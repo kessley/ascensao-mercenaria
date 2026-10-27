@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* Remove as margens padrão e impede a barra de rolagem no Canvas do jogo */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #1a1a1a;
+}
