@@ -1,0 +1,14 @@
+# Regras do Projeto — Ascensão Mercenária (Open Source)
+
+## Visão Geral & Arquitetura
+Jogo de estratégia e RPG 2D híbrido (RTS/Ação 2D) construído com Tauri, React (Tailwind CSS), TypeScript, Phaser.js e Zustand.
+
+## Regras Absolutas de Código
+1. **Estado Global:** Toda a comunicação entre a UI em React e o motor Phaser DEVE passar pela store do Zustand (`src/store/useGameStore.ts`). Nunca acesse o estado interno do Phaser diretamente dentro dos componentes React.
+2. **Separação de Camadas:**
+   - `/src/game`: Cenas, entidades e sistemas táticos do Phaser.
+   - `/src/ui`: Componentes React, telas do acampamento/tenda e estilização Tailwind CSS.
+   - `/src/utils` e `/src/game/data`: Constantes de balanceamento, dados de contratos, habilidades e regras puras.
+3. **Greyboxing Ativo:** Mantenha suporte total a objetos gráficos primitivos do Phaser (`Phaser.GameObjects.Graphics`). Todo render é feito via formas geométricas até a fase de substituição de arte.
+4. **Tipagem Estrita:** Não utilize `any`. Todos os eventos, tropas, tenentes, mensageiros e contratos devem possuir interfaces TypeScript estritas.
+5. **Sem Erros de Build:** Qualquer alteração deve passar pelo compilador TypeScript (`npm run build`) sem erros.
