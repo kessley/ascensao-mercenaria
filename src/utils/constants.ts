@@ -2,14 +2,59 @@
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
+/** Tamanho de uma região do continente (px). Marco 12: 1,5× maior, para caber cidades de verdade. */
+export const REGION_WIDTH = 4800;
+export const REGION_HEIGHT = 3600;
+
 /**
- * Tamanho do continente (Marco 10): 10×8 regiões de 3200×2400, geradas a cada campanha
- * (acampamento, povoados, locais de contrato, covis) — tudo no mesmo mapa contínuo.
+ * Tamanho do continente (Marcos 10–12): regiões de REGION_WIDTH×REGION_HEIGHT, geradas a cada
+ * campanha. O tamanho é escolhido na criação do mundo; estes valores acompanham o mundo
+ * carregado (`setWorldSize`) e os módulos que os importam veem sempre o valor atual.
  */
-export const WORLD_COLS = 10;
-export const WORLD_ROWS = 8;
-export const WORLD_WIDTH = WORLD_COLS * 3200;
-export const WORLD_HEIGHT = WORLD_ROWS * 2400;
+export let WORLD_COLS = 10;
+export let WORLD_ROWS = 8;
+export let WORLD_WIDTH = WORLD_COLS * REGION_WIDTH;
+export let WORLD_HEIGHT = WORLD_ROWS * REGION_HEIGHT;
+
+export function setWorldSize(cols: number, rows: number): void {
+  WORLD_COLS = cols;
+  WORLD_ROWS = rows;
+  WORLD_WIDTH = cols * REGION_WIDTH;
+  WORLD_HEIGHT = rows * REGION_HEIGHT;
+}
+
+/** Opções da criação do mundo (Marco 11). */
+export type WorldSizeId = "SMALL" | "MEDIUM" | "LARGE";
+export type WorldAgeId = "YOUNG" | "MIDDLE" | "ANCIENT";
+export type CalamityRateId = "RARE" | "NORMAL" | "FREQUENT";
+
+export interface WorldOptions {
+  size: WorldSizeId;
+  age: WorldAgeId;
+  calamities: CalamityRateId;
+}
+
+export const DEFAULT_WORLD_OPTIONS: WorldOptions = { size: "MEDIUM", age: "MIDDLE", calamities: "NORMAL" };
+
+export const WORLD_SIZES: Record<WorldSizeId, { label: string; cols: number; rows: number }> = {
+  SMALL: { label: "Pequeno", cols: 7, rows: 6 },
+  MEDIUM: { label: "Médio", cols: 10, rows: 8 },
+  LARGE: { label: "Grande", cols: 13, rows: 10 },
+};
+
+/** Idade do mundo: anos de história simulada antes da campanha. */
+export const WORLD_AGES: Record<WorldAgeId, { label: string; years: number }> = {
+  YOUNG: { label: "Jovem", years: 120 },
+  MIDDLE: { label: "Média", years: 250 },
+  ANCIENT: { label: "Antiga", years: 400 },
+};
+
+/** Frequência de calamidades: multiplica o dia da primeira e o intervalo entre elas. */
+export const CALAMITY_RATES: Record<CalamityRateId, { label: string; delay: number }> = {
+  RARE: { label: "Raras", delay: 1.8 },
+  NORMAL: { label: "Normais", delay: 1 },
+  FREQUENT: { label: "Frequentes", delay: 0.6 },
+};
 
 /** Paleta do greybox: apenas cores sólidas, sem assets. */
 export const COLORS = {
@@ -59,9 +104,23 @@ export type EnemyKind =
   | "SKELETON"
   | "NECROMANCER"
   | "ORC"
-  | "ORC_WARLORD";
+  | "ORC_WARLORD"
+  /** Marco 12: gente que não luta (refugiados) e o mensageiro a cavalo de um reino. */
+  | "CIVILIAN"
+  | "COURIER";
 export type Formation = "LINE" | "SHIELD_WALL" | "WEDGE" | "LOOSE";
-export type TerrainType = "GRASS" | "HILL" | "MUD" | "SWAMP" | "FOREST";
+export type TerrainType =
+  | "GRASS"
+  | "HILL"
+  | "MUD"
+  | "SWAMP"
+  | "FOREST"
+  | "SHALLOW"
+  | "BRIDGE"
+  | "WATER"
+  | "MOUNTAIN"
+  | "WALL"
+  | "BUILDING";
 export type AttackKind = "MELEE" | "RANGED";
 
 export interface UnitStats {
@@ -205,7 +264,43 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     aggroRange: 380,
     stats: { hp: 1200, speed: 100, damage: 24, range: 10, cooldown: 1100, radius: 17 },
   },
+  CIVILIAN: {
+    label: "Refugiado",
+    color: 0xc8b48c,
+    aggroRange: 0,
+    stats: { hp: 20, speed: 75, damage: 0, range: 6, cooldown: 2000, radius: 7 },
+  },
+  COURIER: {
+    label: "Mensageiro real",
+    color: 0xe0d27a,
+    aggroRange: 0,
+    stats: { hp: 55, speed: 230, damage: 4, range: 10, cooldown: 1200, radius: 10 },
+  },
 };
+
+/** Agentes do mundo vivo (Marco 12): patrulhas, mensageiros dos reinos e refugiados. */
+export const AGENTS = {
+  /** Patrulha de um reino: soldados e besteiros que caçam bandos perto das terras do reino. */
+  PATROL_SIZE: { SOLDIER: 6, CROSSBOW: 3 },
+  /** Uma patrulha a cada tantos povoados do reino (no máximo 2). */
+  PATROL_PER_SETTLEMENTS: 4,
+  PATROL_MAX: 2,
+  /** A patrulha vai atrás de bandos a esta distância. */
+  HUNT_RADIUS: 4200,
+  /** Dois bandos a esta distância se enfrentam (resolvido no abstrato). */
+  SKIRMISH_RADIUS: 420,
+  /** Força de cada tipo de bando numa escaramuça. */
+  SKIRMISH_WEIGHT: { GOBLIN: 1, HORDE: 1.5, FACTION: 1.2, PATROL: 1.3, COURIER: 0.5, REFUGEES: 0.1 } as Record<string, number>,
+  /** O mensageiro real cavalga 3× mais rápido que um bando. */
+  COURIER_SPEED: 3,
+  /** Interceptar um mensageiro: ouro dos despachos e a relação que se perde se o reino não estiver em guerra. */
+  COURIER_GOLD: 25,
+  COURIER_RELATION: -8,
+  /** Atacar uma patrulha (ou mensageiro) de um reino em paz. */
+  PROVOKE_RELATION: -15,
+  /** Atacar refugiados custa honra. */
+  REFUGEE_HONOR: -6,
+} as const;
 
 /** Tipo de amotinado que cada tropa vira ao se rebelar. */
 export const MUTINEER_OF: Record<TroopType, EnemyKind> = {
@@ -365,7 +460,7 @@ export const ECONOMY = {
   START_GOLD: 120,
   START_RATIONS: 30,
   /** Rações por dia: 1 para cada N soldados (arredondado para cima), mais 1 do Comandante. */
-  SOLDIERS_PER_RATION: 4,
+  SOLDIERS_PER_RATION: 3,
   RATION_PACK_SIZE: 10,
   RATION_PACK_PRICE: 15,
   /** Dias entre pagamentos de salário. */
@@ -451,6 +546,8 @@ export interface TerrainDef {
   cavalrySpeed: number;
   /** Anula o acúmulo de investida da cavalaria. */
   breaksCharge: boolean;
+  /** Ninguém passa (água funda, rocha). */
+  blocked?: boolean;
 }
 
 export const TERRAIN: Record<TerrainType, TerrainDef> = {
@@ -459,7 +556,47 @@ export const TERRAIN: Record<TerrainType, TerrainDef> = {
   MUD: { label: "Lama", speed: 0.6, cavalrySpeed: 0.45, breaksCharge: true },
   SWAMP: { label: "Pântano", speed: 0.45, cavalrySpeed: 0.35, breaksCharge: true },
   FOREST: { label: "Floresta", speed: 0.75, cavalrySpeed: 0.55, breaksCharge: true },
+  /** Vau ou riacho: água pela cintura (Marco 11). */
+  SHALLOW: { label: "Vau", speed: 0.55, cavalrySpeed: 0.45, breaksCharge: true },
+  BRIDGE: { label: "Ponte", speed: 1, cavalrySpeed: 1, breaksCharge: false },
+  WATER: { label: "Água funda", speed: 0, cavalrySpeed: 0, breaksCharge: true, blocked: true },
+  MOUNTAIN: { label: "Montanha", speed: 0, cavalrySpeed: 0, breaksCharge: true, blocked: true },
+  /** Muralhas, torres e construções dos povoados (Marco 12). */
+  WALL: { label: "Muralha", speed: 0, cavalrySpeed: 0, breaksCharge: true, blocked: true },
+  BUILDING: { label: "Construção", speed: 0, cavalrySpeed: 0, breaksCharge: true, blocked: true },
 };
+
+/** Rios, vaus, pontes e montanhas (Marco 11). */
+export const GEO = {
+  /** Célula do relevo e do clima (px de mundo): 8×6 células por região. */
+  CELL: 600,
+  /** Fração do mapa coberta pelo mar e fração da terra que é montanha. */
+  OCEAN_SHARE: 0.36,
+  MOUNTAIN_SHARE: 0.06,
+  HILL_SHARE: 0.16,
+  /** Largura dos rios por tipo (px). */
+  RIVER_WIDTH: { STREAM: 40, RIVER: 90, GREAT: 160 },
+  /** Comprimento (ao longo do rio) do tabuleiro da ponte e da faixa rasa do vau. */
+  BRIDGE_LENGTH: 240,
+  FORD_LENGTH: 240,
+  /** Passos nas montanhas: raio de cada trecho escavado pela estrada. */
+  PASS_RADIUS: 320,
+  /** Vaus extras ao longo dos rios, um a cada tantos px de rio. */
+  FORD_EVERY: 4200,
+  /** Na água: dano recebido a mais (vau, riacho). */
+  SHALLOW_DAMAGE_TAKEN: 1.25,
+  /** Na água: quem luta sem apoio firme bate mais fraco. */
+  SHALLOW_DAMAGE_DEALT: 0.8,
+  /** Ponte: reconstruir (madeira comprada) e pedágio semanal de cada ponte do bando. */
+  BRIDGE_REBUILD_GOLD: 150,
+  BRIDGE_TOLL: 12,
+  /** Queimar a ponte de um reino. */
+  BRIDGE_BURN_RELATION: -15,
+  /** Quem controla a ponte: dono do povoado mais próximo a até esta distância. */
+  BRIDGE_CONTROL_RADIUS: 4000,
+  /** Grade de navegação (px por célula). */
+  NAV_CELL: 80,
+} as const;
 
 /** Como vários batalhões se dispõem entre si ao marchar juntos ou seguir o Comandante. */
 export type GroupArrangement = "LINE" | "ARCHERS_BACK" | "CAVALRY_FLANKS" | "COLUMN";
@@ -547,10 +684,10 @@ export const BALANCE = {
   HUD_UPDATE_MS: 100,
 } as const;
 
-/** Mundo contínuo, relógio, bandos errantes e viagem rápida (Marco 7). */
+/** Mundo contínuo, relógio, bandos errantes e viagem rápida (Marcos 7 e 12). */
 export const WORLD = {
-  REGION_WIDTH: 3200,
-  REGION_HEIGHT: 2400,
+  REGION_WIDTH,
+  REGION_HEIGHT,
   /** O chão e o terreno são criados em pedaços deste tamanho, só perto da câmera. */
   CHUNK_SIZE: 1600,
   /**
@@ -559,10 +696,15 @@ export const WORLD = {
    */
   BUBBLE_RADIUS: 2400,
   BUBBLE_EXIT_RADIUS: 3200,
-  /** Distância que o exército marcha num dia (vale para andar e para a viagem rápida). */
-  DAY_DISTANCE: 3200,
-  /** Fora do acampamento e fora de combate, o tempo também corre parado: 1 dia a cada N segundos. */
-  DAY_SECONDS: 240,
+  /**
+   * Relógio (Marco 12, rebalanceado para o mapa maior): o dia corre com a marcha — DAY_DISTANCE
+   * px de marcha por dia (3 regiões; vale para andar e para a viagem rápida) — e também parado,
+   * mais devagar: 1 dia a cada DAY_SECONDS segundos. Marchando no passo da infantaria, um dia
+   * dura ≈ 1,5 min e a noite ≈ 30 s; parado, 6 min. Dentro das muralhas de um povoado só o
+   * relógio "parado" corre (passear numa cidade grande não queima o dia).
+   */
+  DAY_DISTANCE: 14400,
+  DAY_SECONDS: 360,
   /** Inimigos mais longe que isto de qualquer aliado ficam "adormecidos" (não pensam nem lutam). */
   ACTIVE_RADIUS: 1800,
   /** Combate: inimigo perseguindo um aliado ou a esta distância de uma tropa visível. */
@@ -574,22 +716,22 @@ export const WORLD = {
   /** Um bando cruza a rota a esta distância: a viagem é interrompida (interceptação). */
   INTERCEPT_RADIUS: 450,
   /** Prazo do contrato além da marcha estimada. */
-  CONTRACT_GRACE_DAYS: 4,
+  CONTRACT_GRACE_DAYS: 3,
   /** Exploração já conhecida no início (raio em volta de cidades e do acampamento). */
-  KNOWN_RADIUS: 650,
+  KNOWN_RADIUS: 1500,
   WARBAND: {
-    FIRST_DAY: 3,
-    EVERY_DAYS: 3,
+    FIRST_DAY: 2,
+    EVERY_DAYS: 2,
     MAX: 6,
     BASE_SIZE: 5,
     /** Bandos crescem com o tempo: +N goblins por semana de campanha. */
     GROWTH_PER_WEEK: 2,
     ARCHER_SHARE: 0.3,
-    /** Velocidade de marcha do bando no mapa (px/s) e por dia de viagem rápida. */
+    /** Velocidade de marcha do bando no mapa (px/s) e por dia de viagem rápida (≈ 1/3 do exército). */
     SPEED: 45,
-    DAY_DISTANCE: 1600,
-    /** Chegou a esta distância do alvo: saqueia. */
-    RAID_RADIUS: 260,
+    DAY_DISTANCE: 5000,
+    /** Chegou a esta distância do centro do alvo (já dentro dos muros): saqueia. */
+    RAID_RADIUS: 700,
     /** Saque a uma cidade: prosperidade perdida. */
     TOWN_RAID_PROSPERITY: 30,
     /** Saque ao acampamento vazio: fração das rações e do ouro levada. */
@@ -634,7 +776,7 @@ export const TIME = {
 /** Salvar e carregar (Marco 10). */
 export const SAVE = {
   /** Versão do formato; saves de outra versão do gerador não são carregados. */
-  VERSION: 1,
+  VERSION: 3,
   /** Espaços manuais (além do automático). */
   SLOTS: 3,
 } as const;
@@ -643,7 +785,7 @@ export const SAVE = {
 export const REALM = {
   /** Fundar uma vila: custo e distância mínima de outros povoados e do acampamento. */
   FOUND_COST: { gold: 250, iron: 10 },
-  FOUND_MIN_DISTANCE: 1600,
+  FOUND_MIN_DISTANCE: 3600,
   /** Reconstruir um povoado em ruínas. */
   REBUILD_COST: { gold: 180, iron: 15 },
   /** População máxima por tipo de povoado. */
@@ -671,16 +813,16 @@ export const REALM = {
   /** Contrato cumprido para um reino. */
   CONTRACT_RELATION: 10,
   /** Reino em guerra manda um exército a cada N dias (tamanho cresce com os povoados dele). */
-  ARMY_EVERY_DAYS: 6,
+  ARMY_EVERY_DAYS: 5,
   ARMY_BASE_SIZE: 6,
   /** Guarnição que aparece no cerco (máximo em campo). */
   SIEGE_MAX_DEFENDERS: 18,
   /** Calamidades: primeira entre os dias, intervalo após derrotar uma, hordas e crescimento. */
-  CALAMITY_FIRST_DAY: [10, 16] as const,
-  CALAMITY_GAP_DAYS: [25, 35] as const,
-  HORDE_EVERY_DAYS: 4,
+  CALAMITY_FIRST_DAY: [8, 12] as const,
+  CALAMITY_GAP_DAYS: [20, 28] as const,
+  HORDE_EVERY_DAYS: 3,
   HORDE_BASE_SIZE: 6,
-  CALAMITY_POWER_EVERY_DAYS: 3,
+  CALAMITY_POWER_EVERY_DAYS: 2,
   CALAMITY_REWARD: 400,
   CALAMITY_RELATION: 25,
   /** Títulos do Comandante pelo número de povoados que governa. */

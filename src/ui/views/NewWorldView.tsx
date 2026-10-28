@@ -3,24 +3,81 @@ import { useGameStore } from "../../store/useGameStore";
 import { generateWorld } from "../../game/worldgen/generateWorld";
 import { randomSeed, seedFromText } from "../../game/worldgen/rng";
 import { settlementFromSeed } from "../../game/sim/realm";
-import { SETTLEMENT_KIND_LABEL } from "../../game/data/world";
+import { BIOME_LABEL, SETTLEMENT_KIND_LABEL, type Biome } from "../../game/data/world";
+import {
+  CALAMITY_RATES,
+  DEFAULT_WORLD_OPTIONS,
+  WORLD_AGES,
+  WORLD_SIZES,
+  type CalamityRateId,
+  type WorldAgeId,
+  type WorldOptions,
+  type WorldSizeId,
+} from "../../utils/constants";
 import { Button } from "../components/Button";
 import { SavePanel } from "../components/SavePanel";
 import { listSaves } from "../../game/save/saveGame";
-import { MAP_H, MAP_W, drawWorldMap } from "./WorldMapView";
+import { MAP_W, drawWorldMap, mapHeight } from "./WorldMapView";
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
+/** Um seletor de opção da criação do mundo. */
+function Choice<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Record<T, { label: string }>;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <label className="flex flex-col text-xs text-neutral-400">
+      {label}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="rounded border border-neutral-600 bg-neutral-900 px-2 py-1.5 text-sm text-white"
+      >
+        {(Object.keys(options) as T[]).map((k) => (
+          <option key={k} value={k}>
+            {options[k].label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 /**
  * Criação do mundo: cada campanha nasce num mundo gerado de uma semente (digitável e
- * compartilhável). Mostra o mapa, os reinos com seus governantes e a crônica de séculos.
+ * compartilhável) e das opções (tamanho, idade da história, frequência de calamidades).
+ * Mostra o mapa com relevo e rios, os reinos com seus governantes e a crônica simulada.
  */
 export function NewWorldView() {
   const startCampaign = useGameStore((s) => s.startCampaign);
   const loadGame = useGameStore((s) => s.loadGame);
   const [saves] = useState(listSaves);
   const [seedText, setSeedText] = useState(() => String(randomSeed()));
-  const world = useMemo(() => generateWorld(seedFromText(seedText) || 1), [seedText]);
+  const [options, setOptions] = useState<WorldOptions>(DEFAULT_WORLD_OPTIONS);
+  const world = useMemo(() => generateWorld(seedFromText(seedText) || 1, options), [seedText, options]);
+  // Geografia em números para o painel: biomas que mais aparecem, rios, pontes, ruínas
+  const facts = useMemo(() => {
+    const count = new Map<Biome, number>();
+    for (const r of world.regions) if (r.biome !== "OCEAN") count.set(r.biome, (count.get(r.biome) ?? 0) + 1);
+    const biomes = [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([b]) => BIOME_LABEL[b].toLowerCase());
+    return {
+      biomes,
+      rivers: world.geo.rivers.filter((r) => r.kind !== "STREAM").length,
+      great: world.geo.rivers.filter((r) => r.kind === "GREAT").map((r) => r.name),
+      bridges: world.geo.crossings.filter((c) => c.kind === "BRIDGE").length,
+      fords: world.geo.crossings.filter((c) => c.kind === "FORD").length,
+      ruins: world.settlements.filter((s) => s.owner === "RUINED").length,
+      ports: world.settlements.filter((s) => s.port).length,
+    };
+  }, [world]);
   const settlements = useMemo(() => world.settlements.map(settlementFromSeed), [world]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -50,6 +107,14 @@ export function NewWorldView() {
               Continuar
             </Button>
           )}
+          <Choice<WorldSizeId> label="Tamanho" value={options.size} options={WORLD_SIZES} onChange={(size) => setOptions({ ...options, size })} />
+          <Choice<WorldAgeId> label="Idade" value={options.age} options={WORLD_AGES} onChange={(age) => setOptions({ ...options, age })} />
+          <Choice<CalamityRateId>
+            label="Calamidades"
+            value={options.calamities}
+            options={CALAMITY_RATES}
+            onChange={(calamities) => setOptions({ ...options, calamities })}
+          />
           <Button onClick={() => setSeedText(String(randomSeed()))}>Outro mundo</Button>
           <Button className="bg-amber-600 hover:bg-amber-500 border-amber-400" onClick={() => startCampaign(world)}>
             Começar campanha
@@ -65,12 +130,18 @@ export function NewWorldView() {
           <canvas
             ref={canvasRef}
             width={MAP_W}
-            height={MAP_H}
+            height={mapHeight(world)}
             className="w-[min(1024px,62vw)] rounded border border-neutral-700"
-            style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+            style={{ aspectRatio: `${MAP_W} / ${mapHeight(world)}` }}
           />
           <p className="text-xs text-neutral-500">
-            Quadrados = povoados na cor do reino dono (claro = livres) · círculos = locais de contrato · elipse dourada = o seu acampamento.
+            Quadrados = povoados na cor do reino dono (claro = livres) · ⚓ = porto · círculos = locais de contrato · elipse dourada = o seu
+            acampamento · azul = rios · marrom = pontes · pontos claros = vaus.
+          </p>
+          <p className="text-xs text-neutral-300">
+            Terra de {facts.biomes.join(", ")} · {facts.rivers} rios{facts.great.length > 0 ? ` (o maior: ${facts.great[0]})` : ""} ·{" "}
+            {facts.bridges} pontes e {facts.fords} vaus · {facts.ports} portos · {facts.ruins} povoado(s) em ruínas ·{" "}
+            {WORLD_AGES[options.age].years} anos de história simulada.
           </p>
         </div>
 

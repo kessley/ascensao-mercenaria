@@ -1,4 +1,5 @@
 import { useGameStore } from "../../../store/useGameStore";
+import { bondOf, relationLabel } from "../../../game/sim/campEvents";
 import { fullName, opinionOn, PASSIVES, TRAITS, type LieutenantData } from "../../../game/data/lieutenants";
 import type { Contract } from "../../../game/data/contracts";
 import { LIEUTENANTS } from "../../../utils/constants";
@@ -34,6 +35,33 @@ function Traits({ l }: { l: LieutenantData }) {
 }
 
 /** Ficha completa de um tenente: história, personalidade, lealdade, crônica e comando. */
+/** Amizades e rivalidades do tenente com os outros (Marco 12). */
+function Relations({ l }: { l: LieutenantData }) {
+  const lieutenants = useGameStore((s) => s.lieutenants);
+  const bonds = useGameStore((s) => s.bonds);
+  const others = lieutenants.filter((x) => x.id !== l.id);
+  if (others.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-1">
+      <h3 className={sectionTitle}>Relações</h3>
+      {others.map((o) => {
+        const v = bondOf(bonds, l.id, o.id);
+        const r = relationLabel(v);
+        return (
+          <div key={o.id} className="flex justify-between text-xs">
+            <span>{fullName(o)}</span>
+            <span className={r.tone}>
+              {r.text} ({v > 0 ? "+" : ""}
+              {v})
+            </span>
+          </div>
+        );
+      })}
+      <p className="text-[11px] text-neutral-500">Os traços aproximam ou afastam os tenentes a cada dia; vitórias lado a lado unem. Rivais brigam; amigos se visitam no acampamento.</p>
+    </section>
+  );
+}
+
 export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData }) {
   const battalions = useGameStore((s) => s.battalions);
   const lieutenants = useGameStore((s) => s.lieutenants);
@@ -60,6 +88,8 @@ export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData 
           </p>
         )}
       </div>
+
+      <Relations l={l} />
 
       <section className="flex flex-col gap-2">
         <h3 className={sectionTitle}>Comando</h3>

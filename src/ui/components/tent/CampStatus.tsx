@@ -1,6 +1,6 @@
 import { supportWages } from "../../../game/data/riders";
 import { useGameStore } from "../../../store/useGameStore";
-import { dailyRations, daysUntilPayday, startingMorale, weeklyWages } from "../../../utils/economy";
+import { campMoraleBonus, dailyRations, daysUntilPayday, startingMorale, weeklyWages } from "../../../utils/economy";
 
 function Stat({ label, value, hint, tone = "" }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
@@ -24,13 +24,20 @@ export function CampStatus() {
   const battalions = useGameStore((s) => s.battalions);
   const lieutenants = useGameStore((s) => s.lieutenants);
   const riders = useGameStore((s) => supportWages(s.scouts.length, s.messengers.length));
+  const followers = useGameStore((s) => s.followers);
+  const campMood = useGameStore((s) => s.campMood);
+  const honor = useGameStore((s) => s.honor);
 
-  const perDay = dailyRations(battalions);
+  const perDay = dailyRations(battalions, followers);
   const foodDays = Math.floor(rations / perDay);
   const wages = weeklyWages(battalions, lieutenants) + riders;
   const payIn = daysUntilPayday(day);
-  const morale = startingMorale(hungryDays, arrearsWeeks);
-  const moraleHint = [morale.hunger && `fome −${morale.hunger}`, morale.arrears && `atrasos −${morale.arrears}`]
+  const morale = startingMorale(hungryDays, arrearsWeeks, campMoraleBonus(campMood, followers));
+  const moraleHint = [
+    morale.hunger && `fome −${morale.hunger}`,
+    morale.arrears && `atrasos −${morale.arrears}`,
+    morale.camp && `acampamento ${morale.camp > 0 ? "+" : ""}${morale.camp}`,
+  ]
     .filter(Boolean)
     .join(", ");
 
@@ -62,6 +69,18 @@ export function CampStatus() {
         value={`${morale.value}`}
         hint={moraleHint || "tropas satisfeitas"}
         tone={morale.value < 100 ? "text-red-400" : "text-green-400"}
+      />
+      <Stat
+        label="Humor"
+        value={campMood > 0 ? `+${campMood}` : String(campMood)}
+        hint={campMood >= 10 ? "acampamento animado" : campMood <= -10 ? "acampamento pesado" : "nada de especial"}
+        tone={campMood > 0 ? "text-green-400" : campMood < 0 ? "text-red-400" : ""}
+      />
+      <Stat
+        label="Honra"
+        value={String(honor)}
+        hint={honor >= 70 ? "bando de palavra" : honor <= 30 ? "fama de sem-palavra" : "nem santo nem bandido"}
+        tone={honor >= 70 ? "text-green-400" : honor <= 30 ? "text-red-400" : ""}
       />
     </div>
   );

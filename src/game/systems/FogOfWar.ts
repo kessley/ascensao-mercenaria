@@ -66,7 +66,7 @@ export class FogOfWar {
     });
   }
 
-  /** Uma letra por célula: 0 nunca visto, 1 explorado, 2 visível agora (para o Mapa Múndi). */
+  /** Uma letra por célula: 0 nunca visto, 1 explorado, 2 visível agora (para o Mapa do Continente). */
   snapshot(): string {
     let out = "";
     for (let i = 0; i < this.explored.length; i++) out += this.visible[i] ? "2" : this.explored[i] ? "1" : "0";

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
-import { BALANCE, COLORS, ENEMIES, TIME, type EnemyKind } from "../../utils/constants";
+import { BALANCE, COLORS, ENEMIES, TIME, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
 /**
@@ -29,6 +29,13 @@ export class Enemy extends Unit {
   readonly bodyColor: number;
   /** Longe de todos os aliados: não pensa nem luta (economia de processamento). */
   dormant = false;
+  /**
+   * Hostil ao bando do jogador? Patrulhas e mensageiros de um reino em paz e refugiados não
+   * são (Marco 12): não atacam, não entram no combate nem nos alvos automáticos das tropas.
+   */
+  hostile = true;
+  /** Alguém do bando atacou este não-hostil: ele (e o bando dele) passa a lutar, e o dono fica sabendo. */
+  provoked = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind = "GOBLIN", color?: number) {
     super(scene, x, y, "ENEMY", ENEMIES[kind].stats);
@@ -68,6 +75,16 @@ export class Enemy extends Unit {
     return !!ENEMIES[this.kind].boss;
   }
 
+  override takeDamage(amount: number, source: Unit, time: number, kind: AttackKind = "MELEE"): void {
+    if (source.team === "ALLY" && !this.hostile) this.provoked = true;
+    super.takeDamage(amount, source, time, kind);
+  }
+
+  /** Gente que não luta (refugiados, mensageiros): foge de quem chegar perto. */
+  private get timid(): boolean {
+    return this.kind === "CIVILIAN" || this.kind === "COURIER";
+  }
+
   override get nightCreature(): boolean {
     return TIME.NIGHT_CREATURES.includes(this.kind);
   }
@@ -83,6 +100,30 @@ export class Enemy extends Unit {
 
   think(dt: number, allies: readonly Unit[]): void {
     if (!this.isAlive) return;
+
+    // Quem não luta foge do bando do jogador; não-hostis seguem a vida (a não ser provocados)
+    if (this.timid || (!this.hostile && !this.provoked)) {
+      this.target = null;
+      const fear = this.timid ? (this.kind === "COURIER" ? 420 : 300) : 0;
+      let threat: Unit | null = null;
+      let best = fear;
+      for (const a of allies) {
+        const d = distance(a, this);
+        if (d < best) {
+          best = d;
+          threat = a;
+        }
+      }
+      if (threat) {
+        const away = Math.atan2(this.y - threat.y, this.x - threat.x);
+        this.moveTowards(this.x + Math.cos(away) * 120, this.y + Math.sin(away) * 120, dt, 1.1);
+        this.unitState = "FLEEING";
+        return;
+      }
+      const arrived = this.moveTowards(this.home.x, this.home.y, dt, 0.8);
+      this.unitState = arrived ? "IDLE" : "MOVING";
+      return;
+    }
 
     // Desiste de alvos mortos ou longe demais de casa (amotinados não têm "casa": sem coleira)
     const leash = ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_LEASH_RANGE;

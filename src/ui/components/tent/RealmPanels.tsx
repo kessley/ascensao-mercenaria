@@ -70,7 +70,7 @@ export function DiplomacyPanel() {
         <div key={c.id} className="rounded border border-red-700 bg-red-950/40 p-3 text-sm">
           <div className="font-semibold text-red-300">☠ {c.name}</div>
           <div className="text-xs text-neutral-300">
-            {c.revealed ? `Covil em ${c.region} (marcado no Mapa Múndi).` : `Rumores vindos de ${c.region}. O covil ainda não foi encontrado.`} Força {c.power}:
+            {c.revealed ? `Covil em ${c.region} (marcado no Mapa do Continente).` : `Rumores vindos de ${c.region}. O covil ainda não foi encontrado.`} Força {c.power}:
             as hordas crescem a cada {REALM.CALAMITY_POWER_EVERY_DAYS} dias e a cada povoado que cai. Mate {c.leader} para acabar com isso.
           </div>
         </div>

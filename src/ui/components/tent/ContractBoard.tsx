@@ -16,6 +16,7 @@ export function ContractBoard() {
   const contracts = useGameStore((s) => s.contracts);
   const pendingMutiny = useGameStore((s) => s.pendingMutiny);
   const battalions = useGameStore((s) => s.battalions);
+  const followers = useGameStore((s) => s.followers);
   const lieutenants = useGameStore((s) => s.lieutenants);
   const riders = useGameStore((s) => supportWages(s.scouts.length, s.messengers.length));
   const rations = useGameStore((s) => s.rations);
@@ -29,7 +30,7 @@ export function ContractBoard() {
   const world = useGameStore((s) => s.world);
   const siteName = (id: string) => world?.sites.find((x) => x.id === id)?.name ?? "?";
 
-  const perDay = dailyRations(battalions);
+  const perDay = dailyRations(battalions, followers);
   const wages = weeklyWages(battalions, lieutenants) + riders;
 
   return (
@@ -39,7 +40,7 @@ export function ContractBoard() {
         <div className="flex flex-col gap-2 rounded border border-amber-500/70 bg-amber-950/40 p-3 text-sm">
           <div className="font-semibold text-amber-200">Em andamento: {active.contract.title}</div>
           <p className="text-xs text-neutral-300">
-            Os inimigos estão em <b>{siteName(active.contract.siteId)}</b> (★ no Mapa Múndi — Tab). Elimine todos até o dia{" "}
+            Os inimigos estão em <b>{siteName(active.contract.siteId)}</b> (★ no Mapa do Continente — Tab). Elimine todos até o dia{" "}
             <b>{active.deadline}</b> para receber o bônus de {active.contract.reward}.
           </p>
           <button

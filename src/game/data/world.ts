@@ -1,15 +1,94 @@
 import type { TerrainZone } from "../world/TerrainMap";
 import type { EnemyGroupDef } from "./battleMaps";
-import { WORLD, WORLD_COLS, WORLD_HEIGHT, WORLD_ROWS, WORLD_WIDTH } from "../../utils/constants";
+import { WORLD, WORLD_HEIGHT, WORLD_WIDTH, type WorldOptions } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
 /**
- * Tipos do mundo procedural (Marcos 7 e 9). Cada campanha gera um WorldDef a partir de uma
- * semente (src/game/worldgen/generateWorld.ts); o que muda durante o jogo (dono dos povoados,
- * prosperidade, guerras) fica no store.
+ * Tipos do mundo procedural (Marcos 7, 9 e 11). Cada campanha gera um WorldDef a partir de uma
+ * semente e das opções (src/game/worldgen/generateWorld.ts); o que muda durante o jogo (dono
+ * dos povoados, prosperidade, guerras, pontes queimadas) fica no store.
  */
 
-export type Biome = "PLAINS" | "FOREST" | "HILLS" | "MARSH";
+export type Biome =
+  | "OCEAN"
+  | "COAST"
+  | "PLAINS"
+  | "FOREST"
+  | "DEEP_FOREST"
+  | "HILLS"
+  | "MOUNTAINS"
+  | "MARSH"
+  | "STEPPE"
+  | "DESERT"
+  | "TUNDRA";
+
+export const BIOME_LABEL: Record<Biome, string> = {
+  OCEAN: "Mar",
+  COAST: "Costa",
+  PLAINS: "Campos",
+  FOREST: "Floresta",
+  DEEP_FOREST: "Floresta densa",
+  HILLS: "Colinas",
+  MOUNTAINS: "Montanhas",
+  MARSH: "Pântano",
+  STEPPE: "Estepe",
+  DESERT: "Deserto",
+  TUNDRA: "Tundra",
+};
+
+export type RiverKind = "STREAM" | "RIVER" | "GREAT";
+
+export const RIVER_KIND_LABEL: Record<RiverKind, string> = { STREAM: "riacho", RIVER: "rio", GREAT: "rio grande" };
+
+/** Rio: linha da nascente à foz, com a largura em cada ponto. */
+export interface RiverDef {
+  id: string;
+  name: string;
+  /** O maior tipo ao longo do curso (decide se tem vaus). */
+  kind: RiverKind;
+  points: Point[];
+  widths: number[];
+}
+
+/** Travessia de um rio: ponte (queimável) ou vau (raso). */
+export interface CrossingDef {
+  id: string;
+  kind: "BRIDGE" | "FORD";
+  x: number;
+  y: number;
+  /** Direção do rio no ponto (a travessia é perpendicular a ela). */
+  angle: number;
+  /** Largura do rio ali. */
+  width: number;
+  riverId: string;
+}
+
+/** Trecho de passo nas montanhas aberto por uma estrada. */
+export interface PassDef {
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** Relevo, clima, biomas e águas do continente (células de GEO.CELL px). */
+export interface GeoDef {
+  cell: number;
+  cols: number;
+  rows: number;
+  seaLevel: number;
+  mountainLevel: number;
+  hillLevel: number;
+  detailSeed: number;
+  elevation: number[];
+  temperature: number[];
+  moisture: number[];
+  biome: Biome[];
+  /** 1 = lago. */
+  lake: number[];
+  rivers: RiverDef[];
+  crossings: CrossingDef[];
+  passes: PassDef[];
+}
 
 export interface RegionDef {
   col: number;
@@ -34,8 +113,12 @@ export interface SettlementSeed {
   kind: SettlementKind;
   x: number;
   y: number;
-  /** Id da facção dona, ou "FREE" (independente). */
+  /** Id da facção dona, "FREE" (independente) ou "RUINED" (arrasado na história). */
   owner: string;
+  /** Na costa: porto (ainda sem uso; navios chegam no Marco 17). */
+  port?: boolean;
+  /** À beira de um rio. */
+  river?: boolean;
   population: number;
   garrison: number;
   market: MarketDef;
@@ -79,6 +162,11 @@ export interface CampDef {
 
 export interface WorldDef {
   seed: number;
+  options: WorldOptions;
+  /** Regiões de largura e altura (cada uma de REGION_WIDTH×REGION_HEIGHT). */
+  cols: number;
+  rows: number;
+  geo: GeoDef;
   name: string;
   era: string;
   /** Ano atual (a história acontece antes dele). */
@@ -109,9 +197,9 @@ export const SETTLEMENT_KIND_LABEL: Record<SettlementKind, string> = {
 };
 
 export function regionAt(world: WorldDef, p: Point): RegionDef {
-  const col = Math.max(0, Math.min(WORLD_COLS - 1, Math.floor(p.x / WORLD.REGION_WIDTH)));
-  const row = Math.max(0, Math.min(WORLD_ROWS - 1, Math.floor(p.y / WORLD.REGION_HEIGHT)));
-  return world.regions[row * WORLD_COLS + col];
+  const col = Math.max(0, Math.min(world.cols - 1, Math.floor(p.x / WORLD.REGION_WIDTH)));
+  const row = Math.max(0, Math.min(world.rows - 1, Math.floor(p.y / WORLD.REGION_HEIGHT)));
+  return world.regions[row * world.cols + col];
 }
 
 export function regionName(world: WorldDef, p: Point): string {

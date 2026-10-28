@@ -1,5 +1,5 @@
-import type { Unit } from "../entities/Unit";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { Unit } from "../entities/Unit";
+import { TERRAIN, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
 
 /**
  * "Peso" de `u` ao se separar de `other`: quem pesa mais é menos empurrado.
@@ -45,9 +45,22 @@ export function separateUnits(units: readonly Unit[]): void {
   }
 }
 
+/**
+ * Mantém todos dentro do mundo e fora da água funda e das montanhas: quem foi empurrado para
+ * lá volta à última posição em terra firme (um salto grande — viagem, recuo — é aceito).
+ */
 export function clampToWorld(units: readonly Unit[]): void {
   for (const u of units) {
     u.x = Math.min(WORLD_WIDTH - u.radius, Math.max(u.radius, u.x));
     u.y = Math.min(WORLD_HEIGHT - u.radius, Math.max(u.radius, u.y));
+    if (!Unit.terrain) continue;
+    const near = Math.abs(u.x - u.safeX) + Math.abs(u.y - u.safeY) < 120;
+    if (TERRAIN[u.terrainType].blocked && near) {
+      u.x = u.safeX;
+      u.y = u.safeY;
+    } else {
+      u.safeX = u.x;
+      u.safeY = u.y;
+    }
   }
 }

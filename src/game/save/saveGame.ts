@@ -1,6 +1,6 @@
 import type { Enemy } from "../entities/Enemy";
 import type { WarbandsSave } from "../systems/Warbands";
-import { SAVE, type EnemyKind } from "../../utils/constants";
+import { SAVE, type EnemyKind, type WorldOptions } from "../../utils/constants";
 
 /**
  * Salvar e carregar (Marco 10).
@@ -39,6 +39,8 @@ export interface SaveFile {
   slot: string;
   savedAt: string;
   seed: number;
+  /** Opções da criação (tamanho, idade, calamidades): o mundo é gerado de novo com elas. */
+  options: WorldOptions;
   /** Conferido na carga: o mundo gerado de novo tem de ser o mesmo. */
   worldName: string;
   bandName: string;

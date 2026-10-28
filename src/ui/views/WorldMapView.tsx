@@ -3,23 +3,57 @@ import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
 import { PALISADE } from "../../game/data/campLayout";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
-import { WORLD, WORLD_COLS, WORLD_HEIGHT, WORLD_ROWS, WORLD_WIDTH } from "../../utils/constants";
+import { WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { geoOf } from "../../game/worldgen/geoMap";
+import { groundColor } from "../../game/world/TerrainMap";
 import { dailyRations } from "../../utils/economy";
 import { distance, type Point } from "../../utils/math";
 import { Button } from "../components/Button";
 
 export const MAP_W = 1024;
-export const MAP_H = (MAP_W * WORLD_HEIGHT) / WORLD_WIDTH;
-const SCALE = MAP_W / WORLD_WIDTH;
+
+/** Altura do mapa (px) para as proporções deste continente. */
+export function mapHeight(world: WorldDef): number {
+  return Math.round((MAP_W * world.rows * WORLD.REGION_HEIGHT) / (world.cols * WORLD.REGION_WIDTH));
+}
+
+/** px do mapa por px do mundo. */
+const scaleOf = (world: WorldDef) => MAP_W / (world.cols * WORLD.REGION_WIDTH);
+
+const RELIEF_STEP = 100;
+const reliefCache = new WeakMap<WorldDef, HTMLCanvasElement>();
+
+/** Relevo sombreado do continente (uma vez por mundo): o mesmo chão do jogo, em amostras de 100 px. */
+function reliefOf(world: WorldDef): HTMLCanvasElement {
+  const cached = reliefCache.get(world);
+  if (cached) return cached;
+  const geo = geoOf(world.geo);
+  const w = Math.round((world.cols * WORLD.REGION_WIDTH) / RELIEF_STEP);
+  const h = Math.round((world.rows * WORLD.REGION_HEIGHT) / RELIEF_STEP);
+  const heights = new Float32Array((w + 1) * (h + 1));
+  for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) heights[j * (w + 1) + i] = geo.heightAt(i * RELIEF_STEP, j * RELIEF_STEP);
+  const img = new ImageData(w, h);
+  const color = [0, 0, 0];
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const k = j * (w + 1) + i;
+      groundColor(geo, i * RELIEF_STEP, j * RELIEF_STEP, heights[k], heights[k + 1], heights[k + w + 1], color, RELIEF_STEP);
+      const o = (j * w + i) * 4;
+      img.data[o] = color[0];
+      img.data[o + 1] = color[1];
+      img.data[o + 2] = color[2];
+      img.data[o + 3] = 255;
+    }
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext("2d")?.putImageData(img, 0, 0);
+  reliefCache.set(world, canvas);
+  return canvas;
+}
 /** Clique a menos disto (px do mundo) de um local conhecido escolhe o local. */
 const SNAP_RADIUS = 450;
-
-const ZONE_FILL: Record<string, string> = {
-  HILL: "#6f8f3a",
-  MUD: "#6b4f2e",
-  SWAMP: "#3f5240",
-  FOREST: "#22501c",
-};
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
@@ -43,6 +77,8 @@ export interface MapLayers {
   dest: Destination | null;
   /** Mostrar a grade das regiões (prévia do mundo). */
   regions?: boolean;
+  /** Pontes queimadas (desenhadas em preto). */
+  burnedBridges?: readonly string[];
 }
 
 interface Destination {
@@ -53,20 +89,29 @@ interface Destination {
 /** Desenha o mundo (terreno, estradas, povoados com a cor do dono, locais, névoa e exércitos). */
 export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): void {
   const { world, settlements, calamities, snap, contractSiteId, dest } = layers;
-  const s = SCALE;
-  ctx.clearRect(0, 0, MAP_W, MAP_H);
-  ctx.fillStyle = "#3a7d2c";
-  ctx.fillRect(0, 0, MAP_W, MAP_H);
+  const s = scaleOf(world);
+  const mapH = mapHeight(world);
+  ctx.clearRect(0, 0, MAP_W, mapH);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(reliefOf(world), 0, 0, MAP_W, mapH);
 
-  for (const z of world.terrain) {
-    ctx.fillStyle = ZONE_FILL[z.type];
-    ctx.beginPath();
-    ctx.ellipse(z.x * s, z.y * s, z.rx * s, z.ry * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.strokeStyle = "rgba(141,123,82,0.85)";
-  ctx.lineWidth = 3;
+  // Rios (a largura de verdade, com um mínimo para aparecer)
+  ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  for (const river of world.geo.rivers) {
+    ctx.strokeStyle = river.kind === "STREAM" ? "rgba(95,156,184,0.75)" : "#3a74a4";
+    for (let k = 1; k < river.points.length; k++) {
+      const a = river.points[k - 1];
+      const b = river.points[k];
+      ctx.lineWidth = Math.max(river.kind === "STREAM" ? 0.8 : 1.3, river.widths[k] * s * 1.6);
+      ctx.beginPath();
+      ctx.moveTo(a.x * s, a.y * s);
+      ctx.lineTo(b.x * s, b.y * s);
+      ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = "rgba(141,123,82,0.9)";
+  ctx.lineWidth = 2;
   for (const road of world.roads) {
     ctx.beginPath();
     road.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x * s, p.y * s) : ctx.lineTo(p.x * s, p.y * s)));
@@ -82,16 +127,29 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.fillText(text, p.x * s, p.y * s + dy);
   };
 
+  // Pontes (quadradinho marrom; queimadas, preto) e vaus (pontos claros)
+  for (const c of world.geo.crossings) {
+    if (c.kind === "BRIDGE") {
+      ctx.fillStyle = layers.burnedBridges?.includes(c.id) ? "#111" : "#8a6234";
+      ctx.fillRect(c.x * s - 3, c.y * s - 3, 6, 6);
+    } else {
+      ctx.fillStyle = "#cfe6ee";
+      ctx.beginPath();
+      ctx.arc(c.x * s, c.y * s, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   if (layers.regions) {
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
     ctx.lineWidth = 1;
-    for (let c = 1; c < WORLD_COLS; c++) {
+    for (let c = 1; c < world.cols; c++) {
       ctx.beginPath();
       ctx.moveTo(c * WORLD.REGION_WIDTH * s, 0);
-      ctx.lineTo(c * WORLD.REGION_WIDTH * s, MAP_H);
+      ctx.lineTo(c * WORLD.REGION_WIDTH * s, mapH);
       ctx.stroke();
     }
-    for (let r = 1; r < WORLD_ROWS; r++) {
+    for (let r = 1; r < world.rows; r++) {
       ctx.beginPath();
       ctx.moveTo(0, r * WORLD.REGION_HEIGHT * s);
       ctx.lineTo(MAP_W, r * WORLD.REGION_HEIGHT * s);
@@ -107,7 +165,8 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
       fog.data[i * 4] = 10;
       fog.data[i * 4 + 1] = 13;
       fog.data[i * 4 + 2] = 10;
-      fog.data[i * 4 + 3] = v === 2 ? 0 : v === 1 ? 107 : 224;
+      // Nunca visto: escuro, mas a forma da terra (costa, rios, montanhas) ainda se adivinha
+      fog.data[i * 4 + 3] = v === 2 ? 0 : v === 1 ? 100 : 178;
     }
     const small = document.createElement("canvas");
     small.width = snap.cols;
@@ -131,7 +190,7 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(t.x * s - size / 2, t.y * s - size / 2, size, size);
-    label(t.owner === "RUINED" ? `${t.name} (ruínas)` : t.name, t, -size / 2 - 4, t.owner === "PLAYER" ? "#9cc4ff" : "#ffe9b0");
+    label(`${t.port ? "⚓ " : ""}${t.owner === "RUINED" ? `${t.name} (ruínas)` : t.name}`, t, -size / 2 - 4, t.owner === "PLAYER" ? "#9cc4ff" : "#ffe9b0");
   }
   for (const site of world.sites) {
     const active = site.id === contractSiteId;
@@ -171,12 +230,13 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    ctx.fillStyle = "#c0392b";
+    // Hostis em vermelho; patrulhas e mensageiros (em paz) em cinza-azulado; refugiados em bege
+    ctx.fillStyle = w.hostile === false ? (w.kind === "REFUGEES" ? "#d8c39a" : "#7f9db3") : "#c0392b";
     ctx.fillRect(w.x * s - size / 2, w.y * s - size / 2, size, size);
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 1;
     ctx.strokeRect(w.x * s - size / 2, w.y * s - size / 2, size, size);
-    label(`${w.visible ? "" : "?"}${w.count}`, w, size + 8, "#ffb4a8");
+    label(`${w.visible ? "" : "?"}${w.count}`, w, size + 8, w.hostile === false ? "#d8e4ee" : "#ffb4a8");
     ctx.globalAlpha = 1;
   }
 
@@ -217,7 +277,7 @@ function explored(snap: WorldSnapshot, p: Point): boolean {
 }
 
 /**
- * Mapa Múndi (Tab): visão distanciada do mundo para viagem rápida e para observar
+ * Mapa do Continente (Tab): visão distanciada do mundo para viagem rápida e para observar
  * movimentos de exércitos dentro do que as tropas enxergam (ou a última posição conhecida).
  * Com ele aberto o mundo fica em pausa. A viagem passa os dias da marcha de verdade.
  */
@@ -226,9 +286,11 @@ export function WorldMapView() {
   const world = useGameStore((s) => s.world);
   const settlements = useGameStore((s) => s.settlements);
   const calamities = useGameStore((s) => s.calamities);
+  const burnedBridges = useGameStore((s) => s.burnedBridges);
   const snap = useGameStore((s) => s.worldSnapshot);
   const activeContract = useGameStore((s) => s.activeContract);
   const battalions = useGameStore((s) => s.battalions);
+  const followers = useGameStore((s) => s.followers);
   const rations = useGameStore((s) => s.rations);
   const engaged = useGameStore((s) => s.battleHud?.engaged ?? false);
   const setWorldMapOpen = useGameStore((s) => s.setWorldMapOpen);
@@ -244,13 +306,13 @@ export function WorldMapView() {
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
-    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, dest });
-  }, [world, settlements, calamities, snap, contractSiteId, dest, open]);
+    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, dest, burnedBridges });
+  }, [world, settlements, calamities, snap, contractSiteId, dest, open, burnedBridges]);
 
   const plan = useMemo(() => {
     if (!dest || !snap) return null;
     const days = travelDaysBetween(snap.commander, dest.point);
-    const food = Math.ceil(days * dailyRations(battalions));
+    const food = Math.ceil(days * dailyRations(battalions, followers));
     const known = explored(snap, dest.point);
     const bandsNearRoute = snap.warbands.filter((w) => {
       const a = snap.commander;
@@ -260,7 +322,7 @@ export function WorldMapView() {
       return distance(w, { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }) < WORLD.INTERCEPT_RADIUS * 2.5;
     });
     return { days, food, known, bandsNearRoute };
-  }, [dest, snap, battalions]);
+  }, [dest, snap, battalions, followers]);
 
   if (!open || !world) return null;
 
@@ -295,16 +357,16 @@ export function WorldMapView() {
     <div className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center gap-4 bg-black/80 p-4 text-white">
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-bold">Mapa Múndi · {world.name}</h2>
+          <h2 className="text-xl font-bold">Mapa do Continente · {world.name}</h2>
           <span className="text-xs text-neutral-400">Clique num destino · Tab ou Esc fecha · o mundo está em pausa</span>
         </div>
         <canvas
           ref={canvasRef}
           width={MAP_W}
-          height={MAP_H}
+          height={mapHeight(world)}
           onClick={onClick}
           className="max-h-[80vh] w-auto max-w-[70vw] cursor-crosshair rounded border border-neutral-600"
-          style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+          style={{ aspectRatio: `${MAP_W} / ${mapHeight(world)}` }}
         />
         <div className="flex flex-wrap gap-x-4 text-xs text-neutral-400">
           <span><span className="text-amber-300">●</span> Comandante</span>
@@ -313,6 +375,10 @@ export function WorldMapView() {
           <span><span className="text-red-500/50">■</span> ? última posição conhecida</span>
           <span><span className="text-red-400">☠</span> covil de calamidade</span>
           <span><span className="text-amber-400">★</span> contrato ativo</span>
+          <span><span className="text-sky-500">━</span> rio</span>
+          <span><span className="text-amber-700">■</span> ponte</span>
+          <span><span className="text-sky-100">●</span> vau</span>
+          <span>⚓ porto</span>
         </div>
       </div>
 
@@ -325,7 +391,10 @@ export function WorldMapView() {
             <div>
               <div className="font-semibold">{dest.name}</div>
               <div className="font-mono text-xs text-neutral-300">
-                {plan.days < 0.1 ? "logo ali" : `${plan.days.toFixed(1).replace(".", ",")} dia(s) de marcha`} · ~{plan.food} rações
+                {plan.days < 0.1 ? "logo ali" : `${plan.days.toFixed(1).replace(".", ",")} dia(s) em linha reta`} · ~{plan.food} rações
+              </div>
+              <div className="text-xs text-neutral-500">
+                A marcha segue estradas, pontes e vaus: rios e montanhas alongam o caminho.
               </div>
               {plan.food > rations && <div className="text-xs text-red-400">As rações não bastam: o bando chegará com fome.</div>}
             </div>

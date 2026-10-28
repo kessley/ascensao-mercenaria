@@ -5,64 +5,91 @@ import {
   SITE_THEME_LABEL,
   regionName,
   type Biome,
-  type FactionDef,
+  type CrossingDef,
   type HistoryEntry,
   type RegionDef,
   type SettlementKind,
   type SettlementSeed,
   type SiteDef,
   type SiteTheme,
-  type Temperament,
   type WorldDef,
 } from "../data/world";
-import { WORLD, WORLD_COLS, WORLD_HEIGHT, WORLD_ROWS, WORLD_WIDTH } from "../../utils/constants";
+import {
+  DEFAULT_WORLD_OPTIONS,
+  GEO,
+  WORLD,
+  WORLD_AGES,
+  WORLD_HEIGHT,
+  WORLD_SIZES,
+  WORLD_WIDTH,
+  setWorldSize,
+  type WorldOptions,
+} from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
+import { NavGrid } from "../systems/NavGrid";
+import { TOWN_SIZE, nearestGate, townLayout, type TownLayout } from "../world/townLayout";
+import { generateGeography } from "./geography";
+import { GeoMap } from "./geoMap";
+import { simulateHistory } from "./history";
 import { createRng, type Rng } from "./rng";
 import * as names from "./names";
 
 /**
- * Gerador de mundos (estilo Dwarf Fortress, em escala greybox): a partir de uma semente,
- * cria um continente de 10×8 regiões com bioma, acampamento, ~20 povoados, 3–4 reinos rivais
- * com governantes, locais de contrato com layout próprio, covis, estradas e uma crônica de
- * séculos de história.
+ * Gerador de mundos (estilo Dwarf Fortress, em escala greybox), Marco 11. A partir de uma
+ * semente e das opções (tamanho, idade, calamidades):
+ * 1. geografia: relevo, clima, biomas, lagos e rios (geography.ts);
+ * 2. acampamento e povoados em terra firme, preferindo rios, costa e terra fértil;
+ * 3. séculos de história simulada decidem reinos, fronteiras e ruínas (history.ts);
+ * 4. locais de contrato, covis e terreno de superfície conforme o bioma;
+ * 5. estradas pelo caminho de menor custo, que criam pontes, vaus e passos nas montanhas.
  */
 
-const MARGIN = 500;
-const FACTION_COLORS = [0xe67e22, 0x1abc9c, 0xbdc3c7, 0xd4ac0d];
-const TEMPERAMENTS: Temperament[] = ["BELLIGERENT", "MERCANTILE", "PIOUS"];
+const FACTION_COLORS = [0xe67e22, 0x1abc9c, 0xbdc3c7, 0xd4ac0d, 0xe84393, 0x8e6c3a];
 
-/** Peso de cada tipo de terreno por bioma da região. */
+/** Tipos de terreno de superfície por bioma (sorteados) e quantos por região. */
 const BIOME_ZONES: Record<Biome, TerrainZone["type"][]> = {
+  OCEAN: [],
+  COAST: ["MUD", "FOREST"],
   PLAINS: ["HILL", "FOREST", "MUD"],
   FOREST: ["FOREST", "FOREST", "FOREST", "HILL", "SWAMP"],
+  DEEP_FOREST: ["FOREST", "FOREST", "FOREST", "FOREST", "FOREST", "SWAMP"],
   HILLS: ["HILL", "HILL", "HILL", "FOREST", "MUD"],
+  MOUNTAINS: ["HILL", "FOREST"],
   MARSH: ["SWAMP", "SWAMP", "MUD", "MUD", "FOREST"],
+  STEPPE: ["HILL", "MUD"],
+  DESERT: ["HILL"],
+  TUNDRA: ["FOREST", "MUD", "HILL"],
 };
 const BIOME_DENSITY: Record<Biome, [number, number]> = {
+  OCEAN: [0, 0],
+  COAST: [1, 2],
   PLAINS: [3, 5],
   FOREST: [7, 10],
+  DEEP_FOREST: [10, 14],
   HILLS: [6, 9],
+  MOUNTAINS: [2, 3],
   MARSH: [6, 9],
+  STEPPE: [1, 3],
+  DESERT: [1, 2],
+  TUNDRA: [2, 4],
+};
+/** Quanto cada bioma atrai povoados (terra fértil sim, deserto e tundra não). */
+const FERTILITY: Record<Biome, number> = {
+  OCEAN: -9,
+  COAST: 1,
+  PLAINS: 1,
+  FOREST: 0.5,
+  DEEP_FOREST: 0,
+  HILLS: 0.3,
+  MOUNTAINS: -9,
+  MARSH: -0.5,
+  STEPPE: 0,
+  DESERT: -1.5,
+  TUNDRA: -1.5,
 };
 
-function randomPoint(rng: Rng, margin = MARGIN): Point {
+function randomPoint(rng: Rng, margin: number): Point {
   return { x: rng.range(margin, WORLD_WIDTH - margin), y: rng.range(margin, WORLD_HEIGHT - margin) };
-}
-
-/** Sorteia um ponto que respeite as distâncias mínimas (ou o melhor encontrado). */
-function placePoint(rng: Rng, ok: (p: Point) => number, tries = 300, margin = MARGIN): Point {
-  let best = randomPoint(rng, margin);
-  let bestScore = -Infinity;
-  for (let i = 0; i < tries; i++) {
-    const p = randomPoint(rng, margin);
-    const score = ok(p);
-    if (score >= 0) return p;
-    if (score > bestScore) {
-      best = p;
-      bestScore = score;
-    }
-  }
-  return best;
 }
 
 /** Folga em relação às distâncias mínimas: >= 0 quando todas são respeitadas. */
@@ -70,6 +97,40 @@ function slack(p: Point, rules: readonly { at: Point; min: number }[]): number {
   let worst = Infinity;
   for (const r of rules) worst = Math.min(worst, distance(p, r.at) - r.min);
   return worst === Infinity ? 0 : worst;
+}
+
+/**
+ * Sorteia `tries` pontos válidos (`ok`) e fica com o de maior nota que respeite as distâncias;
+ * se nenhum respeitar, o que chegou mais perto disso.
+ */
+function bestPoint(
+  rng: Rng,
+  ok: (p: Point) => boolean,
+  rules: readonly { at: Point; min: number }[],
+  score: (p: Point) => number,
+  tries = 300,
+  margin = 600,
+): Point {
+  let best: Point | null = null;
+  let bestScore = -Infinity;
+  let fallback: Point | null = null;
+  let fallbackSlack = -Infinity;
+  for (let i = 0; i < tries; i++) {
+    const p = randomPoint(rng, margin);
+    if (!ok(p)) continue;
+    const s = slack(p, rules);
+    if (s >= 0) {
+      const sc = score(p);
+      if (sc > bestScore) {
+        best = p;
+        bestScore = sc;
+      }
+    } else if (s > fallbackSlack) {
+      fallback = p;
+      fallbackSlack = s;
+    }
+  }
+  return best ?? fallback ?? randomPoint(rng, margin);
 }
 
 function market(rng: Rng, kind: SettlementKind): SettlementSeed["market"] {
@@ -103,6 +164,16 @@ const DESCRIPTIONS: Record<SettlementKind, string[]> = {
 
 const POPULATION: Record<SettlementKind, [number, number]> = { VILLAGE: [110, 200], CITY: [480, 780], FORT: [240, 380] };
 const GARRISON: Record<SettlementKind, number> = { VILLAGE: 6, CITY: 14, FORT: 20 };
+const PORT_DESCRIPTIONS = [
+  "Porto de pescadores e contrabandistas: o sal e as notícias chegam pelo mar.",
+  "Cais de pedra e armazéns cheirando a peixe; os navios esperam o vento.",
+];
+const RIVER_DESCRIPTIONS = [
+  "Moinhos à beira do rio e várzeas férteis: pão não falta.",
+  "Cresceu em volta da travessia do rio; quem controla a margem cobra passagem.",
+];
+
+
 
 // --- Locais de contrato ---
 
@@ -193,36 +264,103 @@ function minimumSpanningTree(points: readonly Point[]): [number, number][] {
   return edges;
 }
 
-/** Estrada com uma curva no meio (não fica reta como régua). */
-function road(rng: Rng, a: Point, b: Point): Point[] {
-  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  const len = distance(a, b);
-  const nx = -(b.y - a.y) / (len || 1);
-  const ny = (b.x - a.x) / (len || 1);
-  const bend = rng.range(-0.15, 0.15) * len;
-  return [a, { x: mid.x + nx * bend, y: mid.y + ny * bend }, b];
+// --- Estradas e travessias ---
+
+/** Curvas suaves (Chaikin): corta os cantos do caminho em grade. */
+function smoothLine(points: readonly Point[], iterations = 2): Point[] {
+  let pts = [...points];
+  for (let k = 0; k < iterations; k++) {
+    if (pts.length < 3) return pts;
+    const out: Point[] = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 }, { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+}
+
+/** Direção do rio perto de um ponto (a do trecho mais próximo). */
+function riverAngleAt(river: { points: Point[] }, p: Point): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 1; i < river.points.length; i++) {
+    const a = river.points[i - 1];
+    const b = river.points[i];
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const d = distance(mid, p);
+    if (d < bestD) {
+      bestD = d;
+      best = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+  }
+  return best;
 }
 
 // --- Mundo ---
 
-export function generateWorld(seed: number): WorldDef {
+export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORLD_OPTIONS): WorldDef {
+  const size = WORLD_SIZES[options.size];
+  setWorldSize(size.cols, size.rows);
+  const W = WORLD_WIDTH;
+  const H = WORLD_HEIGHT;
   const rng = createRng(seed);
   const usedNames = new Set<string>();
+  const area = (size.cols * size.rows) / 80; // em relação ao continente médio
 
-  // Regiões com bioma
+  // 1. Geografia
+  const geoDef = generateGeography(rng, size.cols, size.rows);
+  const geo = new GeoMap(geoDef);
+
+  // Regiões: bioma da maioria das células, com nome
   const regions: RegionDef[] = [];
-  for (let row = 0; row < WORLD_ROWS; row++) {
-    for (let col = 0; col < WORLD_COLS; col++) {
-      const biome = rng.pick<Biome>(["PLAINS", "PLAINS", "FOREST", "HILLS", "MARSH"]);
+  const perCol = Math.round(WORLD.REGION_WIDTH / geoDef.cell);
+  const perRow = Math.round(WORLD.REGION_HEIGHT / geoDef.cell);
+  for (let row = 0; row < size.rows; row++) {
+    for (let col = 0; col < size.cols; col++) {
+      const count = new Map<Biome, number>();
+      let land = 0;
+      for (let r = row * perRow; r < (row + 1) * perRow; r++) {
+        for (let c = col * perCol; c < (col + 1) * perCol; c++) {
+          const b = geoDef.biome[r * geoDef.cols + c];
+          if (b !== "OCEAN") land++;
+          count.set(b, (count.get(b) ?? 0) + (b === "OCEAN" ? 0.35 : 1));
+        }
+      }
+      const biome = land < perCol * perRow * 0.2 ? "OCEAN" : [...count.entries()].filter(([b]) => b !== "OCEAN").sort((a, b) => b[1] - a[1])[0][0];
       regions.push({ col, row, biome, name: names.regionName(rng, biome) });
     }
   }
 
-  // Acampamento numa região interna (longe das bordas)
-  const campCenter = {
-    x: rng.range(WORLD.REGION_WIDTH * 1.2, WORLD_WIDTH - WORLD.REGION_WIDTH * 1.2),
-    y: rng.range(WORLD.REGION_HEIGHT * 0.9, WORLD_HEIGHT - WORLD.REGION_HEIGHT * 0.9),
+  // A terra principal (a maior massa de terra): ilhas ficam para os navios (Marco 17)
+  const main = mainLandmass(geoDef.cols, geoDef.rows, (i) => geoDef.biome[i] !== "OCEAN" && geoDef.lake[i] === 0);
+  const onMain = (p: Point) => main[geo.cellIndex(p.x, p.y)] === 1;
+  const landOk = (p: Point, clearance = 0) => onMain(p) && geo.isOpenLand(p, clearance);
+  /** Uma área retangular inteira em terra firme, sem rio (amostras numa grade de ~300 px). */
+  const areaOk = (c: Point, w: number, h: number) => {
+    const nx = Math.max(2, Math.ceil(w / 300));
+    const ny = Math.max(2, Math.ceil(h / 300));
+    for (let j = 0; j <= ny; j++) {
+      for (let i = 0; i <= nx; i++) {
+        const p = { x: c.x - w / 2 + (i * w) / nx, y: c.y - h / 2 + (j * h) / ny };
+        if (!landOk(p) || geo.riverAt(p.x, p.y, 120)) return false;
+      }
+    }
+    return true;
   };
+
+  // 2. Acampamento: terra temperada, perto do meio do continente, longe de rios
+  const campCenter = bestPoint(
+    rng,
+    (p) => areaOk(p, CAMP_WIDTH + 300, CAMP_HEIGHT + 300) && ["PLAINS", "FOREST", "STEPPE", "COAST", "HILLS"].includes(geo.biomeAt(p.x, p.y)),
+    [],
+    (p) => -distance(p, { x: W / 2, y: H / 2 }) + rng.range(0, 3000),
+    600,
+    WORLD.REGION_WIDTH,
+  );
   const origin = { x: Math.round(campCenter.x - CAMP_WIDTH / 2), y: Math.round(campCenter.y - CAMP_HEIGHT / 2) };
   const local = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
   const camp = {
@@ -232,16 +370,33 @@ export function generateWorld(seed: number): WorldDef {
     gate: local({ x: PALISADE.x - PALISADE.rx - 40, y: PALISADE.y }),
   };
 
-  // Povoados: os primeiros são capitais (cidade ou fortaleza)
-  const factionCount = rng.int(3, 4);
-  const count = rng.int(18, 24);
+  // 3. Povoados: os primeiros serão capitais dos reinos da história
+  const survivors = options.size === "SMALL" ? 3 : options.size === "LARGE" ? rng.int(4, 5) : rng.int(3, 4);
+  const years = WORLD_AGES[options.age].years;
+  const capitals = Math.min(FACTION_COLORS.length, survivors + (options.age === "YOUNG" ? 1 : options.age === "MIDDLE" ? 2 : 3));
+  const count = Math.max(capitals + 6, Math.round(rng.int(18, 24) * area));
+  const capitalSpacing = Math.sqrt((W * H) / capitals) * 0.55;
   const settlements: SettlementSeed[] = [];
   for (let i = 0; i < count; i++) {
     const kind: SettlementKind =
-      i < factionCount ? rng.pick<SettlementKind>(["CITY", "CITY", "FORT"]) : rng.chance(0.2) ? "FORT" : "VILLAGE";
-    const rules = [{ at: camp.center, min: 1900 }, ...settlements.map((s) => ({ at: s as Point, min: i < factionCount ? 8000 : 1900 }))];
-    const p = placePoint(rng, (q) => slack(q, rules), 400, 700);
+      i < capitals ? rng.pick<SettlementKind>(["CITY", "CITY", "FORT"]) : rng.chance(0.12) ? "CITY" : rng.chance(0.2) ? "FORT" : "VILLAGE";
+    // A planta inteira (muralha e um pouco de campo em volta) cabe em terra firme
+    const { w, h } = { w: TOWN_SIZE[kind].w + 500, h: TOWN_SIZE[kind].h + 500 };
+    const rules = [{ at: camp.center, min: 3800 }, ...settlements.map((s) => ({ at: s as Point, min: i < capitals ? capitalSpacing : 4200 }))];
+    const p = bestPoint(
+      rng,
+      (q) => areaOk(q, w, h),
+      rules,
+      (q) => {
+        const river = geo.distanceToRiver(q, 1600);
+        return FERTILITY[geo.biomeAt(q.x, q.y)] + (river < 1300 ? 2 : 0) + (geo.nearSea(q, 900) ? 0.8 : 0) + rng.range(0, 1.2);
+      },
+      400,
+      700,
+    );
     const [pmin, pmax] = POPULATION[kind];
+    const port = geo.nearSea(p, 900);
+    const river = geo.distanceToRiver(p, 1600) < 1300;
     settlements.push({
       id: `S${i}`,
       name: names.settlementName(rng, usedNames),
@@ -252,59 +407,79 @@ export function generateWorld(seed: number): WorldDef {
       population: rng.int(pmin, pmax),
       garrison: GARRISON[kind],
       market: market(rng, kind),
-      description: rng.pick(DESCRIPTIONS[kind]),
+      description: port ? rng.pick(PORT_DESCRIPTIONS) : river ? rng.pick(RIVER_DESCRIPTIONS) : rng.pick(DESCRIPTIONS[kind]),
+      port,
+      river,
     });
   }
 
-  // Reinos rivais: cada capital funda um; os outros povoados juram fidelidade ao mais próximo
-  const factions: FactionDef[] = settlements.slice(0, factionCount).map((capital, i) => ({
-    id: `F${i}`,
-    name: names.factionName(rng),
-    ruler: names.personName(rng),
-    color: FACTION_COLORS[i],
-    capitalId: capital.id,
-    temperament: rng.pick(TEMPERAMENTS),
-  }));
+  // 4. Séculos de história decidem reinos, fronteiras e ruínas
+  const year = rng.int(380, 920);
+  const history = simulateHistory(rng, settlements, capitals, survivors, year, years, FACTION_COLORS);
   for (const s of settlements) {
-    const capitals = factions.map((f) => ({ f, c: settlements.find((x) => x.id === f.capitalId)! }));
-    capitals.sort((a, b) => distance(a.c, s) - distance(b.c, s));
-    // Algumas aldeias distantes vivem livres de qualquer coroa
-    s.owner = s.kind === "VILLAGE" && rng.chance(0.25) ? "FREE" : capitals[0].f.id;
+    s.owner = history.owners.get(s.id) ?? "FREE";
+    if (s.owner === "RUINED") {
+      s.population = 0;
+      s.garrison = 0;
+    }
   }
+  const factions = history.factions;
 
-  // Locais de contrato nos ermos
-  const sites: SiteDef[] = [];
+  // 5. Locais de contrato nos ermos (o vau do pântano procura um rio)
   const allThemes: SiteTheme[] = ["GOBLIN_NEST", "BANDIT_CAMP", "HAUNTED_RUINS", "SWAMP_FORD"];
-  const themes = rng.shuffle<SiteTheme>([...allThemes, ...allThemes, ...Array.from({ length: 4 }, () => rng.pick(allThemes))]);
+  const siteCount = Math.max(6, Math.round(12 * area));
+  const themes = rng.shuffle<SiteTheme>(Array.from({ length: siteCount }, (_, i) => (i < 8 ? allThemes[i % 4] : rng.pick(allThemes))));
+  const sites: SiteDef[] = [];
   const siteZones: TerrainZone[] = [];
-  themes.forEach((theme, i) => {
+  for (const [i, theme] of themes.entries()) {
     const rules = [
-      { at: camp.center, min: 2300 },
-      ...settlements.map((s) => ({ at: s as Point, min: 1500 })),
-      ...sites.map((s) => ({ at: s.center, min: 2000 })),
+      { at: camp.center, min: 3500 },
+      ...settlements.map((s) => ({ at: s as Point, min: 2900 })),
+      ...sites.map((s) => ({ at: s.center, min: 3000 })),
     ];
-    const center = placePoint(rng, (q) => slack(q, rules), 400, 1100);
-    const layout = siteLayout(rng, theme, center);
-    siteZones.push(...layout.zones);
-    sites.push({ id: `L${i}`, name: `${SITE_THEME_LABEL[theme]} de ${names.placeName(rng)}`, theme, center, groups: layout.groups });
-  });
-
-  // Covis goblins: longe de tudo, perto das bordas
-  const lairs: Point[] = [];
-  for (let i = 0; i < 10; i++) {
-    const rules = [
-      { at: camp.center, min: 3000 },
-      ...settlements.map((s) => ({ at: s as Point, min: 1800 })),
-      ...sites.map((s) => ({ at: s.center, min: 1200 })),
-      ...lairs.map((l) => ({ at: l, min: 3000 })),
-    ];
-    lairs.push(placePoint(rng, (q) => slack(q, rules), 300, 250));
+    let chosen: { center: Point; layout: ReturnType<typeof siteLayout> } | null = null;
+    for (let attempt = 0; attempt < 6 && !chosen; attempt++) {
+      const center = bestPoint(
+        rng,
+        (q) => landOk(q, 500),
+        rules,
+        (q) => (theme === "SWAMP_FORD" ? -Math.abs(geo.distanceToRiver(q, 2000) - 900) / 300 : 0) + rng.range(0, 1),
+        300,
+        1100,
+      );
+      const layout = siteLayout(rng, theme, center);
+      if (layout.groups.every((g) => landOk(g, 60))) chosen = { center, layout };
+    }
+    if (!chosen) continue;
+    siteZones.push(...chosen.layout.zones);
+    sites.push({ id: `L${i}`, name: `${SITE_THEME_LABEL[theme]} de ${names.placeName(rng)}`, theme, center: chosen.center, groups: chosen.layout.groups });
   }
 
-  // Terreno: zonas por bioma, sem cobrir povoados, acampamento, locais e covis
+  // Covis goblins: longe de tudo, de preferência em colinas e matas
+  const lairs: Point[] = [];
+  const lairCount = Math.max(5, Math.round(10 * area));
+  for (let i = 0; i < lairCount; i++) {
+    const rules = [
+      { at: camp.center, min: 4500 },
+      ...settlements.map((s) => ({ at: s as Point, min: 3000 })),
+      ...sites.map((s) => ({ at: s.center, min: 1800 })),
+      ...lairs.map((l) => ({ at: l, min: 4500 })),
+    ];
+    const p = bestPoint(
+      rng,
+      (q) => landOk(q, 250),
+      rules,
+      (q) => (["HILLS", "FOREST", "DEEP_FOREST", "MOUNTAINS"].includes(geo.biomeAt(q.x, q.y)) ? 1 : 0) + rng.range(0, 1),
+      300,
+      400,
+    );
+    lairs.push({ x: Math.round(p.x), y: Math.round(p.y) });
+  }
+
+  // 6. Terreno de superfície: zonas conforme o bioma do lugar, sem cobrir povoados e locais
   const protectedAreas = [
-    ...settlements.map((s) => ({ at: s as Point, min: 650 })),
-    { at: camp.center, min: 1150 },
+    ...settlements.map((s) => ({ at: s as Point, min: Math.hypot(TOWN_SIZE[s.kind].w, TOWN_SIZE[s.kind].h) / 2 + 500 })),
+    { at: camp.center, min: 1300 },
     ...sites.map((s) => ({ at: s.center, min: 1000 })),
     ...lairs.map((l) => ({ at: l, min: 250 })),
   ];
@@ -314,31 +489,142 @@ export function generateWorld(seed: number): WorldDef {
     const target = rng.int(dmin, dmax);
     let placed = 0;
     for (let tries = 0; placed < target && tries < 120; tries++) {
-      const type = rng.pick(BIOME_ZONES[region.biome]);
-      const rx = rng.range(160, 480);
-      const ry = rng.range(110, 320);
       const x = region.col * WORLD.REGION_WIDTH + rng.range(200, WORLD.REGION_WIDTH - 200);
       const y = region.row * WORLD.REGION_HEIGHT + rng.range(200, WORLD.REGION_HEIGHT - 200);
+      const choices = BIOME_ZONES[geo.biomeAt(x, y)];
+      if (choices.length === 0 || !geo.isOpenLand({ x, y })) continue;
+      const type = rng.pick(choices);
+      const rx = rng.range(200, 650);
+      const ry = rng.range(150, 440);
       if (protectedAreas.some((a) => distance(a.at, { x, y }) < a.min + Math.max(rx, ry))) continue;
-      terrain.push({ type, x, y, rx, ry });
+      terrain.push({ type, x: Math.round(x), y: Math.round(y), rx: Math.round(rx), ry: Math.round(ry) });
       placed++;
     }
   }
   terrain.push(...siteZones);
 
-  // Estradas: árvore mínima entre o acampamento e os povoados; cada local liga ao povoado mais próximo
+  // 7. Estradas pelo caminho de menor custo: atravessar rio custa (vira ponte ou vau), montanha
+  //    custa muito (vira passo); estradas já abertas são reaproveitadas
+  const layouts = new Map<string, TownLayout>(settlements.map((s) => [s.id, townLayout(s.id, s.kind, s.x, s.y, s.owner === "RUINED")]));
+  const insideAnyTown = (x: number, y: number) =>
+    settlements.some((s) => {
+      const b = layouts.get(s.id)?.bounds;
+      return !!b && x > b.x - 90 && x < b.x + b.w + 90 && y > b.y - 90 && y < b.y + b.h + 90;
+    });
+  const roadCost = (x: number, y: number): number => {
+    if (insideAnyTown(x, y)) return Infinity;
+    const hgt = geo.heightAt(x, y);
+    if (hgt < geoDef.seaLevel || geo.isLake(x, y)) return Infinity;
+    const river = geo.riverAt(x, y, 60);
+    if (river) return river.width <= 50 ? 2 : 7;
+    if (hgt > geoDef.mountainLevel) return 9;
+    switch (geo.biomeAt(x, y)) {
+      case "HILLS":
+        return 1.6;
+      case "MARSH":
+        return 2.4;
+      case "DEEP_FOREST":
+        return 1.8;
+      case "FOREST":
+      case "DESERT":
+        return 1.4;
+      default:
+        return 1;
+    }
+  };
+  const nav = new NavGrid(W, H, 200, roadCost, 1, 0.5);
+  const roads: Point[][] = [];
+  const route = (a: Point, b: Point, head: Point[] = [], tail: Point[] = []): Point[] | null => {
+    const path = nav.findPath(a, b, 150000, false);
+    if (!path) return null;
+    const line = smoothLine([a, ...path.slice(0, -1), b]);
+    nav.markRoad(line, 0.5);
+    // Dentro do povoado a estrada vira a rua que vai do portão à praça
+    return [...head, ...line, ...tail];
+  };
+  /** Ponto de chegada de uma estrada: o portão do povoado voltado para o outro lado. */
+  const doorOf = (i: number, toward: Point): { out: Point; inner: Point[] } => {
+    if (i === 0) return { out: camp.gate, inner: [] };
+    const s = settlements[i - 1];
+    const layout = layouts.get(s.id) as TownLayout;
+    const g = nearestGate(layout, toward);
+    return { out: g.outside, inner: [{ x: g.x, y: g.y }] };
+  };
   const hubs: Point[] = [camp.gate, ...settlements];
-  const roads = minimumSpanningTree(hubs).map(([a, b]) => road(rng, hubs[a], hubs[b]));
+  for (const [a, b] of minimumSpanningTree(hubs)) {
+    const da = doorOf(a, hubs[b]);
+    const db = doorOf(b, hubs[a]);
+    const line = route(da.out, db.out, da.inner, db.inner);
+    if (line) roads.push(line);
+  }
+  const siteRoads = new Set<Point[]>();
   for (const s of sites) {
     const near = [...settlements].sort((a, b) => distance(a, s.center) - distance(b, s.center))[0];
-    roads.push(road(rng, near, s.center));
+    const door = doorOf(settlements.indexOf(near) + 1, s.center);
+    const line = route(door.out, s.center, door.inner);
+    if (line) {
+      roads.push(line);
+      siteRoads.add(line);
+    }
   }
 
-  const year = rng.int(380, 920);
+  // Travessias e passos ao longo das estradas
+  const crossings: CrossingDef[] = [];
+  const addCrossing = (kind: CrossingDef["kind"], p: Point, river: { id: string; points: Point[] }, width: number) => {
+    if (crossings.some((c) => distance(c, p) < 400)) return;
+    crossings.push({ id: `X${crossings.length}`, kind, x: Math.round(p.x), y: Math.round(p.y), angle: riverAngleAt(river, p), width: Math.round(width), riverId: river.id });
+  };
+  for (const line of roads) {
+    let entry: Point | null = null;
+    let lastPass: Point | null = null;
+    for (let k = 1; k < line.length; k++) {
+      const a = line[k - 1];
+      const b = line[k];
+      const steps = Math.max(1, Math.ceil(distance(a, b) / 40));
+      for (let s = 0; s <= steps; s++) {
+        const p = { x: a.x + ((b.x - a.x) * s) / steps, y: a.y + ((b.y - a.y) * s) / steps };
+        const river = geo.riverAt(p.x, p.y);
+        if (river && river.width > 50) {
+          entry ??= p;
+        } else if (entry) {
+          const mid = { x: (entry.x + p.x) / 2, y: (entry.y + p.y) / 2 };
+          const r = geo.riverAt(mid.x, mid.y) ?? geo.riverAt(entry.x, entry.y);
+          if (r) addCrossing(siteRoads.has(line) && r.width < 130 && rng.chance(0.6) ? "FORD" : "BRIDGE", mid, r.river, r.width);
+          entry = null;
+        }
+        if (geo.heightAt(p.x, p.y) > geoDef.mountainLevel - 0.02 && (!lastPass || distance(lastPass, p) > 200)) {
+          geoDef.passes.push({ x: Math.round(p.x), y: Math.round(p.y), r: GEO.PASS_RADIUS });
+          lastPass = p;
+        }
+      }
+    }
+  }
+  geoDef.crossings = crossings;
+  // Vaus naturais ao longo dos rios médios (os grandes só se atravessam por ponte)
+  for (const river of geoDef.rivers) {
+    if (river.kind === "STREAM") continue;
+    let run = rng.range(0.4, 1) * GEO.FORD_EVERY;
+    for (let i = 1; i < river.points.length; i++) {
+      run -= distance(river.points[i - 1], river.points[i]);
+      const w = river.widths[i];
+      if (run > 0 || w <= 50) continue;
+      run = GEO.FORD_EVERY * rng.range(0.8, 1.3);
+      const p = river.points[i];
+      if (w >= 130 || (!landOk({ x: p.x + w, y: p.y }) && !landOk({ x: p.x - w, y: p.y }))) continue;
+      if (!rng.chance(0.65)) continue;
+      const r = geo.riverAt(p.x, p.y);
+      if (r && r.river.id === river.id) addCrossing("FORD", p, river, r.width);
+    }
+  }
+
   const era = names.eraName(rng);
   const bandName = names.bandName(rng);
   const world: WorldDef = {
     seed,
+    options,
+    cols: size.cols,
+    rows: size.rows,
+    geo: geoDef,
     name: names.worldName(rng),
     era,
     year,
@@ -353,64 +639,61 @@ export function generateWorld(seed: number): WorldDef {
     roads,
     history: [],
   };
-  world.history = generateHistory(rng, world);
+  world.history = finishHistory(rng, world, history.entries);
   return world;
 }
 
-// --- História ---
-
-/**
- * Crônica do mundo antes do jogo começar: fundações, coroações, guerras que trocaram
- * povoados de mãos, uma calamidade antiga que deixou ruínas e a fundação do bando.
- */
-function generateHistory(rng: Rng, world: WorldDef): HistoryEntry[] {
-  const h: HistoryEntry[] = [];
-  const { year, settlements, factions, sites, regions } = world;
-  const name = (id: string) => settlements.find((s) => s.id === id)?.name ?? "?";
-
-  for (const s of settlements) {
-    const capital = factions.some((f) => f.capitalId === s.id);
-    const founded = year - rng.int(capital ? 280 : 60, capital ? 380 : 260);
-    h.push({ year: founded, text: `${names.personName(rng)} fundou ${s.name}${capital ? ", que viria a ser uma capital" : ""}.` });
-  }
-  for (const f of factions) {
-    h.push({ year: year - rng.int(150, 260), text: `${name(f.capitalId)} proclamou o ${f.name}.` });
-    h.push({ year: year - rng.int(1, 30), text: `${f.ruler} subiu ao trono do ${f.name}.` });
-  }
-
-  // Calamidade antiga: a origem das ruínas assombradas
-  const ruins = sites.find((s) => s.theme === "HAUNTED_RUINS");
-  const ancient = rng.pick(["a Praga Cinzenta", "a Noite dos Mil Ossos", "a Fome Vermelha", "o Despertar do Rei-Lich"]);
-  const ancientRegion = rng.pick(regions);
-  h.push({
-    year: year - rng.int(120, 220),
-    text: ruins
-      ? `${ancient[0].toUpperCase()}${ancient.slice(1)} devastou ${ancientRegion.name}; as ${ruins.name.toLowerCase()} ainda guardam os mortos.`
-      : `${ancient[0].toUpperCase()}${ancient.slice(1)} devastou ${ancientRegion.name}.`,
-  });
-
-  // Guerras entre os reinos
-  if (factions.length >= 2) {
-    const wars = rng.int(1, 3);
-    for (let i = 0; i < wars; i++) {
-      const [a, b] = rng.shuffle(factions);
-      const prize = rng.pick(settlements.filter((s) => s.owner === a.id && s.id !== a.capitalId)) ?? null;
-      const when = year - rng.int(10, 110);
-      h.push({
-        year: when,
-        text: prize
-          ? `Guerra entre o ${a.name} e o ${b.name}: ${prize.name} mudou de mãos e hoje serve ao ${a.name}.`
-          : `Guerra entre o ${a.name} e o ${b.name} terminou sem vencedor, mas com muitas viúvas.`,
-      });
+/** Maior massa de terra (células conectadas pelos lados). */
+function mainLandmass(cols: number, rows: number, isLand: (i: number) => boolean): Uint8Array {
+  const comp = new Int32Array(cols * rows).fill(-1);
+  let best = -1;
+  let bestSize = 0;
+  let id = 0;
+  for (let i = 0; i < cols * rows; i++) {
+    if (comp[i] !== -1 || !isLand(i)) continue;
+    const stack = [i];
+    comp[i] = id;
+    let size = 0;
+    while (stack.length) {
+      const u = stack.pop() as number;
+      size++;
+      const c = u % cols;
+      const r = Math.floor(u / cols);
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const cc = c + dc;
+        const rr = r + dr;
+        if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+        const v = rr * cols + cc;
+        if (comp[v] === -1 && isLand(v)) {
+          comp[v] = id;
+          stack.push(v);
+        }
+      }
     }
+    if (size > bestSize) {
+      bestSize = size;
+      best = id;
+    }
+    id++;
   }
+  const out = new Uint8Array(cols * rows);
+  for (let i = 0; i < out.length; i++) if (comp[i] === best) out[i] = 1;
+  return out;
+}
 
-  // Goblins e bandidos
-  const village = settlements.find((s) => s.kind === "VILLAGE");
+// --- História: a simulada mais as notícias recentes ---
+
+function finishHistory(rng: Rng, world: WorldDef, simulated: HistoryEntry[]): HistoryEntry[] {
+  const h = [...simulated];
+  const { year, settlements, sites } = world;
+  const ruins = sites.find((s) => s.theme === "HAUNTED_RUINS");
+  if (ruins) h.push({ year: year - rng.int(20, 90), text: `Os mortos voltaram a andar nas ${ruins.name.toLowerCase()}; ninguém mais passa por lá à noite.` });
+  const village = settlements.find((s) => s.kind === "VILLAGE" && s.owner !== "RUINED");
   if (village) h.push({ year: year - rng.int(2, 12), text: `Goblins dos ermos saquearam ${village.name}; ninguém foi punido.` });
   const bandits = sites.find((s) => s.theme === "BANDIT_CAMP");
   if (bandits) h.push({ year: year - rng.int(1, 5), text: `Desertores de guerra formaram o ${bandits.name.toLowerCase()} e cobram pedágio nas estradas.` });
-
+  const great = world.geo.rivers.find((r) => r.kind === "GREAT");
+  if (great) h.push({ year: year - rng.int(30, 150), text: `Uma cheia do ${great.name} levou pontes e moinhos; os velhos ainda contam.` });
   h.push({ year: year - 1, text: `Um punhado de soldados sem senhor jurou lealdade a um novo Comandante: nasciam os ${world.bandName}.` });
   h.push({ year, text: `Os ${world.bandName} montam acampamento em ${regionName(world, world.camp.center)} em busca de contratos.` });
   return h.sort((x, y) => x.year - y.year);

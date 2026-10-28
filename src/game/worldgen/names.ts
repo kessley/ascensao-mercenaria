@@ -59,6 +59,13 @@ const REGION_FORMS: Record<string, string[]> = {
   FOREST: ["Bosque de", "Mata de", "Floresta de", "Selva Velha de"],
   HILLS: ["Colinas de", "Serra de", "Penhascos de", "Altos de"],
   MARSH: ["Pântano de", "Brejo de", "Lodaçal de", "Alagados de"],
+  OCEAN: ["Mar de", "Baía de", "Águas de"],
+  COAST: ["Costa de", "Praias de", "Enseada de"],
+  DEEP_FOREST: ["Selva de", "Mata Fechada de", "Floresta Negra de"],
+  MOUNTAINS: ["Montes de", "Cordilheira de", "Picos de"],
+  STEPPE: ["Estepe de", "Pradarias de", "Campinas de"],
+  DESERT: ["Deserto de", "Areais de", "Dunas de"],
+  TUNDRA: ["Tundra de", "Ermos Gelados de", "Neves de"],
 };
 
 export function regionName(rng: Rng, biome: string): string {
@@ -99,4 +106,9 @@ const BAND_NAMES = ["Corvos de Cinza", "Lobos sem Senhor", "Filhos da Estrada", 
 
 export function bandName(rng: Rng): string {
   return rng.pick(BAND_NAMES);
+}
+
+/** "do Reino de X" / "da Liga de X": a preposição certa para o nome de um reino. */
+export function ofRealm(name: string): string {
+  return /^Liga /.test(name) ? `da ${name}` : `do ${name}`;
 }

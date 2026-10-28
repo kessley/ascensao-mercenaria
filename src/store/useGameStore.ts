@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  AGENTS,
   BALANCE,
   ECONOMY,
   LIEUTENANTS,
@@ -8,9 +9,11 @@ import {
   SUPPORT,
   TROOPS,
   BUILDINGS,
+  GEO,
   REALM,
   SAVE,
   WORLD,
+  setWorldSize,
   type BuildingId,
   type EnemyKind,
   type Formation,
@@ -22,7 +25,10 @@ import { generateContract, type Contract } from "../game/data/contracts";
 import type { WorldDef } from "../game/data/world";
 import {
   bandStrength,
+  bridgeController,
   buildingCost,
+  calamityDelay,
+  playerBridges,
   garrisonCap,
   isCalamityOwner,
   isFactionOwner,
@@ -38,9 +44,20 @@ import {
   type RaidOutcome,
   type Settlement,
 } from "../game/sim/realm";
-import { settlementName } from "../game/worldgen/names";
+import { ofRealm, settlementName } from "../game/worldgen/names";
 import { generateWorld } from "../game/worldgen/generateWorld";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
+import {
+  FOLLOWERS,
+  applyCampEvent,
+  driftBonds,
+  hasFollower,
+  pickCampEvent,
+  shareVictory,
+  type CampContext,
+  type CampEvent,
+  type Follower,
+} from "../game/sim/campEvents";
 import { createRng, randomSeed } from "../game/worldgen/rng";
 import type { Point } from "../utils/math";
 import { battalionWage, dailyRations, reinforceCostPerSoldier, weeklyWages } from "../utils/economy";
@@ -63,6 +80,8 @@ export type CampPanel =
   | { kind: "LIEUTENANT"; lieutenantId: string }
   | { kind: "STABLE" }
   | { kind: "TOWN"; settlementId: string }
+  /** Ponte sobre um rio: queimar, reconstruir. */
+  | { kind: "BRIDGE"; bridgeId: string }
   /** Salvar, carregar e novo mundo (aberto pelo HUD, em qualquer lugar). */
   | { kind: "GAME" };
 
@@ -231,7 +250,7 @@ export interface EngagementInfo {
   notes?: string[];
 }
 
-/** Bando inimigo como aparece no Mapa Múndi. */
+/** Bando inimigo como aparece no Mapa do Continente. */
 export interface WarbandSighting {
   id: string;
   name: string;
@@ -243,9 +262,12 @@ export interface WarbandSighting {
   seenDay: number;
   /** Para onde marcha (só quando visível). */
   heading: Point | null;
+  /** Tipo do bando (patrulha, mensageiro, refugiados não são ameaça) e se ataca o bando. */
+  kind?: string;
+  hostile?: boolean;
 }
 
-/** Retrato do mundo publicado pela cena quando o Mapa Múndi está aberto. */
+/** Retrato do mundo publicado pela cena quando o Mapa do Continente está aberto. */
 export interface WorldSnapshot {
   cols: number;
   rows: number;
@@ -287,7 +309,7 @@ export type BattleCommand =
   /** Toque de trombeta pré-combinado para os batalhões `ids` (vazio = todo o exército). */
   | { type: "TRUMPET"; ids: string[]; call: TrumpetCall }
   | { type: "WAR_CRY"; ids: string[] }
-  /** Viagem rápida pelo Mapa Múndi até o ponto (x, y) do mundo. */
+  /** Viagem rápida pelo Mapa do Continente até o ponto (x, y) do mundo. */
   | { type: "TRAVEL"; ids: string[]; x: number; y: number }
   /** Fundar uma vila onde o Comandante está. */
   | { type: "FOUND"; ids: string[] }
@@ -355,6 +377,26 @@ export interface GameState {
   calamities: Calamity[];
   nextCalamityDay: number;
   siege: SiegeState | null;
+  /** Pontes queimadas (ids das travessias do mundo). */
+  burnedBridges: string[];
+
+  // --- Vida no acampamento (Marco 12) ---
+  /** Honra do bando (0–100): cumprir a palavra, poupar os fracos. Ganha peso no Marco 15. */
+  honor: number;
+  /** Humor do acampamento (−30..+30): soma na moral inicial e volta devagar ao normal. */
+  campMood: number;
+  /** Cozinheiro, mascate, curandeira, capelão, famílias. */
+  followers: Follower[];
+  /** Relação entre cada par de tenentes (−100..100; chave "idA|idB"). */
+  bonds: Record<string, number>;
+  /** Evento com escolha esperando a decisão do Comandante (pausa o mundo). */
+  campEvent: CampEvent | null;
+  /** Antes deste dia não há evento novo no acampamento. */
+  nextEventDay: number;
+  /** Dia da última vitória (a festa no acampamento). */
+  lastVictoryDay: number | null;
+  /** Campos de batalha recentes (corvos voando em cima por uns dias). */
+  battlefields: { x: number; y: number; day: number }[];
   worldMapOpen: boolean;
   worldSnapshot: WorldSnapshot | null;
 
@@ -415,6 +457,25 @@ export interface GameState {
   markHorde: (id: string, day: number) => void;
   markArmy: (factionId: string, day: number) => void;
   setWorldMapOpen: (open: boolean) => void;
+  /** Queima uma ponte (irrita quem a controla); reconstruir custa madeira (ouro). */
+  burnBridge: (id: string) => boolean;
+  rebuildBridge: (id: string) => boolean;
+  /** O Comandante chegou ao acampamento ou descansou nele: às vezes acontece um evento. */
+  campTick: (reason: "ENTER" | "REST") => void;
+  /** Escolha de uma resposta do evento do acampamento. */
+  resolveCampEvent: (option: number) => void;
+  /** Dispensa um seguidor do acampamento. */
+  dismissFollower: (id: string) => void;
+  /** O bando atacou uma patrulha ou mensageiro de um reino em paz: o reino fica sabendo. */
+  provokeFaction: (factionId: string, what: string) => void;
+  /** Mensageiro real abatido: despachos lidos (o que diziam volta como texto). */
+  interceptCourier: (factionId: string) => string;
+  /** O bando atacou refugiados. */
+  attackRefugees: (from: string) => void;
+  /** Um combate terminou aqui: corvos por uns dias. */
+  markBattlefield: (x: number, y: number) => void;
+  /** Pedágio ao cruzar a ponte de outro; devolve o texto do que aconteceu (ou null se não há cobrança). */
+  crossBridge: (id: string) => string | null;
   /** Acontecimento do mundo que entra no diário (bandos avistados, destruídos...). */
   chronicle: (text: string, tone?: LogTone) => void;
   setWorldSnapshot: (snapshot: WorldSnapshot | null) => void;
@@ -505,6 +566,27 @@ function initialArmy(): BattalionData[] {
 
 let logSeq = 0;
 
+/** O que os eventos do acampamento olham e mudam. */
+function campContext(s: GameState): CampContext {
+  return {
+    day: s.day,
+    gold: s.gold,
+    rations: s.rations,
+    debt: s.debt,
+    battalions: s.battalions,
+    lieutenants: s.lieutenants,
+    followers: s.followers,
+    honor: s.honor,
+    campMood: s.campMood,
+    bonds: s.bonds,
+    arrearsWeeks: s.arrearsWeeks,
+    hungryDays: s.hungryDays,
+    pendingMutiny: s.pendingMutiny,
+    lastVictoryDay: s.lastVictoryDay,
+    bandName: s.world?.bandName ?? "mercenários",
+  };
+}
+
 /** Estado de interface (ou recriado na carga) que não vai para o save. */
 const TRANSIENT_KEYS = new Set<string>([
   "phase",
@@ -538,6 +620,9 @@ type DayState = Pick<
   | "lieutenants"
   | "scouts"
   | "messengers"
+  | "followers"
+  | "campMood"
+  | "bonds"
 >;
 
 const addHistory = (history: string[], line: string) => [...history, line].slice(-LIEUTENANTS.HISTORY_SIZE);
@@ -582,8 +667,12 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
   for (let i = 0; i < days; i++) {
     s.day++;
 
-    // Comida
-    const need = dailyRations(s.battalions);
+    // Humor do acampamento volta devagar ao normal; tenentes convivendo se aproximam ou se afastam
+    s.campMood = s.campMood > 0 ? Math.max(0, s.campMood - 2) : Math.min(0, s.campMood + 2);
+    s.bonds = driftBonds(s.bonds, s.lieutenants);
+
+    // Comida (soldados, Comandante e seguidores; o cozinheiro aproveita melhor)
+    const need = dailyRations(s.battalions, s.followers);
     if (s.rations >= need) {
       s.rations -= need;
       if (s.hungryDays > 0) log.push(entry(s.day, "O exército voltou a comer. A fome acabou.", "good"));
@@ -592,6 +681,12 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
       s.rations = 0;
       s.hungryDays++;
       log.push(entry(s.day, `Sem rações! ${s.hungryDays} dia(s) de fome: a moral vai despencar.`, "bad"));
+      // Seguidores não ficam para passar fome
+      const leaving = s.hungryDays >= 2 ? s.followers[s.followers.length - 1] : undefined;
+      if (leaving) {
+        s.followers = s.followers.slice(0, -1);
+        log.push(entry(s.day, `${leaving.name} (${FOLLOWERS[leaving.role].label.toLowerCase()}) foi embora: não há o que comer.`, "bad"));
+      }
     }
 
     // Pagamento
@@ -623,8 +718,10 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     s.debt += wages;
     s.arrearsWeeks++;
     const deserted: string[] = [];
+    // Quem tem a família no acampamento pensa duas vezes antes de desertar
+    const rate = ECONOMY.DESERTION_RATE * (hasFollower(s.followers, "FAMILY") ? 0.5 : 1);
     for (const b of s.battalions) {
-      const lost = Math.max(1, Math.round(b.soldiers * ECONOMY.DESERTION_RATE));
+      const lost = Math.max(1, Math.round(b.soldiers * rate));
       b.soldiers = Math.max(0, b.soldiers - lost);
       deserted.push(`${b.name} −${lost}`);
     }
@@ -667,6 +764,9 @@ function dayState(s: GameState): DayState {
     lieutenants: s.lieutenants,
     scouts: s.scouts,
     messengers: s.messengers,
+    followers: s.followers,
+    campMood: s.campMood,
+    bonds: s.bonds,
   };
 }
 
@@ -770,8 +870,17 @@ function campaignState(world: WorldDef | null): CampaignState {
     settlements,
     factions,
     calamities: [],
-    nextCalamityDay: r.int(REALM.CALAMITY_FIRST_DAY[0], REALM.CALAMITY_FIRST_DAY[1]),
+    nextCalamityDay: Math.round(r.int(REALM.CALAMITY_FIRST_DAY[0], REALM.CALAMITY_FIRST_DAY[1]) * (world ? calamityDelay(world) : 1)),
     siege: null,
+    burnedBridges: [],
+    honor: 50,
+    campMood: 0,
+    followers: [],
+    bonds: {},
+    campEvent: null,
+    nextEventDay: 2,
+    lastVictoryDay: null,
+    battlefields: [],
     worldMapOpen: false,
     worldSnapshot: null,
     battleHud: null,
@@ -792,7 +901,10 @@ function campaignState(world: WorldDef | null): CampaignState {
 export const useGameStore = create<GameState>()((set, get) => ({
   ...campaignState(null),
 
-  startCampaign: (world) => set(campaignState(world)),
+  startCampaign: (world) => {
+    setWorldSize(world.cols, world.rows);
+    set(campaignState(world));
+  },
   newGame: () => set(campaignState(null)),
 
   saveGame: (slot) => {
@@ -809,6 +921,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       slot,
       savedAt: new Date().toISOString(),
       seed: s.world.seed,
+      options: s.world.options,
       worldName: s.world.name,
       bandName: s.world.bandName,
       day: s.day,
@@ -821,7 +934,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const file = readSave(slot);
     if (!file) return "Save não encontrado.";
     if (file.version !== SAVE.VERSION) return "Save de outra versão do jogo.";
-    const world = generateWorld(file.seed);
+    const world = generateWorld(file.seed, file.options);
     if (world.name !== file.worldName) return "Este mundo não pôde ser recriado (o gerador mudou desde o save).";
     const loaded = file.store as Partial<CampaignState>;
     logSeq = Math.max(0, ...(loaded.log ?? []).map((e) => e.id));
@@ -926,7 +1039,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       }
     }
     const deadline = s.day + contract.travelDays + WORLD.CONTRACT_GRACE_DAYS;
-    intro.push(...council.log, entry(s.day, `O local está marcado no Mapa Múndi (Tab). Prazo: dia ${deadline}.`));
+    intro.push(...council.log, entry(s.day, `O local está marcado no Mapa do Continente (Tab). Prazo: dia ${deadline}.`));
 
     set({
       gold: s.gold + contract.advance,
@@ -1010,6 +1123,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
       const day = state.day + 1;
       const r = realmDay({ ...realm, gold: state.gold, rations: state.rations }, s.world, day, s.world.camp.center);
       realm = r.state;
+      if (day % 7 === 0) {
+        const tolls = playerBridges(s.world, realm.settlements, s.burnedBridges) * GEO.BRIDGE_TOLL;
+        if (tolls > 0) {
+          realm = { ...realm, gold: realm.gold + tolls };
+          entries.push(entry(day, `Pedágio das pontes do bando: +${tolls} de ouro.`, "good"));
+        }
+      }
       for (const l of r.log) entries.push(entry(day, l.text, l.tone));
       const passed = passDays({ ...state, gold: realm.gold, rations: realm.rations }, 1);
       state = passed.state;
@@ -1082,12 +1202,113 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const rations = Math.floor(s.rations * WORLD.WARBAND.CAMP_RAID_RATIONS);
     const gold = Math.floor(s.gold * WORLD.WARBAND.CAMP_RAID_GOLD);
+    const lines = [entry(s.day, `${band} atacou o acampamento desguarnecido: levou ${rations} rações e ${gold} de ouro.`, "bad")];
+    // Os seguidores não têm quem os defenda
+    let followers = s.followers;
+    if (followers.length > 0 && Math.random() < 0.5) {
+      const victim = followers[Math.floor(Math.random() * followers.length)];
+      followers = followers.filter((f) => f.id !== victim.id);
+      lines.push(entry(s.day, `${victim.name} (${FOLLOWERS[victim.role].label.toLowerCase()}) foi morto no ataque ao acampamento.`, "bad"));
+    }
+    set({ rations: s.rations - rations, gold: s.gold - gold, followers, log: appendLog(s.log, lines) });
+  },
+
+  campTick: (reason) => {
+    const s = get();
+    if (!s.world || s.campEvent || s.mutiny || s.battleReport || s.day < s.nextEventDay) return;
+    // Nem todo dia tem drama; sem evento hoje, só amanhã de novo
+    if (Math.random() > (reason === "REST" ? 0.6 : 0.5)) {
+      set({ nextEventDay: s.day + 1 });
+      return;
+    }
+    const event = pickCampEvent(campContext(s));
+    set({ campEvent: event, nextEventDay: s.day + (event ? 2 : 1) });
+  },
+
+  resolveCampEvent: (option) => {
+    const s = get();
+    const e = s.campEvent;
+    if (!e || !e.options[option] || e.options[option].disabled) return;
+    const r = applyCampEvent(campContext(s), e, option);
+    const logs = r.log.map((l) => entry(s.day, l.text, l.tone));
+    let lieutenants = r.ctx.lieutenants;
+    for (const d of r.loyalty) {
+      const res = applyLoyalty(lieutenants, (l) => (l.id === d.id ? d.delta : 0), s.day, `"${e.title}" no acampamento`);
+      lieutenants = res.lieutenants;
+      logs.push(...res.log);
+    }
     set({
-      rations: s.rations - rations,
-      gold: s.gold - gold,
+      campEvent: null,
+      gold: r.ctx.gold,
+      rations: r.ctx.rations,
+      debt: r.ctx.debt,
+      battalions: r.ctx.battalions,
+      lieutenants: unassignMissing(lieutenants, r.ctx.battalions),
+      followers: r.ctx.followers,
+      honor: r.ctx.honor,
+      campMood: r.ctx.campMood,
+      bonds: r.ctx.bonds,
+      log: appendLog(s.log, logs),
+    });
+  },
+
+  provokeFaction: (factionId, what) => {
+    const s = get();
+    const def = s.world?.factions.find((f) => f.id === factionId);
+    const factions = s.factions.map((f) => {
+      if (f.id !== factionId) return f;
+      const relation = Math.max(-100, f.relation + AGENTS.PROVOKE_RELATION);
+      return { ...f, relation, atWar: f.atWar || relation <= REALM.WAR_BELOW };
+    });
+    const war = factions.find((f) => f.id === factionId)?.atWar && !s.factions.find((f) => f.id === factionId)?.atWar;
+    set({
+      factions,
       log: appendLog(s.log, [
-        entry(s.day, `${band} atacou o acampamento desguarnecido: levou ${rations} rações e ${gold} de ouro.`, "bad"),
+        entry(s.day, `Os ${s.world?.bandName ?? "mercenários"} atacaram ${what} ${ofRealm(def?.name ?? "reino")}.${war ? " É guerra!" : ""}`, "bad"),
       ]),
+    });
+  },
+
+  interceptCourier: (factionId) => {
+    const s = get();
+    const def = s.world?.factions.find((f) => f.id === factionId);
+    const state = s.factions.find((f) => f.id === factionId);
+    const atWar = !!state?.atWar;
+    const factions = atWar ? s.factions : s.factions.map((f) => (f.id === factionId ? { ...f, relation: Math.max(-100, f.relation + AGENTS.COURIER_RELATION) } : f));
+    const towns = s.settlements.filter((t) => t.owner === factionId);
+    const garrison = towns.reduce((n, t) => n + t.garrison, 0);
+    const next = state ? state.lastArmyDay + REALM.ARMY_EVERY_DAYS : 0;
+    const text = `Despachos ${ofRealm(def?.name ?? "reino")}: ${towns.length} povoado(s), ${garrison} homens de guarnição${
+      atWar ? `; próximo exército contra nós por volta do dia ${next}` : ""
+    }. Na bolsa, ${AGENTS.COURIER_GOLD} de ouro.`;
+    set({
+      gold: s.gold + AGENTS.COURIER_GOLD,
+      factions,
+      log: appendLog(s.log, [entry(s.day, `Mensageiro real interceptado. ${text}`, atWar ? "good" : "bad")]),
+    });
+    return text;
+  },
+
+  attackRefugees: (from) => {
+    const s = get();
+    set({
+      honor: Math.max(0, s.honor + AGENTS.REFUGEE_HONOR),
+      log: appendLog(s.log, [entry(s.day, `Os ${s.world?.bandName ?? "mercenários"} atacaram refugiados de ${from}. A notícia corre.`, "bad")]),
+    });
+  },
+
+  markBattlefield: (x, y) => {
+    const s = get();
+    set({ battlefields: [...s.battlefields.filter((b) => s.day - b.day <= 2), { x: Math.round(x), y: Math.round(y), day: s.day }].slice(-12) });
+  },
+
+  dismissFollower: (id) => {
+    const s = get();
+    const f = s.followers.find((x) => x.id === id);
+    if (!f) return;
+    set({
+      followers: s.followers.filter((x) => x.id !== id),
+      log: appendLog(s.log, [entry(s.day, `${f.name} (${FOLLOWERS[f.role].label.toLowerCase()}) foi dispensado do acampamento.`)]),
     });
   },
 
@@ -1279,7 +1500,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       // Povoados ocupados pela horda ficam livres (o jogador pode reivindicá-los)
       settlements: s.settlements.map((t) => (t.owner === id ? { ...t, owner: "FREE", garrison: 3 } : t)),
       factions: s.factions.map((f) => ({ ...f, relation: Math.min(100, f.relation + REALM.CALAMITY_RELATION) })),
-      nextCalamityDay: s.day + r.int(REALM.CALAMITY_GAP_DAYS[0], REALM.CALAMITY_GAP_DAYS[1]),
+      nextCalamityDay: s.day + Math.round(r.int(REALM.CALAMITY_GAP_DAYS[0], REALM.CALAMITY_GAP_DAYS[1]) * (s.world ? calamityDelay(s.world) : 1)),
       log: appendLog(s.log, [
         entry(s.day, `${c.leader} caiu diante dos ${s.world?.bandName ?? "mercenários"}! ${c.name} chegou ao fim.`, "good"),
         entry(s.day, `Os reinos agradecem: ${REALM.CALAMITY_REWARD} de ouro e a gratidão das coroas.`, "good"),
@@ -1294,6 +1515,60 @@ export const useGameStore = create<GameState>()((set, get) => ({
   markArmy: (factionId, day) =>
     set((s) => ({ factions: s.factions.map((f) => (f.id === factionId ? { ...f, lastArmyDay: day } : f)) })),
 
+  burnBridge: (id) => {
+    const s = get();
+    const c = s.world?.geo.crossings.find((x) => x.id === id && x.kind === "BRIDGE");
+    if (!s.world || !c || s.burnedBridges.includes(id)) return false;
+    const river = s.world.geo.rivers.find((r) => r.id === c.riverId)?.name ?? "rio";
+    const owner = bridgeController(s.settlements, c)?.owner;
+    const factions = s.factions.map((f) => {
+      if (f.id !== owner) return f;
+      const relation = Math.max(-100, f.relation + GEO.BRIDGE_BURN_RELATION);
+      return { ...f, relation, atWar: f.atWar || relation <= REALM.WAR_BELOW };
+    });
+    const def = s.world.factions.find((f) => f.id === owner);
+    set({
+      burnedBridges: [...s.burnedBridges, id],
+      factions,
+      log: appendLog(s.log, [
+        entry(s.day, `Os ${s.world.bandName} queimaram a ponte sobre o ${river}${def ? `; o ${def.name} não vai esquecer` : ""}.`, "bad"),
+      ]),
+    });
+    return true;
+  },
+
+  rebuildBridge: (id) => {
+    const s = get();
+    if (!s.world || !s.burnedBridges.includes(id) || s.gold < GEO.BRIDGE_REBUILD_GOLD) return false;
+    const c = s.world.geo.crossings.find((x) => x.id === id);
+    const river = s.world.geo.rivers.find((r) => r.id === c?.riverId)?.name ?? "rio";
+    set({
+      gold: s.gold - GEO.BRIDGE_REBUILD_GOLD,
+      burnedBridges: s.burnedBridges.filter((x) => x !== id),
+      log: appendLog(s.log, [entry(s.day, `A ponte sobre o ${river} foi reconstruída (−${GEO.BRIDGE_REBUILD_GOLD} de ouro em madeira).`, "good")]),
+    });
+    return true;
+  },
+
+  crossBridge: (id) => {
+    const s = get();
+    const c = s.world?.geo.crossings.find((x) => x.id === id);
+    if (!s.world || !c) return null;
+    const town = bridgeController(s.settlements, c);
+    // Ponte do bando, de ninguém, de calamidade ou de reino em guerra: ninguém cobra
+    if (!town || town.owner === "PLAYER" || isCalamityOwner(town.owner) || s.factions.some((f) => f.id === town.owner && f.atWar)) return null;
+    const toll = Math.round(GEO.BRIDGE_TOLL / 2);
+    if (s.gold >= toll) {
+      set({ gold: s.gold - toll });
+      return `Pedágio na ponte de ${town.name}: −${toll} de ouro.`;
+    }
+    // Sem dinheiro: passa à força, e o dono não gosta
+    if (isFactionOwner(town.owner)) {
+      set({ factions: s.factions.map((f) => (f.id === town.owner ? { ...f, relation: Math.max(-100, f.relation - 3) } : f)) });
+    }
+    return `Sem ouro para o pedágio de ${town.name}: o bando passou à força.`;
+  },
+
   setWorldMapOpen: (open) => set({ worldMapOpen: open, contextMenu: null, ...(open ? {} : { worldSnapshot: null }) }),
   setWorldSnapshot: (snapshot) => set({ worldSnapshot: snapshot }),
   chronicle: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
@@ -1305,6 +1580,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (s.battleReport) return; // relatório anterior ainda aberto
 
     const byId = new Map(survivors.map((x) => [x.id, x]));
+    const healer = hasFollower(s.followers, "HEALER");
+    let healed = 0;
     let casualties = 0;
     const lostBattalions: string[] = [];
     const remaining: BattalionData[] = [];
@@ -1318,7 +1595,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
         remaining.push(b);
         continue;
       }
-      const alive = report.survivors;
+      let alive = report.survivors;
+      // A curandeira tira do chão um em cada três caídos (feridos que ainda tinham salvação)
+      if (healer && alive > 0 && b.soldiers - alive >= 2) {
+        const saved = Math.floor((b.soldiers - alive) / 3);
+        alive += saved;
+        healed += saved;
+      }
       casualties += b.soldiers - alive;
       if (alive <= 0) {
         lostBattalions.push(b.name);
@@ -1346,6 +1629,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }
 
     const notes: string[] = [];
+    if (healed > 0) notes.push(`A curandeira salvou ${healed} ferido(s) que tinham caído.`);
     let gold = s.gold;
     let iron = s.iron;
     let goldEarned = 0;
@@ -1362,7 +1646,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     // Saque de quem caiu (só se o campo ficou com o bando; amotinados não são saqueados)
     if (result === "VICTORY" && info.enemiesKilled > 0 && !mutiny) {
       loot = {
-        gold: info.enemiesKilled * PROGRESSION.LOOT_GOLD_PER_ENEMY,
+        // O mascate revende o que o bando tira dos mortos por um preço melhor
+        gold: Math.round(info.enemiesKilled * PROGRESSION.LOOT_GOLD_PER_ENEMY * (hasFollower(s.followers, "PEDDLER") ? 1.25 : 1)),
         iron: Math.floor(info.enemiesKilled * PROGRESSION.LOOT_IRON_PER_ENEMY),
       };
       gold += loot.gold;
@@ -1490,6 +1775,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
         return { ...x, deliveries, level };
       });
 
+    // Vitória: festa no acampamento e tenentes que lutaram lado a lado mais próximos
+    const together = lieutenants.filter((l) => fought.has(l.id)).map((l) => l.id);
     set({
       gold,
       iron,
@@ -1503,6 +1790,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       mutiny,
       lieutenantCandidates,
       factions,
+      bonds: result === "VICTORY" ? shareVictory(s.bonds, together) : s.bonds,
+      lastVictoryDay: result === "VICTORY" && !info.mutinyOver ? s.day : s.lastVictoryDay,
       log: appendLog(s.log, logEntries),
       battleReport: { result, title, goldEarned, loot, casualties, lostBattalions, xpGains, notes },
     });

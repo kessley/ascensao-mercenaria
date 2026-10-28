@@ -29,12 +29,18 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
   - **Mundo procedural (como Dwarf Fortress):** cada campanha nasce num mundo novo, gerado de uma semente que o jogador pode digitar ou sortear (a mesma semente gera sempre o mesmo mundo). O gerador cria regiões com bioma (campos, florestas, colinas, pântanos) e nome próprio, a posição do acampamento, povoados com nomes gerados (aldeias, cidades, fortalezas), dois ou três reinos rivais com capital e governante, locais de contrato com layout próprio (ninho goblin, covil de bandidos, ruínas assombradas, vau do pântano), covis de monstros e estradas ligando tudo.
   - **História do mundo:** antes do jogo começar, o mundo já tem séculos de crônica gerada: quem fundou cada povoado, quando os reinos foram proclamados, guerras que trocaram povoados de mãos, uma calamidade antiga que deixou ruínas, os saques recentes e a fundação do bando do jogador. A crônica fica na tela de criação e na Tenda do Comandante.
   - **Sem telas de batalha:** o combate começa quando tropas e inimigos se encontram, em qualquer ponto do mapa, e termina sozinho quando ninguém mais está lutando, com um relatório (baixas, XP de quem lutou, saque, contrato). Recuar é simplesmente sair dali.
-  - **O tempo é a marcha:** o dia avança com a distância percorrida pelo exército (e devagar com o tempo parado). Dentro do acampamento e durante um combate o relógio para. Rações, salários, prazos e o surgimento de ameaças correm nesse relógio.
+  - **O tempo é a marcha:** o dia avança com a distância percorrida pelo exército — 3 regiões por dia (≈ 1,5 min de marcha; a noite dura ≈ 30 s) — e devagar com o tempo parado (6 min por dia). Dentro das muralhas de um povoado só corre o relógio de quem está parado: andar pelas ruas não é marcha. Dentro do acampamento e durante um combate o relógio para. Rações, salários, prazos e o surgimento de ameaças correm nesse relógio.
   - **Dia e noite:** o dia tem horas e vira na aurora. À noite o mundo escurece e só tochas, fogueiras e janelas iluminam.
     - O bando escolhe entre marchar com tochas acesas (enxerga mais, mas é visto de longe) ou no escuro (se esconde dos homens, mas não de goblins e mortos-vivos, que enxergam e lutam melhor à noite).
     - Quem surge do escuro e ataca de imediato pega o inimigo de surpresa: é a emboscada noturna, que tira moral.
     - À noite dá para descansar até o amanhecer, se nenhum bando chegar perto.
-  - **Um continente grande:** o mapa é um continente de 10×8 regiões, com uns 20 povoados e 3 ou 4 reinos. Perto do bando tudo é simulado em detalhe; longe, os bandos e exércitos marcham como dados e só viram tropas de verdade quando alguém do bando se aproxima.
+  - **Um continente grande:** o mapa é um continente (pequeno, médio ou grande, à escolha) de regiões de 4800×3600 px, com uns 20 povoados e de 3 a 6 reinos. Perto do bando tudo é simulado em detalhe; longe, os bandos e exércitos marcham como dados e só viram tropas de verdade quando alguém do bando se aproxima.
+  - **Geografia de verdade:**
+    - **Forma do continente:** mar em volta, montanhas, lagos e rios que nascem nas terras chuvosas e descem até o mar. Os biomas seguem o clima: o norte é frio, e há deserto na sombra de chuva das montanhas.
+    - **Bloqueios:** água funda e montanha bloqueiam a passagem. Rios só se cruzam em **vaus** (rasos: lentos, sem formação, mais vulneráveis e mais fracos na água) e **pontes**. As estradas abrem **passos** nas montanhas.
+    - **Gargalos:** quem segura a saída de um vau segura um exército inteiro.
+    - **Pontes:** podem ser queimadas (corta a rota de exércitos e hordas, mas irrita o dono) e reconstruídas. Quem controla a ponte cobra pedágio.
+  - **História simulada:** a crônica não é sorteada. O mundo roda séculos de história antes da campanha (reinos que nascem, guerreiam e caem, reis que morrem, calamidades que deixam ruínas), e o mapa inicial é o resultado. A idade do mundo é uma opção da criação.
   - **Salvar e carregar:** a campanha pode ser salva fora de combate (3 espaços e um automático, gravado a cada dia). O save guarda a semente do mundo, não o mapa.
   - **Mapa Múndi:** pausa o mundo. Mostra o que já foi explorado, o exército e os exércitos inimigos à vista (com o rumo da marcha) ou a última posição conhecida. Viagem Rápida só para lugares já explorados, nunca com inimigos à vista ou mensageiros fora; os dias da marcha passam de verdade e um bando inimigo que cruze o caminho intercepta o exército.
   - **Mundo vivo (gerador de histórias):** bandos errantes saem dos covis com o passar dos dias, crescem conforme a campanha avança, ganham nome (ex.: "Bando de Grukk Dente-Podre") e marcham até cidades ou até o acampamento. Uma cidade saqueada perde prosperidade (os preços sobem até ela se recuperar); um acampamento deixado sem guarda perde rações e ouro. Avistamentos, saques e bandos destruídos entram no diário.
@@ -45,6 +51,7 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
 - **Câmera e Controle:** O jogo possui uma perspectiva gráfica em 2D (estilo top-down ou isométrica) para otimizar o desenvolvimento. A câmera foca no Comandante, que participa ativamente do combate corpo a corpo de forma fluida.
 - **Tenentes (Personagens Únicos):** Além do Comandante, o jogador pode recrutar Tenentes. São NPCs únicos com nomes, histórias e personalidades próprias. Eles lideram Batalhões, acompanham o jogador nas reuniões da Tenda e oferecem diferentes habilidades passivas e bônus táticos para suas tropas.
   - **Personalidade e Lealdade:** Cada Tenente tem traços (ex.: Ganancioso, Corajoso, Cauteloso, Honrado, Ambicioso, Leal) que definem como reage aos acontecimentos: opina sobre os contratos no conselho da Tenda e ganha ou perde lealdade com vitórias, recuos, salários atrasados, a perda do seu batalhão ou a falta de comando. Com lealdade baixa, abandona o bando; num motim, escolhe um lado conforme a lealdade.
+  - **Amizades e rivalidades:** os tenentes convivem no acampamento. Os traços os aproximam ou afastam dia a dia, e vitórias lado a lado unem. Amigos se visitam e rendem noites de histórias na fogueira (moral e lealdade); rivais acabam no braço, e o Comandante decide quem punir.
   - **Presença em campo e morte permanente:** O Tenente luta junto ao batalhão que comanda; sua passiva só vale enquanto estiver vivo, e sua morte é definitiva e abala a moral das tropas. Cada Tenente guarda uma crônica pessoal do que viveu ao lado do Comandante.
 - **Evolução e Magia:** No início, o Comandante é um exímio guerreiro físico. Conforme o late-game se aproxima, ele adquire habilidades mágicas que alteram o rumo da batalha.
 - **Tipos de Magia:**
@@ -77,9 +84,20 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
 
 ## 6. O Acampamento, Gestão e Economia
 
-- **Exploração e UI:** O acampamento militar é um lugar do próprio mapa, cercado por uma paliçada com portão. O Comandante entra caminhando; ao entrar, as tropas que o seguiam descansam diante dos seus alojamentos, e ao sair elas voltam a segui-lo. A gestão fina (contratos, loadouts, treinamentos) ocorre na Tenda do Comandante através de uma mesa estratégica. Com um painel aberto o mundo fica em pausa.
+- **Exploração e UI:** O acampamento militar é um lugar do próprio mapa, cercado por uma paliçada com portão. O Comandante entra caminhando; ao entrar, as tropas que o seguiam vão viver a rotina do acampamento (dormir, comer, treinar, jogar dados, tarefas — ver seção 8.7), e ao sair elas voltam a segui-lo.
+  - **O acampamento mostra o estado do bando antes da interface:** fila na Intendência quando falta comida, rodinhas cochichando quando o soldo atrasa, o batalhão rebelado reunido diante da tenda antes do motim, festa na fogueira depois de uma vitória.
+  - **Seguidores, humor, honra e eventos:**
+    - **Seguidores:** cozinheiro, mascate, curandeira, capelão e famílias seguem o bando, prestam serviços e comem rações.
+    - **Humor do acampamento:** soma na moral com que as tropas saem.
+    - **Honra:** cresce com a palavra cumprida e a clemência.
+    - **Eventos com escolha:** pequenos dramas que pedem uma decisão do Comandante. A gestão fina (contratos, loadouts, treinamentos) ocorre na Tenda do Comandante através de uma mesa estratégica. Com um painel aberto o mundo fica em pausa.
 - **Aquisição de Equipamentos:** Feita através de Saque de inimigos mortos, Comércio em cidades e Crafting pelos ferreiros do acampamento.
 - **Cidades:** cada cidade tem um mercado com preços próprios (a aldeia vende comida barata, a cidade mineira tem ferro barato, a fortaleza paga bem pelo ferro). A prosperidade cai com saques e se recupera com os dias.
+  - **Povoados de verdade:** cada povoado tem planta própria.
+    - **Muralha:** paliçada nas aldeias, pedra com torres nas cidades e fortalezas; só se entra pelos portões.
+    - **Dentro:** ruas em grade com quarteirões de casas, a praça do mercado com barracas e poço, o paço ou castelo onde fica a Sala de Administração, o templo nas cidades.
+    - **Fora:** lavouras em volta dos muros.
+  - **Gente:** moradores, guardas e camponeses dão vida às ruas e aos campos; mais gente quanto maior e mais próspero o povoado. À noite as janelas se acendem. Em ruínas, os muros têm brechas e as casas viram entulho.
 - **Economia de Suprimentos:** O exército exige gestão constante de estoque.
   - **Rações (Comida):** Consumida diariamente. A falta de comida diminui drasticamente o Moral inicial das tropas antes mesmo da batalha começar.
   - **Salários (Ouro):** Tropas exigem pagamento regular. Atrasar salários leva à perda de tropas por deserção e pode culminar em um Motim, forçando o Comandante a combater seus próprios soldados rebelados.
@@ -124,6 +142,7 @@ Toda mecânica nova passa por estes filtros:
 - **Névoa nas três escalas:** um continente nunca visitado aparece só pelo contorno das cartas náuticas compradas ou pelo relato de marinheiros.
 
 ### 8.3 Geração do mundo v2: relevo, rios, mares e história simulada
+> Implementado no Marco 11 (detalhes no Roadmap). Ainda não: os recursos por bioma (Marco 14).
 Todas as etapas usam a semente:
 1. **Relevo:** um mapa de altitude do planeta (ruído + máscaras de continentes) e o nível do mar definem oceanos, mares interiores, continentes e ilhas.
 2. **Clima:** a temperatura vem da latitude e da altitude; a chuva vem dos ventos dominantes, com sombra de chuva atrás das montanhas.
@@ -135,6 +154,7 @@ Todas as etapas usam a semente:
 8. **História simulada:** em vez de sortear a crônica, o gerador **roda a própria simulação de reinos** (seção 8.9) em passos grossos por 100 a 400 anos. Povoados crescem e caem, reinos se unem e se partem, dinastias mudam e calamidades antigas deixam ruínas e lendas. O mundo que o jogador recebe é o resultado. Na tela de criação ele escolhe o tamanho do mundo, o número de continentes, a idade do mundo (jovem, média ou antiga) e a frequência das calamidades.
 
 ### 8.4 Rios e oceano no Campo
+> Implementado no Marco 11: riachos rasos, vaus, rios fundos, pontes queimáveis com pedágio, passos nas montanhas e as regras da água (+25% de dano recebido, −20% causado, sem formação nem investida). Ainda não: a balsa, as cheias e o gelo das estações (Marco 13), as barcaças (Marco 14) e os portos em uso (Marco 17).
 - **Riacho:** dá para atravessar a vau em qualquer ponto, com −40% de velocidade e a formação desfeita.
 - **Rio:** só se atravessa nos **vaus** (marcados no mapa) ou nas **pontes**. Dentro do vau o movimento fica muito lento, quem está na água recebe +25% de dano, não dá para usar a Parede de Escudos e a cavalaria perde a investida. Defender a saída de um vau é a manobra clássica.
 - **Rio grande:** só por ponte, balsa (paga e demorada) ou barco.
@@ -173,6 +193,7 @@ Todas as etapas usam a semente:
 - **Acampamento móvel:** o bando pode **levantar o acampamento** (1 a 2 dias de desmontagem, tudo nas carroças) e montá-lo em outro lugar: perto da frente de guerra, de uma rota rica ou em outro continente. Paliçada, torres e fosso são melhorias de um acampamento fixo.
 
 ### 8.7 Mundo vivo: gente andando
+> Implementado no Marco 12: a rotina e os sinais do acampamento, os seguidores, as relações e os eventos com escolha, os moradores, guardas, camponeses, viajantes, peregrinos e cervos, as patrulhas, mensageiros e refugiados, a fumaça, os corvos e os rastros. Ainda não: caçadores e lobos.
 **No acampamento** (o estado do bando aparece no próprio acampamento):
 - Cada soldado é um bonequinho com rotina: dorme na barraca à noite, come na fogueira, treina, joga dados, faz fila no pagamento, cuida dos cavalos e leva ferro para a ferraria.
 - **O comportamento mostra o estado do bando:**

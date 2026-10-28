@@ -1,8 +1,8 @@
 import type { Enemy } from "../entities/Enemy";
 import { clampToWorldBounds } from "../data/world";
 import { chiefName } from "../worldgen/names";
-import type { BandKind, CalamityKind, Settlement } from "../sim/realm";
-import { WORLD, type EnemyKind } from "../../utils/constants";
+import { isCalamityOwner, isRaiderKind, type BandKind, type CalamityKind, type Settlement } from "../sim/realm";
+import { AGENTS, WORLD, type EnemyKind } from "../../utils/constants";
 import { centroid, distance, type Point } from "../../utils/math";
 
 export type WarbandGoal = { kind: "SETTLEMENT"; id: string } | { kind: "CAMP" } | { kind: "WANDER" };
@@ -47,14 +47,24 @@ export interface Warband {
   offsets: Map<Enemy, Point>;
   goal: WarbandGoal;
   goalPoint: Point;
+  /** Pontos da rota por terra até o alvo (pontes, vaus, passos), ainda a percorrer. */
+  route: Point[];
+  /** Sem rota: px de marcha a esperar antes de procurar outro alvo. */
+  rest: number;
   /** Já foi avistado alguma vez (o primeiro avistamento vira notícia). */
   spotted: boolean;
-  /** Última posição conhecida (Mapa Múndi). */
+  /** Última posição conhecida (Mapa do Continente). */
   lastSeen: { x: number; y: number; day: number } | null;
+  /** Atacado pelo bando do jogador (patrulha, mensageiro ou refugiados): passa a ser hostil. */
+  provoked: boolean;
+  /** Rastros da marcha (pegadas que ficam no chão por um dia e meio). */
+  trail: { x: number; y: number; day: number }[];
+  /** Patrulha: bando que ela está caçando. */
+  huntId: string | null;
 }
 
 /** Bando salvo: sempre como dados (quem estava em campo vira roster com a posição de agora). */
-export type WarbandSave = Omit<Warband, "materialized" | "members" | "offsets">;
+export type WarbandSave = Omit<Warband, "materialized" | "members" | "offsets" | "route" | "trail" | "huntId">;
 
 export interface WarbandsSave {
   seq: number;
@@ -64,7 +74,13 @@ export interface WarbandsSave {
 
 export type WarbandEvent =
   | { type: "ARRIVED"; band: Warband; goal: WarbandGoal }
-  | { type: "DESTROYED"; band: Warband };
+  | { type: "DESTROYED"; band: Warband }
+  /** Dois bandos se enfrentaram longe do jogador (patrulha contra goblins, horda contra patrulha...). */
+  | { type: "SKIRMISH"; winner: Warband; loser: Warband; at: Point; losses: number }
+  /** Refugiados chegaram a um lugar seguro. */
+  | { type: "SHELTERED"; band: Warband; settlementId: string }
+  /** Refugiados alcançados por um bando hostil. */
+  | { type: "MASSACRE"; band: Warband; by: Warband };
 
 /** O que os bandos precisam saber do mundo para escolher alvos. */
 export interface WarbandTargets {
@@ -86,6 +102,10 @@ export function bandSize(band: Warband): number {
  *   sobreviveu e a vida que tinha. Nada aparece ou some do nada.
  * Goblins saem dos covis; exércitos dos reinos em guerra marcham contra os povoados do
  * jogador; hordas de calamidade atacam qualquer povoado que ainda não caiu.
+ * Marco 12: também andam patrulhas dos reinos (caçam bandos perto das terras do reino e se
+ * enfrentam com eles), mensageiros reais (cavalgam entre os povoados do reino) e refugiados
+ * (fogem de um povoado atacado para o mais próximo que ainda está de pé). Toda marcha deixa
+ * rastros no chão.
  */
 export class WarbandManager {
   bands: Warband[] = [];
@@ -95,6 +115,10 @@ export class WarbandManager {
   constructor(
     private readonly spawn: (x: number, y: number, kind: EnemyKind, color?: number) => Enemy,
     private readonly targets: () => WarbandTargets,
+    /** Rota por terra de um ponto a outro (null = não há como chegar). */
+    private readonly pathfind: (from: Point, to: Point) => Point[] | null,
+    /** Dia de agora (com fração), para datar os rastros. */
+    private readonly clock: () => number = () => 0,
   ) {}
 
   /** Goblins: um bando novo a cada poucos dias, num covil que ninguém está vendo. */
@@ -141,8 +165,13 @@ export class WarbandManager {
       offsets: new Map(),
       goal: { kind: "WANDER" },
       goalPoint: spec.origin,
+      route: [],
+      rest: 0,
       spotted: false,
       lastSeen: null,
+      provoked: false,
+      trail: [],
+      huntId: null,
     };
     this.chooseGoal(band);
     this.bands.push(band);
@@ -182,6 +211,15 @@ export class WarbandManager {
     this.chooseGoal(band);
   }
 
+  /** Rota nova até o mesmo alvo (o mapa mudou: ponte queimada ou reconstruída). */
+  repath(band: Warband): void {
+    band.route = this.pathfind(band.anchor, band.goalPoint) ?? [];
+  }
+
+  repathAll(): void {
+    for (const b of this.bands) this.repath(b);
+  }
+
   /** Os defensores derrubam metade do bando antes de ele recuar. */
   loseHalf(band: Warband): void {
     if (band.materialized) {
@@ -219,8 +257,10 @@ export class WarbandManager {
         anchor: { ...b.anchor },
         goal: b.goal,
         goalPoint: { ...b.goalPoint },
+        rest: b.rest,
         spotted: b.spotted,
         lastSeen: b.lastSeen,
+        provoked: b.provoked,
       })),
     };
   }
@@ -236,7 +276,13 @@ export class WarbandManager {
       materialized: false,
       members: [],
       offsets: new Map(),
+      route: [],
+      rest: b.rest ?? 0,
+      provoked: b.provoked ?? false,
+      trail: [],
+      huntId: null,
     }));
+    this.repathAll();
   }
 
   private materialize(band: Warband): void {
@@ -245,6 +291,8 @@ export class WarbandManager {
       const e = this.spawn(band.anchor.x + r.offset.x, band.anchor.y + r.offset.y, r.kind, band.color);
       if (Number.isFinite(r.hp)) e.restoreHp(r.hp);
       e.owner = { kind: "WARBAND", id: band.id };
+      // Patrulhas, mensageiros e refugiados nascem em paz (a cena acerta a guerra no quadro seguinte)
+      e.hostile = isRaiderKind(band.kind) || (band.provoked && band.kind === "PATROL");
       e.home = { x: e.x, y: e.y };
       band.offsets.set(e, r.offset);
       return e;
@@ -261,9 +309,11 @@ export class WarbandManager {
     band.materialized = false;
   }
 
-  private step(stepDist: number): WarbandEvent[] {
+  private step(baseDist: number): WarbandEvent[] {
     const events: WarbandEvent[] = [];
+    const gone = new Set<Warband>();
     for (const band of this.bands) {
+      const stepDist = baseDist * (band.kind === "COURIER" ? AGENTS.COURIER_SPEED : 1);
       if (band.materialized) band.members = band.members.filter((m) => m.isAlive);
       if (bandSize(band) === 0) {
         events.push({ type: "DESTROYED", band });
@@ -275,12 +325,31 @@ export class WarbandManager {
       }
       // O alvo pode ter mudado de dono no caminho (a horda não ataca o que já é dela)
       if (band.goal.kind === "SETTLEMENT" && !this.validTarget(band, band.goal.id)) this.chooseGoal(band);
+      if (band.kind === "PATROL") this.hunt(band);
 
-      const d = distance(band.anchor, band.goalPoint);
-      const move = Math.min(d, stepDist);
-      const dx = d > 0 ? ((band.goalPoint.x - band.anchor.x) / d) * move : 0;
-      const dy = d > 0 ? ((band.goalPoint.y - band.anchor.y) / d) * move : 0;
-      band.anchor = { x: band.anchor.x + dx, y: band.anchor.y + dy };
+      // Anda pela rota (por terra: pontes, vaus, passos), ponto a ponto
+      const before = band.anchor;
+      let left = stepDist;
+      while (left > 0 && band.route.length > 0) {
+        const wp = band.route[0];
+        const d = distance(band.anchor, wp);
+        if (d <= left) {
+          band.anchor = { x: wp.x, y: wp.y };
+          left -= d;
+          band.route.shift();
+        } else {
+          band.anchor = { x: band.anchor.x + ((wp.x - band.anchor.x) / d) * left, y: band.anchor.y + ((wp.y - band.anchor.y) / d) * left };
+          left = 0;
+        }
+      }
+      const dx = band.anchor.x - before.x;
+      const dy = band.anchor.y - before.y;
+      // Rastros: um ponto a cada 250 px de marcha (os últimos 40)
+      const last = band.trail[band.trail.length - 1];
+      if (!last || distance(last, band.anchor) >= 250) {
+        band.trail.push({ x: band.anchor.x, y: band.anchor.y, day: this.clock() });
+        if (band.trail.length > 40) band.trail.shift();
+      }
       for (const m of band.members) {
         const o = band.offsets.get(m) ?? { x: 0, y: 0 };
         m.home = { x: band.anchor.x + o.x, y: band.anchor.y + o.y };
@@ -289,55 +358,185 @@ export class WarbandManager {
           m.y += dy;
         }
       }
-      if (d - move <= WORLD.WARBAND.RAID_RADIUS) {
-        events.push({ type: "ARRIVED", band, goal: band.goal });
-        if (band.goal.kind === "WANDER") this.chooseGoal(band);
+      if (band.route.length === 0) {
+        if (band.rest > 0) {
+          band.rest -= stepDist;
+          continue;
+        }
+        // Chegou (ou a rota acabou antes: o alvo ficou inalcançável e ele procura outro)
+        const near = distance(band.anchor, band.goalPoint) <= WORLD.WARBAND.RAID_RADIUS * 2;
+        if (band.kind === "REFUGEES" && near && band.goal.kind === "SETTLEMENT") {
+          events.push({ type: "SHELTERED", band, settlementId: band.goal.id });
+          gone.add(band);
+          continue;
+        }
+        if (near && isRaiderKind(band.kind)) events.push({ type: "ARRIVED", band, goal: band.goal });
+        if (band.goal.kind === "WANDER" || !near || !isRaiderKind(band.kind)) {
+          this.chooseGoal(band);
+          // Sem rota para lugar nenhum: espera um pouco antes de tentar de novo
+          if (band.route.length === 0) band.rest = 800;
+        }
       }
     }
+    this.skirmishes(events);
+    for (const b of gone) this.disband(b);
     this.bands = this.bands.filter((b) => bandSize(b) > 0);
     return events;
   }
 
+  /** Patrulha: vai atrás do bando hostil mais perto das terras do reino (refaz a rota se ele se afastar). */
+  private hunt(band: Warband): void {
+    let prey: Warband | null = null;
+    let best: number = AGENTS.HUNT_RADIUS;
+    for (const o of this.bands) {
+      if (o.kind !== "GOBLIN" && o.kind !== "HORDE") continue;
+      const d = distance(o.anchor, band.anchor);
+      if (d < best && bandSize(o) > 0) {
+        best = d;
+        prey = o;
+      }
+    }
+    if (!prey) {
+      if (band.huntId) {
+        band.huntId = null;
+        this.chooseGoal(band);
+      }
+      return;
+    }
+    if (band.huntId === prey.id && distance(band.goalPoint, prey.anchor) < 800 && band.route.length > 0) return;
+    band.huntId = prey.id;
+    band.goal = { kind: "WANDER" };
+    band.goalPoint = { ...prey.anchor };
+    band.route = this.pathfind(band.anchor, prey.anchor) ?? [];
+  }
+
+  /**
+   * Bandos que se encontram longe do jogador: patrulha contra goblins ou horda (o mais forte
+   * vence; o vencedor perde gente na proporção da força do outro); bando hostil que alcança
+   * refugiados acaba com eles.
+   */
+  private skirmishes(events: WarbandEvent[]): void {
+    const W = AGENTS.SKIRMISH_WEIGHT;
+    for (const a of this.bands) {
+      if (bandSize(a) === 0) continue;
+      for (const b of this.bands) {
+        if (a === b || bandSize(b) === 0 || distance(a.anchor, b.anchor) > AGENTS.SKIRMISH_RADIUS) continue;
+        if (b.kind === "REFUGEES" && (a.kind === "GOBLIN" || a.kind === "HORDE")) {
+          this.kill(b, bandSize(b));
+          events.push({ type: "MASSACRE", band: b, by: a });
+          continue;
+        }
+        if (a.kind !== "PATROL" || (b.kind !== "GOBLIN" && b.kind !== "HORDE")) continue;
+        // Bando em luta com o jogador não para para brigar com a patrulha
+        if (a.members.some((m) => m.target) || b.members.some((m) => m.target)) continue;
+        const sa = bandSize(a) * (W[a.kind] ?? 1) * (0.8 + Math.random() * 0.4);
+        const sb = bandSize(b) * (W[b.kind] ?? 1) * (0.8 + Math.random() * 0.4);
+        const [winner, loser, sw, sl] = sa >= sb ? [a, b, sa, sb] : [b, a, sb, sa];
+        const losses = Math.min(bandSize(winner) - 1, Math.round(bandSize(winner) * Math.min(0.8, sl / sw) * 0.5));
+        this.kill(loser, bandSize(loser));
+        this.kill(winner, Math.max(0, losses));
+        events.push({ type: "SKIRMISH", winner, loser, at: { x: (a.anchor.x + b.anchor.x) / 2, y: (a.anchor.y + b.anchor.y) / 2 }, losses });
+        if (winner.kind === "PATROL") {
+          winner.huntId = null;
+          this.chooseGoal(winner);
+        }
+      }
+    }
+  }
+
+  /** Tira `n` integrantes do bando (em campo, morrem de verdade). */
+  private kill(band: Warband, n: number): void {
+    if (n <= 0) return;
+    if (band.materialized) {
+      for (const m of band.members.filter((x) => x.isAlive).slice(0, n)) m.takeDamage(m.hp + 999, m, 0);
+      band.members = band.members.filter((m) => m.isAlive);
+    } else {
+      band.roster = band.roster.slice(n);
+    }
+  }
+
   private validTarget(band: Warband, id: string): boolean {
     const t = this.targets().settlements.find((x) => x.id === id);
-    if (!t || t.owner === "RUINED" || (band.ownerId && t.owner === band.ownerId)) return false;
+    if (!t || t.owner === "RUINED") return false;
+    // Patrulhas e mensageiros andam entre os povoados do próprio reino; refugiados, para qualquer um de pé
+    if (band.kind === "PATROL" || band.kind === "COURIER") return t.owner === band.ownerId;
+    if (band.kind === "REFUGEES") return !isCalamityOwner(t.owner);
+    if (band.ownerId && t.owner === band.ownerId) return false;
     if (band.kind === "FACTION") return t.owner === "PLAYER";
     return true;
   }
 
-  private nearestTarget(band: Warband): Settlement | null {
+  /** O povoado válido mais próximo a que se chega por terra (com a rota até ele). */
+  private nearestTarget(band: Warband): { t: Settlement; route: Point[] } | null {
     const options = this.targets().settlements.filter((t) => this.validTarget(band, t.id));
     options.sort((a, b) => distance(a, band.anchor) - distance(b, band.anchor));
-    return options[0] ?? null;
+    for (const t of options.slice(0, 4)) {
+      const route = this.pathfind(band.anchor, t);
+      if (route) return { t, route };
+    }
+    return null;
   }
 
-  /** Próximo alvo conforme o tipo de bando. */
+  /** Próximo alvo conforme o tipo de bando, sempre com uma rota por terra. */
   private chooseGoal(band: Warband): void {
     const { camp } = this.targets();
-    const toSettlement = (t: Settlement) => {
-      band.goal = { kind: "SETTLEMENT", id: t.id };
-      band.goalPoint = { x: t.x, y: t.y };
+    const toSettlement = (target: { t: Settlement; route: Point[] }) => {
+      band.goal = { kind: "SETTLEMENT", id: target.t.id };
+      band.goalPoint = { x: target.t.x, y: target.t.y };
+      band.route = target.route;
     };
-    const toCamp = () => {
+    const toCamp = (): boolean => {
+      const route = this.pathfind(band.anchor, camp);
+      if (!route) return false;
       band.goal = { kind: "CAMP" };
       band.goalPoint = camp;
+      band.route = route;
+      return true;
     };
+    const wander = () => {
+      for (let i = 0; i < 4; i++) {
+        const p = clampToWorldBounds({ x: band.anchor.x + (Math.random() - 0.5) * 4000, y: band.anchor.y + (Math.random() - 0.5) * 3000 }, 300);
+        const route = this.pathfind(band.anchor, p);
+        if (!route) continue;
+        band.goal = { kind: "WANDER" };
+        band.goalPoint = route[route.length - 1] ?? p;
+        band.route = route;
+        return;
+      }
+      band.goal = { kind: "WANDER" };
+      band.goalPoint = { ...band.anchor };
+      band.route = [];
+    };
+    // Patrulha e mensageiro: o próximo povoado do reino (outro que não o de agora)
+    if (band.kind === "PATROL" || band.kind === "COURIER") {
+      const own = this.targets().settlements.filter((t) => this.validTarget(band, t.id) && distance(t, band.anchor) > 1500);
+      const t = own[Math.floor(Math.random() * own.length)];
+      const route = t ? this.pathfind(band.anchor, t) : null;
+      if (t && route) toSettlement({ t, route });
+      else wander();
+      return;
+    }
+    // Refugiados: o povoado de pé mais perto (o primeiro escolhido não muda até chegarem)
+    if (band.kind === "REFUGEES") {
+      const options = this.targets()
+        .settlements.filter((t) => this.validTarget(band, t.id) && distance(t, band.anchor) > 1500)
+        .sort((a, b) => distance(a, band.anchor) - distance(b, band.anchor));
+      for (const t of options.slice(0, 3)) {
+        const route = this.pathfind(band.anchor, t);
+        if (route) return toSettlement({ t, route });
+      }
+      wander();
+      return;
+    }
     const target = this.nearestTarget(band);
     if (band.kind === "FACTION" || band.kind === "HORDE") {
       if (target) toSettlement(target);
-      else toCamp();
+      else if (!toCamp()) wander();
       return;
     }
     const r = Math.random();
     if (r < 0.45 && target) toSettlement(target);
-    else if (r < 0.7 && band.goal.kind !== "CAMP") toCamp();
-    else {
-      band.goal = { kind: "WANDER" };
-      band.goalPoint = clampToWorldBounds(
-        { x: band.anchor.x + (Math.random() - 0.5) * 4000, y: band.anchor.y + (Math.random() - 0.5) * 3000 },
-        300,
-      );
-    }
+    else if (!(r < 0.7 && band.goal.kind !== "CAMP" && toCamp())) wander();
   }
 }
 

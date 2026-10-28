@@ -272,7 +272,7 @@ export function FieldHudView() {
             <WorldClock />
             <ResourceBar />
             <SoundControl />
-            <Button className="pointer-events-auto" onClick={() => setWorldMapOpen(true)} title="Tab: Mapa Múndi">
+            <Button className="pointer-events-auto" onClick={() => setWorldMapOpen(true)} title="Tab: Mapa do Continente">
               Mapa
             </Button>
             <Button className="pointer-events-auto" onClick={() => setCampPanel({ kind: "GAME" })} title="Salvar, carregar, novo mundo">
@@ -390,7 +390,7 @@ export function FieldHudView() {
           <div>F reunir · 1 Linha 2 Parede 3 Cunha 4 Disperso</div>
           <div className="text-amber-200">Anel forte: voz · fraco: trombeta · além: bandeira/mensageiro</div>
           <div>C câmera presa/solta · setas/borda/botão do meio · H centralizar · roda zoom</div>
-          <div className="text-sky-200">E interagir · Tab Mapa Múndi (viagem rápida) · T tochas · M som</div>
+          <div className="text-sky-200">E interagir · Tab Mapa do Continente (viagem rápida) · T tochas · M som</div>
         </div>
       </div>
 

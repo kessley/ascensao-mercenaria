@@ -11,7 +11,9 @@ import { MutinyBanner } from "../components/tent/MutinyBanner";
 import { StablePanel } from "../components/tent/StablePanel";
 import { SettlementPanel } from "../components/SettlementPanel";
 import { DiplomacyPanel, WorldChronicle } from "../components/tent/RealmPanels";
+import { FollowersPanel } from "../components/tent/FollowersPanel";
 import { GamePanel } from "../components/SavePanel";
+import { BridgePanel } from "../components/BridgePanel";
 
 const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TENT: "Tenda do Comandante",
@@ -24,6 +26,7 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   STABLE: "Estábulo",
   TOWN: "Povoado",
   GAME: "Jogo",
+  BRIDGE: "Ponte",
 };
 
 /** Quem comanda o batalhão (atalho para a ficha do tenente). */
@@ -64,6 +67,7 @@ function PanelContent({ panel }: { panel: CampPanel }) {
           <ContractBoard />
           <DiplomacyPanel />
           <LieutenantRoster />
+          <FollowersPanel />
           <BattalionList />
           <CampLog />
           <WorldChronicle />
@@ -108,6 +112,8 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return <SettlementPanel settlementId={panel.settlementId} />;
     case "GAME":
       return <GamePanel />;
+    case "BRIDGE":
+      return <BridgePanel bridgeId={panel.bridgeId} />;
   }
 }
 
@@ -162,7 +168,7 @@ export function PlacePanelView() {
             </button>
           </header>
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
-            {panel.kind !== "TOWN" && panel.kind !== "GAME" && <CampStatus />}
+            {panel.kind !== "TOWN" && panel.kind !== "GAME" && panel.kind !== "BRIDGE" && <CampStatus />}
             <PanelContent panel={panel} />
           </div>
         </aside>

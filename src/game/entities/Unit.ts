@@ -1,8 +1,9 @@
 import Phaser from "phaser";
-import { BALANCE, COLORS, TERRAIN, TIME, type AttackKind, type TerrainType, type UnitStats } from "../../utils/constants";
-import { distance } from "../../utils/math";
+import { BALANCE, COLORS, GEO, TERRAIN, TIME, type AttackKind, type TerrainType, type UnitStats } from "../../utils/constants";
+import { distance, type Point } from "../../utils/math";
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
+import type { NavGrid } from "../systems/NavGrid";
 
 export type Team = "ALLY" | "ENEMY";
 export type UnitState = "IDLE" | "MOVING" | "ATTACKING" | "FLEEING" | "DEAD";
@@ -19,6 +20,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   static terrain: TerrainMap | null = null;
   /** Escuridão de agora, de 0 (dia) a 1 (noite fechada); a cena atualiza a cada quadro. */
   static darkness = 0;
+  /** Grade de navegação do mundo (rotas em volta de rios, mar e montanhas). */
+  static nav: NavGrid | null = null;
 
   readonly team: Team;
   readonly radius: number;
@@ -53,6 +56,15 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** Herói (Comandante): aliados não o empurram — eles é que abrem passagem. */
   isHero = false;
 
+  /** Última posição em terra firme (empurrões não jogam ninguém no rio). */
+  safeX = NaN;
+  safeY = NaN;
+  /** Rota atual quando a linha reta até o destino está bloqueada. */
+  private route: { goal: Point; at: number; path: Point[] | null } | null = null;
+  private terrainCache = { x: NaN, y: NaN, type: "GRASS" as TerrainType };
+  /** De pé, sentado ou dormindo (vida no acampamento). */
+  private pose: "STAND" | "SIT" | "SLEEP" = "STAND";
+
   protected readonly bodyGfx: Phaser.GameObjects.Graphics;
   protected readonly barsGfx: Phaser.GameObjects.Graphics;
 
@@ -83,8 +95,20 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return this.unitState !== "DEAD";
   }
 
+  /** Terreno sob a unidade (guardado enquanto ela não se mexe: é consultado muitas vezes por quadro). */
   get terrainType(): TerrainType {
-    return Unit.terrain?.typeAt(this.x, this.y) ?? "GRASS";
+    const c = this.terrainCache;
+    if (c.x !== this.x || c.y !== this.y) {
+      c.x = this.x;
+      c.y = this.y;
+      c.type = Unit.terrain?.typeAt(this.x, this.y) ?? "GRASS";
+    }
+    return c.type;
+  }
+
+  /** Com água pela cintura (vau, riacho): formação desfeita e mais vulnerável. */
+  get inShallows(): boolean {
+    return this.terrainType === "SHALLOW";
   }
 
   get isInForest(): boolean {
@@ -123,6 +147,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     if (this.terrainType === "HILL" && target.terrainType !== "HILL") dmg *= BALANCE.HILL_DAMAGE_BONUS;
     if (this.isCharging) dmg *= this.chargeMultiplier;
     if (this.nightCreature) dmg *= 1 + Unit.darkness * (TIME.NIGHT_CREATURE_DAMAGE - 1);
+    if (this.inShallows) dmg *= GEO.SHALLOW_DAMAGE_DEALT;
     return dmg;
   }
 
@@ -130,7 +155,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   onKill(): void {}
 
   incomingMultiplier(_source: Unit, kind: AttackKind): number {
-    return kind === "RANGED" && this.isInForest ? BALANCE.FOREST_RANGED_TAKEN : 1;
+    const water = this.inShallows ? GEO.SHALLOW_DAMAGE_TAKEN : 1;
+    return (kind === "RANGED" && this.isInForest ? BALANCE.FOREST_RANGED_TAKEN : 1) * water;
   }
 
   // --- Movimento e combate ---
@@ -140,21 +166,65 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.bodyGfx.rotation = angle;
   }
 
-  /** Move em direção ao ponto. Retorna true se já chegou. */
+  /**
+   * Move em direção ao ponto. Retorna true se já chegou (ou chegou o mais perto possível de
+   * um destino na água). Se a linha reta cruza rio, mar ou montanha, segue uma rota.
+   */
   moveTowards(tx: number, ty: number, dt: number, extraMultiplier = 1): boolean {
-    const dx = tx - this.x;
-    const dy = ty - this.y;
-    const d = Math.hypot(dx, dy);
+    const d = Math.hypot(tx - this.x, ty - this.y);
     if (d <= 2) return true;
-    const step = Math.min(d, this.speed * this.speedMultiplier() * extraMultiplier * dt);
-    this.x += (dx / d) * step;
-    this.y += (dy / d) * step;
+    let gx = tx;
+    let gy = ty;
+    if (d > 60) {
+      const wp = this.waypoint(tx, ty);
+      if (wp) {
+        // Destino na água: a rota termina na margem
+        if (wp.final && Math.hypot(wp.x - this.x, wp.y - this.y) <= 6) return true;
+        gx = wp.x;
+        gy = wp.y;
+      }
+    }
+    const dx = gx - this.x;
+    const dy = gy - this.y;
+    const dd = Math.hypot(dx, dy) || 1;
+    const step = Math.min(dd, this.speed * this.speedMultiplier() * extraMultiplier * dt);
+    this.stepBy((dx / dd) * step, (dy / dd) * step);
     this.setFacing(Math.atan2(dy, dx));
 
     if (this.canCharge) {
       this.chargeDistance = TERRAIN[this.terrainType].breaksCharge ? 0 : this.chargeDistance + step;
     }
     return false;
+  }
+
+  /** Anda sem entrar em água funda nem em montanha: na margem, desliza ao longo dela. */
+  protected stepBy(dx: number, dy: number): void {
+    const t = Unit.terrain;
+    if (!t || !t.isBlocked(this.x + dx, this.y + dy)) {
+      this.x += dx;
+      this.y += dy;
+    } else if (dx && !t.isBlocked(this.x + dx, this.y)) {
+      this.x += dx;
+    } else if (dy && !t.isBlocked(this.x, this.y + dy)) {
+      this.y += dy;
+    }
+  }
+
+  /** Próximo ponto da rota até (tx, ty), ou null se a linha reta serve. Refeita a cada 1,5 s. */
+  private waypoint(tx: number, ty: number): (Point & { final: boolean }) | null {
+    const nav = Unit.nav;
+    if (!nav) return null;
+    const now = this.scene.time.now;
+    let r = this.route;
+    if (!r || (r.goal.x - tx) ** 2 + (r.goal.y - ty) ** 2 > 120 * 120 || now - r.at > 1500) {
+      const goal = { x: tx, y: ty };
+      // Atraso aleatório: o exército inteiro não recalcula no mesmo quadro
+      r = this.route = { goal, at: now + Math.random() * 300, path: nav.lineClear(this, goal) ? null : nav.findPath(this, goal, 6000) };
+    }
+    const path = r.path;
+    if (!path || path.length === 0) return null;
+    while (path.length > 1 && (path[0].x - this.x) ** 2 + (path[0].y - this.y) ** 2 < 50 * 50) path.shift();
+    return { x: path[0].x, y: path[0].y, final: path.length === 1 };
   }
 
   /** Distância de borda a borda até outra unidade. */
@@ -190,6 +260,15 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       source.onKill();
       this.die();
     }
+  }
+
+  /** Postura (só visual): sentado fica menor; dormindo, quase apagado e sem a barra de vida. */
+  setPose(pose: "STAND" | "SIT" | "SLEEP"): void {
+    if (this.pose === pose) return;
+    this.pose = pose;
+    this.bodyGfx.setScale(pose === "STAND" ? 1 : pose === "SIT" ? 0.8 : 0.7);
+    this.bodyGfx.setAlpha(pose === "SLEEP" ? 0.4 : 1);
+    this.barsGfx.setVisible(pose === "STAND");
   }
 
   /** Vida vinda de dados (bando que volta à bolha, jogo carregado). */

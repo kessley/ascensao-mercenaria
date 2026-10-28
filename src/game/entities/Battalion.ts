@@ -176,6 +176,21 @@ export class Battalion {
     return true;
   }
 
+  /**
+   * Vida no acampamento (Marco 12): enquanto o batalhão descansa, quem cuida de cada soldado
+   * é a rotina do acampamento (true = cuidou). Inimigo por perto: a rotina é largada e luta-se.
+   */
+  restDriver: ((s: Soldier, i: number, dt: number) => boolean) | null = null;
+
+  /** Descansar no alojamento: segura a posição ali (e a rotina do acampamento assume). */
+  restAt(slot: Point): void {
+    if (this.isDestroyed) return;
+    if (this.panicking) this.rally();
+    this.facing = Math.PI / 2;
+    this.order = { type: "HOLD", point: slot };
+    for (const s of this.soldiers) s.target = null;
+  }
+
   holdPosition(): boolean {
     if (this.panicking || this.isDestroyed) return false;
     this.order = { type: "HOLD", point: this.center };
@@ -273,6 +288,7 @@ export class Battalion {
     this.soldiers.forEach((s, i) => {
       if (engaging) this.pickTarget(s, anchor, enemies);
       else s.target = null;
+      if (this.restDriver && !s.target && this.restDriver(s, i, dt)) return;
 
       if (s.target && s.inRange(s.target)) {
         s.unitState = "ATTACKING";
@@ -326,9 +342,11 @@ export class Battalion {
     }
   }
 
-  private pickTarget(s: Soldier, anchor: Point, enemies: readonly Unit[]): void {
+  private pickTarget(s: Soldier, anchorPoint: Point, enemies: readonly Unit[]): void {
+    // Descansando no acampamento, cada um reage ao inimigo perto de si (e não do alojamento)
+    const anchor = this.restDriver ? s : anchorPoint;
     // Arqueiros engajam até o próprio alcance além do raio padrão
-    const radius = Math.max(BALANCE.ENGAGE_RADIUS, s.attackRange() + 40);
+    const radius = Math.max(BALANCE.ENGAGE_RADIUS * (this.restDriver ? 1.6 : 1), s.attackRange() + 40);
     if (this.order.type === "ATTACK" && this.order.target.isAlive && this.order.target.revealed && !s.target) {
       s.target = this.order.target;
     }
@@ -339,7 +357,7 @@ export class Battalion {
 
     // Alvo da ordem morreu e não há mais ninguém por perto → segura a posição
     if (!s.target && this.order.type === "ATTACK" && !this.order.target.isAlive) {
-      this.order = { type: "HOLD", point: anchor };
+      this.order = { type: "HOLD", point: anchorPoint };
     }
   }
 

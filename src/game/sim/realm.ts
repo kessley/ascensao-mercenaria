@@ -1,7 +1,8 @@
-import { BUILDINGS, ECONOMY, REALM, type BuildingId } from "../../utils/constants";
+import { BUILDINGS, CALAMITY_RATES, ECONOMY, GEO, REALM, type BuildingId } from "../../utils/constants";
 import { regionName, type MarketDef, type SettlementKind, type SettlementSeed, type WorldDef } from "../data/world";
 import { chiefName, necromancerName, personName } from "../worldgen/names";
 import { createRng, randomSeed } from "../worldgen/rng";
+import { geoOf } from "../worldgen/geoMap";
 import { distance, type Point } from "../../utils/math";
 
 /**
@@ -28,6 +29,9 @@ export interface Settlement {
   taxRate: 0 | 1 | 2;
   market: MarketDef;
   description: string;
+  /** Na costa (porto) e à beira de um rio. */
+  port?: boolean;
+  river?: boolean;
   lastRaidDay: number | null;
 }
 
@@ -53,7 +57,7 @@ export interface Calamity {
   startDay: number;
   /** Cresce com o tempo e com cada povoado que cai: hordas maiores. */
   power: number;
-  /** O covil foi visto (aparece no Mapa Múndi). */
+  /** O covil foi visto (aparece no Mapa do Continente). */
   revealed: boolean;
   defeated: boolean;
   lastHordeDay: number;
@@ -205,7 +209,9 @@ function newCalamity(world: WorldDef, index: number, day: number, camp: Point): 
   const byDistance = [...world.lairs].sort((a, b) => distance(a, camp) - distance(b, camp));
   const middle = byDistance.filter((p) => distance(p, camp) >= 6000 && distance(p, camp) <= 14000);
   const base = r.pick(middle.length > 0 ? middle : byDistance.slice(-2));
-  const lair = { x: base.x + r.range(-300, 300), y: base.y + r.range(-300, 300) };
+  // Deslocado do covil antigo, mas nunca dentro d'água ou na rocha
+  const moved = { x: base.x + r.range(-300, 300), y: base.y + r.range(-300, 300) };
+  const lair = geoOf(world.geo).isOpenLand(moved, 150) ? moved : { x: base.x, y: base.y };
   const leader = kind === "NECROMANCER" ? necromancerName(r.next) : chiefName(r.next);
   return {
     id: `C${index + 1}`,
@@ -274,7 +280,11 @@ function worldEvent(s: RealmState, world: WorldDef): RealmLog[] {
   return [];
 }
 
-export type BandKind = "GOBLIN" | "FACTION" | "HORDE";
+/** Bandos do mundo: os que atacam (goblins, exércitos, hordas) e os que não (patrulha, mensageiro, refugiados). */
+export type BandKind = "GOBLIN" | "FACTION" | "HORDE" | "PATROL" | "COURIER" | "REFUGEES";
+
+/** Bandos que saqueiam povoados quando chegam. */
+export const isRaiderKind = (k: BandKind) => k === "GOBLIN" || k === "FACTION" || k === "HORDE";
 export type RaidOutcome = "REPELLED" | "RAIDED" | "CAPTURED" | "RUINED" | "IGNORED";
 
 /**
@@ -315,4 +325,28 @@ export function resolveRaid(
 /** Força de um bando para o combate abstrato. */
 export function bandStrength(kind: BandKind, members: number): number {
   return Math.round(members * (kind === "HORDE" ? 1.5 : kind === "FACTION" ? 1.2 : 1));
+}
+
+/** Calamidades raras esperam mais; frequentes, menos (opção da criação do mundo). */
+export function calamityDelay(world: WorldDef): number {
+  return CALAMITY_RATES[world.options.calamities].delay;
+}
+
+/** Quem controla uma ponte: o povoado mais próximo dela (até BRIDGE_CONTROL_RADIUS), se houver. */
+export function bridgeController(settlements: readonly Settlement[], p: Point): Settlement | null {
+  let best: Settlement | null = null;
+  let bestD: number = GEO.BRIDGE_CONTROL_RADIUS;
+  for (const t of settlements) {
+    const d = distance(t, p);
+    if (d < bestD && t.owner !== "RUINED") {
+      best = t;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/** Pontes de pé controladas pelo bando (rendem pedágio toda semana). */
+export function playerBridges(world: WorldDef, settlements: readonly Settlement[], burned: readonly string[]): number {
+  return world.geo.crossings.filter((c) => c.kind === "BRIDGE" && !burned.includes(c.id) && bridgeController(settlements, c)?.owner === "PLAYER").length;
 }

@@ -52,8 +52,7 @@ export class Commander extends Unit {
     }
     const len = Math.hypot(vx, vy);
     const step = this.speed * this.speedMultiplier() * dt;
-    this.x += (vx / len) * step;
-    this.y += (vy / len) * step;
+    this.stepBy((vx / len) * step, (vy / len) * step);
     this.setFacing(Math.atan2(vy, vx));
     this.unitState = "MOVING";
     return true;

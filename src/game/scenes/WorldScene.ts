@@ -10,18 +10,26 @@ import { FogOfWar, type VisionSource } from "../systems/FogOfWar";
 import { updateMorale } from "../systems/MoraleSystem";
 import { clampToWorld, separateUnits } from "../systems/MovementSystem";
 import { layoutGroup } from "../systems/GroupLayout";
-import { WarbandManager, bandSize, type WarbandEvent } from "../systems/Warbands";
+import { WarbandManager, bandSize, type Warband, type WarbandEvent } from "../systems/Warbands";
 import { TerrainMap, TerrainStreamer } from "../world/TerrainMap";
 import { NightLayer, type Light } from "../world/NightLayer";
 import { CampArea, type Interactable } from "../world/CampArea";
 import { StaticCuller } from "../world/StaticCuller";
-import { SettlementLayer, drawCalamityLair, drawRoads, drawSites, ownerColor } from "../world/Settlements";
+import { SettlementLayer, drawCalamityLair, drawSites, ownerColor } from "../world/Settlements";
+import { NavGrid } from "../systems/NavGrid";
+import { TOWN_SIZE, insideTown } from "../world/townLayout";
+import { CampLife, type CampState } from "../world/CampLife";
+import { MapLife, type MapLifeContext } from "../world/MapLife";
+import { FRIEND_AT, bondOf } from "../sim/campEvents";
+import { geoOf } from "../worldgen/geoMap";
+import { ofRealm } from "../worldgen/names";
 import { scaleGroups, type EnemyGroupDef } from "../data/battleMaps";
 import { DIFFICULTY } from "../data/contracts";
 import { regionName, type WorldDef } from "../data/world";
-import { isCalamityOwner } from "../sim/realm";
+import { isCalamityOwner, isRaiderKind, type Settlement } from "../sim/realm";
 import { AUTO_SLOT, registerFieldCapture, unregisterFieldCapture, type EnemySave, type FieldSave } from "../save/saveGame";
 import {
+  mutinyLeader,
   useGameStore,
   type BattalionData,
   type BattalionSurvivors,
@@ -38,16 +46,20 @@ import {
   COLORS,
   FORMATIONS,
   SUPPORT,
+  AGENTS,
+  GEO,
   REALM,
+  TERRAIN,
   TIME,
   WORLD,
   WORLD_HEIGHT,
   WORLD_WIDTH,
+  setWorldSize,
   type EnemyKind,
   type Formation,
 } from "../../utils/constants";
-import { startingMorale } from "../../utils/economy";
-import { darknessAt, daysUntilHour, formatHour, phaseOf } from "../../utils/time";
+import { campMoraleBonus, dailyRations, startingMorale } from "../../utils/economy";
+import { darknessAt, daysUntilHour, formatHour, hourOf, phaseOf } from "../../utils/time";
 import { AudioEngine } from "../../audio/AudioEngine";
 import { sfx, startCampfireAmbience, stopCampfireAmbience } from "../../audio/sounds";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
@@ -159,10 +171,21 @@ export class WorldScene extends Phaser.Scene {
   private lastFogAt = -Infinity;
 
   private campArea!: CampArea;
+  /** Rotina dos soldados e seguidores no acampamento (Marco 12). */
+  private campLife!: CampLife;
+  /** Gente e bichos perto da câmera, e os sinais do mapa (fumaça, corvos, rastros). */
+  private mapLife!: MapLife;
+  private lastCampStateAt = -Infinity;
   private culler!: StaticCuller;
   /** Chão e terreno carregados em pedaços perto da câmera. */
   private terrainStreamer!: TerrainStreamer;
   private night!: NightLayer;
+  /** Rotas por terra (rios, mar e montanhas bloqueiam; estradas são preferidas). */
+  private nav!: NavGrid;
+  /** Pontes do mundo como lugares de interação (queimar, reconstruir). */
+  private bridgeSpots: Interactable[] = [];
+  /** Ponte que o Comandante está cruzando agora (o pedágio é cobrado uma vez por travessia). */
+  private onBridge: string | null = null;
   /** Tochas acesas: o bando enxerga mais à noite, mas é visto de longe. */
   private torches = true;
   /** Quando cada inimigo apareceu à vista (emboscada noturna = surgiu do escuro há pouco). */
@@ -230,7 +253,7 @@ export class WorldScene extends Phaser.Scene {
   /** Sem simulação com o mapa, um relatório ou um painel abertos (pausa tática). */
   private get ended(): boolean {
     const s = useGameStore.getState();
-    return s.worldMapOpen || s.battleReport !== null || s.campPanel !== null;
+    return s.worldMapOpen || s.battleReport !== null || s.campPanel !== null || s.campEvent !== null;
   }
 
   create(): void {
@@ -274,17 +297,36 @@ export class WorldScene extends Phaser.Scene {
     const store = useGameStore.getState();
     if (!store.world) throw new Error("Mundo não gerado");
     this.world = store.world;
+    setWorldSize(this.world.cols, this.world.rows);
+    this.onBridge = null;
 
     // Mundo gerado: chão, terreno, estradas, locais de contrato, povoados e o acampamento
     this.culler = new StaticCuller();
-    const terrain = new TerrainMap(this.world.terrain);
-    this.terrainStreamer = new TerrainStreamer(this, terrain);
+    const terrain = new TerrainMap(this.world.terrain, geoOf(this.world.geo));
+    terrain.setBurned(store.burnedBridges);
+    this.terrainStreamer = new TerrainStreamer(this, terrain, this.world);
     Unit.terrain = terrain;
-    drawRoads(this, this.world, this.culler);
+    // Navegação: água funda e montanha bloqueiam; vau, lama e pântano custam; estrada é atalho
+    const NAV_COST: Partial<Record<string, number>> = { SHALLOW: 3, MUD: 2, SWAMP: 2.5, FOREST: 1.4, HILL: 1.2 };
+    const nav = new NavGrid(WORLD_WIDTH, WORLD_HEIGHT, GEO.NAV_CELL, (x, y) => {
+      const t = terrain.typeAt(x, y);
+      return TERRAIN[t].blocked ? Infinity : (NAV_COST[t] ?? 1);
+    });
+    for (const road of this.world.roads) nav.markRoad(road, 0.7);
+    this.nav = nav;
+    Unit.nav = nav;
+    this.buildBridgeSpots(store.burnedBridges);
     drawSites(this, this.world, this.culler);
-    this.settlementLayer = new SettlementLayer(this, this.world, this.culler);
+    const geo = geoOf(this.world.geo);
+    this.settlementLayer = new SettlementLayer(this, this.world, this.culler, (p) => geo.isOpenLand(p));
     this.settlementLayer.sync(store.settlements, store.calamities);
+    // Muralhas e casas viram obstáculo (antes de a navegação avaliar qualquer célula)
+    terrain.setTowns(this.settlementLayer.layouts);
     this.campArea = new CampArea(this, this.world.camp);
+    this.campLife = new CampLife(this, this.campArea, this.world.camp.origin);
+    this.mapLife = new MapLife(this);
+    this.campLife.setFollowers(store.followers);
+    this.lastCampStateAt = -Infinity;
 
     this.commander = new Commander(this, this.world.camp.spawn.x, this.world.camp.spawn.y);
     this.commander.setFacing(-Math.PI / 2);
@@ -301,6 +343,11 @@ export class WorldScene extends Phaser.Scene {
     this.warbands = new WarbandManager(
       (x, y, kind, color) => this.spawnEnemy(x, y, kind, color),
       () => ({ settlements: useGameStore.getState().settlements, camp: this.world.camp.center }),
+      (from, to) => this.nav.findPath(from, to, 200000),
+      () => {
+        const s = useGameStore.getState();
+        return s.day + s.dayProgress;
+      },
     );
 
     this.missionGfx = this.add.graphics().setDepth(14);
@@ -340,10 +387,12 @@ export class WorldScene extends Phaser.Scene {
       }
       if (s.activeContract !== prev.activeContract) this.syncContract();
       if (s.settlements !== prev.settlements || s.calamities !== prev.calamities) {
-        this.settlementLayer.sync(s.settlements, s.calamities);
+        if (this.settlementLayer.sync(s.settlements, s.calamities)) this.applyTowns();
         this.syncCalamities();
       }
       if (s.siege !== prev.siege) this.syncSiege();
+      if (s.burnedBridges !== prev.burnedBridges) this.applyBridges(s.burnedBridges, prev.burnedBridges);
+      if (s.followers !== prev.followers) this.campLife.setFollowers(s.followers);
       if (s.worldMapOpen && !prev.worldMapOpen) this.lastSnapshotAt = -Infinity;
     });
     activeScene = this;
@@ -351,7 +400,10 @@ export class WorldScene extends Phaser.Scene {
       unsubscribe();
       unregisterFieldCapture(capture);
       this.terrainStreamer.destroy();
+      this.campLife.destroy();
+      this.mapLife.destroy();
       if (Unit.terrain === terrain) Unit.terrain = null;
+      if (Unit.nav === nav) Unit.nav = null;
       // Ao carregar um jogo, a cena antiga morre depois de a nova nascer: só a mais nova mexe no que é global
       if (activeScene !== this) return;
       activeScene = null;
@@ -406,8 +458,11 @@ export class WorldScene extends Phaser.Scene {
     const allies = this.allAllies();
     if (time - this.lastFogAt >= SUPPORT.FOG_UPDATE_MS) this.updateVision(time);
     else this.updateReveal(allies, time);
+    this.updateHostility();
     const active = this.activeEnemies();
-    const visibleEnemies = active.filter((e) => e.revealed);
+    // Só os hostis contam para alvos automáticos, moral e combate (patrulhas em paz, refugiados e mensageiros não)
+    const hostiles = active.filter((e) => e.hostile);
+    const visibleEnemies = hostiles.filter((e) => e.revealed);
 
     for (const e of active) e.think(dt, allies);
     this.handleWarbandEvents(this.warbands.update(dt));
@@ -421,7 +476,7 @@ export class WorldScene extends Phaser.Scene {
     const faltering = this.commander.hp / this.commander.maxHp < SUPPORT.BANNER_FALTER_HP;
     for (const b of this.battalions) {
       const seen = !b.isDestroyed && this.seesBanner(b.center);
-      updateMorale(b, active, this.commander, dt, time, { seen, faltering });
+      updateMorale(b, hostiles, this.commander, dt, time, { seen, faltering });
     }
 
     separateUnits(everyone);
@@ -438,6 +493,9 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     this.updateCampPresence();
+    this.updateCampLife(time, dt);
+    this.updateMapLife(time, dt);
+    this.updateBridgeCrossing();
     this.updatePrompt();
     this.checkObjectives();
     this.updateEngagement(time, active);
@@ -458,12 +516,9 @@ export class WorldScene extends Phaser.Scene {
     const spawn = this.world.camp.spawn;
     const pos = at ?? slot ?? { x: spawn.x - 120, y: spawn.y + 80 * index };
     const b = new Battalion(this, data, pos.x, pos.y, this.commander, lieutenant);
-    // Fome e salários atrasados: os batalhões já saem desanimados
-    b.morale = startingMorale(store.hungryDays, store.arrearsWeeks).value;
-    if (!at && slot) {
-      b.orderMove(slot, Math.PI / 2);
-      this.quartered.add(b.id);
-    }
+    // Fome, salários atrasados e o humor do acampamento: os batalhões já saem animados ou desanimados
+    b.morale = startingMorale(store.hungryDays, store.arrearsWeeks, campMoraleBonus(store.campMood, store.followers)).value;
+    if (!at && slot) this.quarter(b, index, slot);
     this.fieldSignatures.set(b, this.battalionSignature(data, lieutenant?.id ?? null));
     this.battalions.push(b);
     return b;
@@ -506,6 +561,7 @@ export class WorldScene extends Phaser.Scene {
     const rebuilt = old.filter((b) => !kept.includes(b));
     const centers = new Map(rebuilt.filter((b) => b.soldiers.length > 0).map((b) => [b.id, b.center]));
     for (const b of rebuilt) {
+      this.campLife.release(b);
       b.destroy();
       this.quartered.delete(b.id);
     }
@@ -577,7 +633,7 @@ export class WorldScene extends Phaser.Scene {
     }
     // O cliente indicou o lugar: ele fica conhecido no mapa (destino da viagem rápida)
     this.fog?.revealExplored(site.center, 700);
-    this.pushFeed(`Contrato: "${contract.title}" — o local (${site.name}) está marcado no Mapa Múndi.`);
+    this.pushFeed(`Contrato: "${contract.title}" — o local (${site.name}) está marcado no Mapa do Continente.`);
   }
 
   // --- Acampamento, cidades e caminhada ---
@@ -593,13 +649,18 @@ export class WorldScene extends Phaser.Scene {
         const b = this.battalions.find((x) => x.id === data.id);
         const slot = this.campArea.quarterSlot(i);
         if (!b || !slot || b.isDestroyed || !b.isFollowing) return;
-        b.orderMove(slot, Math.PI / 2);
-        this.quartered.add(b.id);
+        this.quarter(b, i, slot);
       });
       this.pushFeed("De volta ao acampamento: as tropas descansam nos alojamentos.");
       this.autosave();
+      // Às vezes o acampamento tem algo para o Comandante resolver
+      store.campTick("ENTER");
     } else {
-      for (const b of this.battalions) if (this.quartered.has(b.id) && !b.isDestroyed) b.orderFollow(this.commander);
+      for (const b of this.battalions) {
+        if (!this.quartered.has(b.id) || b.isDestroyed) continue;
+        this.unquarter(b);
+        b.orderFollow(this.commander);
+      }
       this.quartered.clear();
       this.pushFeed("O bando deixou o acampamento.");
     }
@@ -607,11 +668,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spots(): Interactable[] {
-    return [...this.campArea.interactables, ...this.settlementLayer.interactables];
+    return [...this.campArea.interactables, ...this.settlementLayer.interactables, ...this.bridgeSpots];
   }
 
   private updatePrompt(): void {
-    this.nearestSpot = this.campArea.nearestInteractable(this.commander, this.settlementLayer.interactables);
+    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.settlementLayer.interactables, ...this.bridgeSpots]);
     const store = useGameStore.getState();
     store.setCampPrompt(this.nearestSpot && !store.campPanel ? `E — ${this.nearestSpot.label}` : null);
   }
@@ -646,7 +707,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spawnEnemy(x: number, y: number, kind: EnemyKind, color?: number): Enemy {
-    const e = new Enemy(this, x, y, kind, color);
+    const at = this.nav?.nearestOpen({ x, y }, 600) ?? { x, y };
+    const e = new Enemy(this, at.x, at.y, kind, color);
     e.dormant = true; // acorda quando alguém do bando chegar perto
     e.setVisible(false);
     this.enemies.push(e);
@@ -691,6 +753,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** Inimigos "quentes": perseguindo alguém do bando ou à vista e perto de uma tropa. */
   private isHot(e: Enemy, allyPoints: readonly Point[]): boolean {
+    if (!e.hostile) return false;
     if (e.target?.isAlive && e.target.team === "ALLY") return true;
     if (!e.revealed) return false;
     const r2 = WORLD.ENGAGE_RADIUS ** 2;
@@ -891,6 +954,10 @@ export class WorldScene extends Phaser.Scene {
       };
     });
     const killed = eng ? [...eng.enemies].filter((e) => !e.isAlive).length : 0;
+    if (eng && killed >= 4) {
+      const fallen = [...eng.enemies];
+      store.markBattlefield(fallen.reduce((n, e) => n + e.x, 0) / fallen.length, fallen.reduce((n, e) => n + e.y, 0) / fallen.length);
+    }
     const mutinyOver = !!store.mutiny && this.mutineers.length > 0 && this.mutineers.every((e) => !e.isAlive);
     const contractDone = !!eng?.contractDone || (!!this.contractId && this.contractEnemies.length === 0 && !!store.activeContract);
 
@@ -954,6 +1021,7 @@ export class WorldScene extends Phaser.Scene {
     this.lastCommanderPos = { x: this.commander.x, y: this.commander.y };
     this.walkPath = null;
     this.inCamp = true;
+    for (const b of this.battalions) this.unquarter(b);
     this.quartered.clear();
     useGameStore.getState().battalions.forEach((data, i) => {
       const b = this.battalions.find((x) => x.id === data.id);
@@ -961,8 +1029,7 @@ export class WorldScene extends Phaser.Scene {
       if (!b || b.isDestroyed) return;
       if (b.panicking) b.rally();
       b.teleportTo(slot);
-      b.orderMove(slot, Math.PI / 2);
-      this.quartered.add(b.id);
+      this.quarter(b, i, slot);
     });
     for (const r of [...this.scouts, ...this.messengers]) {
       if (!r.isAlive) continue;
@@ -976,13 +1043,16 @@ export class WorldScene extends Phaser.Scene {
 
   /**
    * Relógio do mundo: fora do acampamento e fora de combate, o dia corre com a marcha
-   * (DAY_DISTANCE por dia) e devagar com o tempo parado. Dentro da paliçada o tempo para.
+   * (DAY_DISTANCE por dia) e devagar com o tempo parado (DAY_SECONDS). Dentro das muralhas de
+   * um povoado só o relógio parado corre (andar pelas ruas não é marcha); dentro da paliçada
+   * do acampamento o tempo para.
    */
   private tickClock(time: number, dt: number): void {
     const moved = distance(this.commander, this.lastCommanderPos);
     this.lastCommanderPos = { x: this.commander.x, y: this.commander.y };
     if (!this.inCamp && !this.engagement && moved < 200) {
-      this.clockAccum += moved / WORLD.DAY_DISTANCE + dt / WORLD.DAY_SECONDS;
+      const inTown = this.settlementLayer.layouts.some((l) => insideTown(l, this.commander));
+      this.clockAccum += (inTown ? 0 : moved / WORLD.DAY_DISTANCE) + dt / WORLD.DAY_SECONDS;
     }
     if (time - this.lastClockFlush < CLOCK_FLUSH_MS || this.clockAccum <= 0) return;
     this.lastClockFlush = time;
@@ -1000,6 +1070,7 @@ export class WorldScene extends Phaser.Scene {
     const band = this.warbands.maybeSpawnGoblins(after, this.world.lairs, (p) => this.fog.canSee(p));
     if (band) useGameStore.getState().chronicle(`Rumores: um bando goblin deixou seu covil nos ermos.`, "bad");
     this.spawnArmies(after);
+    this.spawnAgents();
     this.autosave();
   }
 
@@ -1010,8 +1081,39 @@ export class WorldScene extends Phaser.Scene {
   private handleWarbandEvents(events: readonly WarbandEvent[]): void {
     const store = useGameStore.getState();
     for (const ev of events) {
+      if (ev.type === "SKIRMISH") {
+        const near = ev.winner.spotted || ev.loser.spotted || distance(this.commander, ev.at) < 5000;
+        if (near) {
+          const text = `${ev.winner.name} venceu o ${ev.loser.name} perto de ${this.placeName(ev.at)}.`;
+          this.pushFeed(text);
+          store.chronicle(text, ev.winner.kind === "PATROL" ? "good" : "bad");
+        }
+        store.markBattlefield(ev.at.x, ev.at.y);
+        continue;
+      }
+      if (ev.type === "SHELTERED") {
+        const t = useGameStore.getState().settlements.find((x) => x.id === ev.settlementId);
+        if (ev.band.spotted && t) this.pushFeed(`Os ${ev.band.name.toLowerCase()} chegaram a ${t.name}.`);
+        continue;
+      }
+      if (ev.type === "MASSACRE") {
+        const text = `O ${ev.by.name} alcançou os ${ev.band.name.toLowerCase()} na estrada. Ninguém sobreviveu.`;
+        store.chronicle(text, "bad");
+        if (distance(this.commander, ev.band.anchor) < 6000) this.pushFeed(text);
+        store.markBattlefield(ev.band.anchor.x, ev.band.anchor.y);
+        continue;
+      }
       const band = ev.band;
       if (ev.type === "DESTROYED") {
+        // Mensageiro real abatido pelo bando: os despachos são lidos
+        if (band.kind === "COURIER") {
+          if (band.materialized && band.ownerId) {
+            this.pushFeed(`Mensageiro real interceptado! ${store.interceptCourier(band.ownerId)}`);
+            this.revealArmiesOf(band.ownerId);
+          }
+          continue;
+        }
+        if (band.kind === "REFUGEES") continue;
         if (band.spotted || band.kind !== "GOBLIN") {
           store.chronicle(`O ${band.name} foi destruído.`, "good");
           this.pushFeed(`O ${band.name} não existe mais.`);
@@ -1046,11 +1148,14 @@ export class WorldScene extends Phaser.Scene {
         if (t) this.pushFeed(`${t.name} repeliu o ${band.name}.`);
       } else if (outcome === "CAPTURED") {
         if (t) this.pushFeed(`${t.name} caiu nas mãos do ${band.name}.`);
+        if (t) this.spawnRefugees(t);
         this.warbands.disband(band); // o bando vira a guarnição do povoado
         continue;
       } else if (outcome === "RUINED" || outcome === "RAIDED") {
         if (t) this.pushFeed(outcome === "RUINED" ? `${t.name} foi tomada pelos mortos!` : `${band.name} saqueou ${t.name}!`);
       }
+      // Quem escapou foge pela estrada até o povoado de pé mais perto
+      if (t && (outcome === "RAIDED" || outcome === "RUINED")) this.spawnRefugees(t);
       this.warbands.retarget(band);
     }
   }
@@ -1058,10 +1163,43 @@ export class WorldScene extends Phaser.Scene {
   /** Nome do lugar para o HUD e os relatórios: povoado, acampamento, local de contrato ou região. */
   private placeName(p: Point): string {
     if (this.campArea.contains(p, -200)) return "o acampamento";
-    const town = useGameStore.getState().settlements.find((t) => distance(t, p) < 600);
+    const town = useGameStore.getState().settlements.find((t) => {
+      const layout = this.settlementLayer.layoutOf(t.id);
+      return layout ? insideTown(layout, p, 400) : distance(t, p) < 600;
+    });
     if (town) return town.name;
     const site = this.world.sites.find((x) => distance(x.center, p) < 1200);
-    return site ? site.name : regionName(this.world, p);
+    if (site) return site.name;
+    const river = geoOf(this.world.geo).riverAt(p.x, p.y, 250);
+    if (river) return `margens do ${river.river.name}`;
+    return regionName(this.world, p);
+  }
+
+  /** Onde nasce a aldeia fundada: logo à frente (ao sul) do Comandante, com o portão norte para ele. */
+  private foundSite(): Point {
+    return { x: Math.round(this.commander.x), y: Math.round(this.commander.y + TOWN_SIZE.VILLAGE.h / 2 + 380) };
+  }
+
+  /**
+   * Plantas mudaram (aldeia fundada, povoado em ruínas ou reconstruído): colisão, navegação e
+   * rotas são refeitas, e quem ficou dentro de uma parede sai para a rua mais próxima.
+   */
+  private applyTowns(): void {
+    const terrain = Unit.terrain;
+    if (!terrain) return;
+    terrain.setTowns(this.settlementLayer.layouts);
+    for (const l of this.settlementLayer.layouts) {
+      this.nav.invalidate({ x: l.cx, y: l.cy }, Math.max(l.bounds.w, l.bounds.h) / 2 + 200);
+    }
+    for (const u of [...this.allAllies(), ...this.enemies]) {
+      if (!u.isAlive || !terrain.isBlocked(u.x, u.y)) continue;
+      const safe = this.nav.nearestOpen(u, 800);
+      if (safe) {
+        u.x = safe.x;
+        u.y = safe.y;
+      }
+    }
+    this.warbands.repathAll();
   }
 
   /** Pode fundar uma vila aqui? (null = sim; senão, o motivo) */
@@ -1069,14 +1207,25 @@ export class WorldScene extends Phaser.Scene {
     const store = useGameStore.getState();
     if (this.inCamp) return "Saia do acampamento";
     if (this.engagement) return "Em combate";
-    const near = [...store.settlements, this.world.camp.center].some((t) => distance(t, this.commander) < REALM.FOUND_MIN_DISTANCE);
+    // A mesma regra do store: distância medida de onde a aldeia nasce (à frente do Comandante)
+    const site = this.foundSite();
+    const near = [...store.settlements, this.world.camp.center].some((t) => distance(t, site) < REALM.FOUND_MIN_DISTANCE);
     if (near) return "Perto demais de outro povoado";
+    const { w, h } = TOWN_SIZE.VILLAGE;
+    const geo = geoOf(this.world.geo);
+    const terrain = Unit.terrain;
+    for (let j = 0; j <= 4; j++) {
+      for (let i = 0; i <= 4; i++) {
+        const p = { x: site.x - w / 2 - 150 + ((w + 300) * i) / 4, y: site.y - h / 2 - 150 + ((h + 300) * j) / 4 };
+        if (!geo.isOpenLand(p, 60) || terrain?.isBlocked(p.x, p.y)) return "Terreno impróprio (água, rio, montanha ou construções)";
+      }
+    }
     if (store.gold < REALM.FOUND_COST.gold || store.iron < REALM.FOUND_COST.iron) return "Ouro ou ferro insuficiente";
     return null;
   }
 
   /**
-   * Viagem rápida (Mapa Múndi): o exército marcha em linha reta até o destino em passos de
+   * Viagem rápida (Mapa do Continente): o exército marcha pela rota por terra até o destino em passos de
    * fração de dia, os bandos marcham junto, e a viagem para se algum deles cruzar o caminho.
    */
   private fastTravel(dest: Point): void {
@@ -1092,11 +1241,16 @@ export class WorldScene extends Phaser.Scene {
     }
     if (this.messengers.some((m) => m.isAlive && !m.available)) return refuse("Aguarde os mensageiros voltarem antes de viajar.");
     if (!this.fog.isExplored(dest)) return refuse("Destino desconhecido: explore a região antes.");
-
+    const target = this.nav.nearestOpen(dest, 800);
+    if (!target) return refuse("Não há onde parar ali (água ou montanha).");
     const start = { x: this.commander.x, y: this.commander.y };
-    const { at, elapsed, interceptedBy } = this.simulateMarch(start, dest, distance(start, dest) / WORLD.DAY_DISTANCE, WORLD.INTERCEPT_RADIUS);
+    const path = this.nav.findPath(start, target, 250000);
+    if (!path) return refuse("Não há caminho por terra até lá (rio sem ponte, mar ou montanha).");
 
-    this.placeArmy(at, Math.atan2(dest.y - start.y, dest.x - start.x));
+    const route = [start, ...path];
+    const { at, elapsed, interceptedBy, facing } = this.simulateMarch(route, routeLength(route) / WORLD.DAY_DISTANCE, WORLD.INTERCEPT_RADIUS);
+
+    this.placeArmy(at, facing);
     this.passTime(elapsed);
     store.setWorldMapOpen(false);
     const dayText = elapsed < 1 ? "menos de um dia" : `${elapsed.toFixed(1).replace(".", ",")} dias`;
@@ -1110,31 +1264,219 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Dias que passam de uma vez (viagem rápida ou descanso): o exército vai de `start` a `dest`
-   * em passos de fração de dia, os bandos marcham junto, e tudo para se algum chegar perto.
+   * Dias que passam de uma vez (viagem rápida ou descanso): o exército percorre a rota em
+   * passos de fração de dia, os bandos marcham junto, e tudo para se algum chegar perto.
    */
-  private simulateMarch(start: Point, dest: Point, totalDays: number, interceptRadius: number): { at: Point; elapsed: number; interceptedBy: string | null } {
+  private simulateMarch(
+    route: readonly Point[],
+    totalDays: number,
+    interceptRadius: number,
+  ): { at: Point; elapsed: number; interceptedBy: string | null; facing: number } {
     for (const e of this.enemies) e.dormant = true; // ninguém vê o caminho inteiro: tudo anda em bloco
+    const total = routeLength(route);
     const steps = Math.max(1, Math.ceil(totalDays / TRAVEL_STEP_DAYS));
-    let at = start;
+    let at = route[0];
     let elapsed = 0;
     let interceptedBy: string | null = null;
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      at = { x: start.x + (dest.x - start.x) * t, y: start.y + (dest.y - start.y) * t };
+      at = pointAlong(route, total * t);
       elapsed = totalDays * t;
       this.handleWarbandEvents(this.warbands.advance(totalDays / steps));
       this.fog.revealExplored(at, SUPPORT.VISION.SCOUT);
-      const band = this.warbands.bands.find((b) => distance(b.anchor, at) < interceptRadius);
+      const band = this.warbands.bands.find((b) => this.bandHostile(b) && distance(b.anchor, at) < interceptRadius);
       if (band) {
         interceptedBy = band.name;
         // Para um pouco antes, de frente para o bando
-        const back = Math.min(1, 250 / Math.max(1, distance(start, at)));
-        at = { x: at.x + (start.x - at.x) * back, y: at.y + (start.y - at.y) * back };
+        at = pointAlong(route, Math.max(0, total * t - 250));
         break;
       }
     }
-    return { at, elapsed, interceptedBy };
+    // Olhando na direção do último trecho da rota
+    const last = route[route.length - 1];
+    const prev = route[route.length - 2];
+    const facing = prev ? Math.atan2(last.y - prev.y, last.x - prev.x) : this.commander.facing;
+    return { at, elapsed, interceptedBy, facing };
+  }
+
+  // --- Pontes ---
+
+  private buildBridgeSpots(burned: readonly string[]): void {
+    this.bridgeSpots = this.world.geo.crossings
+      .filter((c) => c.kind === "BRIDGE")
+      .map((c) => {
+        const river = this.world.geo.rivers.find((r) => r.id === c.riverId)?.name ?? "rio";
+        return {
+          label: burned.includes(c.id) ? `Ponte queimada sobre o ${river}` : `Ponte sobre o ${river}`,
+          door: { x: c.x, y: c.y },
+          panel: { kind: "BRIDGE" as const, bridgeId: c.id },
+          bounds: new Phaser.Geom.Rectangle(c.x - 120, c.y - 120, 240, 240),
+          radius: 230,
+        };
+      });
+  }
+
+  /** Ponte queimada ou reconstruída: terreno, desenho, rotas e o que os bandos planejavam mudam. */
+  private applyBridges(burned: readonly string[], before: readonly string[]): void {
+    const terrain = Unit.terrain;
+    if (!terrain) return;
+    terrain.setBurned(burned);
+    const changed = [...burned.filter((id) => !before.includes(id)), ...before.filter((id) => !burned.includes(id))];
+    for (const id of changed) {
+      const c = this.world.geo.crossings.find((x) => x.id === id);
+      if (!c) continue;
+      this.terrainStreamer.invalidate(c, 500);
+      this.nav.invalidate(c, 400);
+      // Quem estava sobre a ponte em chamas cai na margem mais próxima
+      for (const u of [...this.allAllies(), ...this.enemies]) {
+        if (!u.isAlive || !terrain.isBlocked(u.x, u.y) || distance(u, c) > 400) continue;
+        const safe = this.nav.nearestOpen(u, 600);
+        if (safe) {
+          u.x = safe.x;
+          u.y = safe.y;
+        }
+      }
+    }
+    this.warbands.repathAll();
+    this.buildBridgeSpots(burned);
+  }
+
+  /** Pedágio: ao pisar numa ponte de outro, paga (ou passa à força). */
+  private updateBridgeCrossing(): void {
+    const c = this.commander;
+    const id = c.terrainType === "BRIDGE" ? (geoOf(this.world.geo).crossingAt(c.x, c.y)?.id ?? null) : null;
+    if (id === this.onBridge) return;
+    this.onBridge = id;
+    if (!id) return;
+    const msg = useGameStore.getState().crossBridge(id);
+    if (msg) this.pushFeed(msg);
+  }
+
+  // --- Agentes do mundo (Marco 12) ---
+
+  /** O bando ataca o jogador? Goblins, exércitos e hordas sim; patrulhas e mensageiros só em guerra ou provocados. */
+  private bandHostile(b: Warband): boolean {
+    if (isRaiderKind(b.kind)) return true;
+    if (b.kind === "REFUGEES") return false;
+    if (b.provoked) return true;
+    return useGameStore.getState().factions.some((f) => f.id === b.ownerId && f.atWar);
+  }
+
+  /** Hostilidade de quem está em campo; quem foi atacado pelo bando é provocado (e o dono fica sabendo). */
+  private updateHostility(): void {
+    for (const band of this.warbands.bands) {
+      if (!band.materialized) continue;
+      if (!band.provoked && band.members.some((m) => m.provoked)) {
+        band.provoked = true;
+        const store = useGameStore.getState();
+        if (band.kind === "REFUGEES") store.attackRefugees(band.name.replace(/^Refugiados de /, ""));
+        else if (band.ownerId && !store.factions.some((f) => f.id === band.ownerId && f.atWar)) {
+          store.provokeFaction(band.ownerId, band.kind === "PATROL" ? "uma patrulha" : "o mensageiro real");
+        }
+        const realm = this.world.factions.find((f) => f.id === band.ownerId)?.name ?? "reino";
+        this.pushFeed(
+          `Atacamos ${band.kind === "REFUGEES" ? "refugiados" : band.kind === "PATROL" ? `a patrulha ${ofRealm(realm)}` : `o mensageiro ${ofRealm(realm)}`}!`,
+        );
+      }
+      // Mensageiros e refugiados nunca lutam (fogem); patrulhas lutam em guerra ou provocadas
+      const hostile = band.kind !== "COURIER" && band.kind !== "REFUGEES" && this.bandHostile(band);
+      for (const m of band.members) m.hostile = hostile;
+    }
+  }
+
+  /** Patrulhas e mensageiros: cada reino mantém os seus em movimento. */
+  private spawnAgents(): void {
+    const s = useGameStore.getState();
+    for (const f of s.factions) {
+      const own = s.settlements.filter((t) => t.owner === f.id);
+      const def = this.world.factions.find((x) => x.id === f.id);
+      if (own.length === 0 || !def) continue;
+      const gateOf = (t: Settlement) => {
+        const layout = this.settlementLayer.layoutOf(t.id);
+        return layout ? layout.gates[Math.floor(Math.random() * layout.gates.length)].outside : { x: t.x, y: t.y };
+      };
+      const patrols = this.warbands.bands.filter((b) => b.kind === "PATROL" && b.ownerId === f.id).length;
+      const want = Math.min(AGENTS.PATROL_MAX, Math.ceil(own.length / AGENTS.PATROL_PER_SETTLEMENTS));
+      if (patrols < want) {
+        this.warbands.spawnBand({
+          name: `Patrulha ${ofRealm(def.name)}`,
+          kind: "PATROL",
+          units: [
+            ["SOLDIER", AGENTS.PATROL_SIZE.SOLDIER],
+            ["CROSSBOW", AGENTS.PATROL_SIZE.CROSSBOW],
+          ],
+          origin: gateOf(own[Math.floor(Math.random() * own.length)]),
+          ownerId: f.id,
+          color: def.color,
+        });
+      }
+      if (own.length >= 2 && !this.warbands.bands.some((b) => b.kind === "COURIER" && b.ownerId === f.id)) {
+        const capital = own.find((t) => t.id === def.capitalId) ?? own[0];
+        this.warbands.spawnBand({ name: `Mensageiro ${ofRealm(def.name)}`, kind: "COURIER", units: [["COURIER", 1]], origin: gateOf(capital), ownerId: f.id, color: def.color });
+      }
+    }
+  }
+
+  /** Povoado atacado: quem escapou foge pela estrada. */
+  private spawnRefugees(t: Settlement): void {
+    const layout = this.settlementLayer.layoutOf(t.id);
+    const origin = layout ? layout.gates[0].outside : { x: t.x, y: t.y };
+    const n = Math.max(4, Math.min(10, Math.round(t.population / 80)));
+    this.warbands.spawnBand({ name: `Refugiados de ${t.name}`, kind: "REFUGEES", units: [["CIVILIAN", n]], origin, ownerId: null });
+  }
+
+  /** Despachos interceptados: os exércitos do reino em marcha aparecem no mapa. */
+  private revealArmiesOf(factionId: string): void {
+    const day = useGameStore.getState().day;
+    for (const b of this.warbands.bands) {
+      if (b.ownerId !== factionId || (b.kind !== "FACTION" && b.kind !== "PATROL")) continue;
+      b.lastSeen = { x: b.anchor.x, y: b.anchor.y, day };
+      b.spotted = true;
+    }
+  }
+
+  /** Gente perto da câmera e os sinais do mapa. */
+  private updateMapLife(time: number, dt: number): void {
+    const s = useGameStore.getState();
+    const now = s.day + s.dayProgress;
+    const towns: MapLifeContext["towns"] = [];
+    for (const t of s.settlements) {
+      const layout = this.settlementLayer.layoutOf(t.id);
+      if (layout) towns.push({ settlement: t, layout });
+    }
+    const smoke: MapLifeContext["smoke"] = [];
+    const crows: Point[] = s.battlefields.filter((b) => s.day - b.day <= 2);
+    for (const t of s.settlements) {
+      const raided = t.lastRaidDay !== null && s.day - t.lastRaidDay <= 2;
+      if (raided || isCalamityOwner(t.owner)) smoke.push({ x: t.x, y: t.y, strength: 1 });
+      else if (t.owner === "RUINED") smoke.push({ x: t.x, y: t.y, strength: 0.45 });
+      if (raided) crows.push({ x: t.x, y: t.y - 200 });
+    }
+    const tracks: MapLifeContext["tracks"] = [];
+    for (const b of this.warbands.bands) {
+      for (let i = 1; i < b.trail.length; i++) {
+        const p = b.trail[i];
+        const q = b.trail[i - 1];
+        tracks.push({ x: p.x, y: p.y, dir: Math.atan2(p.y - q.y, p.x - q.x), age: now - p.day });
+      }
+    }
+    const army: Point[] = [this.commander];
+    for (const b of this.battalions) if (!b.isDestroyed) army.push(b.center);
+    this.mapLife.update(time, dt, {
+      view: this.cameras.main.worldView,
+      hour: hourOf(s.dayProgress),
+      darkness: Unit.darkness,
+      towns,
+      roads: this.world.roads,
+      canSee: (p) => this.fog.canSee(p),
+      threats: this.warbands.bands.filter((b) => this.bandHostile(b)).map((b) => b.anchor),
+      army,
+      factionColor: (owner) => ownerColor(this.world, s.calamities, owner),
+      terrain: Unit.terrain,
+      smoke,
+      crows,
+      tracks,
+    });
   }
 
   /** Pode descansar até o amanhecer? (null = sim; senão, o motivo) */
@@ -1161,7 +1503,7 @@ export class WorldScene extends Phaser.Scene {
     }
     const store = useGameStore.getState();
     const here = { x: this.commander.x, y: this.commander.y };
-    const r = this.simulateMarch(here, here, daysUntilHour(store.dayProgress, TIME.DAWN[1]), WORLD.WARBAND.CAMP_GUARD_RADIUS);
+    const r = this.simulateMarch([here], daysUntilHour(store.dayProgress, TIME.DAWN[1]), WORLD.WARBAND.CAMP_GUARD_RADIUS);
     this.passTime(r.elapsed);
     const now = formatHour(useGameStore.getState().dayProgress);
     this.pushFeed(
@@ -1171,8 +1513,54 @@ export class WorldScene extends Phaser.Scene {
           ? `O bando dormiu no acampamento e acordou com o sol (${now}).`
           : `O bando dormiu ao relento e levantou acampamento ao amanhecer (${now}).`,
     );
+    if (this.inCamp && !r.interceptedBy) useGameStore.getState().campTick("REST");
     this.updateVision(this.time.now);
     this.publishHud();
+  }
+
+  // --- Vida no acampamento ---
+
+  /** O batalhão descansa no alojamento: segura a posição e a rotina do acampamento assume. */
+  private quarter(b: Battalion, index: number, slot: Point): void {
+    b.restAt(slot);
+    b.restDriver = this.campLife.driverFor(b, index);
+    this.quartered.add(b.id);
+  }
+
+  /** O batalhão deixa de descansar (sai com o Comandante, viaja, foi derrotado). */
+  private unquarter(b: Battalion): void {
+    if (!b.restDriver) return;
+    b.restDriver = null;
+    this.campLife.release(b);
+  }
+
+  /** O que o acampamento está vivendo (para a rotina dos soldados): lido do store 2 vezes por segundo. */
+  private updateCampLife(time: number, dt: number): void {
+    if (time - this.lastCampStateAt > 500) {
+      this.lastCampStateAt = time;
+      const s = useGameStore.getState();
+      const morale = startingMorale(s.hungryDays, s.arrearsWeeks, campMoraleBonus(s.campMood, s.followers)).value;
+      const assigned = s.lieutenants.filter((l) => l.battalionId);
+      const friends: [string, string][] = [];
+      for (let i = 0; i < assigned.length; i++) {
+        for (let j = i + 1; j < assigned.length; j++) {
+          if (bondOf(s.bonds, assigned[i].id, assigned[j].id) >= FRIEND_AT) friends.push([assigned[i].id, assigned[j].id]);
+        }
+      }
+      const state: CampState = {
+        hour: hourOf(s.dayProgress),
+        hungry: s.hungryDays > 0 || s.rations < dailyRations(s.battalions, s.followers),
+        lowMorale: morale < 60,
+        arrears: s.arrearsWeeks > 0,
+        rebelId: s.pendingMutiny ? (mutinyLeader(s.battalions)?.id ?? null) : null,
+        party: s.lastVictoryDay !== null && s.day - s.lastVictoryDay <= 1 && s.hungryDays === 0,
+        friends,
+      };
+      this.campLife.setState(state);
+    }
+    const view = this.cameras.main.worldView;
+    const near = distance({ x: view.centerX, y: view.centerY }, this.campArea.campfire) < 1800;
+    this.campLife.update(time, dt, near);
   }
 
   // --- Noite ---
@@ -1200,7 +1588,9 @@ export class WorldScene extends Phaser.Scene {
       for (const m of this.messengers) if (m.isAlive) out.push({ x: m.x, y: m.y, radius: L.TORCH * 0.6 });
     }
     const store = useGameStore.getState();
-    for (const t of store.settlements) if (t.owner !== "RUINED") out.push({ x: t.x, y: t.y, radius: L.TOWN });
+    out.push(...this.settlementLayer.lights);
+    for (const p of this.campLife.lights()) out.push({ x: p.x, y: p.y, radius: L.TORCH });
+    for (const p of this.mapLife.lanterns()) out.push({ x: p.x, y: p.y, radius: 140 });
     for (const c of store.calamities) if (!c.defeated) out.push({ ...c.lair, radius: L.LAIR });
     return out;
   }
@@ -1281,6 +1671,7 @@ export class WorldScene extends Phaser.Scene {
       b.morale = saved.morale;
       if (quartered.has(b.id)) continue;
       this.quartered.delete(b.id);
+      this.unquarter(b);
       b.teleportTo(saved);
       b.orderFollow(c);
     }
@@ -1351,11 +1742,12 @@ export class WorldScene extends Phaser.Scene {
     this.lastCommanderPos = { x: c.x, y: c.y };
     this.walkPath = null;
     this.inCamp = this.campArea.contains(c);
+    for (const b of this.battalions) this.unquarter(b);
     this.quartered.clear();
-    const back = (d: number, lateral: number): Point => ({
-      x: c.x - Math.cos(facing) * d - Math.sin(facing) * lateral,
-      y: c.y - Math.sin(facing) * d + Math.cos(facing) * lateral,
-    });
+    const back = (d: number, lateral: number): Point => {
+      const p = { x: c.x - Math.cos(facing) * d - Math.sin(facing) * lateral, y: c.y - Math.sin(facing) * d + Math.cos(facing) * lateral };
+      return this.nav.nearestOpen(p, 600) ?? { x: c.x, y: c.y };
+    };
     const alive = this.battalions.filter((b) => !b.isDestroyed);
     alive.forEach((b, i) => {
       if (b.panicking) b.rally();
@@ -1373,7 +1765,7 @@ export class WorldScene extends Phaser.Scene {
     this.campArea.buildQuarters(useGameStore.getState(), this.awayBattalions());
   }
 
-  /** Retrato para o Mapa Múndi: névoa, exército e bandos avistados (ou a última posição conhecida). */
+  /** Retrato para o Mapa do Continente: névoa, exército e bandos avistados (ou a última posição conhecida). */
   private publishSnapshot(time: number): void {
     this.lastSnapshotAt = time;
     const day = useGameStore.getState().day;
@@ -1395,6 +1787,8 @@ export class WorldScene extends Phaser.Scene {
         visible: seen.length > 0,
         seenDay: band.lastSeen.day,
         heading: seen.length > 0 ? band.goalPoint : null,
+        kind: band.kind,
+        hostile: this.bandHostile(band),
       });
     }
     useGameStore.getState().setWorldSnapshot({
@@ -1429,6 +1823,12 @@ export class WorldScene extends Phaser.Scene {
       band.lastSeen = { x: c.x, y: c.y, day };
       if (band.spotted) continue;
       band.spotted = true;
+      if (!isRaiderKind(band.kind)) {
+        // Patrulhas, mensageiros e refugiados: só uma nota (não são ameaça)
+        const what = band.kind === "REFUGEES" ? `${band.name} na estrada, fugindo` : `${band.name} passando`;
+        this.pushFeed(`${what} perto de ${this.placeName(c)}.`);
+        continue;
+      }
       const text = `${band.name} avistado perto de ${this.placeName(c)} (cerca de ${bandSize(band)} combatentes).`;
       this.pushFeed(text);
       useGameStore.getState().chronicle(text, "bad");
@@ -1509,8 +1909,9 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** Inimigos à vista (só os hostis: patrulhas em paz, refugiados e mensageiros não contam). */
   private visibleEnemies(): Enemy[] {
-    return this.enemies.filter((e) => e.revealed);
+    return this.enemies.filter((e) => e.revealed && e.hostile);
   }
 
   // --- Câmera ---
@@ -1908,7 +2309,7 @@ export class WorldScene extends Phaser.Scene {
       if (store.campPanel) store.setCampPanel(null);
       else if (this.nearestSpot) store.setCampPanel(this.nearestSpot.panel);
     });
-    // Tab: Mapa Múndi (viagem rápida e observação de exércitos)
+    // Tab: Mapa do Continente (viagem rápida e observação de exércitos)
     this.keys.TAB.on("down", () => {
       const store = useGameStore.getState();
       if (store.battleReport) return;
@@ -2074,7 +2475,11 @@ export class WorldScene extends Phaser.Scene {
       accepted = this.dispatch(s, "Explorar", () => s.setMode("EXPLORE", point)) || accepted;
     }
 
-    const enemy = nearest(this.visibleEnemies(), point, 40);
+    const enemy = nearest(
+      this.enemies.filter((e) => e.isAlive && e.revealed),
+      point,
+      40,
+    );
     if (enemy) {
       for (const b of selected) accepted = this.dispatch(b, "Atacar", () => b.orderAttack(enemy)) || accepted;
     } else if (selected.length > 0) {
@@ -2173,7 +2578,7 @@ export class WorldScene extends Phaser.Scene {
         case "FOUND": {
           const why = this.foundBlocked();
           if (why) this.pushFeed(`Não dá para fundar uma vila aqui: ${why.toLowerCase()}.`);
-          else if (useGameStore.getState().foundSettlement(this.commander.x, this.commander.y + 400)) {
+          else if (useGameStore.getState().foundSettlement(this.foundSite().x, this.foundSite().y)) {
             this.pushFeed("Uma nova aldeia nasce sob a bandeira do bando!");
           }
           break;
@@ -2348,4 +2753,25 @@ export class WorldScene extends Phaser.Scene {
       restBlocked: this.restBlocked(),
     });
   }
+}
+
+/** Comprimento de uma linha de pontos. */
+function routeLength(route: readonly Point[]): number {
+  let total = 0;
+  for (let i = 1; i < route.length; i++) total += distance(route[i - 1], route[i]);
+  return total;
+}
+
+/** Ponto a `d` px do começo da linha. */
+function pointAlong(route: readonly Point[], d: number): Point {
+  let left = d;
+  for (let i = 1; i < route.length; i++) {
+    const seg = distance(route[i - 1], route[i]);
+    if (left <= seg) {
+      const t = seg > 0 ? left / seg : 0;
+      return { x: route[i - 1].x + (route[i].x - route[i - 1].x) * t, y: route[i - 1].y + (route[i].y - route[i - 1].y) * t };
+    }
+    left -= seg;
+  }
+  return route[route.length - 1];
 }

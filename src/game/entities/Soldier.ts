@@ -77,11 +77,9 @@ export class Soldier extends Unit {
   }
 
   override outgoingDamage(target: Unit): number {
-    return (
-      super.outgoingDamage(target) *
-      FORMATIONS[this.battalion.formation].damageDealt *
-      (this.battalion.leaderPassive?.damage ?? 1)
-    );
+    // Na água a formação se desfaz: a Cunha não empurra
+    const formation = this.inShallows ? 1 : FORMATIONS[this.battalion.formation].damageDealt;
+    return super.outgoingDamage(target) * formation * (this.battalion.leaderPassive?.damage ?? 1);
   }
 
   override incomingMultiplier(source: Unit, kind: AttackKind): number {
@@ -91,6 +89,8 @@ export class Soldier extends Unit {
       super.incomingMultiplier(source, kind) *
       (kind === "RANGED" ? m.rangedTaken : m.meleeTaken) *
       (this.battalion.leaderPassive?.taken ?? 1);
+    // Na água (vau, riacho) não há Parede de Escudos nem fileira: só a armadura vale
+    if (this.inShallows) return base;
     const f = FORMATIONS[this.battalion.formation];
     // Parede de Escudos: proteção só para golpes vindos da frente (arco maior com Muralha Viva)
     if (f.frontArc !== undefined) {

@@ -1,11 +1,21 @@
 import { BALANCE, ECONOMY, PROGRESSION, TROOPS } from "./constants";
 import type { BattalionData } from "../store/useGameStore";
 import { PASSIVES, type LieutenantData } from "../game/data/lieutenants";
+import { followerRations, hasFollower, type Follower } from "../game/sim/campEvents";
 
-/** Rações consumidas por dia: 1 para cada SOLDIERS_PER_RATION soldados, mais 1 do Comandante. */
-export function dailyRations(battalions: readonly BattalionData[]): number {
+/**
+ * Rações consumidas por dia: 1 para cada SOLDIERS_PER_RATION soldados, mais 1 do Comandante e
+ * o que os seguidores comem. Com um cozinheiro, a tropa gasta 20% menos.
+ */
+export function dailyRations(battalions: readonly BattalionData[], followers: readonly Follower[] = []): number {
   const soldiers = battalions.reduce((sum, b) => sum + b.soldiers, 0);
-  return 1 + Math.ceil(soldiers / ECONOMY.SOLDIERS_PER_RATION);
+  const troops = Math.ceil(soldiers / ECONOMY.SOLDIERS_PER_RATION) * (hasFollower(followers, "COOK") ? 0.8 : 1);
+  return Math.ceil(1 + troops + followerRations(followers));
+}
+
+/** Bônus de moral vindo do acampamento: o humor do dia e o capelão. */
+export function campMoraleBonus(campMood: number, followers: readonly Follower[]): number {
+  return campMood + (hasFollower(followers, "CHAPLAIN") ? 10 : 0);
 }
 
 /** Salário semanal do batalhão: veteranos (nível alto) cobram mais. */
@@ -35,14 +45,16 @@ export interface MoraleBreakdown {
   value: number;
   hunger: number;
   arrears: number;
+  /** Humor do acampamento e capelão (pode ser negativo). */
+  camp: number;
 }
 
-/** Moral com que os batalhões entram na próxima batalha (fome e salários atrasados pesam). */
-export function startingMorale(hungryDays: number, arrearsWeeks: number): MoraleBreakdown {
+/** Moral com que os batalhões entram na próxima batalha (fome, salários atrasados e o acampamento pesam). */
+export function startingMorale(hungryDays: number, arrearsWeeks: number, camp = 0): MoraleBreakdown {
   const hunger = hungryDays * ECONOMY.HUNGER_MORALE_PER_DAY;
   const arrears = arrearsWeeks * ECONOMY.ARREARS_MORALE_PER_WEEK;
-  const value = Math.max(ECONOMY.MIN_STARTING_MORALE, BALANCE.MORALE.MAX - hunger - arrears);
-  return { value, hunger, arrears };
+  const value = Math.max(ECONOMY.MIN_STARTING_MORALE, Math.min(BALANCE.MORALE.MAX, BALANCE.MORALE.MAX - hunger - arrears + camp));
+  return { value, hunger, arrears, camp };
 }
 
 /** Dias até o próximo pagamento (no dia múltiplo de PAYDAY_INTERVAL). */
