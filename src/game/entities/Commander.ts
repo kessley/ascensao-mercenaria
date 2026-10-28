@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
+import { sfx } from "../../audio/sounds";
 import { BALANCE, COLORS } from "../../utils/constants";
 import { angleDiff, angleTo, nearest } from "../../utils/math";
 
@@ -38,6 +39,7 @@ export class Commander extends Unit {
   }
 
   handleMovement(keys: CommanderKeys, dt: number): boolean {
+    if (!this.isAlive) return false; // não "ressuscita" quem caiu entre um quadro e outro
     let vx = 0;
     let vy = 0;
     if (keys.A.isDown) vx -= 1;
@@ -80,6 +82,7 @@ export class Commander extends Unit {
     }
 
     this.drawSlash(reach + 6);
+    sfx.swing(this);
   }
 
   private drawSlash(radius: number): void {

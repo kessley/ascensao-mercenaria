@@ -1,6 +1,6 @@
 import { supportWages } from "../../../game/data/riders";
 import { useGameStore } from "../../../store/useGameStore";
-import { BATTLE_MAPS } from "../../../game/data/battleMaps";
+import { WORLD } from "../../../utils/constants";
 import { DIFFICULTY, type Difficulty } from "../../../game/data/contracts";
 import { dailyRations, daysUntilPayday, weeklyWages } from "../../../utils/economy";
 import { CouncilOpinions } from "./LieutenantPanels";
@@ -23,6 +23,11 @@ export function ContractBoard() {
   const debt = useGameStore((s) => s.debt);
   const day = useGameStore((s) => s.day);
   const acceptContract = useGameStore((s) => s.acceptContract);
+  const abandonContract = useGameStore((s) => s.abandonContract);
+  const active = useGameStore((s) => s.activeContract);
+  const mutiny = useGameStore((s) => s.mutiny);
+  const world = useGameStore((s) => s.world);
+  const siteName = (id: string) => world?.sites.find((x) => x.id === id)?.name ?? "?";
 
   const perDay = dailyRations(battalions);
   const wages = weeklyWages(battalions, lieutenants) + riders;
@@ -30,6 +35,22 @@ export function ContractBoard() {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400">Mesa estratégica: contratos</h2>
+      {active && (
+        <div className="flex flex-col gap-2 rounded border border-amber-500/70 bg-amber-950/40 p-3 text-sm">
+          <div className="font-semibold text-amber-200">Em andamento: {active.contract.title}</div>
+          <p className="text-xs text-neutral-300">
+            Os inimigos estão em <b>{siteName(active.contract.siteId)}</b> (★ no Mapa Múndi — Tab). Elimine todos até o dia{" "}
+            <b>{active.deadline}</b> para receber o bônus de {active.contract.reward}.
+          </p>
+          <button
+            type="button"
+            onClick={abandonContract}
+            className="self-end rounded border border-red-500 px-3 py-1 text-xs text-red-200 hover:bg-red-900/50"
+          >
+            Abandonar contrato
+          </button>
+        </div>
+      )}
       {contracts.map((c) => {
         const food = perDay * c.travelDays;
         const hungry = food > rations;
@@ -41,7 +62,7 @@ export function ContractBoard() {
               <div>
                 <div className="font-semibold">{c.title}</div>
                 <div className="text-xs text-neutral-400">
-                  {c.client} · {BATTLE_MAPS[c.mapId].name}
+                  {c.client} · {siteName(c.siteId)}
                 </div>
               </div>
               <span className={`text-xs font-bold ${DIFFICULTY_COLOR[c.difficulty]}`}>
@@ -52,7 +73,8 @@ export function ContractBoard() {
             <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs">
               <span className="text-yellow-400">Adiantamento {c.advance}</span>
               <span className="text-yellow-300">Bônus {c.reward}</span>
-              <span className="text-neutral-300">Marcha {c.travelDays} dia(s)</span>
+              <span className="text-neutral-300">~{c.travelDays} dia(s) daqui</span>
+              <span className="text-neutral-400">prazo {c.travelDays + WORLD.CONTRACT_GRACE_DAYS} dias</span>
               <span className={hungry ? "text-red-400" : "text-neutral-400"}>−{food} rações</span>
             </div>
             {(hungry || payday) && (
@@ -69,11 +91,12 @@ export function ContractBoard() {
             <CouncilOpinions contract={c} />
             <button
               type="button"
-              disabled={pendingMutiny}
+              disabled={pendingMutiny || !!mutiny || !!active}
+              title={active ? "Termine ou abandone o contrato em andamento" : undefined}
               onClick={() => acceptContract(c.id)}
               className="self-end rounded border border-blue-400 bg-blue-600 px-3 py-1 font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Aceitar e marchar
+              Aceitar
             </button>
           </div>
         );

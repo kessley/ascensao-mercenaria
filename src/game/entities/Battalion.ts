@@ -411,6 +411,25 @@ export class Battalion {
     return { lateral, depth };
   }
 
+  /** Leva o batalhão inteiro (em forma) para outro ponto: viagem rápida, recuo ao acampamento. */
+  teleportTo(p: Point): void {
+    const c = this.center;
+    for (const s of this.soldiers) {
+      s.x += p.x - c.x;
+      s.y += p.y - c.y;
+      s.target = null;
+    }
+  }
+
+  /** Remove o batalhão do mundo (reforço, deserção, motim: ele é recriado a partir dos dados). */
+  destroy(): void {
+    for (const s of this.soldiers) s.destroy();
+    this.soldiers = [];
+    this.label.destroy();
+    this.bannerGfx.destroy();
+    this.selectionGfx.destroy();
+  }
+
   private drawBanner(): void {
     const c = this.center;
     const top = Math.min(...this.soldiers.map((s) => s.y)) - 22;

@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import type { Unit } from "../entities/Unit";
 import { fireArrow } from "./ProjectileSystem";
+import { sfx } from "../../audio/sounds";
 
 /** Resolve os ataques automáticos de todas as unidades que já estão no alcance do alvo. */
 export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time: number): void {
@@ -20,7 +21,9 @@ export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time
     const charging = unit.isCharging;
     unit.playAttack(target);
     target.takeDamage(unit.outgoingDamage(target), unit, time, "MELEE");
+    sfx.clash(target);
     if (charging) {
+      sfx.charge(target);
       // Impacto da investida: empurra o alvo e gasta o embalo
       const a = Math.atan2(target.y - unit.y, target.x - unit.x);
       target.x += Math.cos(a) * unit.chargeKnockback;

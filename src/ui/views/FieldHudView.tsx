@@ -5,10 +5,13 @@ import {
   type CommandReach,
   type TrumpetCall,
 } from "../../store/useGameStore";
-import { FORMATIONS, TERRAIN, TROOPS } from "../../utils/constants";
+import { FORMATIONS, REALM, TERRAIN, TROOPS } from "../../utils/constants";
+import { titleFor } from "../../game/sim/realm";
+import { PHASE_LABEL, darknessAt, formatHour, phaseOf } from "../../utils/time";
 import { BattalionContextMenu } from "../components/BattalionContextMenu";
 import { Button } from "../components/Button";
 import { ResourceBar } from "../components/ResourceBar";
+import { SoundControl } from "../components/SoundControl";
 import { StatBar } from "../components/StatBar";
 
 const STATUS_LABEL: Record<BattalionStatus, string> = {
@@ -21,9 +24,15 @@ const STATUS_LABEL: Record<BattalionStatus, string> = {
 
 /** Por qual meio as ordens chegam a cada batalhão sem mensageiro. */
 const REACH: Record<CommandReach, { text: string; tone: string }> = {
-  VOICE: { text: "Ao alcance da voz: qualquer ordem", tone: "text-emerald-400" },
+  VOICE: {
+    text: "Ao alcance da voz: qualquer ordem",
+    tone: "text-emerald-400",
+  },
   TRUMPET: { text: "♪ Trombeta: só toques básicos", tone: "text-amber-200" },
-  BANNER: { text: "⚑ Estandarte: só sinais (formação, reunir)", tone: "text-sky-300" },
+  BANNER: {
+    text: "⚑ Estandarte: só sinais (formação, reunir)",
+    tone: "text-sky-300",
+  },
   NONE: { text: "Só por mensageiro", tone: "text-neutral-500" },
 };
 
@@ -42,19 +51,94 @@ const RESULT_TITLE: Record<BattleResult, string> = {
 };
 
 /**
- * HUD transparente sobre o canvas do Phaser.
+ * Dia e hora do mundo (o relógio anda com a marcha e para no acampamento e em combate),
+ * as tochas do bando e o descanso até o amanhecer.
+ */
+function WorldClock() {
+  const day = useGameStore((s) => s.day);
+  const progress = useGameStore((s) => s.dayProgress);
+  const hud = useGameStore((s) => s.battleHud);
+  const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
+  const paused = hud?.inCamp || hud?.engaged;
+  const phase = phaseOf(progress);
+  const night = darknessAt(progress) > 0;
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        className="flex w-40 flex-col gap-1 rounded bg-black/60 px-3 py-1.5"
+        title="O dia passa com a marcha (fora do acampamento e fora de combate) e vira na aurora"
+      >
+        <div className="flex justify-between font-mono text-sm">
+          <span className="font-bold">Dia {day}</span>
+          <span className="text-xs text-neutral-300">
+            {formatHour(progress)} {paused ? "⏸" : phase === "NIGHT" ? "☾" : phase === "DAY" ? "☀" : "◐"}
+          </span>
+        </div>
+        <div className="h-1 rounded bg-neutral-700">
+          <div className="h-1 rounded bg-amber-300" style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+        <span className="text-[10px] uppercase tracking-wider text-neutral-400">{PHASE_LABEL[phase]}</span>
+      </div>
+      {hud && (
+        <div className="pointer-events-auto flex gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => sendBattleCommand({ type: "TORCHES", ids: [] })}
+            title="T: tochas acesas enxergam mais à noite, mas o inimigo vê o bando de longe"
+            className={`flex-1 rounded border px-1.5 py-0.5 ${hud.torches ? "border-amber-500 text-amber-200" : "border-neutral-600 text-neutral-400"} ${night ? "" : "opacity-60"}`}
+          >
+            {hud.torches ? "🔥 Tochas" : "Sem tochas"}
+          </button>
+          {night && (
+            <button
+              type="button"
+              disabled={!!hud.restBlocked}
+              onClick={() => sendBattleCommand({ type: "REST", ids: [] })}
+              title={hud.restBlocked ?? "Passa a noite de uma vez; um bando que chegue perto interrompe o descanso"}
+              className="flex-1 rounded border border-sky-700 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+            >
+              Descansar
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Contrato ativo: onde ir e até quando. */
+function ContractBanner() {
+  const active = useGameStore((s) => s.activeContract);
+  const day = useGameStore((s) => s.day);
+  const world = useGameStore((s) => s.world);
+  if (!active) return null;
+  const site = world?.sites.find((x) => x.id === active.contract.siteId);
+  const left = active.deadline - day;
+  return (
+    <div className="rounded bg-black/60 px-3 py-1.5 text-xs">
+      <span className="text-neutral-400">Contrato: </span>
+      <b className="text-amber-200">{active.contract.title}</b>
+      <span className="text-neutral-400"> · {site?.name} · </span>
+      <span className={left <= 1 ? "text-red-400" : "text-neutral-300"}>prazo dia {active.deadline}</span>
+    </div>
+  );
+}
+
+/**
+ * HUD do mundo sobre o canvas do Phaser: Comandante, relógio, contrato, batalhões e ordens.
  * O container ignora o mouse (pointer-events-none) para que os cliques cheguem ao jogo;
  * apenas os controles interativos reativam pointer-events.
  */
-export function BattleOverlayView() {
+export function FieldHudView() {
   const hud = useGameStore((s) => s.battleHud);
   const report = useGameStore((s) => s.battleReport);
-  const retreat = useGameStore((s) => s.retreat);
-  const returnToCamp = useGameStore((s) => s.returnToCamp);
+  const clearReport = useGameStore((s) => s.clearReport);
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
-  const battleName = useGameStore((s) =>
-    s.currentBattle?.kind === "CONTRACT" ? s.currentBattle.contract.title : s.currentBattle?.setup.name,
-  );
+  const setWorldMapOpen = useGameStore((s) => s.setWorldMapOpen);
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  const settlements = useGameStore((s) => s.settlements);
+  const seats = settlements.filter((t) => t.owner === "PLAYER");
+  const title = titleFor(seats.length) + (seats[0] ? ` de ${seats[0].name}` : "");
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 text-white">
@@ -62,10 +146,27 @@ export function BattleOverlayView() {
       {/* Topo: Comandante, recursos e recuo */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex w-72 flex-col gap-2 rounded bg-black/60 p-3">
-          {battleName && <span className="text-xs uppercase tracking-wider text-neutral-400">{battleName}</span>}
-          <span className="text-sm font-bold">Comandante</span>
           {hud && (
-            <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />
+            <span className="text-xs uppercase tracking-wider text-neutral-400">
+              {hud.region}
+              {hud.engaged && <b className="ml-2 text-red-400">· em combate</b>}
+            </span>
+          )}
+          <span className="text-sm font-bold">
+            Comandante <span className="font-normal text-blue-300">· {title}</span>
+          </span>
+          {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
+          {hud && !hud.inCamp && (
+            <button
+              type="button"
+              disabled={!!hud.foundBlocked}
+              title={hud.foundBlocked ?? "Funda uma aldeia do bando logo à frente"}
+              onClick={() => sendBattleCommand({ type: "FOUND", ids: [] })}
+              className="pointer-events-auto rounded border border-blue-700 px-2 py-1 text-left text-xs text-blue-200 hover:bg-blue-900/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+            >
+              ⚑ Fundar vila aqui ({REALM.FOUND_COST.gold} ouro · {REALM.FOUND_COST.iron} ferro)
+              {hud.foundBlocked && <span className="block text-[10px]">{hud.foundBlocked}</span>}
+            </button>
           )}
           {hud && hud.messengers.length > 0 && (
             <div className="flex flex-wrap items-center gap-1 text-xs text-neutral-300">
@@ -96,14 +197,27 @@ export function BattleOverlayView() {
               <button
                 type="button"
                 disabled={!s.alive}
-                onClick={(e) => sendBattleCommand({ type: "SELECT_SCOUT", ids: [s.id], additive: e.shiftKey })}
+                onClick={(e) =>
+                  sendBattleCommand({
+                    type: "SELECT_SCOUT",
+                    ids: [s.id],
+                    additive: e.shiftKey,
+                  })
+                }
                 className={`pointer-events-auto text-left ${s.alive ? "" : "text-red-400 line-through"}`}
               >
                 Batedor {s.name} · {s.alive ? `${s.hp}/${s.maxHp}` : "morto"}
                 {s.alive && (
                   <span className="text-neutral-400">
                     {" "}
-                    · {s.fleeing ? "recuando" : s.mode === "VANGUARD" ? "vanguarda" : s.mode === "EXPLORE" ? "explorando" : "recolhido"}
+                    ·{" "}
+                    {s.fleeing
+                      ? "recuando"
+                      : s.mode === "VANGUARD"
+                        ? "vanguarda"
+                        : s.mode === "EXPLORE"
+                          ? "explorando"
+                          : "recolhido"}
                   </span>
                 )}
               </button>
@@ -111,14 +225,26 @@ export function BattleOverlayView() {
                 <span className="pointer-events-auto flex gap-1">
                   <button
                     type="button"
-                    onClick={() => sendBattleCommand({ type: "SCOUT_MODE", ids: [s.id], mode: "VANGUARD" })}
+                    onClick={() =>
+                      sendBattleCommand({
+                        type: "SCOUT_MODE",
+                        ids: [s.id],
+                        mode: "VANGUARD",
+                      })
+                    }
                     className="rounded border border-neutral-600 px-1 hover:border-lime-400"
                   >
                     Vanguarda
                   </button>
                   <button
                     type="button"
-                    onClick={() => sendBattleCommand({ type: "SCOUT_MODE", ids: [s.id], mode: "RECALL" })}
+                    onClick={() =>
+                      sendBattleCommand({
+                        type: "SCOUT_MODE",
+                        ids: [s.id],
+                        mode: "RECALL",
+                      })
+                    }
                     className="rounded border border-neutral-600 px-1 hover:border-lime-400"
                   >
                     Recolher
@@ -128,8 +254,11 @@ export function BattleOverlayView() {
             </div>
           ))}
         </div>
+        <div className="absolute left-1/2 top-[4.5rem] -translate-x-1/2">
+          <ContractBanner />
+        </div>
         {hud && hud.feed.length > 0 && (
-          <ol className="absolute left-1/2 top-20 flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
+          <ol className="absolute left-1/2 top-[6.75rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
             {hud.feed.map((line, i) => (
               <li key={i} className={i === hud.feed.length - 1 ? "" : "opacity-60"}>
                 {line}
@@ -137,39 +266,59 @@ export function BattleOverlayView() {
             ))}
           </ol>
         )}
-        <div className="flex items-center gap-3">
-          {hud && (
-            <div className="pointer-events-auto flex items-center gap-1 rounded bg-black/60 px-2 py-1.5 text-sm">
-              <button
-                type="button"
-                onClick={() => sendBattleCommand({ type: "CAMERA", ids: [], action: "TOGGLE" })}
-                title="C: prender/soltar a câmera"
-                className={`rounded px-2 py-0.5 ${hud.camera.locked ? "bg-neutral-700 text-neutral-200" : "bg-amber-600 text-white"}`}
-              >
-                {hud.camera.locked ? "Câmera presa" : "Câmera solta"}
-              </button>
-              <button
-                type="button"
-                onClick={() => sendBattleCommand({ type: "CAMERA", ids: [], action: "CENTER" })}
-                title="H: centralizar no Comandante"
-                className="rounded px-2 py-0.5 text-neutral-300 hover:bg-neutral-700"
-              >
-                ⌖
-              </button>
-              <span className="font-mono text-xs text-neutral-400">{Math.round(hud.camera.zoom * 100)}%</span>
-            </div>
-          )}
-          {hud && (
-            <span className="rounded bg-black/60 px-3 py-2 font-mono text-sm text-red-300">
-              Inimigos: {hud.enemiesAlive}/{hud.enemiesTotal}
-            </span>
-          )}
-          <ResourceBar />
-          {!report && (
-            <Button variant="danger" className="pointer-events-auto" onClick={retreat}>
-              Recuar
+        {/* Direita: relógio, recursos, som e mapa; abaixo, câmera e inimigos à vista */}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-start gap-3">
+            <WorldClock />
+            <ResourceBar />
+            <SoundControl />
+            <Button className="pointer-events-auto" onClick={() => setWorldMapOpen(true)} title="Tab: Mapa Múndi">
+              Mapa
             </Button>
-          )}
+            <Button className="pointer-events-auto" onClick={() => setCampPanel({ kind: "GAME" })} title="Salvar, carregar, novo mundo">
+              Jogo
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            {hud && hud.enemiesInSight > 0 && (
+              <span className="rounded bg-black/60 px-3 py-1.5 font-mono text-sm text-red-300">
+                À vista: {hud.enemiesInSight}
+              </span>
+            )}
+            {hud && (
+              <div className="pointer-events-auto flex items-center gap-1 rounded bg-black/60 px-2 py-1.5 text-sm">
+                <button
+                  type="button"
+                  onClick={() =>
+                    sendBattleCommand({
+                      type: "CAMERA",
+                      ids: [],
+                      action: "TOGGLE",
+                    })
+                  }
+                  title="C: prender/soltar a câmera"
+                  className={`rounded px-2 py-0.5 ${hud.camera.locked ? "bg-neutral-700 text-neutral-200" : "bg-amber-600 text-white"}`}
+                >
+                  {hud.camera.locked ? "Câmera presa" : "Câmera solta"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    sendBattleCommand({
+                      type: "CAMERA",
+                      ids: [],
+                      action: "CENTER",
+                    })
+                  }
+                  title="H: centralizar no Comandante"
+                  className="rounded px-2 py-0.5 text-neutral-300 hover:bg-neutral-700"
+                >
+                  ⌖
+                </button>
+                <span className="font-mono text-xs text-neutral-400">{Math.round(hud.camera.zoom * 100)}%</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -184,12 +333,20 @@ export function BattleOverlayView() {
                 key={b.id}
                 type="button"
                 disabled={b.status === "DESTROYED"}
-                onClick={(e) => sendBattleCommand({ type: "SELECT", ids: [b.id], additive: e.shiftKey })}
+                onClick={(e) =>
+                  sendBattleCommand({
+                    type: "SELECT",
+                    ids: [b.id],
+                    additive: e.shiftKey,
+                  })
+                }
                 className={`pointer-events-auto flex w-72 flex-col gap-2 rounded bg-black/60 p-3 text-left outline-none hover:bg-black/75 ${ring}`}
               >
                 <div className="flex justify-between text-sm">
                   <span className="font-bold">
-                    <span className="mr-1 rounded bg-amber-700/80 px-1 font-mono text-xs text-amber-100">Nv {b.level}</span>
+                    <span className="mr-1 rounded bg-amber-700/80 px-1 font-mono text-xs text-amber-100">
+                      Nv {b.level}
+                    </span>
                     {b.name}
                   </span>
                   <span className={panic || b.status === "DESTROYED" ? "font-bold text-red-400" : "text-neutral-300"}>
@@ -213,7 +370,9 @@ export function BattleOverlayView() {
                   </div>
                 )}
                 {b.lieutenant && (
-                  <div className={`-mt-1 text-xs ${b.lieutenant.alive ? "text-slate-200" : "text-red-400 line-through"}`}>
+                  <div
+                    className={`-mt-1 text-xs ${b.lieutenant.alive ? "text-slate-200" : "text-red-400 line-through"}`}
+                  >
                     Tenente {b.lieutenant.name}
                     {b.lieutenant.alive ? "" : " (morto)"}
                   </div>
@@ -231,11 +390,12 @@ export function BattleOverlayView() {
           <div>F reunir · 1 Linha 2 Parede 3 Cunha 4 Disperso</div>
           <div className="text-amber-200">Anel forte: voz · fraco: trombeta · além: bandeira/mensageiro</div>
           <div>C câmera presa/solta · setas/borda/botão do meio · H centralizar · roda zoom</div>
+          <div className="text-sky-200">E interagir · Tab Mapa Múndi (viagem rápida) · T tochas · M som</div>
         </div>
       </div>
 
       {/* Toques de trombeta (selecionados, ou todo o exército) e grito de guerra */}
-      {hud && !report && (
+      {hud && !report && !hud.inCamp && (
         <div className="pointer-events-auto absolute bottom-4 left-[19rem] flex flex-col items-center gap-1 rounded bg-black/65 px-3 py-2">
           <span className="text-[10px] uppercase tracking-wider text-neutral-400">
             Trombeta · {hud.battalions.some((b) => b.selected) ? "selecionados" : "todo o exército"}
@@ -280,7 +440,9 @@ export function BattleOverlayView() {
             </h2>
             <div className="-mt-3 text-sm text-neutral-400">{report.title}</div>
             <ul className="flex flex-col gap-1 text-sm text-neutral-300">
-              {report.goldEarned > 0 && <li className="text-yellow-400">Bônus do contrato: {report.goldEarned} de ouro</li>}
+              {report.goldEarned > 0 && (
+                <li className="text-yellow-400">Bônus do contrato: {report.goldEarned} de ouro</li>
+              )}
               {(report.loot.gold > 0 || report.loot.iron > 0) && (
                 <li className="text-yellow-300">
                   Saque: {report.loot.gold} de ouro e {report.loot.iron} de ferro
@@ -288,8 +450,8 @@ export function BattleOverlayView() {
               )}
               {report.xpGains.map((g) => (
                 <li key={g.name} className={g.newLevel ? "font-semibold text-amber-300" : "text-neutral-300"}>
-                  {g.name}: +{g.xp} XP ({g.kills} abate{g.kills === 1 ? "" : "s"})
-                  {g.newLevel ? ` — subiu para o nível ${g.newLevel}!` : ""}
+                  {g.name}: +{g.xp} XP ({g.kills} abate
+                  {g.kills === 1 ? "" : "s"}){g.newLevel ? ` — subiu para o nível ${g.newLevel}!` : ""}
                 </li>
               ))}
               <li>Baixas: {report.casualties}</li>
@@ -304,7 +466,7 @@ export function BattleOverlayView() {
                 </li>
               ))}
             </ul>
-            <Button onClick={returnToCamp}>Voltar ao acampamento</Button>
+            <Button onClick={clearReport}>Continuar</Button>
           </div>
         </div>
       )}

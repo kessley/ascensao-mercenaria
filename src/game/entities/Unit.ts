@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import { BALANCE, COLORS, TERRAIN, type AttackKind, type TerrainType, type UnitStats } from "../../utils/constants";
+import { BALANCE, COLORS, TERRAIN, TIME, type AttackKind, type TerrainType, type UnitStats } from "../../utils/constants";
 import { distance } from "../../utils/math";
+import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 
 export type Team = "ALLY" | "ENEMY";
@@ -16,6 +17,8 @@ export type UnitState = "IDLE" | "MOVING" | "ATTACKING" | "FLEEING" | "DEAD";
 export abstract class Unit extends Phaser.GameObjects.Container {
   /** Terreno da batalha atual (definido pela BattleScene no `create`). */
   static terrain: TerrainMap | null = null;
+  /** Escuridão de agora, de 0 (dia) a 1 (noite fechada); a cena atualiza a cada quadro. */
+  static darkness = 0;
 
   readonly team: Team;
   readonly radius: number;
@@ -88,11 +91,23 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return this.terrainType === "FOREST";
   }
 
+  /** Criatura da noite (goblins, mortos-vivos): enxerga no escuro e fica mais forte nele. */
+  get nightCreature(): boolean {
+    return false;
+  }
+
+  /** No escuro, criaturas da noite aceleram e todos os outros andam mais devagar. */
+  private nightSpeed(): number {
+    const d = Unit.darkness;
+    if (d <= 0) return 1;
+    return this.nightCreature ? 1 + d * (TIME.NIGHT_CREATURE_SPEED - 1) : 1 - d * (1 - TIME.NIGHT_SPEED);
+  }
+
   // --- Modificadores (subclasses estendem com formação etc.) ---
 
   speedMultiplier(): number {
     const t = TERRAIN[this.terrainType];
-    return this.canCharge ? t.cavalrySpeed : t.speed;
+    return (this.canCharge ? t.cavalrySpeed : t.speed) * this.nightSpeed();
   }
 
   attackRange(): number {
@@ -107,6 +122,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     let dmg = this.damage;
     if (this.terrainType === "HILL" && target.terrainType !== "HILL") dmg *= BALANCE.HILL_DAMAGE_BONUS;
     if (this.isCharging) dmg *= this.chargeMultiplier;
+    if (this.nightCreature) dmg *= 1 + Unit.darkness * (TIME.NIGHT_CREATURE_DAMAGE - 1);
     return dmg;
   }
 
@@ -158,6 +174,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     if (!this.isAlive) return;
     if (this.evasion > 0 && Math.random() < this.evasion) {
       this.floatText("esquiva", "#c6ff8a");
+      sfx.dodge(this);
       return;
     }
     this.hp = Math.max(0, this.hp - amount * this.incomingMultiplier(source, kind));
@@ -173,6 +190,12 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       source.onKill();
       this.die();
     }
+  }
+
+  /** Vida vinda de dados (bando que volta à bolha, jogo carregado). */
+  restoreHp(hp: number): void {
+    this.hp = Math.max(1, Math.min(this.maxHp, hp));
+    this.redrawBars();
   }
 
   /** Texto curto que sobe e some acima da unidade (ex.: "esquiva"). */
@@ -204,6 +227,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   }
 
   protected die(): void {
+    sfx.death(this);
     this.unitState = "DEAD";
     this.target = null;
     this.scene.tweens.killTweensOf(this.bodyGfx);

@@ -35,7 +35,7 @@ export function CampStatus() {
     .join(", ");
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="grid grid-cols-3 gap-2">
       <Stat label="Dia" value={String(day)} />
       <Stat label="Ouro" value={String(gold)} tone="text-yellow-400" />
       <Stat label="Ferro" value={String(iron)} tone="text-sky-300" />

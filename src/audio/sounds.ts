@@ -7,7 +7,7 @@ import { AudioEngine, type PlayOptions, type SoundRecipe } from "./AudioEngine";
 
 // --- Blocos básicos ---
 
-function envelope(ctx: AudioContext, g: GainNode, start: number, attack: number, dur: number, peak: number): void {
+function envelope(g: GainNode, start: number, attack: number, dur: number, peak: number): void {
   g.gain.setValueAtTime(0.0001, start);
   g.gain.exponentialRampToValueAtTime(peak, start + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
@@ -34,7 +34,7 @@ function noiseBurst(ctx: AudioContext, out: AudioNode, noise: AudioBuffer, s: No
   f.frequency.setValueAtTime(s.freq, t);
   if (s.freqEnd) f.frequency.exponentialRampToValueAtTime(s.freqEnd, t + s.dur);
   const g = ctx.createGain();
-  envelope(ctx, g, t, s.attack ?? 0.005, s.dur, s.gain);
+  envelope(g, t, s.attack ?? 0.005, s.dur, s.gain);
   src.connect(f).connect(g).connect(out);
   src.start(t, Math.random() * 1.5);
   src.stop(t + s.dur + 0.05);
@@ -57,7 +57,7 @@ function tone(ctx: AudioContext, out: AudioNode, s: ToneSpec): void {
   o.frequency.setValueAtTime(s.freq, t);
   if (s.freqEnd) o.frequency.exponentialRampToValueAtTime(s.freqEnd, t + s.dur);
   const g = ctx.createGain();
-  envelope(ctx, g, t, s.attack ?? 0.005, s.dur, s.gain);
+  envelope(g, t, s.attack ?? 0.005, s.dur, s.gain);
   o.connect(g).connect(out);
   o.start(t);
   o.stop(t + s.dur + 0.05);

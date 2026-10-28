@@ -39,7 +39,7 @@ class AudioEngineImpl {
   private playingNow = new Map<string, number>();
   private settings: AudioSettings = { volume: 0.7, muted: false };
   private subscribers = new Set<Listener>();
-  private loops = new Map<string, { stop: () => void }>();
+  private loops = new Map<string, { stop: () => void; gain?: GainNode }>();
 
   constructor() {
     try {
@@ -117,6 +117,8 @@ class AudioEngineImpl {
       const retry = () => {
         window.removeEventListener("pointerdown", retry);
         window.removeEventListener("keydown", retry);
+        // Tira o marcador de espera antes de tentar de novo (senão a nova tentativa acha que já toca)
+        this.loops.delete(name);
         setTimeout(() => this.startLoop(name, start), 50);
       };
       window.addEventListener("pointerdown", retry);
@@ -131,11 +133,18 @@ class AudioEngineImpl {
     out.connect(this.master);
     const stop = start(ctx, out, this.noise);
     this.loops.set(name, {
+      gain: out,
       stop: () => {
         stop();
         out.disconnect();
       },
     });
+  }
+
+  /** Volume de um som ambiente (0–1), ex.: fogueira mais alta quando se está perto. */
+  setLoopVolume(name: string, volume: number): void {
+    const gain = this.loops.get(name)?.gain;
+    if (gain && this.ctx) gain.gain.setTargetAtTime(volume, this.ctx.currentTime, 0.1);
   }
 
   stopLoop(name: string): void {

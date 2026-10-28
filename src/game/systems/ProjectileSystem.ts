@@ -2,6 +2,7 @@ import type Phaser from "phaser";
 import type { Unit } from "../entities/Unit";
 import { BALANCE, COLORS } from "../../utils/constants";
 import { distance } from "../../utils/math";
+import { sfx } from "../../audio/sounds";
 
 /**
  * Dispara uma flecha (linha curta) até a posição atual do alvo.
@@ -21,6 +22,7 @@ export function fireArrow(scene: Phaser.Scene, shooter: Unit, target: Unit): voi
   arrow.fillStyle(COLORS.ARROW, 1);
   arrow.fillTriangle(8, 0, 3, -3, 3, 3);
   arrow.rotation = angle;
+  sfx.bowShot(from);
 
   scene.tweens.add({
     targets: arrow,
@@ -31,6 +33,7 @@ export function fireArrow(scene: Phaser.Scene, shooter: Unit, target: Unit): voi
       arrow.destroy();
       if (target.isAlive && distance(target, to) <= BALANCE.ARROW_HIT_RADIUS) {
         target.takeDamage(damage, shooter, scene.time.now, "RANGED");
+        sfx.arrowHit(to);
       }
     },
   });

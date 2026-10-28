@@ -2,9 +2,14 @@
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
-/** Tamanho do campo de batalha (maior que a tela; a câmera segue o Comandante). */
-export const WORLD_WIDTH = 3200;
-export const WORLD_HEIGHT = 2400;
+/**
+ * Tamanho do continente (Marco 10): 10×8 regiões de 3200×2400, geradas a cada campanha
+ * (acampamento, povoados, locais de contrato, covis) — tudo no mesmo mapa contínuo.
+ */
+export const WORLD_COLS = 10;
+export const WORLD_ROWS = 8;
+export const WORLD_WIDTH = WORLD_COLS * 3200;
+export const WORLD_HEIGHT = WORLD_ROWS * 2400;
 
 /** Paleta do greybox: apenas cores sólidas, sem assets. */
 export const COLORS = {
@@ -41,7 +46,20 @@ export const COLORS = {
 // --- Tipos de domínio compartilhados por Phaser e React ---
 
 export type TroopType = "INFANTRY" | "ARCHERS" | "CAVALRY";
-export type EnemyKind = "GOBLIN" | "GOBLIN_ARCHER" | "MUTINEER" | "MUTINEER_ARCHER" | "MUTINEER_RIDER";
+export type EnemyKind =
+  | "GOBLIN"
+  | "GOBLIN_ARCHER"
+  | "MUTINEER"
+  | "MUTINEER_ARCHER"
+  | "MUTINEER_RIDER"
+  | "BANDIT"
+  | "BANDIT_ARCHER"
+  | "SOLDIER"
+  | "CROSSBOW"
+  | "SKELETON"
+  | "NECROMANCER"
+  | "ORC"
+  | "ORC_WARLORD";
 export type Formation = "LINE" | "SHIELD_WALL" | "WEDGE" | "LOOSE";
 export type TerrainType = "GRASS" | "HILL" | "MUD" | "SWAMP" | "FOREST";
 export type AttackKind = "MELEE" | "RANGED";
@@ -106,6 +124,8 @@ export interface EnemyDef {
   color: number;
   /** Alcance de percepção próprio (amotinados vêm direto para cima). */
   aggroRange?: number;
+  /** Líder de uma calamidade: maior, com coroa; a morte dele encerra a calamidade. */
+  boss?: boolean;
 }
 
 /** Amotinados usam os atributos da tropa de origem, mas aparecem como quadrados roxos. */
@@ -139,6 +159,51 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     color: COLORS.MUTINEER,
     aggroRange: MUTINEER_AGGRO,
     stats: { ...TROOPS.CAVALRY.stats },
+  },
+  BANDIT: {
+    label: "Bandido",
+    color: 0x8a5a2b,
+    stats: { hp: 45, speed: 110, damage: 8, range: 8, cooldown: 950, radius: 9 },
+  },
+  BANDIT_ARCHER: {
+    label: "Bandido arqueiro",
+    color: 0xa87a4b,
+    stats: { hp: 32, speed: 105, damage: 7, range: 190, cooldown: 1600, radius: 8, ranged: true },
+  },
+  // Soldados dos reinos: a cor real vem da facção (ver Enemy)
+  SOLDIER: {
+    label: "Soldado",
+    color: 0x7f8c8d,
+    stats: { hp: 70, speed: 110, damage: 9, range: 8, cooldown: 900, radius: 10 },
+  },
+  CROSSBOW: {
+    label: "Besteiro",
+    color: 0x95a5a6,
+    stats: { hp: 45, speed: 100, damage: 12, range: 220, cooldown: 2100, radius: 9, ranged: true },
+  },
+  SKELETON: {
+    label: "Esqueleto",
+    color: 0xd8d2c0,
+    stats: { hp: 35, speed: 95, damage: 7, range: 8, cooldown: 1000, radius: 9 },
+  },
+  NECROMANCER: {
+    label: "Lorde Necromante",
+    color: 0x5b2c6f,
+    boss: true,
+    aggroRange: 420,
+    stats: { hp: 900, speed: 80, damage: 18, range: 230, cooldown: 1400, radius: 16, ranged: true },
+  },
+  ORC: {
+    label: "Orc",
+    color: 0x4e6b2a,
+    stats: { hp: 85, speed: 110, damage: 11, range: 9, cooldown: 1000, radius: 11 },
+  },
+  ORC_WARLORD: {
+    label: "Senhor da Guerra orc",
+    color: 0x2f4a16,
+    boss: true,
+    aggroRange: 380,
+    stats: { hp: 1200, speed: 100, damage: 24, range: 10, cooldown: 1100, radius: 17 },
   },
 };
 
@@ -315,8 +380,6 @@ export const ECONOMY = {
   MIN_STARTING_MORALE: 20,
   /** Repor um soldado custa esta fração do preço "por soldado" do recrutamento. */
   REINFORCE_COST_FACTOR: 1.2,
-  /** Dias de volta ao acampamento após uma batalha. */
-  RETURN_DAYS: 1,
   CONTRACTS_OFFERED: 3,
   /** Derrota contra amotinados: eles fogem levando esta fração do ouro. */
   MUTINY_GOLD_LOSS: 0.5,
@@ -483,3 +546,159 @@ export const BALANCE = {
 
   HUD_UPDATE_MS: 100,
 } as const;
+
+/** Mundo contínuo, relógio, bandos errantes e viagem rápida (Marco 7). */
+export const WORLD = {
+  REGION_WIDTH: 3200,
+  REGION_HEIGHT: 2400,
+  /** O chão e o terreno são criados em pedaços deste tamanho, só perto da câmera. */
+  CHUNK_SIZE: 1600,
+  /**
+   * Bolha de detalhe: bandos a menos disto de alguém do bando viram unidades de verdade;
+   * além de BUBBLE_EXIT_RADIUS (e sem ninguém lutando) voltam a ser só dados que marcham.
+   */
+  BUBBLE_RADIUS: 2400,
+  BUBBLE_EXIT_RADIUS: 3200,
+  /** Distância que o exército marcha num dia (vale para andar e para a viagem rápida). */
+  DAY_DISTANCE: 3200,
+  /** Fora do acampamento e fora de combate, o tempo também corre parado: 1 dia a cada N segundos. */
+  DAY_SECONDS: 240,
+  /** Inimigos mais longe que isto de qualquer aliado ficam "adormecidos" (não pensam nem lutam). */
+  ACTIVE_RADIUS: 1800,
+  /** Combate: inimigo perseguindo um aliado ou a esta distância de uma tropa visível. */
+  ENGAGE_RADIUS: 500,
+  /** Sem inimigos ativos por este tempo, o combate acaba e sai o relatório. */
+  ENGAGE_END_MS: 3000,
+  /** Viagem rápida: proibida com inimigos à vista a menos disto do Comandante. */
+  TRAVEL_BLOCK_RADIUS: 1000,
+  /** Um bando cruza a rota a esta distância: a viagem é interrompida (interceptação). */
+  INTERCEPT_RADIUS: 450,
+  /** Prazo do contrato além da marcha estimada. */
+  CONTRACT_GRACE_DAYS: 4,
+  /** Exploração já conhecida no início (raio em volta de cidades e do acampamento). */
+  KNOWN_RADIUS: 650,
+  WARBAND: {
+    FIRST_DAY: 3,
+    EVERY_DAYS: 3,
+    MAX: 6,
+    BASE_SIZE: 5,
+    /** Bandos crescem com o tempo: +N goblins por semana de campanha. */
+    GROWTH_PER_WEEK: 2,
+    ARCHER_SHARE: 0.3,
+    /** Velocidade de marcha do bando no mapa (px/s) e por dia de viagem rápida. */
+    SPEED: 45,
+    DAY_DISTANCE: 1600,
+    /** Chegou a esta distância do alvo: saqueia. */
+    RAID_RADIUS: 260,
+    /** Saque a uma cidade: prosperidade perdida. */
+    TOWN_RAID_PROSPERITY: 30,
+    /** Saque ao acampamento vazio: fração das rações e do ouro levada. */
+    CAMP_RAID_RATIONS: 0.4,
+    CAMP_RAID_GOLD: 0.15,
+    /** O acampamento está guardado se houver tropas a esta distância. */
+    CAMP_GUARD_RADIUS: 900,
+  },
+  /** Prosperidade das cidades (0–100): recupera com o tempo; baixa = preços altos. */
+  TOWN_PROSPERITY_REGEN: 4,
+} as const;
+
+/** Horas do dia, dia e noite (Marco 10). O dia é contado de aurora a aurora. */
+export const TIME = {
+  /** Hora em que o contador de dias vira (dayProgress 0 = 6h). */
+  DAY_START_HOUR: 6,
+  /** Aurora (escuridão diminuindo) e crepúsculo (aumentando), em horas. */
+  DAWN: [5, 7] as const,
+  DUSK: [18, 20] as const,
+  /** Visão à noite: sem tochas e com tochas (multiplicador do raio). */
+  NIGHT_VISION: 0.6,
+  TORCH_VISION: 0.85,
+  /** À noite, de quão longe o inimigo percebe o bando: tochas denunciam, o escuro esconde. */
+  NIGHT_AGGRO_TORCHES: 1.4,
+  NIGHT_AGGRO_DARK: 0.65,
+  /** Marchar no escuro é mais lento (o cansaço de verdade chega com a fadiga, no Marco 13). */
+  NIGHT_SPEED: 0.85,
+  /** Criaturas da noite (goblins e mortos-vivos) ganham força e velocidade no escuro. */
+  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "SKELETON", "NECROMANCER"] as readonly EnemyKind[],
+  NIGHT_CREATURE_DAMAGE: 1.25,
+  NIGHT_CREATURE_SPEED: 1.1,
+  /** Emboscada noturna: inimigo que surge do escuro e ataca em poucos segundos abala a moral. */
+  AMBUSH_MORALE: 20,
+  AMBUSH_WINDOW_MS: 4000,
+  /** Escuridão máxima da tela e a cor da noite. */
+  DARKNESS_ALPHA: 0.74,
+  DARKNESS_COLOR: 0x050a1f,
+  /** Raio das luzes (px de mundo): tocha, fogueira, janelas dos povoados. */
+  LIGHT: { TORCH: 170, BATTALION: 230, CAMPFIRE: 520, TOWN: 380, LAIR: 300 },
+} as const;
+
+/** Salvar e carregar (Marco 10). */
+export const SAVE = {
+  /** Versão do formato; saves de outra versão do gerador não são carregados. */
+  VERSION: 1,
+  /** Espaços manuais (além do automático). */
+  SLOTS: 3,
+} as const;
+
+/** Reino do jogador, reinos rivais e calamidades (Marco 9). */
+export const REALM = {
+  /** Fundar uma vila: custo e distância mínima de outros povoados e do acampamento. */
+  FOUND_COST: { gold: 250, iron: 10 },
+  FOUND_MIN_DISTANCE: 1600,
+  /** Reconstruir um povoado em ruínas. */
+  REBUILD_COST: { gold: 180, iron: 15 },
+  /** População máxima por tipo de povoado. */
+  MAX_POPULATION: { VILLAGE: 300, CITY: 900, FORT: 500 },
+  /** Defesa base de cada tipo de povoado (somada à guarnição). */
+  BASE_DEFENSE: { VILLAGE: 2, CITY: 6, FORT: 12 },
+  /** Guarnição máxima sem e com quartel. */
+  GARRISON_CAP: 12,
+  GARRISON_CAP_BARRACKS: 30,
+  /** Armar milícia: +N homens por X de ouro. */
+  MILITIA: { MEN: 5, GOLD: 40 },
+  /** Impostos: multiplicador da renda e efeito diário na prosperidade. */
+  TAX: [
+    { label: "Baixos", income: 0.6, prosperity: 1 },
+    { label: "Normais", income: 1, prosperity: 0 },
+    { label: "Altos", income: 1.5, prosperity: -5 },
+  ],
+  /** Renda semanal: ouro por 10 habitantes (antes de impostos e prosperidade). */
+  GOLD_PER_10_POP: 1,
+  RATIONS_PER_25_POP: 1,
+  POP_GROWTH: 0.06,
+  /** Relação com reinos: guerra abaixo disto; tributo pela paz. */
+  WAR_BELOW: -50,
+  TRIBUTE: { GOLD: 150, RELATION: 45 },
+  /** Contrato cumprido para um reino. */
+  CONTRACT_RELATION: 10,
+  /** Reino em guerra manda um exército a cada N dias (tamanho cresce com os povoados dele). */
+  ARMY_EVERY_DAYS: 6,
+  ARMY_BASE_SIZE: 6,
+  /** Guarnição que aparece no cerco (máximo em campo). */
+  SIEGE_MAX_DEFENDERS: 18,
+  /** Calamidades: primeira entre os dias, intervalo após derrotar uma, hordas e crescimento. */
+  CALAMITY_FIRST_DAY: [10, 16] as const,
+  CALAMITY_GAP_DAYS: [25, 35] as const,
+  HORDE_EVERY_DAYS: 4,
+  HORDE_BASE_SIZE: 6,
+  CALAMITY_POWER_EVERY_DAYS: 3,
+  CALAMITY_REWARD: 400,
+  CALAMITY_RELATION: 25,
+  /** Títulos do Comandante pelo número de povoados que governa. */
+  TITLES: [
+    { min: 0, label: "Capitão mercenário" },
+    { min: 1, label: "Senhor" },
+    { min: 2, label: "Barão" },
+    { min: 4, label: "Rei" },
+  ],
+} as const;
+
+export type BuildingId = "FARM" | "MINE" | "MARKET" | "WALLS" | "BARRACKS";
+
+/** Construções da Sala de Administração de um povoado do jogador. */
+export const BUILDINGS: Record<BuildingId, { label: string; gold: number; iron: number; effect: string }> = {
+  FARM: { label: "Fazendas", gold: 80, iron: 0, effect: "+12 rações por semana" },
+  MINE: { label: "Mina", gold: 100, iron: 0, effect: "+5 ferro por semana" },
+  MARKET: { label: "Mercado", gold: 120, iron: 5, effect: "+40% de impostos" },
+  WALLS: { label: "Muralhas", gold: 150, iron: 15, effect: "defesa da guarnição em dobro" },
+  BARRACKS: { label: "Quartel", gold: 120, iron: 10, effect: "+3 milicianos por semana, guarnição até 30" },
+};

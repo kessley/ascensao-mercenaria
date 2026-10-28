@@ -9,6 +9,9 @@ import { ContractBoard } from "../components/tent/ContractBoard";
 import { MarketPanel } from "../components/tent/MarketPanel";
 import { MutinyBanner } from "../components/tent/MutinyBanner";
 import { StablePanel } from "../components/tent/StablePanel";
+import { SettlementPanel } from "../components/SettlementPanel";
+import { DiplomacyPanel, WorldChronicle } from "../components/tent/RealmPanels";
+import { GamePanel } from "../components/SavePanel";
 
 const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TENT: "Tenda do Comandante",
@@ -19,6 +22,8 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   BATTALION: "Alojamento",
   LIEUTENANT: "Tenente",
   STABLE: "Estábulo",
+  TOWN: "Povoado",
+  GAME: "Jogo",
 };
 
 /** Quem comanda o batalhão (atalho para a ficha do tenente). */
@@ -57,9 +62,11 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return (
         <>
           <ContractBoard />
+          <DiplomacyPanel />
           <LieutenantRoster />
           <BattalionList />
           <CampLog />
+          <WorldChronicle />
         </>
       );
     case "QUARTERMASTER":
@@ -97,14 +104,19 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       ) : (
         <p className="text-sm text-neutral-400">Este tenente não está mais no bando.</p>
       );
+    case "TOWN":
+      return <SettlementPanel settlementId={panel.settlementId} />;
+    case "GAME":
+      return <GamePanel />;
   }
 }
 
 /**
- * HUD do acampamento sobre o canvas do Phaser: situação do bando, aviso de interação
- * e o painel do local visitado (tenda, intendência, recrutamento, alojamentos, tenentes...).
+ * Interação com os lugares do mundo: aviso "E — ..." e o painel do local visitado
+ * (tenda, intendência, recrutamento, alojamentos, tenentes, mercado de uma cidade...).
+ * Com um painel aberto o mundo fica em pausa.
  */
-export function CampOverlayView() {
+export function PlacePanelView() {
   const panel = useGameStore((s) => s.campPanel);
   const prompt = useGameStore((s) => s.campPrompt);
   const setCampPanel = useGameStore((s) => s.setCampPanel);
@@ -114,28 +126,24 @@ export function CampOverlayView() {
       const l = s.lieutenants.find((x) => x.id === panel.lieutenantId);
       return l ? fullName(l) : undefined;
     }
+    if (panel?.kind === "TOWN") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
     return undefined;
   });
+  const pendingMutiny = useGameStore((s) => s.pendingMutiny);
 
   return (
     <div className="pointer-events-none absolute inset-0 text-white">
-      <div className="flex flex-col gap-2 p-3">
-        <CampStatus />
-        <div className="pointer-events-auto max-w-3xl">
+      {pendingMutiny && (
+        <div className="pointer-events-auto absolute left-1/2 top-24 w-[36rem] max-w-[90vw] -translate-x-1/2">
           <MutinyBanner />
-        </div>
-      </div>
-
-      {prompt && !panel && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/60 bg-black/75 px-5 py-2 font-mono text-sm text-amber-200">
-          {prompt}
         </div>
       )}
 
-      <div className="absolute bottom-3 left-3 rounded bg-black/60 p-3 font-mono text-xs leading-5 text-neutral-300">
-        <div>WASD ou clique: andar pelo acampamento</div>
-        <div>E ou clique num local: interagir · Esc: fechar</div>
-      </div>
+      {prompt && !panel && (
+        <div className="absolute bottom-40 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/60 bg-black/75 px-5 py-2 font-mono text-sm text-amber-200">
+          {prompt}
+        </div>
+      )}
 
       {panel && (
         <aside className="pointer-events-auto absolute bottom-0 right-0 top-0 flex w-full max-w-lg flex-col border-l border-neutral-700 bg-neutral-900/95 shadow-2xl">
@@ -154,6 +162,7 @@ export function CampOverlayView() {
             </button>
           </header>
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
+            {panel.kind !== "TOWN" && panel.kind !== "GAME" && <CampStatus />}
             <PanelContent panel={panel} />
           </div>
         </aside>

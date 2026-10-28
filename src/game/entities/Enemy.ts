@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
-import { BALANCE, COLORS, ENEMIES, type EnemyKind } from "../../utils/constants";
+import { BALANCE, COLORS, ENEMIES, TIME, type EnemyKind } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
 /**
@@ -8,12 +8,32 @@ import { distance, type Point } from "../../utils/math";
  * Arqueiros param assim que o alvo entra no alcance e atiram de longe.
  */
 export class Enemy extends Unit {
-  readonly kind: EnemyKind;
-  private readonly home: Point;
+  /**
+   * Alcance de percepção dos inimigos em relação ao normal: à noite, tochas denunciam o bando
+   * de longe e o escuro o esconde (a cena atualiza a cada quadro).
+   */
+  static perception = 1;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind = "GOBLIN") {
+  readonly kind: EnemyKind;
+  /** Para onde volta sem alvo. Num bando errante, acompanha a marcha do bando. */
+  home: Point;
+  /** De quem é este inimigo no mundo: contrato ativo, bando errante ou motim. */
+  owner:
+    | { kind: "CONTRACT"; contractId: string }
+    | { kind: "WARBAND"; id: string }
+    | { kind: "MUTINY" }
+    | { kind: "SIEGE"; settlementId: string }
+    | { kind: "CALAMITY"; id: string }
+    | null = null;
+  /** Cor do corpo (soldados dos reinos usam a cor da facção). */
+  readonly bodyColor: number;
+  /** Longe de todos os aliados: não pensa nem luta (economia de processamento). */
+  dormant = false;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind = "GOBLIN", color?: number) {
     super(scene, x, y, "ENEMY", ENEMIES[kind].stats);
     this.kind = kind;
+    this.bodyColor = color ?? ENEMIES[kind].color;
     this.canCharge = kind === "MUTINEER_RIDER";
     this.home = { x, y };
     this.drawBody();
@@ -23,7 +43,7 @@ export class Enemy extends Unit {
     const g = this.bodyGfx;
     const s = this.radius;
     g.clear();
-    g.fillStyle(ENEMIES[this.kind].color, 1);
+    g.fillStyle(this.bodyColor, 1);
     g.fillRect(-s, -s, s * 2, s * 2);
     g.lineStyle(2, COLORS.OUTLINE, 1);
     g.strokeRect(-s, -s, s * 2, s * 2);
@@ -34,11 +54,29 @@ export class Enemy extends Unit {
     } else {
       g.fillRect(s - 4, -2, 4, 4);
     }
+    if (this.isBoss) {
+      // Coroa: o líder de uma calamidade
+      g.fillStyle(0xf1c40f, 1);
+      g.fillTriangle(-s, -s - 2, -s / 2, -s - 12, 0, -s - 2);
+      g.fillTriangle(0, -s - 2, s / 2, -s - 12, s, -s - 2);
+      g.lineStyle(3, 0xf1c40f, 1);
+      g.strokeRect(-s - 3, -s - 3, s * 2 + 6, s * 2 + 6);
+    }
+  }
+
+  get isBoss(): boolean {
+    return !!ENEMIES[this.kind].boss;
+  }
+
+  override get nightCreature(): boolean {
+    return TIME.NIGHT_CREATURES.includes(this.kind);
   }
 
   /** Aliado está ao alcance da percepção? Na floresta, só bem de perto. */
   private canPerceive(ally: Unit): boolean {
-    const aggro = ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_AGGRO_RANGE;
+    // Criaturas da noite enxergam no escuro: apagar as tochas não as engana
+    const perception = this.nightCreature ? Math.max(1, Enemy.perception) : Enemy.perception;
+    const aggro = (ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_AGGRO_RANGE) * perception;
     const limit = ally.isInForest ? Math.min(aggro, BALANCE.FOREST_DETECT_RANGE) : aggro;
     return distance(ally, this) <= limit;
   }
