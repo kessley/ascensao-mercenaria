@@ -12,6 +12,8 @@ const ROUGH = new Set(["MUD", "SWAMP", "FOREST", "SHALLOW", "ICE"]);
  * perder a comida que ela levava. Atola na lama, no pântano, na mata e na neve.
  */
 export class Wagon extends Unit {
+  /** Carga de mercadoria atrasa as rodas (Marco 14): a cena atualiza a cada quadro. */
+  static load = 1;
   readonly wagonId: string;
   private wheelPhase = 0;
 
@@ -55,7 +57,7 @@ export class Wagon extends Unit {
   /** Atola em terreno ruim e na neve (o chão da estação pesa mais para rodas). */
   override speedMultiplier(): number {
     const rough = ROUGH.has(this.terrainType) || this.groundFactor() < 0.85;
-    return super.speedMultiplier() * (rough ? SUPPLY.WAGON_ROUGH : 1) * Unit.pace;
+    return super.speedMultiplier() * (rough ? SUPPLY.WAGON_ROUGH : 1) * Unit.pace * Wagon.load;
   }
 
   /** Não revida: só sofre. */

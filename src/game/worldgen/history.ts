@@ -6,7 +6,7 @@ import * as names from "./names";
 const TEMPERAMENTS: Temperament[] = ["BELLIGERENT", "MERCANTILE", "PIOUS"];
 const ANCIENT_CALAMITIES = ["a Praga Cinzenta", "a Noite dos Mil Ossos", "a Fome Vermelha", "o Despertar do Rei-Lich", "a Maré de Orcs", "o Inverno Sem Fim"];
 /** Força de cada povoado numa guerra da história. */
-const WEIGHT = { VILLAGE: 1, CITY: 3, FORT: 4 } as const;
+const WEIGHT = { VILLAGE: 1, CITY: 3, FORT: 4, CAPITAL: 6 } as const;
 
 interface Kingdom {
   key: string;

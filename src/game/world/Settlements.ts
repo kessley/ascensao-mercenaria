@@ -5,7 +5,7 @@ import { CAMP_COLORS, drawTentShape, worldLabel, type Interactable } from "./Cam
 import type { StaticCuller } from "./StaticCuller";
 import { COLORS } from "../../utils/constants";
 import type { Point } from "../../utils/math";
-import { specialHouses, templeDoor, townLayout, type GarrisonCamp, type TownLayout } from "./townLayout";
+import { specialHouses, templeDoor, townLayout, type GarrisonCamp, type InnerCity, type TownLayout } from "./townLayout";
 
 const WALL_COLOR = 0x8a8478;
 const ROOF_COLORS = [0x8e4a2b, 0x7a3b22, 0x9c6b3c, 0x6b5a4a];
@@ -158,6 +158,10 @@ export class SettlementLayer {
       return [{ label: `Ruínas de ${t.name}`, door: layout.market, panel: panel("MARKET"), bounds: rectAround(layout.market, 160), radius: MARKET_RADIUS }];
     }
     const hall = t.owner === "PLAYER" ? `Sala de Administração de ${t.name}` : t.kind === "VILLAGE" ? `Casa do Conselho de ${t.name}` : `Paço de ${t.name}`;
+    // Marco 15: na capital, a "porta do paço" é o portão da muralha interna (a Cidade Alta é outro mapa)
+    const hallSpot: Interactable = layout.inner
+      ? { label: `Portão da Cidade Alta de ${t.name}`, door: layout.hall, panel: panel("HALL"), bounds: new Phaser.Geom.Rectangle(layout.keep.x, layout.keep.y, layout.keep.w, layout.keep.h), radius: HALL_RADIUS + 30, enter: `capital:${t.id}` }
+      : { label: hall, door: layout.hall, panel: panel("HALL"), bounds: new Phaser.Geom.Rectangle(layout.keep.x, layout.keep.y, layout.keep.w, layout.keep.h), radius: HALL_RADIUS, enter: `town:${t.id}:hall` };
     // Marco 14: paço, taverna, Casa dos Mercadores e templo têm lado de dentro
     const special = specialHouses(layout);
     const houseSpot = (i: number | null, label: string, enter: string): Interactable[] => {
@@ -168,7 +172,7 @@ export class SettlementLayer {
     const temple = templeDoor(layout);
     return [
       { label: `Mercado de ${t.name}`, door: layout.market, panel: panel("MARKET"), bounds: rectAround(layout.market, 160), radius: MARKET_RADIUS },
-      { label: hall, door: layout.hall, panel: panel("HALL"), bounds: rectAround(layout.hall, 70), radius: HALL_RADIUS, enter: `town:${t.id}:hall` },
+      hallSpot,
       ...houseSpot(special.tavern, `Taverna de ${t.name}`, `town:${t.id}:tavern`),
       ...houseSpot(special.guild, `Casa dos Mercadores de ${t.name}`, `town:${t.id}:guild`),
       ...(temple && layout.temple
@@ -180,6 +184,7 @@ export class SettlementLayer {
         panel: panel("CAMP"),
         bounds: new Phaser.Geom.Rectangle(c.rect.x, c.rect.y, c.rect.w, c.rect.h),
         radius: CAMP_RADIUS,
+        enter: `town:${t.id}:garrison`,
       })),
       // Do lado de fora de cada portão (onde o exército fica): é dali que se ataca
       ...layout.gates.map((g) => ({
@@ -299,8 +304,12 @@ export class SettlementLayer {
       g.fillStyle(0x23201b, 0.9);
       for (let k = 0; k < 4; k++) g.fillRect(r.x + rnd.between(4, Math.max(5, r.w - 30)), r.y + rnd.between(4, Math.max(5, r.h - 24)), rnd.between(12, 26), rnd.between(8, 18));
     }
+    // Capital: a Cidade Alta por trás da muralha interna (telhados, cúpula e torres ao fundo)
+    const walls = scene.add.graphics().setDepth(-6);
+    if (layout.inner) drawInnerCity(g, walls, layout.inner, rnd, ruined);
     // Paço/castelo: pedra com pátio e torrinhas
     const k = layout.keep;
+    if (!layout.inner) {
     g.fillStyle(ruined ? 0x4e4b45 : 0x8d877c, 1);
     g.fillRect(k.x, k.y, k.w, k.h);
     g.lineStyle(4, COLORS.OUTLINE, 1);
@@ -320,6 +329,7 @@ export class SettlementLayer {
     }
     g.fillStyle(0x2a1c10, 1);
     g.fillRect(layout.hall.x - 16, k.y + k.h - 8, 32, 12);
+    }
     if (layout.temple) {
       const tp = layout.temple;
       g.fillStyle(ruined ? 0x56534c : 0xd9d2bf, 1);
@@ -333,7 +343,6 @@ export class SettlementLayer {
     for (const camp of layout.camps) drawGarrisonCamp(ground, g, camp);
 
     // Muralha, torres e portões
-    const walls = scene.add.graphics().setDepth(-6);
     const stone = layout.wallKind === "STONE";
     for (const w of layout.walls) {
       walls.fillStyle(stone ? WALL_COLOR : CAMP_COLORS.WOOD, 1);
@@ -398,7 +407,10 @@ export class SettlementLayer {
       g.strokeRect(x, y - size * 2.2, size * 1.6, size);
     };
     if (t.owner !== "RUINED") {
-      flag(layout.keep.x + layout.keep.w - 20, layout.keep.y + 10, 28);
+      if (layout.inner) {
+        const r = layout.inner.rect;
+        for (const x of [r.x + r.w * 0.36, r.x + r.w * 0.64]) flag(x, r.y + r.h - 6, 30);
+      } else flag(layout.keep.x + layout.keep.w - 20, layout.keep.y + 10, 28);
       for (const gt of layout.gates) flag(gt.x + gt.width / 2 + 30, gt.y, 18);
       for (const c of layout.camps) flag(c.flag.x, c.flag.y, 16);
     }
@@ -412,6 +424,67 @@ export class SettlementLayer {
 }
 
 const rectAround = (p: Point, r: number) => new Phaser.Geom.Rectangle(p.x - r, p.y - r, r * 2, r * 2);
+
+/**
+ * A Cidade Alta vista de fora: telhados apertados, a cúpula do templo maior e o castelo ao
+ * fundo, por trás da muralha interna (quem quiser ver de perto tem de passar pelo portão).
+ */
+function drawInnerCity(g: Phaser.GameObjects.Graphics, walls: Phaser.GameObjects.Graphics, inner: InnerCity, rnd: Phaser.Math.RandomDataGenerator, ruined: boolean): void {
+  const r = inner.rect;
+  g.fillStyle(ruined ? 0x4e4b45 : 0x6d6452, 1);
+  g.fillRect(r.x, r.y, r.w, r.h);
+  for (let y = r.y + 70; y < r.y + r.h - 110; y += 62) {
+    for (let x = r.x + 70; x < r.x + r.w - 110; x += 74) {
+      if (y < r.y + 420 && Math.abs(x - (r.x + r.w / 2)) < 320) continue; // lugar do castelo
+      g.fillStyle(ROOF_COLORS[rnd.between(0, 3)], ruined ? 0.5 : 1);
+      g.fillRect(x, y, rnd.between(46, 64), rnd.between(34, 48));
+    }
+  }
+  const c = { x: r.x + r.w / 2, y: r.y + 230 };
+  g.fillStyle(ruined ? 0x56534c : 0x9a9488, 1);
+  g.fillRect(c.x - 280, c.y - 150, 560, 300);
+  g.lineStyle(4, COLORS.OUTLINE, 1);
+  g.strokeRect(c.x - 280, c.y - 150, 560, 300);
+  g.fillStyle(ruined ? 0x46433d : 0x7c766c, 1);
+  g.fillRect(c.x - 130, c.y - 80, 260, 160);
+  for (const [dx, dy] of [[-280, -150], [280, -150], [-280, 150], [280, 150]]) {
+    g.fillStyle(0x77716a, 1);
+    g.fillCircle(c.x + dx, c.y + dy, 44);
+    g.lineStyle(3, COLORS.OUTLINE, 1);
+    g.strokeCircle(c.x + dx, c.y + dy, 44);
+  }
+  // Muralha interna e torres
+  for (const w of inner.walls) {
+    walls.fillStyle(0x938c7e, 1);
+    walls.fillRect(w.x, w.y, w.w, w.h);
+    walls.lineStyle(2, COLORS.OUTLINE, 0.9);
+    walls.strokeRect(w.x, w.y, w.w, w.h);
+    walls.fillStyle(0x6c675d, 1);
+    const along = w.w > w.h;
+    const len = along ? w.w : w.h;
+    for (let d = 10; d < len - 10; d += 26) {
+      if (along) walls.fillRect(w.x + d, w.y + 4, 12, Math.max(6, w.h * 0.3));
+      else walls.fillRect(w.x + 4, w.y + d, Math.max(6, w.w * 0.3), 12);
+    }
+  }
+  for (const tw of inner.towers) {
+    walls.fillStyle(0x7f786e, 1);
+    walls.fillRect(tw.x, tw.y, tw.w, tw.h);
+    walls.lineStyle(3, COLORS.OUTLINE, 1);
+    walls.strokeRect(tw.x, tw.y, tw.w, tw.h);
+    walls.fillStyle(0x5f5a52, 1);
+    walls.fillRect(tw.x + tw.w * 0.25, tw.y + tw.h * 0.25, tw.w * 0.5, tw.h * 0.5);
+  }
+  // Portão: duas folhas de ferro fechadas (entra-se com E: a Cidade Alta é outro mapa)
+  const gx = r.x + r.w / 2;
+  const gy = r.y + r.h;
+  walls.fillStyle(0x3a2412, 1);
+  walls.fillRect(gx - inner.gateWidth / 2, gy - 62, inner.gateWidth, 62);
+  walls.lineStyle(4, 0x8fa6b8, 1);
+  for (let d = 18; d < inner.gateWidth; d += 28) walls.lineBetween(gx - inner.gateWidth / 2 + d, gy - 62, gx - inner.gateWidth / 2 + d, gy);
+  walls.lineStyle(3, 0xe0b040, 1);
+  walls.strokeRect(gx - inner.gateWidth / 2, gy - 62, inner.gateWidth, 62);
+}
 
 /**
  * Acampamento da guarnição (dentro dos muros): pátio de terra batida com cerca de estacas

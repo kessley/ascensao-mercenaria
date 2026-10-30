@@ -1,11 +1,13 @@
-import { BUILDINGS, CALAMITY_RATES, ECONOMY, GEO, HEALTH, MARKET, REALM, SEASONS, TRADE, type BuildingId, type Good } from "../../utils/constants";
+import { BUILDINGS, CALAMITY_RATES, ECONOMY, GEO, HEALTH, KINGDOM, MARKET, REALM, SEASONS, TRADE, type BuildingId, type Good } from "../../utils/constants";
 import { seasonOf, weatherAt } from "../../utils/season";
-import { regionName, type MarketDef, type SettlementKind, type SettlementSeed, type WorldDef, type ResourceId } from "../data/world";
-import { chiefName, necromancerName, personName } from "../worldgen/names";
+import { regionName, type FactionDef, type MarketDef, type SettlementKind, type SettlementSeed, type WorldDef, type ResourceId } from "../data/world";
+import { chiefName, necromancerName } from "../worldgen/names";
 import { createRng, randomSeed, seedFromText } from "../worldgen/rng";
 import { geoOf } from "../worldgen/geoMap";
 import { distance, type Point } from "../../utils/math";
 import { diffuse, initEconomy, marketDay, needsOf, quote, rationPackPrice, type Economy } from "./market";
+import { courtCalendar, kingdomsWeek, loyaltyDay, noblesWeek, siegesDay, type Alliance, type CourtEvent, type FieldArmy, type KingdomPlan } from "./kingdoms";
+import type { Noble, Plot } from "./nobility";
 
 /**
  * Simulação do reino e do mundo vivo (Marco 9), em funções puras usadas pelo store:
@@ -43,6 +45,14 @@ export interface Settlement {
   econ: Economy;
   /** Taxa de mercado (povoados do bando): 0 baixa, 1 normal, 2 alta. */
   marketTax?: 0 | 1 | 2;
+  /** Lealdade ao dono (Marco 15): baixa recusa impostos; muito baixa, revolta. */
+  loyalty?: number;
+  /** Gente convocada para a guerra (fração da população). */
+  levy?: number;
+  /** Conquistado neste dia (a gente demora a aceitar o dono novo). */
+  conqueredDay?: number;
+  /** Cerco em andamento: o reino que acampou diante dos muros. */
+  besiegedBy?: string;
 }
 
 /** Guerra entre dois reinos (Marco 14): embargo, armas caras e escaramuças na fronteira. */
@@ -50,8 +60,10 @@ export interface KingdomWar {
   a: string;
   b: string;
   since: number;
-  /** Dia da paz (a trégua dura 4 semanas; depois, o registro some). */
+  /** Dia da paz (depois da trégua, o registro some). */
   peace?: number;
+  /** Guerra civil: `b` é o lado do pretendente. */
+  civil?: boolean;
 }
 
 const pairCache = new Map<string, [number, number][]>();
@@ -83,6 +95,14 @@ export interface FactionState {
   relation: number;
   atWar: boolean;
   lastArmyDay: number;
+  /** Marco 15: onde a corte está, o plano da semana, tesouro, convocação, cansaço de guerra. */
+  seatId?: string;
+  plan?: KingdomPlan;
+  treasury?: number;
+  levy?: number;
+  weariness?: number;
+  /** Sem nenhum povoado: o reino acabou. */
+  fallen?: boolean;
 }
 
 export type CalamityKind = "NECROMANCER" | "ORC_HORDE";
@@ -113,9 +133,28 @@ export interface RealmState {
   rations: number;
   iron: number;
   wars: KingdomWar[];
+  // --- Reinos vivos (Marco 15) ---
+  nobles: Noble[];
+  plots: Plot[];
+  alliances: Alliance[];
+  armies: FieldArmy[];
+  courtEvents: CourtEvent[];
+  /** Povoados em que a gente pegou em armas (a cena põe o bando rebelde no mapa). */
+  revolts: string[];
+  /** Reinos nascidos de uma guerra civil (voltam ao mundo na carga). */
+  extraFactions: FactionDef[];
+  honor: number;
+  fear: number;
+  liege: string | null;
+  spouseId: string | null;
+  wanted: Record<string, number>;
 }
 
-export type RealmLog = { text: string; tone: "info" | "good" | "bad" };
+/**
+ * Linha do diário do dia. Com `where` (Marco 15), é uma notícia do mundo: nasce ali e só chega ao
+ * diário quando alcançar alguém do bando (rumors.ts).
+ */
+export type RealmLog = { text: string; tone: "info" | "good" | "bad"; where?: Point };
 
 /**
  * Construções que os povoados já têm no começo (Marco 14), conforme a terra, o rio e o mar:
@@ -133,7 +172,8 @@ function startingBuildings(seed: SettlementSeed): BuildingId[] {
   if (res.includes("SALT") && r.chance(0.6)) out.push("SALTWORKS");
   if (res.includes("IRON") && r.chance(0.6)) out.push("MINE");
   if (res.includes("HORSES") && r.chance(0.6)) out.push("PASTURE");
-  if (seed.kind === "CITY" && r.chance(0.6)) out.push("WEAVERY");
+  if ((seed.kind === "CITY" || seed.kind === "CAPITAL") && r.chance(0.6)) out.push("WEAVERY");
+  if (seed.kind === "CAPITAL") out.push("MARKET", "WALLS");
   if (res.includes("GRAIN") && r.chance(0.4)) out.push("FARM");
   return out;
 }
@@ -244,6 +284,12 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
     settlements: input.settlements.map((x) => ({ ...x })),
     factions: input.factions.map((f) => ({ ...f })),
     calamities: input.calamities.map((c) => ({ ...c })),
+    wars: input.wars.map((w) => ({ ...w })),
+    nobles: input.nobles.map((n) => ({ ...n })),
+    plots: input.plots.map((p) => ({ ...p })),
+    armies: input.armies.map((a) => ({ ...a })),
+    courtEvents: input.courtEvents,
+    revolts: [...input.revolts],
   };
 
   const season = seasonOf(day);
@@ -257,6 +303,8 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
     const atWar =
       (isFactionOwner(t.owner) && (s.factions.some((f) => f.id === t.owner && f.atWar) || s.wars.some((w) => w.peace === undefined && (w.a === t.owner || w.b === t.owner)))) ||
       (t.owner === "PLAYER" && s.factions.some((f) => f.atWar));
+    // A convocação tira gente das lavouras (Marco 15)
+    if (isFactionOwner(t.owner)) t.levy = s.factions.find((f) => f.id === t.owner)?.levy ?? 0;
     const hoard = threats.some((c) => distance(c.lair, t) < MARKET.HOARD_RADIUS);
     const storm = !!t.port && weatherAt(world.seed, day, t, geo) === "STORM";
     const wasFamine = t.econ.famine;
@@ -268,7 +316,7 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
     t.prosperity = Math.max(0, Math.min(100, t.prosperity + MARKET.PROSPERITY_BASE + (t.econ.sol - 60) / 25 + tax + sick + famine));
     if (t.econ.famine) t.population = Math.max(20, Math.round(t.population * 0.995));
     if (t.econ.famine && !wasFamine && (t.owner === "PLAYER" || t.kind !== "VILLAGE")) {
-      log.push({ text: `Fome em ${t.name}: os celeiros estão vazios e o pão custa uma fortuna.`, tone: t.owner === "PLAYER" ? "bad" : "info" });
+      log.push({ text: `Fome em ${t.name}: os celeiros estão vazios e o pão custa uma fortuna.`, tone: t.owner === "PLAYER" ? "bad" : "info", where: t.owner === "PLAYER" ? undefined : t });
     }
     // Povoados do bando: o nível de vida baixo agita a gente; em 100, revolta (sem impostos por duas semanas)
     // (o comércio miúdo entre vizinhos vem depois de todos os mercados do dia)
@@ -291,6 +339,9 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
     (a, b) => isFactionOwner(at(a)) && isFactionOwner(at(b)) && kingdomsAtWar(s.wars, at(a), at(b)),
   );
 
+  // Reinos vivos (Marco 15): cercos, lealdade dos povoados e o calendário da corte
+  log.push(...siegesDay(s, world, day), ...loyaltyDay(s, world, day), ...courtCalendar(s, world, day));
+
   // Relações esfriam (ou esquentam) devagar rumo à neutralidade, fora de guerra
   for (const f of s.factions) {
     if (!f.atWar && f.relation !== 0) f.relation += f.relation > 0 ? -0.25 : 0.5;
@@ -310,6 +361,11 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
           const max = REALM.MAX_POPULATION[t.kind];
           t.population = Math.max(20, Math.min(max, Math.round(t.population * (1 + 0.02 * ((t.econ.sol - 60) / 40)))));
         }
+        continue;
+      }
+      // Com lealdade baixa, o povoado recusa os impostos
+      if ((t.loyalty ?? KINGDOM.LOYALTY_START) < KINGDOM.LOYALTY_NO_TAX) {
+        log.push({ text: `${t.name} se recusa a pagar impostos: a lealdade ao bando está no chão.`, tone: "bad" });
         continue;
       }
       const y = weeklyYield(t, day);
@@ -341,6 +397,7 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
       log.push({ text: "Feiras da colheita: os mercados se enchem e a comida está barata.", tone: "info" });
     }
     log.push(...spreadFever(s, day));
+    log.push(...noblesWeek(s, world, day), ...kingdomsWeek(s, world, day));
     log.push(...worldEvent(s, world, day));
   }
 
@@ -400,7 +457,7 @@ function spreadFever(s: RealmState, day: number): RealmLog[] {
       .sort((a, b) => distance(a, t) - distance(b, t))[0];
     if (!next) continue;
     next.sickUntil = day + HEALTH.TOWN_SICK_DAYS;
-    log.push({ text: `A febre de ${t.name} chegou a ${next.name} com os viajantes da estrada.`, tone: next.owner === "PLAYER" ? "bad" : "info" });
+    log.push({ text: `A febre de ${t.name} chegou a ${next.name} com os viajantes da estrada.`, tone: next.owner === "PLAYER" ? "bad" : "info", where: next.owner === "PLAYER" ? undefined : next });
   }
   return log;
 }
@@ -410,7 +467,6 @@ function worldEvent(s: RealmState, world: WorldDef, day: number): RealmLog[] {
   const r = rng();
   const name = (fid: string) => world.factions.find((f) => f.id === fid)?.name ?? "?";
   const roll = r.next();
-  const living = s.factions.filter((f) => s.settlements.some((t) => t.owner === f.id));
 
   // Reinos beligerantes com rancor declaram guerra ao bando
   for (const f of s.factions) {
@@ -423,46 +479,7 @@ function worldEvent(s: RealmState, world: WorldDef, day: number): RealmLog[] {
     }
   }
 
-  // Guerras entre reinos (Marco 14): a trégua acaba em 4 semanas; guerras longas cansam
-  s.wars = s.wars.filter((w) => w.peace === undefined || day - w.peace < 28);
-  const winter = seasonOf(day) === "WINTER";
-  for (const w of s.wars) {
-    if (w.peace !== undefined || day - w.since < 21 || !r.chance(0.3)) continue;
-    w.peace = day;
-    return [{ text: `O ${name(w.a)} e o ${name(w.b)} assinaram a paz. As estradas entre os dois reabrem ao comércio.`, tone: "info" }];
-  }
-  const fighting = s.wars.filter((w) => w.peace === undefined);
-  if (!winter && fighting.length < 2 && living.length >= 2 && roll < 0.2) {
-    const [a, b] = r.shuffle(living);
-    if (!s.wars.some((w) => (w.a === a.id && w.b === b.id) || (w.a === b.id && w.b === a.id))) {
-      s.wars.push({ a: a.id, b: b.id, since: day });
-      return [{ text: `Guerra! O ${name(a.id)} declarou guerra ao ${name(b.id)}. Embargo entre os dois: armas e cavalos sobem de preço.`, tone: "info" }];
-    }
-  }
-
-  // Inverno: os reinos estão nos quartéis de inverno (sem escaramuças de fronteira)
-  if (roll < 0.35) {
-    if (fighting.length === 0 || winter) return [];
-    // Escaramuça entre reinos em guerra: um povoado menor muda de mãos
-    const war = r.pick(fighting);
-    const [a, b] = r.chance(0.5) ? [living.find((f) => f.id === war.a), living.find((f) => f.id === war.b)] : [living.find((f) => f.id === war.b), living.find((f) => f.id === war.a)];
-    if (!a || !b) return [];
-    const capitals = new Set(world.factions.map((f) => f.capitalId));
-    const prize = s.settlements.find((t) => t.owner === b.id && !capitals.has(t.id) && t.kind === "VILLAGE");
-    if (prize) {
-      prize.owner = a.id;
-      prize.prosperity = Math.max(0, prize.prosperity - 30);
-      prize.econ = plunder(prize.econ, 0.3);
-      return [{ text: `O ${name(a.id)} tomou ${prize.name} do ${name(b.id)}.`, tone: "info" }];
-    }
-    return [{ text: `Escaramuças na fronteira entre o ${name(a.id)} e o ${name(b.id)}.`, tone: "info" }];
-  }
-  if (roll < 0.47 && living.length > 0) {
-    const f = r.pick(living);
-    const old = f.ruler;
-    f.ruler = personName(r);
-    return [{ text: `${old} morreu; ${f.ruler} é agora quem governa o ${name(f.id)}.`, tone: "info" }];
-  }
+  // Guerras, paz e sucessões vêm da simulação dos reinos (kingdoms.ts); aqui ficam feiras e pragas
   const towns = s.settlements.filter((x) => x.owner !== "RUINED");
   if (towns.length === 0) return [];
   if (roll < 0.65) {
@@ -470,14 +487,14 @@ function worldEvent(s: RealmState, world: WorldDef, day: number): RealmLog[] {
     const t = r.pick(towns);
     t.prosperity = Math.min(100, t.prosperity + 20);
     t.econ = restock(t.econ, { CLOTH: 8, ALE: 10, LUXURY: 3, SALT: 4 });
-    return [{ text: `Uma feira em ${t.name} atrai mercadores de longe: tecido, cerveja e luxos baratos por uns dias.`, tone: "info" }];
+    return [{ text: `Uma feira em ${t.name} atrai mercadores de longe: tecido, cerveja e luxos baratos por uns dias.`, tone: "info", where: t }];
   }
   if (roll < 0.8) {
     const t = r.pick(towns);
     t.prosperity = Math.max(0, t.prosperity - 25);
     t.population = Math.round(t.population * 0.9);
     t.sickUntil = day + HEALTH.TOWN_SICK_DAYS;
-    return [{ text: `Febre em ${t.name}: muitos morreram e o comércio parou. Quem passar por lá pode adoecer.`, tone: "bad" }];
+    return [{ text: `Febre em ${t.name}: muitos morreram e o comércio parou. Quem passar por lá pode adoecer.`, tone: "bad", where: t.owner === "PLAYER" ? undefined : t }];
   }
   if (roll < 0.9) {
     // Choques do mercado (Marco 14): praga nos celeiros, mina alagada, gado doente
@@ -489,7 +506,7 @@ function worldEvent(s: RealmState, world: WorldDef, day: number): RealmLog[] {
       ["WOOD", `Um incêndio consumiu o depósito de madeira de ${t.name}.`],
     ]);
     t.econ = { ...t.econ, stock: { ...t.econ.stock, [shock[0]]: Math.round(t.econ.stock[shock[0]] * 0.4) } };
-    return [{ text: shock[1], tone: "info" }];
+    return [{ text: shock[1], tone: "info", where: t }];
   }
   return [];
 }
@@ -509,10 +526,10 @@ export function restock(econ: Economy, add: Partial<Record<Good, number>>): Econ
 }
 
 /** Bandos do mundo: os que atacam (goblins, exércitos, hordas) e os que não (patrulha, mensageiro, refugiados). */
-export type BandKind = "GOBLIN" | "FACTION" | "HORDE" | "PATROL" | "COURIER" | "REFUGEES" | "CARAVAN";
+export type BandKind = "GOBLIN" | "FACTION" | "HORDE" | "PATROL" | "COURIER" | "REFUGEES" | "CARAVAN" | "REBELS";
 
 /** Bandos que saqueiam povoados quando chegam. */
-export const isRaiderKind = (k: BandKind) => k === "GOBLIN" || k === "FACTION" || k === "HORDE";
+export const isRaiderKind = (k: BandKind) => k === "GOBLIN" || k === "FACTION" || k === "HORDE" || k === "REBELS";
 export type RaidOutcome = "REPELLED" | "RAIDED" | "CAPTURED" | "RUINED" | "IGNORED";
 
 /**
@@ -538,6 +555,14 @@ export function resolveRaid(
     // Os armazéns são o que os goblins levam
     s.econ = plunder(s.econ, 0.4);
     return { settlement: s, outcome: "RAIDED" };
+  }
+  // Camponeses que vencem expulsam o senhor: a aldeia fica livre (Marco 15)
+  if (band.kind === "REBELS") {
+    s.owner = "FREE";
+    s.garrison = 3;
+    s.loyalty = 70;
+    s.conqueredDay = undefined;
+    return { settlement: s, outcome: "CAPTURED" };
   }
   if (band.kind === "HORDE" && band.calamityKind === "NECROMANCER") {
     s.owner = "RUINED";

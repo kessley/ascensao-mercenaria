@@ -44,6 +44,8 @@ export interface EconTown {
   resources?: readonly ResourceId[];
   port?: boolean;
   river?: boolean;
+  /** Parte da gente convocada para a guerra (Marco 15): faltam braços no campo. */
+  levy?: number;
 }
 
 /** O que muda o mercado do dia (estação, guerra, calamidade por perto, tempestade no porto). */
@@ -90,7 +92,7 @@ export const INDUSTRIES: Record<IndustryId, { label: string; inputs: Partial<Sto
 
 export function strata(t: EconTown): { peasants: number; burghers: number; nobles: number } {
   const s = MARKET.STRATA[t.kind];
-  return { peasants: t.population * s.peasants, burghers: t.population * s.burghers, nobles: t.population * s.nobles };
+  return { peasants: t.population * s.peasants * (1 - (t.levy ?? 0)), burghers: t.population * s.burghers, nobles: t.population * s.nobles };
 }
 
 /** Oficinas de um povoado e o tamanho de cada uma (pela gente, pela terra e pelas construções). */
@@ -107,7 +109,7 @@ export function industriesOf(t: EconTown): { id: IndustryId; level: number }[] {
     ["MINE", (res("IRON") ? 1.5 : 0) + (has("MINE") ? (res("IRON") ? 1.5 : 0.75) : 0)],
     ["WEAVERY", burghers / 150 + (res("FURS") ? 0.5 : 0) + (has("WEAVERY") ? 1.5 : 0)],
     ["BREWERY", burghers / 120 + (has("MILL") ? 0.5 : 0)],
-    ["ARMORY", (t.kind === "CITY" ? 1.2 : t.kind === "FORT" ? 1.5 : 0) + (has("BARRACKS") ? 0.5 : 0)],
+    ["ARMORY", (t.kind === "CITY" ? 1.2 : t.kind === "CAPITAL" ? 2 : t.kind === "FORT" ? 1.5 : 0) + (has("BARRACKS") ? 0.5 : 0)],
     ["STUD", (res("HORSES") ? 1.2 : 0) + (has("PASTURE") && res("HORSES") ? 0.8 : 0)],
     ["HERBALIST", res("HERBS") ? 1.2 : 0],
     ["TRAPPERS", res("FURS") ? 1.2 : 0],

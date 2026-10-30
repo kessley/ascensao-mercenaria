@@ -25,9 +25,9 @@ O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 | | 11 | Geografia real: relevo, rios e mares | ✅ OK |
 | | 12 | Mundo vivo: gente andando (e cidades de verdade num mapa maior) | ✅ OK |
 | | 13 | Estações, clima e logística | ✅ OK |
-| | 14 | Economia e comércio | ⏭ próximo |
-| | 15 | Reinos vivos | |
-| | 16 | Guerra de verdade: cercos e prisioneiros | |
+| | 14 | Economia e comércio (e interiores das estruturas) | ✅ OK |
+| | 15 | Reinos vivos (e a Cidade Alta das capitais) | ✅ OK |
+| | 16 | Guerra de verdade: cercos e prisioneiros | ⏭ próximo |
 | | 17 | Mares e continentes (o novo Mapa Múndi) | |
 | | 18 | Legado e Lendas | |
 | 3 — O arcano (abaixo) | 19 | Magia do Comandante (era o Marco 8) | por último |
@@ -58,6 +58,5 @@ O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 ## Banco de ideias (ainda sem marco)
 - **Religiões e templos:** fé por cultura, peregrinações, cruzadas contra calamidades e heresias.
 - **Armas e armaduras com nome e história**, que passam de batalhão em batalhão.
-- **Espionagem:** espiões nas cortes, sabotagem e roubo de planos de campanha.
-- **Torneios e duelos** nas capitais (fama e ouro, risco ao Comandante).
+- **Espionagem:** espiões nas cortes, sabotagem e roubo de planos de campanha (o Marco 15 trouxe o básico: favores de espionagem, cartas e esgotos).
 - **Monstros lendários únicos** (raros, por ser low fantasy), com covil e lenda na crônica.

@@ -124,6 +124,7 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
     - **Alcance:** a capacidade das carroças limita o alcance da campanha.
     - **Risco:** as carroças são o alvo preferido dos saqueadores.
     - **Forragem:** forragear completa a comida, mas esgota a região.
+  - **Mercados:** cada povoado tem estoque, preços por oferta e procura e nível de vida; rações e cavalos vêm desses mercados (ver seção 8.8).
   - **Fadiga, feridos e doenças:** marchar e lutar cansam cada batalhão; marcha forçada troca cansaço por caminho. Parte dos que caem fica ferida e volta da enfermaria. Pântano, fome, frio e acampamento lotado espalham doenças.
   - **Acampamento móvel:** pode ser levantado e montado em outro lugar. Paliçada reforçada, torres e fosso protegem o acampamento fixo e se perdem na mudança.
   - **Salários (Ouro):** Tropas exigem pagamento regular. Atrasar salários leva à perda de tropas por deserção e pode culminar em um Motim, forçando o Comandante a combater seus próprios soldados rebelados.
@@ -168,7 +169,7 @@ Toda mecânica nova passa por estes filtros:
 - **Névoa nas três escalas:** um continente nunca visitado aparece só pelo contorno das cartas náuticas compradas ou pelo relato de marinheiros.
 
 ### 8.3 Geração do mundo v2: relevo, rios, mares e história simulada
-> Implementado no Marco 11 (detalhes no Roadmap); os recursos por bioma chegaram no fechamento do Marco 12. Ainda não: os bens e as cadeias de produção (Marco 14).
+> Implementado no Marco 11 (detalhes no Roadmap); os recursos por bioma chegaram no fechamento do Marco 12. Os bens e as cadeias de produção chegaram no Marco 14 (seção 8.8).
 Todas as etapas usam a semente:
 1. **Relevo:** um mapa de altitude do planeta (ruído + máscaras de continentes) e o nível do mar definem oceanos, mares interiores, continentes e ilhas.
 2. **Clima:** a temperatura vem da latitude e da altitude; a chuva vem dos ventos dominantes, com sombra de chuva atrás das montanhas.
@@ -180,7 +181,7 @@ Todas as etapas usam a semente:
 8. **História simulada:** em vez de sortear a crônica, o gerador **roda a própria simulação de reinos** (seção 8.9) em passos grossos por 100 a 400 anos. Povoados crescem e caem, reinos se unem e se partem, dinastias mudam e calamidades antigas deixam ruínas e lendas. O mundo que o jogador recebe é o resultado. Na tela de criação ele escolhe o tamanho do mundo, o número de continentes, a idade do mundo (jovem, média ou antiga) e a frequência das calamidades.
 
 ### 8.4 Rios e oceano no Campo
-> Implementado no Marco 11: riachos rasos, vaus, rios fundos, pontes queimáveis com pedágio, passos nas montanhas e as regras da água (+25% de dano recebido, −20% causado, sem formação nem investida). A balsa chegou no fechamento do Marco 12; a cheia da primavera e os rios congelados do inverno (com gelo fino), no Marco 13. Ainda não: as barcaças (Marco 14) e os portos em uso (Marco 17).
+> Implementado no Marco 11: riachos rasos, vaus, rios fundos, pontes queimáveis com pedágio, passos nas montanhas e as regras da água (+25% de dano recebido, −20% causado, sem formação nem investida). A balsa chegou no fechamento do Marco 12; a cheia da primavera e os rios congelados do inverno (com gelo fino), no Marco 13. As barcaças e os navios de comércio chegaram no Marco 14. Ainda não: viajar por mar (Marco 17).
 - **Riacho:** dá para atravessar a vau em qualquer ponto, com −40% de velocidade e a formação desfeita.
 - **Rio:** só se atravessa nos **vaus** (marcados no mapa) ou nas **pontes**. Dentro do vau o movimento fica muito lento, quem está na água recebe +25% de dano, não dá para usar a Parede de Escudos e a cavalaria perde a investida. Defender a saída de um vau é a manobra clássica.
 - **Rio grande:** só por ponte, balsa (paga e demorada) ou barco.
@@ -190,7 +191,7 @@ Todas as etapas usam a semente:
 - **Costa e mar:** praias permitem desembarque; portos têm cais, estaleiro e farol. Piratas e saqueadores vindos do mar atacam aldeias costeiras.
 
 ### 8.5 Tempo: horas, dia e noite, estações e clima
-> Horas, dia e noite, tochas, criaturas da noite, emboscada noturna e descanso: implementados no Marco 10 (seção 2). Estações, clima diário por região e a previsão do tenente Cauteloso: Marco 13 (detalhes e números no Roadmap). A noite cansa o dobro pela fadiga. Ainda não: a tempestade no mar (Marco 17).
+> Horas, dia e noite, tochas, criaturas da noite, emboscada noturna e descanso: implementados no Marco 10 (seção 2). Estações, clima diário por região e a previsão do tenente Cauteloso: Marco 13 (detalhes e números no Roadmap). A noite cansa o dobro pela fadiga. A tempestade na costa e no mar chegou no Marco 14.
 - **Horas do dia:** o dia ganha fases (aurora, dia, crepúsculo e noite) e continua avançando com a marcha. **À noite:**
   - a visão cai 40% (tochas ajudam, mas denunciam a posição);
   - goblins e mortos-vivos ganham bônus;
@@ -211,7 +212,7 @@ Todas as etapas usam a semente:
   Um tenente com o traço certo prevê o tempo do dia seguinte.
 
 ### 8.6 Logística, fadiga e saúde
-> Implementado no Marco 13: fadiga e marcha forçada, trem de carroças com depósito no acampamento e carga em campo, forragem com esgotamento, feridos e enfermaria, doenças (também nos povoados), acampamento móvel e obras do acampamento fixo. Ainda não: ferro, saque e carga comercial nas carroças (Marco 14).
+> Implementado no Marco 13: fadiga e marcha forçada, trem de carroças com depósito no acampamento e carga em campo, forragem com esgotamento, feridos e enfermaria, doenças (também nos povoados), acampamento móvel e obras do acampamento fixo. Ferro, saque e carga comercial nas carroças chegaram no Marco 14, e a febre também passa a viajar com as caravanas.
 - **Fadiga** por batalhão (0–100): sobe com marcha forçada, marcha noturna, terreno ruim e combate; desce com descanso. Com fadiga alta o batalhão fica mais lento, causa menos dano e recupera a moral mais devagar. É a escolha clássica entre chegar antes e chegar inteiro.
 - **Trem de carroças:** rações, ferro, saque e carga comercial viajam em **carroças** de verdade que seguem o exército. Elas são lentas na lama e, em terreno difícil, ficam presas às estradas. A capacidade das carroças limita o alcance da campanha. São o alvo preferido dos bandos: perdê-las é perder a comida.
 - **Forragear:** no campo, o exército pode coletar comida da região. Rende pouco no inverno e no deserto, esgota a região por semanas e irrita o dono das terras.
@@ -228,7 +229,7 @@ Todas as etapas usam a semente:
 > - **Agentes:** as patrulhas, os mensageiros e os refugiados.
 > - **Sinais:** a fumaça, os corvos e os rastros (mais fundos e duradouros na lama e na neve).
 >
-> Ficam para depois: as caravanas (Marco 14) e os exércitos de lordes (Marco 15).
+> As caravanas chegaram no Marco 14 e os exércitos de lordes, no Marco 15.
 **No acampamento** (o estado do bando aparece no próprio acampamento):
 - Cada soldado é um bonequinho com rotina: dorme na barraca à noite, come na fogueira, treina, joga dados, faz fila no pagamento, cuida dos cavalos e leva ferro para a ferraria.
 - **O comportamento mostra o estado do bando:**
@@ -255,6 +256,13 @@ Todas as etapas usam a semente:
 - **Dentro dos povoados:** moradores, barracas no mercado, guardas na muralha. Uma cidade próspera está cheia; uma saqueada está vazia.
 
 ### 8.8 Economia e comércio
+> Implementado no Marco 14 (detalhes e números no Roadmap). Além do que está aqui:
+> - **Inspirado no Victoria 3:** gente em três camadas com necessidades, nível de vida, oficinas com insumos, produção que reage ao preço, guildas com dividendos e empréstimos.
+> - **Desafio:** fome e revolta nos povoados do bando, comida disputando espaço com mercadoria nas carroças, cavalaria dependendo de cavalos e calote com consequências.
+> - **Interiores das estruturas:** como num mapa de Pokémon, com gente que mostra o estado do bando e da cidade.
+> - **Saída do acampamento:** escolher quem vai e quem fica de guarda.
+>
+> Ainda não: despachar carga própria por água e luxos reais de outros continentes (Marco 17).
 - **Bens** (cerca de 10): Grãos, Gado, Sal, Madeira, Ferro, Tecido, Cerveja/Vinho, Armas e Armaduras, Cavalos e Luxos (especiarias, seda e outros, vindos de outros continentes). Para que servem:
   - grão e gado viram rações;
   - o ferro vira equipamento;
@@ -273,6 +281,12 @@ Todas as etapas usam a semente:
 - **Contratos econômicos:** escoltar uma caravana, recuperar carga roubada, abrir uma rota infestada ou sabotar o comércio de um rival.
 
 ### 8.9 Reinos vivos
+> Implementado no Marco 15 (detalhes e números no Roadmap): nobreza com memória e rotina, planos semanais, exércitos de lordes, cercos, cansaço de guerra, tratados, alianças, casamentos, coalizões, sucessão, guerra civil, conspirações, lealdade e revoltas, contratos emergentes e notícias que andam na velocidade dos viajantes. Além do que está aqui:
+> - **A Cidade Alta:** cada capital tem uma muralha interna que leva a outro mapa, enorme, com o castelo, o Bairro Nobre e a corte vivendo a sua rotina.
+> - **Reconhecimento:** cada portão pergunta quem é o Comandante naquele reino; quem não tem nome ainda tem suborno, disfarce, cartas, intimidação e os esgotos.
+> - **Role playing:** conversa por assuntos e traços, presentes, favores que mexem em gente de verdade, títulos, casamento, intriga, duelos e torneios.
+>
+> Ainda não: batalhas de verdade entre exércitos da IA (Marco 16).
 - **Personagens da nobreza:** cada reino tem rei, herdeiros e 2 a 4 lordes vassalos. Cada um tem traços (como os tenentes), idade, ambição, feudos e **memória pessoal do Comandante** (favores e ofensas). Nobres morrem, casam, conspiram e traem.
 - **IA de reino por objetivos:** toda semana o reino avalia as suas necessidades (fome, ameaça, oportunidade, vingança, riqueza) e escolhe um **plano**: campanha contra um vizinho, defesa de uma fronteira, cruzada contra a calamidade, expansão para terras livres ou uma rota comercial. Os planos viram **ações visíveis**:
   - convocação de recrutas, que tira braços do campo e baixa a produção;
@@ -297,6 +311,7 @@ Todas as etapas usam a semente:
 - **A corte:** a capital tem uma sala do trono, com audiências para pedir contratos, títulos, casamentos, resgates e paz.
 
 ### 8.10 Reputação: Fama, Honra e Temor
+> Implementado no Marco 15. Os três nomes aparecem na barra de recursos e decidem os portões da Cidade Alta (seção 8.9).
 Além da relação com cada reino e com cada personagem, o bando tem três reputações globais:
 - **Fama:** cresce com vitórias, calamidades vencidas e batalhas famosas. Atrai recrutas, tenentes melhores e mais seguidores, e aumenta o valor dos contratos.
 - **Honra:** cresce ao cumprir contratos, poupar prisioneiros e não trair. Honra alta abre contratos de nobres e alianças. Honra baixa atrai clientes desesperados e traiçoeiros, que pagam mais e às vezes não pagam.

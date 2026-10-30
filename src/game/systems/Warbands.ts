@@ -34,6 +34,8 @@ export interface BandSpec {
   cargo?: CaravanCargo;
   route?: Point[];
   goalId?: string;
+  /** Exército de um lorde (Marco 15): o registro dele na simulação. */
+  armyId?: string;
 }
 
 /** Um integrante do bando enquanto ele é só dados (fora da bolha de detalhe). */
@@ -82,6 +84,9 @@ export interface Warband {
   waiting?: boolean;
   /** Goblins que saquearam uma caravana: levam a carga (recuperável). */
   loot?: { good: Good; qty: number; townId: string };
+  /** Marco 15: exército de um lorde e se ele já está voltando para casa. */
+  armyId?: string;
+  homeward?: boolean;
 }
 
 /** Bando salvo: sempre como dados (quem estava em campo vira roster com a posição de agora). */
@@ -107,7 +112,12 @@ export type WarbandEvent =
   /** Caravana chegou ao mercado de destino (Marco 14). */
   | { type: "DELIVERED"; band: Warband; cargo: CaravanCargo }
   /** Caravana alcançada por goblins ou por uma horda longe do jogador: a carga vai com eles. */
-  | { type: "CARAVAN_RAIDED"; band: Warband; by: Warband; cargo: CaravanCargo };
+  | { type: "CARAVAN_RAIDED"; band: Warband; by: Warband; cargo: CaravanCargo }
+  /** Exército de um lorde chegou ao alvo (começa o cerco) ou de volta a casa (Marco 15). */
+  | { type: "ARMY_AT"; band: Warband; townId: string }
+  | { type: "ARMY_HOME"; band: Warband }
+  /** Dois exércitos em guerra (ou exército contra bando hostil) se encontraram longe da mão do jogador. */
+  | { type: "ARMY_CLASH"; winner: Warband; loser: Warband; at: Point; losses: number };
 
 /** O que os bandos precisam saber do mundo para escolher alvos. */
 export interface WarbandTargets {
@@ -143,6 +153,8 @@ export class WarbandManager {
   marchFactor: (p: Point, band: Warband) => number = () => 1;
   /** Inverno: os exércitos dos reinos voltam aos quartéis de inverno. */
   private winter = false;
+  /** Dois reinos estão em guerra? (a cena consulta o store) */
+  atWar: (a: string, b: string) => boolean = () => false;
 
   setWinter(winter: boolean): void {
     if (winter === this.winter) return;
@@ -218,6 +230,13 @@ export class WarbandManager {
       band.goal = { kind: "SETTLEMENT", id: spec.goalId };
       band.route = [...spec.route];
       band.goalPoint = { ...band.route[band.route.length - 1] };
+    } else if (spec.goalId) {
+      // Exército de um lorde ou camponeses em revolta: o alvo vem decidido (Marco 15)
+      band.armyId = spec.armyId;
+      const t = this.targets().settlements.find((x) => x.id === spec.goalId);
+      band.goal = { kind: "SETTLEMENT", id: spec.goalId };
+      band.goalPoint = t ? { x: t.x, y: t.y } : { ...spec.origin };
+      band.route = (t && this.pathfind(band.anchor, t)) || [];
     } else {
       this.chooseGoal(band);
     }
@@ -251,6 +270,14 @@ export class WarbandManager {
   /** Dias de viagem rápida: os bandos andam o mesmo tempo que o exército. */
   advance(days: number): WarbandEvent[] {
     return this.step(WORLD.WARBAND.DAY_DISTANCE * days);
+  }
+
+  /** O exército larga o cerco e volta para a casa mais perto do reino (Marco 15). */
+  sendHome(band: Warband): void {
+    band.waiting = false;
+    band.homeward = true;
+    band.rest = 0;
+    this.chooseGoal(band);
   }
 
   /** Bando chegou e o alvo caiu ou o repeliu: escolhe outro (ou se dissolve na guarnição). */
@@ -312,6 +339,8 @@ export class WarbandManager {
         cargo: b.cargo,
         waiting: b.waiting,
         loot: b.loot,
+        armyId: b.armyId,
+        homeward: b.homeward,
         // A rota das caravanas não se refaz pela grade: vai junto
         route: b.kind === "CARAVAN" ? b.route.map((p) => ({ ...p })) : undefined,
       })),
@@ -345,7 +374,7 @@ export class WarbandManager {
       if (Number.isFinite(r.hp)) e.restoreHp(r.hp);
       e.owner = { kind: "WARBAND", id: band.id };
       // Patrulhas, mensageiros, refugiados e caravanas nascem em paz (a cena acerta a guerra no quadro seguinte)
-      e.hostile = isRaiderKind(band.kind) || (band.provoked && (band.kind === "PATROL" || band.kind === "CARAVAN"));
+      e.hostile = (isRaiderKind(band.kind) && band.kind !== "FACTION" && band.kind !== "REBELS") || (band.provoked && (band.kind === "PATROL" || band.kind === "CARAVAN"));
       // Lado no mundo: goblins e hordas contra patrulhas, exércitos dos reinos e caravanas (lutam de verdade)
       e.side = band.kind === "GOBLIN" || band.kind === "HORDE" ? "WILD" : band.kind === "PATROL" || band.kind === "FACTION" || band.kind === "CARAVAN" ? "TOWN" : null;
       e.home = { x: e.x, y: e.y };
@@ -435,6 +464,17 @@ export class WarbandManager {
           gone.add(band);
           continue;
         }
+        // Exército de um lorde: chegou ao alvo (cerco) ou de volta a casa (Marco 15)
+        if (band.armyId && near && band.goal.kind === "SETTLEMENT") {
+          if (band.homeward || this.winter) {
+            events.push({ type: "ARMY_HOME", band });
+            gone.add(band);
+          } else {
+            band.waiting = true;
+            events.push({ type: "ARMY_AT", band, townId: band.goal.id });
+          }
+          continue;
+        }
         if (band.kind === "FACTION" && this.winter && near && band.goal.kind === "SETTLEMENT") {
           events.push({ type: "QUARTERED", band, settlementId: band.goal.id });
           gone.add(band);
@@ -522,6 +562,20 @@ export class WarbandManager {
           }
           continue;
         }
+        // Exércitos de reinos em guerra, ou contra hordas e goblins (Marco 15)
+        const rivals = a.kind === "FACTION" && b.kind === "FACTION" && a.id < b.id && !!a.ownerId && !!b.ownerId && this.atWar(a.ownerId, b.ownerId);
+        const vermin = a.kind === "FACTION" && (b.kind === "HORDE" || b.kind === "GOBLIN");
+        if (rivals || vermin) {
+          if (a.members.some((m) => m.target) || b.members.some((m) => m.target)) continue;
+          const sa = bandSize(a) * (W.FACTION ?? 1.2) * (0.8 + Math.random() * 0.4);
+          const sb = bandSize(b) * (W[b.kind] ?? 1) * (0.8 + Math.random() * 0.4);
+          const [winner, loser, sw, sl] = sa >= sb ? [a, b, sa, sb] : [b, a, sb, sa];
+          const losses = Math.min(bandSize(winner) - 1, Math.round(bandSize(winner) * Math.min(0.8, sl / sw) * 0.5));
+          this.kill(loser, bandSize(loser));
+          this.kill(winner, Math.max(0, losses));
+          events.push({ type: "ARMY_CLASH", winner, loser, at: { x: (a.anchor.x + b.anchor.x) / 2, y: (a.anchor.y + b.anchor.y) / 2 }, losses });
+          continue;
+        }
         if (a.kind !== "PATROL" || (b.kind !== "GOBLIN" && b.kind !== "HORDE")) continue;
         // Os dois à vista: a luta é de verdade, soldado contra soldado (ver Enemy.think)
         if (a.materialized && b.materialized) continue;
@@ -561,6 +615,13 @@ export class WarbandManager {
     if (band.kind === "REFUGEES") return !isCalamityOwner(t.owner);
     // Caravana: o destino foi escolhido na partida (o que acontecer lá, a cena resolve)
     if (band.kind === "CARAVAN") return true;
+    // Camponeses em revolta só querem a própria terra
+    if (band.kind === "REBELS") return band.goal.kind === "SETTLEMENT" && t.id === band.goal.id;
+    // Exército de um lorde (Marco 15): segue para o alvo; voltando, qualquer casa do reino serve
+    if (band.armyId) {
+      if (band.homeward || this.winter) return t.owner === band.ownerId;
+      return band.goal.kind === "SETTLEMENT" && t.id === band.goal.id;
+    }
     // Inverno: o exército volta para casa (quartéis de inverno)
     if (band.kind === "FACTION") return this.winter ? t.owner === band.ownerId : t.owner === "PLAYER";
     if (band.ownerId && t.owner === band.ownerId) return false;
@@ -634,6 +695,7 @@ export class WarbandManager {
       return;
     }
     const target = this.nearestTarget(band);
+    if (band.kind === "REBELS") return;
     if (band.kind === "FACTION" || band.kind === "HORDE") {
       if (target) toSettlement(target);
       else if ((band.kind === "FACTION" && this.winter) || !toCamp()) wander();

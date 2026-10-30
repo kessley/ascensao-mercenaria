@@ -156,6 +156,8 @@ function market(rng: Rng, kind: SettlementKind): SettlementSeed["market"] {
       return { rationPrice: 1 * j(), ironBuy: Math.round(6 * j()), ironSell: Math.round(5 * j()) };
     case "FORT":
       return { rationPrice: 1.3 * j(), ironBuy: Math.round(8 * j()), ironSell: Math.round(7 * j()) };
+    case "CAPITAL":
+      return { rationPrice: 1.1 * j(), ironBuy: Math.round(7 * j()), ironSell: Math.round(6 * j()) };
   }
 }
 
@@ -174,9 +176,13 @@ const DESCRIPTIONS: Record<SettlementKind, string[]> = {
     "Guarnição de fronteira: paga bem pelo ferro, cobra caro pela comida.",
     "Castelo de pedra negra que vigia as estradas do reino.",
   ],
+  CAPITAL: [
+    "A maior cidade do reino. Atrás da muralha interna fica a Cidade Alta, com o castelo, os palácios e a corte.",
+    "Cidade imensa em volta de uma muralha mais velha que o reino: lá dentro, nobres, intrigas e a sala do trono.",
+  ],
 };
 
-const POPULATION: Record<SettlementKind, [number, number]> = { VILLAGE: [110, 200], CITY: [480, 780], FORT: [240, 380] };
+const POPULATION: Record<SettlementKind, [number, number]> = { VILLAGE: [110, 200], CITY: [480, 780], FORT: [240, 380], CAPITAL: [900, 1300] };
 const PORT_DESCRIPTIONS = [
   "Porto de pescadores e contrabandistas: o sal e as notícias chegam pelo mar.",
   "Cais de pedra e armazéns cheirando a peixe; os navios esperam o vento.",
@@ -385,13 +391,17 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
   const settlements: SettlementSeed[] = [];
   for (let i = 0; i < count; i++) {
     const kind: SettlementKind =
-      i < capitals ? rng.pick<SettlementKind>(["CITY", "CITY", "FORT"]) : rng.chance(0.12) ? "CITY" : rng.chance(0.2) ? "FORT" : "VILLAGE";
+      // Marco 15: os reinos nascem em capitais (a planta enorme, com a Cidade Alta no meio)
+      i < capitals ? "CAPITAL" : rng.chance(0.12) ? "CITY" : rng.chance(0.2) ? "FORT" : "VILLAGE";
     // A planta inteira (muralha e um pouco de campo em volta) cabe em terra firme
     const { w, h } = { w: TOWN_SIZE[kind].w + 500, h: TOWN_SIZE[kind].h + 500 };
-    const rules = [{ at: camp.center, min: 3800 }, ...settlements.map((s) => ({ at: s as Point, min: i < capitals ? capitalSpacing : 4200 }))];
+    const rules = [{ at: camp.center, min: kind === "CAPITAL" ? 5600 : 3800 }, ...settlements.map((s) => ({ at: s as Point, min: i < capitals ? capitalSpacing : 4200 }))];
+    // Plantas nunca se sobrepõem (as capitais são enormes): nem o plano B do sorteio aceita isso
+    const clear = (q: Point) => settlements.every((o) => Math.abs(o.x - q.x) >= (TOWN_SIZE[o.kind].w + TOWN_SIZE[kind].w) / 2 + 200 || Math.abs(o.y - q.y) >= (TOWN_SIZE[o.kind].h + TOWN_SIZE[kind].h) / 2 + 200);
+    const fits = (q: Point) => areaOk(q, w, h) && clear(q);
     const p = bestPoint(
       rng,
-      (q) => areaOk(q, w, h),
+      fits,
       rules,
       (q) => {
         // Rio e mar contam a partir da muralha (a planta inteira fica em terra firme)
@@ -399,9 +409,11 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
         const river = geo.distanceToRiver(q, reach + 1800);
         return FERTILITY[geo.biomeAt(q.x, q.y)] + (river < reach + 1500 ? 2 : 0) + (geo.nearSea(q, reach + 700) ? 0.8 : 0) + rng.range(0, 1.2);
       },
-      400,
+      i < capitals ? 3000 : 400,
       700,
     );
+    // Mundo apertado: sem lugar de verdade, esse povoado simplesmente não existe
+    if (!fits(p)) continue;
     const [pmin, pmax] = POPULATION[kind];
     // Porto e rio contam a partir da muralha (Marco 14: desde que as cidades cresceram, o
     // centro fica longe da água; o cais e o moinho ficam do lado de fora dos muros)
@@ -419,7 +431,7 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
       population: rng.int(pmin, pmax),
       garrison: REALM.BASE_GARRISON[kind],
       market: adjustMarket(market(rng, kind), resources),
-      description: port ? rng.pick(PORT_DESCRIPTIONS) : river ? rng.pick(RIVER_DESCRIPTIONS) : rng.pick(DESCRIPTIONS[kind]),
+      description: kind === "CAPITAL" ? rng.pick(DESCRIPTIONS.CAPITAL) : port ? rng.pick(PORT_DESCRIPTIONS) : river ? rng.pick(RIVER_DESCRIPTIONS) : rng.pick(DESCRIPTIONS[kind]),
       port,
       river,
       resources,

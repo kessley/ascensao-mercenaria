@@ -1,7 +1,7 @@
 import { supportWages } from "../../../game/data/riders";
 import { useGameStore } from "../../../store/useGameStore";
 import { WORLD } from "../../../utils/constants";
-import { DIFFICULTY, type Difficulty } from "../../../game/data/contracts";
+import { DIFFICULTY, contractGoal, type Difficulty } from "../../../game/data/contracts";
 import { dailyRations, daysUntilPayday, weeklyWages } from "../../../utils/economy";
 import { CouncilOpinions } from "./LieutenantPanels";
 
@@ -28,7 +28,13 @@ export function ContractBoard() {
   const active = useGameStore((s) => s.activeContract);
   const mutiny = useGameStore((s) => s.mutiny);
   const world = useGameStore((s) => s.world);
+  const settlements = useGameStore((s) => s.settlements);
   const siteName = (id: string) => world?.sites.find((x) => x.id === id)?.name ?? "?";
+  const names = {
+    site: siteName,
+    town: (id?: string) => settlements.find((t) => t.id === id)?.name ?? "?",
+    realm: (id?: string) => world?.factions.find((f) => f.id === id)?.name ?? "?",
+  };
 
   const perDay = dailyRations(battalions, followers);
   const wages = weeklyWages(battalions, lieutenants) + riders;
@@ -40,8 +46,7 @@ export function ContractBoard() {
         <div className="flex flex-col gap-2 rounded border border-amber-500/70 bg-amber-950/40 p-3 text-sm">
           <div className="font-semibold text-amber-200">Em andamento: {active.contract.title}</div>
           <p className="text-xs text-neutral-300">
-            Os inimigos estão em <b>{siteName(active.contract.siteId)}</b> (★ no Mapa do Continente — Tab). Elimine todos até o dia{" "}
-            <b>{active.deadline}</b> para receber o bônus de {active.contract.reward}.
+            {contractGoal(active.contract, names, active.progress ?? 0).long} Até o dia <b>{active.deadline}</b>, pelo bônus de {active.contract.reward}.
           </p>
           <button
             type="button"
@@ -63,7 +68,7 @@ export function ContractBoard() {
               <div>
                 <div className="font-semibold">{c.title}</div>
                 <div className="text-xs text-neutral-400">
-                  {c.client} · {siteName(c.siteId)}
+                  {c.client} · {contractGoal(c, names).short}
                 </div>
               </div>
               <span className={`text-xs font-bold ${DIFFICULTY_COLOR[c.difficulty]}`}>

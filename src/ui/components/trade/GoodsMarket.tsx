@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGameStore } from "../../../store/useGameStore";
-import { quote } from "../../../game/sim/market";
+import { INDUSTRIES, industriesOf, quote, strata } from "../../../game/sim/market";
 import { freightOf, freightWeight, isContraband } from "../../../game/sim/trade";
 import type { Settlement } from "../../../game/sim/realm";
 import { GOODS, GOOD_LIST, MARKET, TRADE, type Good } from "../../../utils/constants";
@@ -100,7 +100,31 @@ export function GoodsMarket({ t }: { t: Settlement }) {
         Cor do preço: azul = barato, vermelho = caro (em relação ao preço base); a linha mostra os últimos {MARKET.HISTORY} registros, tracejado = preço base.
       </p>
       {msg && <p className="text-xs text-amber-300">{msg}</p>}
+      <TownEconomy t={t} />
     </section>
+  );
+}
+
+/** Quem vive no povoado e o que as oficinas fazem (produção e consumo de ontem). */
+function TownEconomy({ t }: { t: Settlement }) {
+  const g = strata(t);
+  const list = (stock: Record<Good, number>) =>
+    GOOD_LIST.filter((x) => stock[x] >= 0.1)
+      .sort((a, b) => stock[b] * GOODS[b].base - stock[a] * GOODS[a].base)
+      .slice(0, 5)
+      .map((x) => `${GOODS[x].icon} ${stock[x].toFixed(1)}`)
+      .join("  ");
+  return (
+    <details className="text-xs text-neutral-400">
+      <summary className="cursor-pointer text-neutral-300">Gente e oficinas</summary>
+      <p className="mt-1">
+        Camponeses ~{Math.round(g.peasants)} · burgueses ~{Math.round(g.burghers)} · nobres ~{Math.round(g.nobles)} · guarnição {t.garrison}
+      </p>
+      <p>Oficinas: {industriesOf(t).map((i) => `${INDUSTRIES[i.id].label} ${i.level.toFixed(1)}`).join(" · ")}</p>
+      <p>Produziu ontem: {list(t.econ.made) || "nada"}</p>
+      <p>Consumiu ontem: {list(t.econ.used) || "nada"}</p>
+      <p className="text-neutral-500">Oficina que vende barato produz menos; vendendo caro, contrata mais gente.</p>
+    </details>
   );
 }
 

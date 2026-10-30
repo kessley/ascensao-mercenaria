@@ -11,7 +11,8 @@ import {
   weeklyYield,
   type Settlement,
 } from "../../game/sim/realm";
-import { BUILDINGS, ECONOMY, GOODS, REALM, TRADE, type BuildingId } from "../../utils/constants";
+import { BUILDINGS, ECONOMY, GOODS, KINGDOM, REALM, TRADE, type BuildingId } from "../../utils/constants";
+import { nobleName } from "../../game/sim/nobility";
 import { Button } from "./Button";
 import { cargoCapacity } from "../../utils/economy";
 import { seasonOf } from "../../utils/season";
@@ -180,12 +181,14 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const mutiny = useGameStore((s) => s.mutiny);
   const besiege = useGameStore((s) => s.besiege);
   const rebuild = useGameStore((s) => s.rebuildSettlement);
+  const nobles = useGameStore((s) => s.nobles);
   if (!t || !world) return <p className="text-sm text-neutral-400">Este povoado não existe mais.</p>;
 
   const prosperity = prosperityLabel(t.prosperity);
   const faction = isFactionOwner(t.owner) ? factions.find((f) => f.id === t.owner) : null;
   const factionDef = faction ? world.factions.find((f) => f.id === faction.id) : null;
   const occupied = isCalamityOwner(t.owner);
+  const lord = nobles.find((n) => n.alive && n.fiefs.includes(t.id));
 
   return (
     <>
@@ -214,6 +217,14 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
           <p className="text-xs text-neutral-400">
             Prosperidade: <b className={prosperity.tone}>{prosperity.text}</b> ({Math.round(t.prosperity)}/100)
             {t.lastRaidDay !== null && ` · atacada no dia ${t.lastRaidDay}${t.lastRaidDay >= day - 3 ? " (recente!)" : ""}`}
+          </p>
+        )}
+        {t.owner !== "RUINED" && (
+          <p className="text-xs text-neutral-400">
+            Lealdade ao dono:{" "}
+            <b className={(t.loyalty ?? 70) < KINGDOM.LOYALTY_REVOLT + 10 ? "text-red-400" : (t.loyalty ?? 70) < 55 ? "text-yellow-300" : "text-green-400"}>{Math.round(t.loyalty ?? 70)}/100</b>
+            {lord ? ` · senhor: ${nobleName(lord, factionDef?.name ?? "reino")}` : ""}
+            {t.besiegedBy ? ` · SOB CERCO do ${world.factions.find((f) => f.id === t.besiegedBy)?.name ?? "inimigo"}` : ""}
           </p>
         )}
         {faction && factionDef && (

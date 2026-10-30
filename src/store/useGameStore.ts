@@ -21,6 +21,9 @@ import {
   GOOD_LIST,
   CARAVAN,
   TRADE,
+  KINGDOM,
+  REPUTE,
+  COURT,
   setWorldSize,
   type Good,
   type CampWork,
@@ -59,6 +62,9 @@ import {
   type Settlement,
 } from "../game/sim/realm";
 import { applyTrade, foodGood, initEconomy, quote, rationPackPrice } from "../game/sim/market";
+import { generateNobles } from "../game/sim/nobility";
+import { hearRumors, rumorLine, type Ear, type Rumor } from "../game/sim/rumors";
+import { INITIAL_COURT, courtSlice, type CourtActions, type CourtState } from "./courtSlice";
 import {
   GUILD_BUILDINGS,
   addLot,
@@ -131,6 +137,8 @@ export type CampPanel =
   | { kind: "GUILD" | "TAVERN" | "TEMPLE"; settlementId: string }
   /** Livro de Preços (na mesa da Tenda) e a saída do acampamento (quem vai, quem fica). */
   | { kind: "PRICE_BOOK" | "DEPARTURE" }
+  /** Livro da Nobreza (Marco 15): as cortes, os favores e o nome do bando. */
+  | { kind: "NOBILITY" }
   /** Ponte sobre um rio: queimar, reconstruir. */
   | { kind: "BRIDGE"; bridgeId: string }
   /** Cais de uma balsa num rio grande: atravessar o exército. */
@@ -448,7 +456,7 @@ export interface BattalionContextMenu {
   y: number;
 }
 
-export interface GameState {
+export interface GameState extends CourtState, CourtActions {
   /** Tela de criação do mundo ou campanha em andamento. */
   phase: "NEW_GAME" | "PLAYING";
   /** Campo a restaurar quando a cena do mundo for criada (jogo carregado). */
@@ -689,6 +697,8 @@ export interface GameState {
   /** Devolve o valor da compra (0 = não partiu com carga: estoque vazio ou, se própria, sem ouro). */
   caravanDeparts: (from: string, good: Good, qty: number, ownId?: string) => number;
   caravanArrives: (to: string, cargo: { good: Good; qty: number; from: string; cost: number; own?: string }) => void;
+  /** Caravana alheia passando por `towns` povoados do bando: pedágio de estrada. */
+  roadToll: (towns: number) => void;
   robCaravan: (band: { name: string; ownerId: string | null; good: Good; qty: number; from: string }) => string;
   caravanStolen: (band: { bandId: string; bandName: string; good: Good; qty: number; townId: string }) => void;
   ownCaravanLost: (id: string, by: string) => void;
@@ -842,6 +852,8 @@ const TRANSIENT_KEYS = new Set<string>([
   "campPrompt",
   "interior",
   "dialog",
+  "city",
+  "duel",
 ]);
 function entry(day: number, text: string, tone: LogTone = "info"): LogEntry {
   return { id: ++logSeq, day, text, tone };
@@ -1158,15 +1170,20 @@ function contractClients(settlements: readonly Settlement[], factions: readonly 
   );
 }
 
-function freshContract(s: Pick<GameState, "world" | "settlements" | "factions" | "wars" | "stolenCargo">): Contract | null {
+function freshContract(s: Pick<GameState, "world" | "settlements" | "factions" | "wars" | "stolenCargo" | "armies" | "nobles" | "fame">): Contract | null {
   const world = s.world;
   if (!world) return null;
-  return generateContract(world, contractClients(s.settlements, s.factions), world.camp.center, {
+  const c = generateContract(world, contractClients(s.settlements, s.factions), world.camp.center, {
     settlements: s.settlements,
     wars: s.wars,
     stolenCargo: s.stolenCargo,
     factionName: (id) => world.factions.find((f) => f.id === id)?.name ?? "reino",
+    armies: s.armies,
+    nobles: s.nobles,
+    relationOf: (id) => s.factions.find((f) => f.id === id)?.relation ?? 0,
   });
+  // A fama paga: até +50% num nome conhecido em todo o continente
+  return c ? { ...c, reward: Math.round(c.reward * (1 + s.fame * REPUTE.CONTRACT_FAME_BONUS)) } : null;
 }
 
 function playerSettlements(settlements: readonly Settlement[]): Settlement[] {
@@ -1194,11 +1211,11 @@ function campaignState(world: WorldDef | null): CampaignState {
     battalionId: army[0].id,
     history: [`Dia 1: está ao lado do Comandante desde a fundação do bando.`],
   };
-  const settlements = world ? world.settlements.map(settlementFromSeed) : [];
+  const settlements = world ? world.settlements.map(settlementFromSeed).map((t) => ({ ...t, loyalty: KINGDOM.LOYALTY_START })) : [];
   const factions: FactionState[] = world
-    ? world.factions.map((f) => ({ id: f.id, ruler: f.ruler, relation: 0, atWar: false, lastArmyDay: 0 }))
+    ? world.factions.map((f) => ({ id: f.id, ruler: f.ruler, relation: 0, atWar: false, lastArmyDay: 0, seatId: f.capitalId, treasury: 300, levy: 0, weariness: 0 }))
     : [];
-  const base = { world, settlements, factions, wars: [] as KingdomWar[], stolenCargo: [], day: 1 };
+  const base = { world, settlements, factions, wars: [] as KingdomWar[], stolenCargo: [], day: 1, ...INITIAL_COURT };
   const contracts = Array.from({ length: ECONOMY.CONTRACTS_OFFERED }, () => freshContract(base)).filter(
     (c): c is Contract => c !== null,
   );
@@ -1276,6 +1293,8 @@ function campaignState(world: WorldDef | null): CampaignState {
     rationLoad: 1,
     interior: null,
     dialog: null,
+    ...INITIAL_COURT,
+    nobles: world ? generateNobles(world, settlements) : [],
     worldMapOpen: false,
     worldSnapshot: null,
     battleHud: null,
@@ -1335,6 +1354,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     logSeq = Math.max(0, ...(loaded.log ?? []).map((e) => e.id));
     // Acampamento montado em outro lugar (Marco 13)
     if (loaded.campAt) world.camp = campDefAt(loaded.campAt);
+    // Reinos nascidos de guerras civis voltam ao mundo (Marco 15)
+    world.factions.push(...(loaded.extraFactions ?? []));
     set({
       ...campaignState(world),
       ...loaded,
@@ -1536,8 +1557,24 @@ export const useGameStore = create<GameState>()((set, get) => ({
       rations: s.rations,
       iron: s.iron,
       wars: s.wars,
+      nobles: s.nobles,
+      plots: s.plots,
+      alliances: s.alliances,
+      armies: s.armies,
+      courtEvents: s.courtEvents,
+      revolts: s.revolts,
+      extraFactions: s.extraFactions,
+      honor: s.honor,
+      fear: s.fear,
+      liege: s.liege,
+      spouseId: s.spouseId,
+      wanted: s.wanted,
     };
     const entries: LogEntry[] = [];
+    // Notícias na estrada (Marco 15)
+    let rumors: Rumor[] = s.rumors;
+    let rumorSeq = s.rumorSeq;
+    let summons = s.summons;
     // Finanças do comércio (Marco 14)
     let honor = s.honor;
     let posts = s.posts;
@@ -1554,8 +1591,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     };
     for (let i = 0; i < whole; i++) {
       const day = state.day + 1;
-      const r = realmDay({ ...realm, gold: state.gold, rations: state.rations }, world, day, world.camp.center);
-      realm = r.state;
+      const r = realmDay({ ...realm, gold: state.gold, rations: state.rations, honor }, world, day, world.camp.center);
+      realm = { ...r.state, fear: Math.max(0, r.state.fear - REPUTE.FEAR_DECAY) };
       // Feitorias mandam os preços de cada dia
       for (const id of posts) {
         const t = realm.settlements.find((x) => x.id === id);
@@ -1622,10 +1659,53 @@ export const useGameStore = create<GameState>()((set, get) => ({
         }
         loans = nextLoans;
       }
-      for (const l of r.log) entries.push(entry(day, l.text, l.tone));
+      for (const l of r.log) {
+        if (l.where) rumors = [...rumors, { id: ++rumorSeq, day, x: l.where.x, y: l.where.y, text: l.text, tone: l.tone }];
+        else entries.push(entry(day, l.text, l.tone));
+      }
+      // As notícias chegam a quem escuta pelo bando: o Comandante, as feitorias e os povoados do bando
+      const ears: Ear[] = [];
+      const near = (p: Point) => realm.settlements.find((t) => t.owner !== "RUINED" && distance(t, p) < 2600);
+      if (s.commanderAt) {
+        const t = near(s.commanderAt);
+        const inCamp = distance(s.commanderAt, world.camp.center) < 1600;
+        ears.push({ ...s.commanderAt, to: inCamp ? "ao acampamento" : t ? `a ${t.name}` : "ao bando, na estrada" });
+      }
+      for (const t of realm.settlements) if (t.owner === "PLAYER" || posts.includes(t.id)) ears.push({ x: t.x, y: t.y, to: `a ${t.name}` });
+      const news = hearRumors(rumors, day, ears);
+      rumors = news.left;
+      for (const h of news.heard) entries.push(entry(day, rumorLine(h), h.rumor.tone));
+      // Convocação do suserano: o bando precisa estar na capital até o prazo
+      const lord = realm.liege ? realm.factions.find((f) => f.id === realm.liege) : undefined;
+      if (summons && day > summons.deadline) {
+        const seat = realm.settlements.find((t) => t.id === summons?.townId);
+        const answered = !!seat && !!s.commanderAt && distance(seat, s.commanderAt) < 5000;
+        if (answered) {
+          realm = { ...realm, gold: realm.gold + 120, factions: realm.factions.map((f) => (f.id === summons?.factionId ? { ...f, relation: Math.min(100, f.relation + 8) } : f)) };
+          entries.push(entry(day, `O bando atendeu à convocação em ${seat?.name}: +120 de ouro e o suserano agradece.`, "good"));
+        } else {
+          honor = Math.max(0, honor + COURT.SUMMONS_HONOR);
+          realm = { ...realm, factions: realm.factions.map((f) => (f.id === summons?.factionId ? { ...f, relation: Math.max(-100, f.relation + COURT.SUMMONS_RELATION) } : f)) };
+          entries.push(entry(day, `O bando faltou à convocação do suserano: honra ${COURT.SUMMONS_HONOR} e relação ${COURT.SUMMONS_RELATION}.`, "bad"));
+        }
+        summons = null;
+      }
+      if (!summons && lord && day % 7 === 0 && Math.random() < COURT.SUMMONS_CHANCE && realm.wars.some((w) => w.peace === undefined && (w.a === lord.id || w.b === lord.id))) {
+        const seat = realm.settlements.find((t) => t.id === lord.seatId);
+        if (seat) {
+          summons = { factionId: lord.id, townId: seat.id, deadline: day + COURT.SUMMONS_DAYS, why: "a guerra" };
+          entries.push(entry(day, `CONVOCAÇÃO! ${lord.ruler} chama o bando a ${seat.name} até o dia ${summons.deadline}. Faltar custa honra e relação.`, "bad"));
+        }
+      }
       const passed = passDays({ ...state, gold: realm.gold, rations: realm.rations }, 1);
       state = passed.state;
       entries.push(...passed.log);
+    }
+    // Favores vencidos: quem pediu lembra (Marco 15)
+    const late = s.quests.filter((q) => q.deadline < state.day);
+    for (const q of late) {
+      entries.push(entry(state.day, `Favor esquecido: ${q.title}. Quem pediu não vai gostar.`, "bad"));
+      realm = { ...realm, nobles: realm.nobles.map((n) => (n.id === q.giverId ? { ...n, opinion: Math.max(-100, n.opinion - 10), memory: [...n.memory, { day: state.day, text: `o Comandante faltou com um favor: ${q.title}`, delta: -10 }].slice(-8) } : n)) };
     }
     // Prazo do contrato
     let activeContract = s.activeContract;
@@ -1644,7 +1724,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (contracts.length > offered) contracts = contracts.slice(0, offered);
     const stolenCargo = s.stolenCargo.filter((c) => state.day - c.day <= 20);
     while (contracts.length < offered) {
-      const c = freshContract({ world: s.world, settlements: realm.settlements, factions: realm.factions, wars: realm.wars, stolenCargo });
+      const c = freshContract({ world: s.world, settlements: realm.settlements, factions: realm.factions, wars: realm.wars, stolenCargo, armies: realm.armies, nobles: realm.nobles, fame: s.fame });
       if (!c) break;
       contracts = [...contracts, c];
     }
@@ -1663,6 +1743,20 @@ export const useGameStore = create<GameState>()((set, get) => ({
       calamities: realm.calamities,
       nextCalamityDay: realm.nextCalamityDay,
       wars: realm.wars,
+      nobles: realm.nobles,
+      plots: realm.plots,
+      alliances: realm.alliances,
+      armies: realm.armies,
+      courtEvents: realm.courtEvents,
+      revolts: realm.revolts,
+      extraFactions: realm.extraFactions,
+      fear: realm.fear,
+      spouseId: realm.spouseId,
+      wanted: realm.wanted,
+      rumors,
+      rumorSeq,
+      summons,
+      quests: s.quests.filter((q) => q.deadline >= state.day),
       dayProgress: total - whole,
       activeContract,
       lieutenantCandidates,
@@ -1678,6 +1772,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       log: appendLog(s.log, entries),
     });
   },
+
+  ...courtSlice((partial) => set(partial), get),
 
   bandArrives: (targetId, band) => {
     const s = get();
@@ -1810,10 +1906,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const text = `Despachos ${ofRealm(def?.name ?? "reino")}: ${towns.length} povoado(s), ${garrison} homens de guarnição${
       atWar ? `; próximo exército contra nós por volta do dia ${next}` : ""
     }. Na bolsa, ${AGENTS.COURIER_GOLD} de ouro.`;
+    // Os despachos trazem o que ainda está na estrada (Marco 15)
+    const seat = towns.find((t) => t.id === state?.seatId) ?? towns[0];
+    if (seat) get().hearNews(seat, "nos despachos do mensageiro", WORLD.DAY_DISTANCE * 2);
     set({
       gold: s.gold + AGENTS.COURIER_GOLD,
       factions,
-      log: appendLog(s.log, [entry(s.day, `Mensageiro real interceptado. ${text}`, atWar ? "good" : "bad")]),
+      log: appendLog(get().log, [entry(s.day, `Mensageiro real interceptado. ${text}`, atWar ? "good" : "bad")]),
     });
     return text;
   },
@@ -1822,6 +1921,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     set({
       honor: Math.max(0, s.honor + AGENTS.REFUGEE_HONOR),
+      fear: Math.min(100, s.fear + REPUTE.FEAR.MASSACRE),
       log: appendLog(s.log, [entry(s.day, `Os ${s.world?.bandName ?? "mercenários"} atacaram refugiados de ${from}. A notícia corre.`, "bad")]),
     });
   },
@@ -1955,6 +2055,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
     } else {
       entries.push(entry(s.day, `Os ${s.world.bandName} atacam ${t.name} para libertá-la.`, "good"));
     }
+    // Temor (Marco 15): uma guarnição pequena abre os portões sem lutar diante de um nome temido
+    if (s.fear >= 50 && t.garrison <= 8 && Math.random() < s.fear / 120) {
+      set({ factions, campPanel: null, log: appendLog(s.log, [...entries, entry(s.day, `${t.name} se rendeu sem lutar: ninguém quis enfrentar os ${s.world.bandName}.`, "bad")]) });
+      get().conquerSettlement(id);
+      return true;
+    }
     set({ siege: { settlementId: id }, factions, campPanel: null, log: appendLog(s.log, entries) });
     return true;
   },
@@ -1983,7 +2089,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (!t || !s.world) return;
     const liberated = isCalamityOwner(t.owner);
     const settlements = s.settlements.map((x) =>
-      x.id === id ? { ...x, owner: "PLAYER", prosperity: Math.max(20, x.prosperity - 20), garrison: 4, taxRate: 1 as const } : x,
+      x.id === id ? { ...x, owner: "PLAYER", prosperity: Math.max(20, x.prosperity - 20), garrison: 4, taxRate: 1 as const, conqueredDay: s.day, besiegedBy: undefined } : x,
     );
     // Libertar uma cidade das garras de uma calamidade é visto com bons olhos por todos
     const factions = liberated ? s.factions.map((f) => ({ ...f, relation: Math.min(100, f.relation + 10) })) : s.factions;
@@ -1991,6 +2097,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
       siege: null,
       settlements,
       factions,
+      fear: liberated ? s.fear : Math.min(100, s.fear + REPUTE.FEAR.CONQUER),
+      fame: Math.min(100, s.fame + (liberated ? 6 : 4)),
+      nobles: s.nobles.map((n) => (n.fiefs.includes(id) ? { ...n, fiefs: n.fiefs.filter((x) => x !== id), opinion: Math.max(-100, n.opinion - 30), memory: [...n.memory, { day: s.day, text: `perdeu ${t.name} para o bando`, delta: -30 }].slice(-8) } : n)),
       log: appendLog(s.log, [
         entry(s.day, liberated ? `${t.name} foi libertada e jura lealdade ao Comandante.` : `${t.name} foi tomada e agora pertence ao bando.`, "good"),
         ...titleChange(s.settlements, settlements, s.day),
@@ -2052,6 +2161,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const r = createRng(randomSeed());
     set({
       gold: s.gold + REALM.CALAMITY_REWARD,
+      fame: Math.min(100, s.fame + REPUTE.FAME.CALAMITY),
       calamities: s.calamities.map((x) => (x.id === id ? { ...x, defeated: true } : x)),
       // Povoados ocupados pela horda ficam livres (o jogador pode reivindicá-los)
       settlements: s.settlements.map((t) => (t.owner === id ? { ...t, owner: "FREE", garrison: 3 } : t)),
@@ -2075,6 +2185,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const c = s.world?.geo.crossings.find((x) => x.id === id && x.kind === "BRIDGE");
     if (!s.world || !c || s.burnedBridges.includes(id)) return false;
+    if (s.activeContract?.contract.kind === "BURN" && s.activeContract.contract.crossingId === id) queueMicrotask(() => get().finishContract(true, "a ponte queimou"));
     const river = s.world.geo.rivers.find((r) => r.id === c.riverId)?.name ?? "rio";
     const owner = bridgeController(s.settlements, c)?.owner;
     const factions = s.factions.map((f) => {
@@ -2363,6 +2474,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       factions,
       bonds: result === "VICTORY" ? shareVictory(s.bonds, together) : s.bonds,
       lastVictoryDay: result === "VICTORY" && !info.mutinyOver ? s.day : s.lastVictoryDay,
+      // Fama (Marco 15): vencer dá nome ao bando; vencer muitos, mais ainda
+      fame: result === "VICTORY" && info.enemiesKilled > 0 && !info.mutinyOver ? Math.min(100, s.fame + (info.enemiesKilled >= 10 ? REPUTE.FAME.BIG_VICTORY : REPUTE.FAME.VICTORY)) : s.fame,
       log: appendLog(s.log, logEntries),
       battleReport: { result, title, goldEarned, loot, casualties, wounded: woundedTotal, lostBattalions, xpGains, notes },
     });
@@ -2658,6 +2771,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       gold: s.gold + c.reward,
       honor: Math.min(100, s.honor + 3),
+      fame: Math.min(100, s.fame + REPUTE.FAME.CONTRACT),
       freight: takeLots(s.freight, c.good, c.qty).lots,
       factions,
       settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: restock(x.econ, { [c.good as Good]: c.qty }), prosperity: Math.min(100, x.prosperity + 5) } : x)),
@@ -2673,10 +2787,17 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const c = s.activeContract?.contract;
     if (!c) return;
     const owner = s.settlements.find((t) => t.id === c.clientId)?.owner;
+    // O lado contrário lembra (Marco 15): quem o bando prejudicou guarda rancor
+    const rivalRuler = c.rival && success ? s.nobles.find((n) => n.alive && n.factionId === c.rival && n.rank === "RULER") : undefined;
     set({
       gold: s.gold + (success ? c.reward : 0),
       honor: success ? Math.min(100, s.honor + 3) : s.honor,
-      factions: s.factions.map((f) => (f.id === owner ? { ...f, relation: Math.max(-100, Math.min(100, f.relation + (success ? REALM.CONTRACT_RELATION : -5))) } : f)),
+      fame: success ? Math.min(100, s.fame + REPUTE.FAME.CONTRACT) : s.fame,
+      factions: s.factions.map((f) => {
+        if (f.id === owner) return { ...f, relation: Math.max(-100, Math.min(100, f.relation + (success ? REALM.CONTRACT_RELATION : -5))) };
+        return success && f.id === c.rival ? { ...f, relation: Math.max(-100, f.relation - 12) } : f;
+      }),
+      nobles: rivalRuler ? s.nobles.map((n) => (n.id === rivalRuler.id ? { ...n, opinion: Math.max(-100, n.opinion - 12), memory: [...n.memory, { day: s.day, text: `o bando trabalhou contra o reino: ${c.title}`, delta: -12 }].slice(-8) } : n)) : s.nobles,
       activeContract: null,
       lieutenantCandidates: success ? Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)) : s.lieutenantCandidates,
       log: appendLog(s.log, [
@@ -2756,6 +2877,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return value;
   },
 
+  roadToll: (towns) => {
+    if (towns > 0) set((s) => ({ marketTaxIncome: s.marketTaxIncome + towns * TRADE.ROAD_TOLL }));
+  },
+
   caravanArrives: (to, cargo) => {
     const s = get();
     const t = s.settlements.find((x) => x.id === to);
@@ -2819,6 +2944,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       freight: kept > 0 ? addLot(s.freight, { good: band.good, qty: kept, from: "LOOT", faction: band.ownerId && isFactionOwner(band.ownerId) ? band.ownerId : null, cost: 0 }) : s.freight,
       honor: atWar ? s.honor : Math.max(0, s.honor + CARAVAN.ROB_HONOR),
+      fear: Math.min(100, s.fear + REPUTE.FEAR.ROB),
       factions,
       activeContract,
       log: appendLog(s.log, lines),

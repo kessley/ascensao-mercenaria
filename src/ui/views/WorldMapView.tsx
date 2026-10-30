@@ -77,6 +77,8 @@ export interface MapLayers {
   contractSiteId: string | null;
   /** Contratos da economia (Marco 14): os povoados envolvidos (entrega, escolta). */
   contractTownIds?: readonly string[];
+  /** Ponte a queimar (contrato do Marco 15). */
+  contractCrossing?: string;
   dest: Destination | null;
   /** Mostrar a grade das regiões (prévia do mundo). */
   regions?: boolean;
@@ -149,6 +151,7 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     } else if (c.kind === "BRIDGE") {
       ctx.fillStyle = layers.burnedBridges?.includes(c.id) ? "#111" : "#8a6234";
       ctx.fillRect(c.x * s - 3, c.y * s - 3, 6, 6);
+      if (c.id === layers.contractCrossing) label("★ ponte do contrato", c, -8, "#fbbf24");
     } else {
       ctx.fillStyle = "#cfe6ee";
       ctx.beginPath();
@@ -223,13 +226,13 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     label("Acampamento", world.camp.center, -PALISADE.ry * s - 6, "#ffe9b0");
   }
   for (const t of settlements) {
-    const size = t.kind === "CITY" ? 18 : t.kind === "FORT" ? 15 : 11;
+    const size = t.kind === "CAPITAL" ? 24 : t.kind === "CITY" ? 18 : t.kind === "FORT" ? 15 : 11;
     ctx.fillStyle = ownerFill(world, calamities, t.owner);
     ctx.fillRect(t.x * s - size / 2, t.y * s - size / 2, size, size);
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(t.x * s - size / 2, t.y * s - size / 2, size, size);
-    label(`${t.port ? "⚓ " : ""}${contractTownIds.includes(t.id) ? "★ " : ""}${t.owner === "RUINED" ? `${t.name} (ruínas)` : t.name}`, t, -size / 2 - 4, contractTownIds.includes(t.id) ? "#fbbf24" : t.owner === "PLAYER" ? "#9cc4ff" : "#ffe9b0");
+    label(`${t.kind === "CAPITAL" ? "♛ " : ""}${t.besiegedBy ? "⚔ " : ""}${t.port ? "⚓ " : ""}${contractTownIds.includes(t.id) ? "★ " : ""}${t.owner === "RUINED" ? `${t.name} (ruínas)` : t.name}`, t, -size / 2 - 4, contractTownIds.includes(t.id) ? "#fbbf24" : t.owner === "PLAYER" ? "#9cc4ff" : "#ffe9b0");
     if (contractTownIds.includes(t.id)) {
       ctx.strokeStyle = "#fbbf24";
       ctx.lineWidth = 3;
@@ -291,7 +294,7 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
       continue;
     }
     // Hostis em vermelho; patrulhas e mensageiros (em paz) em cinza-azulado; refugiados em bege
-    ctx.fillStyle = w.hostile === false ? (w.kind === "REFUGEES" ? "#d8c39a" : "#7f9db3") : "#c0392b";
+    ctx.fillStyle = w.hostile === false ? (w.kind === "REFUGEES" ? "#d8c39a" : w.kind === "FACTION" ? "#b98cff" : "#7f9db3") : "#c0392b";
     ctx.fillRect(w.x * s - size / 2, w.y * s - size / 2, size, size);
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 1;
@@ -386,8 +389,8 @@ export function WorldMapView() {
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
-    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, contractTownIds, dest, burnedBridges, day, campPacked });
-  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, dest, open, burnedBridges, day, campPacked]);
+    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, contractTownIds, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked });
+  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked]);
 
   const plan = useMemo(() => {
     if (!dest || !snap) return null;
@@ -464,6 +467,9 @@ export function WorldMapView() {
           <span><span className="text-amber-700">■</span> ponte</span>
           <span><span className="text-sky-100">●</span> vau</span>
           <span>⚓ porto</span>
+          <span>♛ capital</span>
+          <span>⚔ sob cerco</span>
+          <span><span className="text-violet-400">■</span> exército de um reino (em paz com o bando)</span>
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import {
 } from "../../store/useGameStore";
 import { FATIGUE, FORMATIONS, REALM, SEASONS, TERRAIN, TROOPS, WEATHER } from "../../utils/constants";
 import { titleFor } from "../../game/sim/realm";
+import { contractGoal } from "../../game/data/contracts";
 import { SICKNESS_LABEL } from "../../game/sim/logistics";
 import { PHASE_LABEL, darknessAt, formatHour, phaseOf } from "../../utils/time";
 import { campaignYear, daysToNextSeason, isFlood, seasonDay, seasonOf } from "../../utils/season";
@@ -143,19 +144,42 @@ function OutOfRanks({ id }: { id: string }) {
   );
 }
 
+/** Convocação do suserano (Marco 15): faltar custa honra e relação. */
+function SummonsBanner() {
+  const summons = useGameStore((s) => s.summons);
+  const town = useGameStore((s) => s.settlements.find((t) => t.id === s.summons?.townId)?.name);
+  if (!summons) return null;
+  return (
+    <div className="rounded bg-black/60 px-3 py-1.5 text-xs">
+      <span className="text-neutral-400">Convocação: </span>
+      <b className="text-amber-200">reunir o bando em {town}</b>
+      <span className="text-neutral-400"> · prazo dia {summons.deadline}</span>
+    </div>
+  );
+}
+
 /** Contrato ativo: onde ir e até quando. */
 function ContractBanner() {
   const active = useGameStore((s) => s.activeContract);
   const day = useGameStore((s) => s.day);
   const world = useGameStore((s) => s.world);
+  const settlements = useGameStore((s) => s.settlements);
   if (!active) return null;
-  const site = world?.sites.find((x) => x.id === active.contract.siteId);
+  const goal = contractGoal(
+    active.contract,
+    {
+      site: (id) => world?.sites.find((x) => x.id === id)?.name ?? "?",
+      town: (id) => settlements.find((t) => t.id === id)?.name ?? "?",
+      realm: (id) => world?.factions.find((f) => f.id === id)?.name ?? "?",
+    },
+    active.progress ?? 0,
+  ).short;
   const left = active.deadline - day;
   return (
     <div className="rounded bg-black/60 px-3 py-1.5 text-xs">
       <span className="text-neutral-400">Contrato: </span>
       <b className="text-amber-200">{active.contract.title}</b>
-      <span className="text-neutral-400"> · {site?.name} · </span>
+      <span className="text-neutral-400"> · {goal} · </span>
       <span className={left <= 1 ? "text-red-400" : "text-neutral-300"}>prazo dia {active.deadline}</span>
     </div>
   );
@@ -306,6 +330,7 @@ export function FieldHudView() {
         </div>
         <div className="absolute left-1/2 top-[4.5rem] -translate-x-1/2">
           <ContractBanner />
+          <SummonsBanner />
         </div>
         {hud && hud.feed.length > 0 && (
           <ol className="absolute left-1/2 top-[6.75rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">

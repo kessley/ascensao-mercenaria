@@ -20,6 +20,7 @@ import { PriceBook } from "../components/trade/PriceBook";
 import { GuildPanel } from "../components/trade/GuildPanel";
 import { DepotPanel } from "../components/trade/DepotPanel";
 import { DeparturePanel } from "../components/DeparturePanel";
+import { NobilityBook } from "../components/court/NobilityBook";
 
 const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TENT: "Tenda do Comandante",
@@ -40,23 +41,34 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TEMPLE: "Templo",
   PRICE_BOOK: "Livro de Preços",
   DEPARTURE: "Portão do acampamento",
+  NOBILITY: "Livro da Nobreza",
 };
 
 /** Painéis fora do acampamento (ou sobre um assunto só): sem o resumo do acampamento em cima. */
-const NO_STATUS = new Set<CampPanel["kind"]>(["TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE"]);
+const NO_STATUS = new Set<CampPanel["kind"]>(["TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE", "NOBILITY"]);
 
-/** Atalho da mesa da Tenda para o Livro de Preços (Marco 14). */
+/** Atalhos da mesa da Tenda: Livro de Preços (Marco 14) e Livro da Nobreza (Marco 15). */
 function BookButton() {
   const setCampPanel = useGameStore((s) => s.setCampPanel);
   const known = useGameStore((s) => Object.keys(s.priceBook).length);
+  const met = useGameStore((s) => s.nobles.filter((n) => n.met).length);
   return (
-    <button
-      type="button"
-      onClick={() => setCampPanel({ kind: "PRICE_BOOK" })}
-      className="rounded border border-violet-400/70 bg-violet-900/40 px-3 py-2 text-left text-sm hover:bg-violet-800/50"
-    >
-      📖 <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => setCampPanel({ kind: "PRICE_BOOK" })}
+        className="rounded border border-violet-400/70 bg-violet-900/40 px-3 py-2 text-left text-sm hover:bg-violet-800/50"
+      >
+        📖 <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setCampPanel({ kind: "NOBILITY" })}
+        className="rounded border border-amber-400/70 bg-amber-900/30 px-3 py-2 text-left text-sm hover:bg-amber-800/40"
+      >
+        👑 <b>Livro da Nobreza</b> <span className="text-xs text-neutral-400">— {met} nobre(s) conhecido(s), favores e o nome do bando</span>
+      </button>
+    </>
   );
 }
 
@@ -162,6 +174,8 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return <PriceBook />;
     case "DEPARTURE":
       return <DeparturePanel />;
+    case "NOBILITY":
+      return <NobilityBook />;
   }
 }
 

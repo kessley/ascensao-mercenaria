@@ -22,6 +22,8 @@ import { StaticCuller } from "../world/StaticCuller";
 import { SettlementLayer, drawCalamityLair, drawSites, ownerColor } from "../world/Settlements";
 import { NavGrid } from "../systems/NavGrid";
 import { TOWN_SIZE, insideTown, nearestGate, specialHouses, type Rect, type TownLayout } from "../world/townLayout";
+import { kingdomsAtWar } from "../sim/realm";
+import { nobleName } from "../sim/nobility";
 import { GarrisonManager } from "../world/Garrisons";
 import { WildlifeManager, type WildlifeContext } from "../world/Wildlife";
 import { CampLife, type CampState } from "../world/CampLife";
@@ -29,7 +31,7 @@ import { MapLife, type MapLifeContext } from "../world/MapLife";
 import { TradeRoutes, type TradeNews } from "../world/TradeRoutes";
 import { FRIEND_AT, bondOf, followerCap } from "../sim/campEvents";
 import { geoOf } from "../worldgen/geoMap";
-import { ofRealm } from "../worldgen/names";
+import { TheRealm, ofRealm } from "../worldgen/names";
 import { scaleGroups, type EnemyGroupDef } from "../data/battleMaps";
 import { DIFFICULTY, type Contract } from "../data/contracts";
 import { ferryDocks, regionName, type WorldDef } from "../data/world";
@@ -57,6 +59,7 @@ import {
   GEO,
   PROGRESSION,
   REALM,
+  KINGDOM,
   TERRAIN,
   TIME,
   WOLF,
@@ -80,6 +83,7 @@ import {
 } from "../../utils/constants";
 import { campMoraleBonus, cargoCapacity, dailyRations, startingMorale } from "../../utils/economy";
 import { freightWeight } from "../sim/trade";
+import { roadGraphOf } from "../sim/roadGraph";
 import { darknessAt, daysUntilHour, formatHour, hourOf, phaseOf } from "../../utils/time";
 import { AudioEngine } from "../../audio/AudioEngine";
 import { sfx, startCampfireAmbience, stopCampfireAmbience } from "../../audio/sounds";
@@ -176,6 +180,9 @@ interface GateRule {
   army: boolean;
   visitor: boolean;
 }
+
+/** O reino conhece o bando o bastante para deixar passar sem portagem. */
+const isFactionFriend = (s: GameState, owner: string) => owner === "PLAYER" || (s.factions.find((f) => f.id === owner)?.relation ?? 0) >= 15;
 
 const inRect = (r: Rect, p: Point, pad = 0) => p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
 /** Distância de um ponto até um retângulo (0 dentro dele). */
@@ -453,7 +460,8 @@ export class WorldScene extends Phaser.Scene {
     this.warbands = new WarbandManager(
       (x, y, kind, color) => this.spawnEnemy(x, y, kind, color),
       () => ({ settlements: useGameStore.getState().settlements, camp: this.campArea.packed ? null : this.world.camp.center }),
-      (from, to) => this.nav.findPath(from, to, 200000),
+      // O centro de uma capital fica dentro da muralha interna: vale o ponto aberto mais perto
+      (from, to) => this.nav.findPath(this.nav.nearestOpen(from, 1400) ?? from, this.nav.nearestOpen(to, 1400) ?? to, 200000),
       () => {
         const s = useGameStore.getState();
         return s.day + s.dayProgress;
@@ -463,6 +471,7 @@ export class WorldScene extends Phaser.Scene {
     // Bandos marcham pelas mesmas regras de chão (lama, neve); inverno: os reinos recolhem os exércitos
     this.warbands.marchFactor = (p) => this.groundAt(p.x, p.y, "GRASS");
     this.warbands.setWinter(this.season === "WINTER");
+    this.warbands.atWar = (a, b) => kingdomsAtWar(useGameStore.getState().wars, a, b);
     this.trade = new TradeRoutes(this, this.world, this.warbands, (id) => this.settlementLayer.layoutOf(id));
     this.syncWagons();
 
@@ -559,7 +568,7 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
     // Volta de um interior (Marco 14)
-    const wake = (_sys: unknown, data?: { after?: string | null }) => this.onWake(data);
+    const wake = (_sys: unknown, data?: { after?: string | null; text?: string }) => this.onWake(data);
     this.events.on(Phaser.Scenes.Events.WAKE, wake);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.WAKE, wake));
 
@@ -605,8 +614,10 @@ export class WorldScene extends Phaser.Scene {
     if (this.armyDirty && !this.engagement) this.reconcileArmy();
 
     const prev = { x: this.commander.x, y: this.commander.y };
-    if (this.commander.handleMovement(k, dt)) this.walkPath = null;
+    const walking = this.commander.handleMovement(k, dt);
+    if (walking) this.walkPath = null;
     else this.followWalkPath(dt);
+    this.updateDoorPush(walking, dt);
     if (k.SPACE.isDown) this.commander.trySwing(this.activeEnemies(), time);
     this.updateFreeCamera(dt);
 
@@ -641,6 +652,7 @@ export class WorldScene extends Phaser.Scene {
     // Marcha forçada: o passo apertado só vale fora de combate
     Unit.pace = this.forced && !this.engagement && !this.inCamp ? FATIGUE.FORCED_SPEED : 1;
     for (const b of this.battalions) b.update(dt, visibleEnemies);
+    Wagon.load = this.loadPace();
     this.updateWagons(dt);
     for (const s of this.scouts) s.think(dt, this.commander, active);
     this.updateMessengers(dt);
@@ -810,8 +822,11 @@ export class WorldScene extends Phaser.Scene {
     this.contractEnemies = [];
     const was = this.contractId;
     this.contractId = active?.contract.id ?? null;
-    // Escolta abandonada ou vencida: a caravana da guilda desiste
-    if (was && !active) this.trade.dropEscort();
+    // Escolta abandonada ou vencida: a caravana da guilda desiste, e os salteadores largam a tocaia
+    if (was && !active) {
+      this.trade.dropEscort();
+      for (const b of this.warbands.bands) if (b.rest > 1e8) b.rest = 0;
+    }
     if (!active) return;
 
     const { contract } = active;
@@ -867,6 +882,33 @@ export class WorldScene extends Phaser.Scene {
       this.pushFeed(`Contrato: a caravana espera o bando no portão de ${name(contract.fromId)} (marcada no Mapa do Continente).`);
       return;
     }
+    if (contract.kind === "ROUTE" && contract.fromId && contract.targetId) {
+      // Salteadores no meio da estrada: o id deles fica no contrato (vai no save)
+      const road = roadGraphOf(this.world).route(contract.fromId, contract.targetId);
+      const mid = road?.points[Math.floor(road.points.length * 0.5)];
+      if (!mid) return;
+      const n = 6 + contract.difficulty * 2;
+      const band = this.warbands.spawnBand({
+        name: `Salteadores da estrada de ${name(contract.targetId)}`,
+        kind: "GOBLIN",
+        units: [
+          ["BANDIT", Math.ceil(n * 0.65)],
+          ["BANDIT_ARCHER", Math.floor(n * 0.35)],
+        ],
+        origin: { x: mid.x, y: mid.y },
+        ownerId: null,
+      });
+      band.route = [];
+      band.goal = { kind: "WANDER" };
+      band.goalPoint = { ...band.anchor };
+      band.rest = 1e9;
+      band.spotted = true;
+      band.lastSeen = { x: band.anchor.x, y: band.anchor.y, day };
+      this.fog?.revealExplored(band.anchor, 500);
+      useGameStore.setState((st) => (st.activeContract ? { activeContract: { ...st.activeContract, contract: { ...st.activeContract.contract, bandId: band.id } } } : {}));
+      this.pushFeed(`Contrato: ${band.name} — marcados no Mapa do Continente.`);
+      return;
+    }
     if (contract.kind === "RECOVER" && contract.bandId) {
       const band = this.warbands.bands.find((b) => b.id === contract.bandId);
       if (band) {
@@ -885,6 +927,27 @@ export class WorldScene extends Phaser.Scene {
         b.lastSeen = { x: b.anchor.x, y: b.anchor.y, day };
       }
       this.pushFeed(`Contrato: os espiões do cliente marcaram as caravanas inimigas na estrada (Mapa do Continente).`);
+      return;
+    }
+    // Marco 15: quem o bando precisa enfrentar aparece no Mapa do Continente
+    if ((contract.kind === "RELIEF" || contract.kind === "CIVIL") && contract.armyId) {
+      const army = s.armies.find((a) => a.id === contract.armyId);
+      const band = this.warbands.bands.find((b) => b.id === army?.bandId);
+      if (band) {
+        band.spotted = true;
+        band.lastSeen = { x: band.anchor.x, y: band.anchor.y, day };
+      }
+      this.pushFeed(`Contrato: ${band?.name ?? "o exército inimigo"} está marcado no Mapa do Continente.`);
+      return;
+    }
+    if (contract.kind === "BURN" && contract.crossingId) {
+      const c = this.world.geo.crossings.find((x) => x.id === contract.crossingId);
+      if (c) this.fog?.revealExplored(c, 700);
+      this.pushFeed(`Contrato: a ponte a queimar fica em ${c ? this.placeName(c) : "lugar incerto"} (revelada no Mapa do Continente).`);
+      return;
+    }
+    if (contract.kind === "RANSOM") {
+      this.pushFeed(`Contrato: o preso está na masmorra de ${name(contract.targetId)}. Fale com o Camareiro-mor na Cidade Alta, ou vá pelos esgotos.`);
       return;
     }
     if (contract.kind === "DELIVERY") {
@@ -947,13 +1010,16 @@ export class WorldScene extends Phaser.Scene {
     this.campArea.buildQuarters(store, this.awayBattalions());
   }
 
+  /** Passado o combate, quem ficou parado ou seguindo dentro da paliçada (ex.: se recompôs do pânico) vai descansar. */
   private quarterStragglers(): void {
+    if (this.engagement) return;
     const store = useGameStore.getState();
     let changed = false;
     store.battalions.forEach((data, i) => {
       const b = this.battalions.find((x) => x.id === data.id);
       const slot = this.campArea.quarterSlot(i);
-      if (!b || !slot || b.isDestroyed || !b.isFollowing || this.quartered.has(b.id) || !this.campArea.contains(b.center)) return;
+      if (!b || !slot || b.isDestroyed || b.panicking || this.quartered.has(b.id) || !this.campArea.contains(b.center)) return;
+      if (b.order.type !== "FOLLOW" && b.order.type !== "HOLD") return;
       this.quarter(b, i, slot);
       changed = true;
     });
@@ -979,18 +1045,34 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spots(): Interactable[] {
-    return [...this.campArea.interactables, ...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots()];
+    return [...this.campArea.interactables, ...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots()];
+  }
+
+  /** Exércitos à vista, em paz com o bando: dá para ir à tenda do lorde (Marco 15). */
+  private armySpots(): Interactable[] {
+    const s = useGameStore.getState();
+    const out: Interactable[] = [];
+    for (const b of this.warbands.bands) {
+      if (!b.armyId || !b.materialized || this.bandHostile(b)) continue;
+      const lordId = s.armies.find((a) => a.id === b.armyId)?.lordId;
+      const lord = lordId ? s.nobles.find((n) => n.id === lordId && n.alive) : undefined;
+      if (!lord) continue;
+      const realm = this.world.factions.find((f) => f.id === lord.factionId)?.name ?? "reino";
+      const c = b.anchor;
+      out.push({ label: `Tenda de ${nobleName(lord, realm)}`, door: { x: c.x, y: c.y }, panel: { kind: "GAME" }, bounds: new Phaser.Geom.Rectangle(c.x - 60, c.y - 60, 120, 120), radius: 170, enter: `field:${lord.id}` });
+    }
+    return out;
   }
 
   /** Banca do mascate (quando ele segue o bando). */
   private followerSpots(): Interactable[] {
     const stall = this.campArea.packed ? null : this.campLife.peddlerStall();
     if (!stall) return [];
-    return [{ label: "Banca do mascate", door: { x: stall.x, y: stall.y + 36 }, panel: { kind: "PEDDLER" }, bounds: new Phaser.Geom.Rectangle(stall.x - 40, stall.y - 20, 80, 50), radius: 70 }];
+    return [{ label: "Banca do mascate", door: { x: stall.x, y: stall.y + 36 }, panel: { kind: "PEDDLER" }, bounds: new Phaser.Geom.Rectangle(stall.x - 40, stall.y - 20, 80, 50), radius: 70, enter: "camp:PEDDLER" }];
   }
 
   private updatePrompt(): void {
-    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots()]);
+    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots()]);
     const store = useGameStore.getState();
     store.setCampPrompt(this.nearestSpot && !store.campPanel ? `E — ${this.nearestSpot.enter ? "Entrar: " : ""}${this.nearestSpot.label}` : null);
   }
@@ -1039,6 +1121,24 @@ export class WorldScene extends Phaser.Scene {
     s.notePrices(t.id, "VISIT");
   }
 
+  /** Como num mapa de Pokémon: andar de encontro à porta de um prédio é entrar nele. */
+  private doorPush = 0;
+  private updateDoorPush(walking: boolean, dt: number): void {
+    const spot = this.nearestSpot;
+    const c = this.commander;
+    if (!walking || !spot?.enter || distance(c, spot.door) > 46) {
+      this.doorPush = 0;
+      return;
+    }
+    const to = { x: spot.bounds.centerX - spot.door.x, y: spot.bounds.centerY - spot.door.y };
+    const heading = (Math.cos(c.facing) * to.x + Math.sin(c.facing) * to.y) / (Math.hypot(to.x, to.y) || 1);
+    this.doorPush = heading >= 0.7 ? this.doorPush + dt : 0;
+    if (this.doorPush >= 0.18) {
+      this.doorPush = 0;
+      this.enterBuilding(spot);
+    }
+  }
+
   /** Lugar de onde o Comandante entrou num prédio (volta para lá ao sair). */
   private interiorReturn: { x: number; y: number; facing: number } | null = null;
 
@@ -1053,22 +1153,63 @@ export class WorldScene extends Phaser.Scene {
       this.pushFeed("Inimigos por perto: não é hora de entrar em lugar nenhum.");
       return;
     }
+    // Marco 15: o portão da muralha interna leva à Cidade Alta, que é outro mapa
+    const capital = spot.enter.startsWith("capital:") ? spot.enter.slice(8) : null;
+    if (capital && !this.cityGate(capital)) return;
     store.setCampPanel(null);
     this.walkPath = null;
-    const back = { x: spot.door.x - this.commander.x, y: spot.door.y - this.commander.y };
-    this.interiorReturn = { x: spot.door.x, y: spot.door.y, facing: Math.atan2(-back.y, -back.x) };
+    // Volta de costas para o prédio
+    this.interiorReturn = { x: spot.door.x, y: spot.door.y, facing: Math.atan2(spot.door.y - spot.bounds.centerY, spot.door.x - spot.bounds.centerX) };
     const cam = this.cameras.main;
     cam.fadeOut(160, 0, 0, 0);
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.launch("InteriorScene", { key: spot.enter, title: spot.label });
+      if (capital) this.scene.launch("CapitalScene", { townId: capital });
+      else this.scene.launch("InteriorScene", { key: spot.enter, title: spot.label });
       this.scene.sleep();
     });
   }
 
+  /**
+   * Portão da muralha interna: em guerra ou com mandado, só de disfarce; quem ninguém conhece
+   * paga a portagem. Os guardas falam pelo HUD (o resto dos portões fica lá dentro).
+   */
+  private cityGate(townId: string): boolean {
+    const store = useGameStore.getState();
+    const t = store.settlements.find((x) => x.id === townId);
+    if (!t) return false;
+    const check = store.access("CITY", townId);
+    const disguised = store.disguiseUntil > store.day + store.dayProgress;
+    if (!check.open && !disguised) {
+      this.pushFeed(`Guardas de ${t.name}: "${check.why}"`);
+      return false;
+    }
+    if (check.open && store.fame < 15 && !isFactionFriend(store, t.owner)) {
+      const paid = store.passGate(townId, "CITY", "TOLL");
+      this.pushFeed(`Portão da Cidade Alta: ${paid.text}`);
+      return paid.ok;
+    }
+    return true;
+  }
+
+  /** Tempo corrido na Cidade Alta: o mundo dorme na tela, mas não para (Marco 15). */
+  advanceAbroad(days: number): void {
+    this.handleWarbandEvents(this.warbands.advance(days));
+    this.tradeNews(this.trade.advance(days));
+    this.passTime(days);
+  }
+
+  /** O Comandante caminha pela Cidade Alta sem levantar a tropa: ela espera na muralha. */
+  get commanderPosition(): Point {
+    return { x: this.commander.x, y: this.commander.y };
+  }
+
   /** Saiu do prédio: o Comandante aparece diante da porta, de costas para ela. */
-  private onWake(data?: { after?: string | null }): void {
+  private onWake(data?: { after?: string | null; text?: string }): void {
     const r = this.interiorReturn;
     this.interiorReturn = null;
+    // Quem entrou segurando uma tecla soltou lá dentro: aqui ela ficaria "apertada" para sempre
+    this.input.keyboard?.resetKeys();
+    this.doorPush = 0;
     const cam = this.cameras.main;
     cam.fadeIn(200, 0, 0, 0);
     if (r) {
@@ -1080,6 +1221,12 @@ export class WorldScene extends Phaser.Scene {
     this.houseCache = null;
     this.lastHudAt = 0;
     if (data?.after === "rest") this.restUntilDawn();
+    // Duelo pedido no paço de um lorde (Marco 15): a Liça improvisada no pátio
+    if (data?.after === "duel") {
+      this.scene.launch("DuelScene");
+      this.scene.sleep();
+    }
+    if (data?.after === "duelover" && data.text) this.pushFeed(data.text);
   }
 
   private walkTo(spot: Interactable | null, point: Point): void {
@@ -1696,7 +1843,7 @@ export class WorldScene extends Phaser.Scene {
       const layout = this.settlementLayer.layoutOf(t.id);
       if (!layout || t.owner === "RUINED") continue;
       const army = t.owner !== "PLAYER";
-      const war = isCalamityOwner(t.owner) || s.factions.some((f) => f.id === t.owner && f.atWar) || s.siege?.settlementId === t.id;
+      const war = isCalamityOwner(t.owner) || s.factions.some((f) => f.id === t.owner && f.atWar) || s.siege?.settlementId === t.id || (!!t.besiegedBy && !s.factions.some((f) => f.id === t.besiegedBy && f.atWar && t.owner === "PLAYER"));
       rules.push({ id: t.id, name: t.name, bounds: layout.bounds, army, visitor: army && war });
     }
     this.gateRules = rules;
@@ -1811,8 +1958,10 @@ export class WorldScene extends Phaser.Scene {
       const size = REALM.ARMY_BASE_SIZE + own.length * 2;
       const archers = Math.round(size / 3);
       const def = this.world.factions.find((x) => x.id === f.id);
+      // Um lorde do reino lidera, se houver quem (Marco 15)
+      const lord = store.nobles.find((n) => n.alive && n.factionId === f.id && n.rank === "LORD" && !n.armyId && !n.captiveOf);
       this.warbands.spawnBand({
-        name: `Exército do ${def?.name ?? "reino"}`,
+        name: lord ? `Exército de ${nobleName(lord, def?.name ?? "reino")}` : `Exército ${ofRealm(def?.name ?? "reino")}`,
         kind: "FACTION",
         units: [
           ["SOLDIER", size - archers],
@@ -1822,7 +1971,77 @@ export class WorldScene extends Phaser.Scene {
         ownerId: f.id,
         color: def?.color,
       });
-      store.chronicle(`O ${def?.name ?? "reino"} pôs um exército (${size}) em marcha contra os ${this.world.bandName}.`, "bad");
+      store.chronicle(`${TheRealm(def?.name ?? "reino")} pôs um exército (${size}) em marcha contra os ${this.world.bandName}.`, "bad");
+    }
+    this.syncArmies();
+    this.syncRevolts();
+  }
+
+  /**
+   * Exércitos dos lordes (Marco 15): a simulação decide; aqui eles viram bandos de verdade,
+   * marcham, cercam, e os que acabaram (tomaram a cidade, desistiram) deixam o mapa.
+   */
+  private syncArmies(): void {
+    const store = useGameStore.getState();
+    for (const a of store.armies) {
+      const band = a.bandId ? this.warbands.bands.find((b) => b.id === a.bandId) : undefined;
+      if (a.outcome) {
+        if (band && a.outcome !== "TOOK") {
+          if (!band.homeward) this.warbands.sendHome(band);
+          continue;
+        }
+        if (band) this.warbands.disband(band);
+        useGameStore.getState().armyDone(a.id, a.size);
+        continue;
+      }
+      if (band) continue;
+      // Sumiu do mapa, ou o inverno chegou antes de sair: a convocação acaba
+      if (a.bandId || this.season === "WINTER") {
+        useGameStore.getState().armyDone(a.id);
+        continue;
+      }
+      const from = store.settlements.find((t) => t.id === a.fromId);
+      const target = store.settlements.find((t) => t.id === a.targetId);
+      const def = this.world.factions.find((f) => f.id === a.factionId);
+      if (!from || !target || !def) {
+        useGameStore.getState().armyDone(a.id);
+        continue;
+      }
+      const layout = this.settlementLayer.layoutOf(from.id);
+      const origin = layout ? nearestGate(layout, target).outside : { x: from.x, y: from.y + 300 };
+      const lord = a.lordId ? store.nobles.find((n) => n.id === a.lordId) : undefined;
+      const archers = Math.round(a.size / 3);
+      const spawned = this.warbands.spawnBand({
+        name: lord ? `Exército de ${nobleName(lord, def.name)}` : `Exército ${ofRealm(def.name)}`,
+        kind: "FACTION",
+        units: [
+          ["SOLDIER", a.size - archers],
+          ["CROSSBOW", archers],
+        ],
+        origin,
+        ownerId: a.factionId,
+        color: def.color,
+        goalId: target.id,
+        armyId: a.id,
+      });
+      useGameStore.getState().armySpawned(a.id, spawned.id);
+    }
+  }
+
+  /** Povoado em revolta: a gente sai de casa com foices e marcha contra os próprios muros. */
+  private syncRevolts(): void {
+    const store = useGameStore.getState();
+    for (const id of store.revolts) {
+      if (this.warbands.bands.some((b) => b.kind === "REBELS" && b.goal.kind === "SETTLEMENT" && b.goal.id === id)) continue;
+      const t = store.settlements.find((x) => x.id === id);
+      const layout = t ? this.settlementLayer.layoutOf(id) : undefined;
+      if (!t || !layout) {
+        store.revoltHandled(id);
+        continue;
+      }
+      const n = Math.max(6, Math.min(KINGDOM.REVOLT_MAX, Math.round((t.population / 100) * KINGDOM.REVOLT_PER_100)));
+      const gate = layout.gates[0];
+      this.warbands.spawnBand({ name: `Camponeses revoltados de ${t.name}`, kind: "REBELS", units: [["BANDIT", n]], origin: { x: gate.wait.x, y: gate.wait.y }, ownerId: null, goalId: id });
     }
   }
 
@@ -1852,7 +2071,9 @@ export class WorldScene extends Phaser.Scene {
       store.markBattlefield(fallen.reduce((n, e) => n + e.x, 0) / fallen.length, fallen.reduce((n, e) => n + e.y, 0) / fallen.length);
     }
     const mutinyOver = !!store.mutiny && this.mutineers.length > 0 && this.mutineers.every((e) => !e.isAlive);
-    const contractDone = !!eng?.contractDone || (!!this.contractId && this.contractEnemies.length === 0 && !!store.activeContract);
+    // Só o contrato de limpar um local termina em combate (os da economia têm fim próprio)
+    const siteContract = !!store.activeContract && (store.activeContract.contract.kind ?? "SITE") === "SITE";
+    const contractDone = !!eng?.contractDone || (!!this.contractId && this.contractEnemies.length === 0 && siteContract);
 
     if (result === "VICTORY") sfx.victory();
     else if (result === "DEFEAT") sfx.defeat();
@@ -1972,9 +2193,14 @@ export class WorldScene extends Phaser.Scene {
   private passTime(days: number): void {
     const store = useGameStore.getState();
     const before = store.day;
+    // Notícias alcançam o Comandante onde ele está (Marco 15)
+    if (days > 0 && before !== Math.floor(before + store.dayProgress + days)) useGameStore.setState({ commanderAt: { x: Math.round(this.commander.x), y: Math.round(this.commander.y) } });
+    const logBefore = store.log[store.log.length - 1]?.id ?? 0;
     store.advanceTime(days);
     const after = useGameStore.getState().day;
     if (after === before) return;
+    // As notícias que chegaram hoje aparecem no HUD (as três mais novas)
+    for (const l of useGameStore.getState().log.filter((e) => e.id > logBefore && e.text.startsWith("Chegou")).slice(-3)) this.pushFeed(l.text);
     this.applySeason();
     // Inverno: os goblins saem menos dos covis
     const band = this.warbands.maybeSpawnGoblins(after, this.world.lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1);
@@ -1995,10 +2221,28 @@ export class WorldScene extends Phaser.Scene {
     const store = useGameStore.getState();
     for (const ev of events) {
       // Caravanas (Marco 14): chegada, saque, destruição; goblins com carga roubada
-      if (ev.type === "DELIVERED" || ev.type === "CARAVAN_RAIDED" || (ev.type === "DESTROYED" && (ev.band.kind === "CARAVAN" || ev.band.loot))) {
+      const contractBand = ev.type === "DESTROYED" && ev.band.id === store.activeContract?.contract.bandId;
+      if (ev.type === "DELIVERED" || ev.type === "CARAVAN_RAIDED" || (ev.type === "DESTROYED" && (ev.band.kind === "CARAVAN" || ev.band.loot || contractBand))) {
         const near = (p: Point) => this.presence().some((a) => distance(a, p) < 2600);
         this.tradeNews(this.trade.onEvent(ev, near));
         if (ev.type !== "DESTROYED" || ev.band.kind === "CARAVAN") continue;
+      }
+      // Exércitos dos lordes (Marco 15)
+      if (ev.type === "ARMY_AT") {
+        if (ev.band.armyId) store.armyArrived(ev.band.armyId);
+        if (ev.band.spotted || distance(this.commander, ev.band.anchor) < 5000) this.pushFeed(`${ev.band.name} acampou diante de ${this.placeName(ev.band.anchor)}: é um cerco.`);
+        continue;
+      }
+      if (ev.type === "ARMY_HOME") {
+        if (ev.band.armyId) store.armyDone(ev.band.armyId, bandSize(ev.band));
+        continue;
+      }
+      if (ev.type === "ARMY_CLASH") {
+        const near = ev.winner.spotted || ev.loser.spotted || distance(this.commander, ev.at) < 5000;
+        if (near) this.pushFeed(`${ev.winner.name} destroçou o ${ev.loser.name} perto de ${this.placeName(ev.at)}.`);
+        store.armiesClash(ev.winner.armyId ?? null, ev.loser.armyId ?? null, ev.at);
+        store.markBattlefield(ev.at.x, ev.at.y);
+        continue;
       }
       if (ev.type === "SKIRMISH") {
         const near = ev.winner.spotted || ev.loser.spotted || distance(this.commander, ev.at) < 5000;
@@ -2046,6 +2290,18 @@ export class WorldScene extends Phaser.Scene {
           continue;
         }
         if (band.kind === "REFUGEES") continue;
+        // Exército de um lorde caiu: quem esteve perto do bando conta como obra do bando
+        if (band.armyId) {
+          store.armyDestroyed(band.armyId, distance(this.commander, band.anchor) < 2500, band.anchor);
+          this.pushFeed(`O ${band.name} não existe mais.`);
+          continue;
+        }
+        // Revolta acabou: a gente volta para casa com medo (e menos gente)
+        if (band.kind === "REBELS") {
+          if (band.goal.kind === "SETTLEMENT") store.revoltHandled(band.goal.id);
+          store.chronicle(`A revolta de ${this.placeName(band.anchor)} foi esmagada.`, "info");
+          continue;
+        }
         if (band.spotted || band.kind !== "GOBLIN") {
           // Patrulha que caiu (diante dos goblins) é má notícia; bando hostil destruído, boa
           store.chronicle(`${band.kind === "PATROL" ? "A" : "O"} ${band.name} foi destruíd${band.kind === "PATROL" ? "a" : "o"}.`, isRaiderKind(band.kind) ? "good" : "bad");
@@ -2076,6 +2332,13 @@ export class WorldScene extends Phaser.Scene {
         calamityKind: band.calamityKind,
       });
       const t = useGameStore.getState().settlements.find((x) => x.id === (ev.goal as { id: string }).id);
+      // Camponeses: acabou de um jeito ou de outro
+      if (band.kind === "REBELS") {
+        store.revoltHandled(ev.goal.id);
+        if (t) this.pushFeed(outcome === "CAPTURED" ? `${t.name} expulsou o senhor: a aldeia é livre.` : `A revolta de ${t.name} foi contida pela guarnição.`);
+        this.warbands.disband(band);
+        continue;
+      }
       if (outcome === "REPELLED") {
         // Os defensores derrubam metade do bando antes de ele recuar
         this.warbands.loseHalf(band);
@@ -2386,10 +2649,15 @@ export class WorldScene extends Phaser.Scene {
 
   /** O bando ataca o jogador? Goblins, exércitos e hordas sim; patrulhas e mensageiros só em guerra ou provocados. */
   private bandHostile(b: Warband): boolean {
+    const s = useGameStore.getState();
+    // Camponeses só querem a terra deles; só são inimigos do senhor (Marco 15)
+    if (b.kind === "REBELS") return b.goal.kind === "SETTLEMENT" && s.settlements.find((t) => t.id === (b.goal as { id: string }).id)?.owner === "PLAYER";
+    // Exércitos dos reinos só atacam o bando em guerra com ele (ou provocados)
+    if (b.kind === "FACTION") return b.provoked || s.factions.some((f) => f.id === b.ownerId && f.atWar) || !b.armyId;
     if (isRaiderKind(b.kind)) return true;
     if (b.kind === "REFUGEES" || b.ownerId === "PLAYER") return false;
     if (b.provoked) return true;
-    return useGameStore.getState().factions.some((f) => f.id === b.ownerId && f.atWar);
+    return s.factions.some((f) => f.id === b.ownerId && f.atWar);
   }
 
   /** Hostilidade de quem está em campo; quem foi atacado pelo bando é provocado (e o dono fica sabendo). */
@@ -2412,7 +2680,7 @@ export class WorldScene extends Phaser.Scene {
         }
         if (band.kind === "REFUGEES") store.attackRefugees(band.name.replace(/^Refugiados de /, ""));
         else if (band.ownerId && !store.factions.some((f) => f.id === band.ownerId && f.atWar)) {
-          store.provokeFaction(band.ownerId, band.kind === "PATROL" ? "uma patrulha" : "o mensageiro real");
+          store.provokeFaction(band.ownerId, band.kind === "PATROL" ? "uma patrulha" : band.kind === "FACTION" ? "um exército" : "o mensageiro real");
         }
         const realm = this.world.factions.find((f) => f.id === band.ownerId)?.name ?? "reino";
         this.pushFeed(
@@ -2492,6 +2760,7 @@ export class WorldScene extends Phaser.Scene {
       const raided = t.lastRaidDay !== null && s.day - t.lastRaidDay <= 2;
       if (raided || isCalamityOwner(t.owner)) smoke.push({ x: t.x, y: t.y, strength: 1 });
       else if (t.owner === "RUINED") smoke.push({ x: t.x, y: t.y, strength: 0.45 });
+      else if (t.besiegedBy) smoke.push({ x: t.x, y: t.y, strength: 0.7 });
       if (raided) crows.push({ x: t.x, y: t.y - 200 });
     }
     const tracks: MapLifeContext["tracks"] = [];

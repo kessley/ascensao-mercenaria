@@ -2,7 +2,7 @@
 
 Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, estações, comércio, reinos) alimenta os outros. Os marcos estão em ordem de dependência.
 
-**Estado:** Marcos 10, 11, 12 e 13 ✅ OK · próximo: Marco 14. **OK** = concluído e jogável em greybox.
+**Estado:** Marcos 10 a 15 ✅ OK · próximo: Marco 16. **OK** = concluído e jogável em greybox.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 1 — O bando](ROADMAP_FASE_1.md) · Design: [GDD.md](GDD.md), seção 8 (as regras para os marcos novos estão na 8.1)
 
@@ -407,9 +407,13 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 - **Save versão 6:** guarda carroças, carga, depósito, exposição, forragem, acampamento movido e obras. O campo guarda a posição e a vida das carroças, a fadiga e a marcha forçada.
 - **Teste automatizado:** 39 verificações do marco. Os testes dos Marcos 9 a 12 continuam passando. A expectativa da curandeira foi atualizada para a regra dos feridos, e a contagem de goblins mortos no teste do Marco 12 foi corrigida.
 - **Desempenho:** ≈ 125 fps no inverno com neve caindo e 140 fps no acampamento.
-- **Ficou de fora:** barcaças e portos em uso (Marcos 14 e 17); a carga comercial nas carroças (Marco 14); tempestade no mar (Marco 17).
+- **Ficou de fora → resolvido no Marco 14:**
+  - **Barcaças e portos em uso:** barcaças nos rios e navios na costa levam carga entre os mercados. Passagem de tropas por mar continua no Marco 17.
+  - **Carga comercial, ferro e saque nas carroças:** o ferro do saque e as mercadorias vão nas carroças, disputando espaço com a comida.
+  - **Tempestade:** na costa e no mar, no outono e no inverno. Alcançar os portos exigiu medir a tempestade pela proximidade do mar.
+  - **Doenças pelas rotas comerciais:** uma caravana de um povoado com febre às vezes leva a febre ao destino.
 
-## Marco 14 — Economia e comércio
+## Marco 14 — Economia e comércio ✅ OK
 **Objetivo:** a economia vira um sistema vivo que o jogador lê, explora e perturba. GDD 8.8.
 - **Cerca de 10 bens**, com produção e consumo por povoado (bioma, recursos, construções, população) e estoque.
 - **Preço por oferta e procura** (0,3× a 4× da base). Colheita, guerra, saque e calamidade mexem nos preços.
@@ -422,7 +426,69 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 
 **Pronto quando:** um bando goblin numa estrada encarece a comida numa cidade distante; e o jogador lucra comprando barato num lugar e vendendo caro em outro, sabendo que a informação pode estar velha.
 
-## Marco 15 — Reinos vivos
+**Implementado:**
+- **Mercado de cada povoado** (`src/game/sim/market.ts`, inspirado no Victoria 3):
+  - **Dez bens:** grão, carne, sal, madeira, ferro, tecido, cerveja e vinho, armas e armaduras, cavalos e luxos, cada um com preço base e peso.
+  - **Gente:** camponeses, burgueses e nobres, em proporções que dependem do tipo de povoado, cada camada com as suas necessidades. A guarnição também consome.
+  - **Oficinas:** lavouras, pastagens, pesca, salina, lenhadores, mina, tecelagem, cervejaria, armaria, haras, ervanários, caçadores de peles e porto. O tamanho de cada uma vem da gente, da terra e das construções. As que têm insumo (a armaria gasta ferro e madeira) produzem na proporção do que acham.
+  - **Preço:** base × (procura de 12 dias ÷ estoque), entre 0,3× e 4×. O preço anda 35% por dia rumo a esse valor; compras e vendas mexem nele na hora, unidade a unidade.
+  - **Produção conforme o preço:** oficina que vende barato produz menos (até −55%); vendendo caro, contrata (até +25%). É o que mantém o equilíbrio em qualquer geografia.
+  - **Comércio miúdo:** entre povoados vizinhos, um pouco de cada bem passa de onde está barato para onde está caro todo dia (mascates que não aparecem no mapa). Reinos em guerra não trocam nada.
+  - **Estações:** as lavouras rendem 1,7× no outono e 0,45× no inverno, então o grão barateia na colheita e encarece no fim do inverno. No inverno a lenha dobra de procura.
+  - **Comida estraga:** com sal no mercado, a carne dura mais.
+  - **Choques:** gorgulhos nos celeiros, peste no gado, galeria desabada, incêndio na madeira. Saques esvaziam os armazéns.
+- **Nível de vida** (0–100): quanto das necessidades a gente conseguiu comprar.
+  - **Prosperidade:** segue o nível de vida (e os impostos, nos povoados do bando).
+  - **Fome:** com menos de metade da comida necessária, a gente morre e a prosperidade despenca.
+  - **Povoados do bando:** nível de vida abaixo de 40 agita a gente; agitação em 100 é revolta, com duas semanas sem impostos.
+- **Renda do reino ligada ao mercado:** o ouro depende da prosperidade e do nível de vida; as rações e o ferro são tributo tirado do que sobra na praça. Com fome na cidade, não sobra nada.
+- **Guerras entre reinos:** começam e terminam sozinhas, com trégua de 4 semanas. O reino em guerra procura armas e cavalos ×3 e comida ×1,3, e o comércio entre os dois para (embargo). As escaramuças de fronteira agora só acontecem entre reinos em guerra.
+- **Caravanas** (`src/game/world/TradeRoutes.ts`, `src/game/sim/roadGraph.ts`): bandos de verdade, com carroça, mercador e guardas, que seguem as estradas de praça em praça.
+  - **Negócio:** escolhem o bem de maior lucro entre mercados ligados por estrada, contando que comprar encarece a origem e vender barateia o destino.
+  - **Risco:** goblins farejam caravanas e levam a carga. Uma caravana perdida deixa o destino sem o bem.
+  - **Saque pelo bando:** a carga vai para as carroças (o que couber), com −8 de honra e −12 de relação com o reino, se não houver guerra.
+  - **Notícias:** mercadores na estrada contam os preços de onde vieram.
+- **Barcaças e navios:** levam mais carga. Rio abaixo a barcaça é rápida; rio acima, lenta. Navio em tempestade fica parado e pode afundar; tempestade no porto para o porto naquele dia.
+- **Comércio do bando:**
+  - **Mercado de bens:** comprar e vender no painel do povoado, com margem do mercador e impacto no preço. O painel mostra a linha dos últimos preços, gente e oficinas.
+  - **Carga:** mercadoria nas carroças divide espaço com a comida. Sem carroças por perto, só a bolsa do Comandante. Carga pesada atrasa as carroças (até −15%).
+  - **Depósito:** na Intendência, mercadorias entre depósito e carroças. Grão e carne viram rações, à mão ou sozinhos quando a comida acaba.
+  - **Rações ligadas aos bens:** cada pacote tira grão ou carne do estoque do mercado. O vivandeiro do acampamento compra no mercado mais perto e cobra frete.
+  - **Cavalaria:** um cavalo por cavaleiro, do estábulo ou do negociante (ao preço do mercado mais perto, com frete).
+  - **Ração de cerveja:** opcional, gasta cerveja toda semana e melhora o humor.
+- **Livro de Preços** (mesa da Tenda): os mercados conhecidos, com a idade e a origem de cada notícia, os preços pintados de barato a caro, os negócios que o livro sugere e o histórico de cada mercado. As notícias vêm da visita, de mercadores na estrada, da taverna e das feitorias.
+- **Casa dos Mercadores** (casa com placa azul):
+  - **Feitoria:** preços frescos todo dia e margem melhor naquele mercado.
+  - **Guildas:** o bando paga a obra de uma oficina e recebe 35% do lucro dela toda semana. Se o povoado virar inimigo ou cair, a parte se perde.
+  - **Empréstimos:** nas cidades e fortalezas, com 6% de juros por semana e 6 semanas de prazo. Calote custa honra e relação.
+  - **Caravanas próprias:** até três, em rota de ida e volta. O bando paga a compra e recebe a venda; goblins podem destruí-las.
+- **Contrabando:** vender num reino a carga de um reino em guerra com ele paga 50% a mais, com 25% de chance de confisco, multa e perda de relação.
+- **Taxa de mercado e pedágio de estrada:** nos povoados do bando, caravanas pagam taxa (2%, 5% ou 10%, à escolha) e um pedágio ao atravessar.
+- **Construções:** serraria, salina, tecelagem, pastagem, moinho e porto, conforme a terra, o rio e o mar. Os povoados dos reinos já começam com as suas.
+- **Contratos da economia** (quase metade das ofertas):
+  - **Entrega:** levar um bem em falta a um povoado.
+  - **Escolta:** a caravana espera no portão, parte com o bando por perto, e salteadores esperam no meio da estrada.
+  - **Carga roubada:** destruir o bando goblin que saqueou a caravana e devolver a carga.
+  - **Rota infestada:** acabar com os salteadores que fecharam uma estrada.
+  - **Sabotagem:** saquear caravanas do inimigo do cliente.
+- **Interiores** (`src/game/scenes/InteriorScene.ts`, `src/game/data/interiors.ts`): as estruturas têm lado de dentro, como num mapa de Pokémon. Entra-se andando de encontro à porta, com E ou com um clique; o mundo dorme lá dentro e sai-se pelo tapete da porta. Com inimigos por perto, não dá para entrar.
+  - **Acampamento:** Tenda (mesa de estratégia, Livro de Preços, catre, baú, tenentes), Intendência (sacos conforme as rações, barris, caixotes, fila quando falta comida), Posto de Recrutamento, Ferraria (pilha de ferro de verdade), Estábulo (cavalos nas baias), alojamentos (um catre por soldado, feridos enfaixados, doentes) e a banca do mascate.
+  - **Povoados:** paço ou Sala de Administração, taverna (fregueses conforme a prosperidade, rodada que traz notícias, mercador de passagem), Casa dos Mercadores, templo (esmola), guarnição e todas as casas de moradores. A gente fala do que acontece ali: fome, preços, guerra, febre, impostos. Com fome, uma família pede comida das carroças, e dar comida rende honra.
+  - **A céu aberto:** o Campo de Treino, a praça do mercado e os portões continuam abrindo o painel direto.
+- **Saída do acampamento** (portão, por dentro): escolher quem vai e quem fica, ou sair sozinho.
+  - **Quem fica:** come do depósito, descansa e defende o acampamento. Para chamá-lo depois, basta dar uma ordem ao batalhão (o mensageiro leva).
+  - **Comida:** carroças cheias, pela metade ou com um quarto de comida, deixando espaço para mercadoria.
+- **Mapa do Continente:** caravanas como losangos (as do bando em azul), barcos à vista e os povoados de um contrato da economia marcados.
+- **Gerador do mundo:** porto e beira de rio agora contam a partir da muralha, e a medida de distância até o rio foi corrigida. Desde que as cidades cresceram (Marco 12) nenhum povoado saía como porto ou ribeirinho.
+- **Save versão 7:** mercados, guerras, depósito, carga, Livro de Preços, feitorias, guildas, empréstimos, caravanas e barcos. Saves antigos não carregam, e a mesma semente gera outro mundo, porque o gerador mudou.
+- **Teste automatizado:** 47 verificações do marco, mais 12 com teclado e mouse de verdade. Os testes dos Marcos 9 a 13 continuam passando. Eles foram adaptados ao que mudou: contratos que não têm local, o paço com lado de dentro e a colheita que age pelo estoque.
+- **Calibragem:** um ano simulado em dois mundos (um costeiro e um do interior), com 10 a 13 caravanas e 3 ou 4 barcos em viagem. Ainda falta ajustar jogando: o nível de vida ficou alto (de 90 a 100) e a fome está rara.
+- **Desempenho:** com 300 inimigos, 2,9 ms de JavaScript por quadro (2,7 ms antes do marco).
+- **Ficou de fora:**
+  - **Marco 17:** o bando despachar carga própria por barcaça ou navio; luxos de outros continentes de verdade (por enquanto os portos os recebem de forma abstrata).
+  - **Marcos 15 e 16:** exércitos dos reinos marchando uns contra os outros.
+
+## Marco 15 — Reinos vivos ✅ OK
 **Objetivo:** os reinos deixam de ser números e viram personagens com planos. GDD 8.9 e 8.10.
 - **Nobreza:** rei, herdeiros e lordes vassalos com traços, idade, ambição, feudos e memória pessoal do Comandante.
 - **IA por objetivos:** um plano semanal (campanha, defesa, cruzada, expansão, comércio) vira convocação de recrutas, exércitos de lordes marchando no mapa e cercos.
@@ -435,6 +501,72 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 - **Vassalagem e corte:** jurar fidelidade em troca de feudo, atender às convocações e pedir audiências na sala do trono.
 
 **Pronto quando:** sem o jogador fazer nada, em dois anos de jogo os reinos travam guerras visíveis, fazem paz, trocam de rei e oferecem contratos coerentes com o que está acontecendo, e o jogador fica sabendo disso com atraso.
+
+**Pedido junto com o marco:** as capitais bem maiores: uma cidade com uma muralha interna que leva a outro mapa, com o castelo e a nobreza morando e podendo interagir, e reputação decidindo aonde se entra; algo divertido, com simulação e role playing.
+
+**Implementado:**
+- **Capitais** (`SettlementKind` `CAPITAL`, `src/game/world/townLayout.ts`): 3800×3000 no mapa do continente, com seis colunas de quarteirões, praça diante do portão e a **muralha interna** no meio (sólida, com torres, telhados e o castelo aparecendo por trás). Toda capital de reino é uma capital de verdade. As que caíram na história continuam grandes, nas mãos de quem as tomou.
+- **A Cidade Alta** (`src/game/scenes/CapitalScene.ts`, `src/game/world/capitalLayout.ts`, `capitalPaint.ts`): passar pelo portão da muralha interna leva a **outro mapa**, de 9600×7200 px, treze vezes a área de uma cidade comum, pintado em pedaços de canvas (≈ 600 prédios).
+  - **Bairros:** Castelo (fosso, ponte, muralha, Torre de Menagem, Grande Salão, Aposentos Reais, Sala do Conselho, Biblioteca, Capela, Arsenal, Masmorra, jardim e pátio de armas), Bairro Nobre (murado, com 16 palácios), Bairro do Templo (Catedral e cemitério), Praça Real, Grande Mercado, Campo da Liça, Bairro Baixo, Rua dos Mercadores, Bairro dos Artesãos e Cidade Velha.
+  - **Andar:** Shift corre, M abre o mapa dos bairros, liteiras levam de um bairro a outro por 2 de ouro, e o Portão Velho é a saída.
+  - **Gente:** até 100 moradores conforme a prosperidade e a hora (noite vazia, torneio cheio), 19 guardas com ronda e postos, e todas as casas têm porta.
+  - **O tempo corre:** o mundo dorme na tela, mas não para (um dia a cada 6 minutos). Bandos, caravanas, guerras e fome seguem. Sair e salvar funcionam; ao carregar, o Comandante aparece diante da muralha interna.
+  - **Mercado, Casa dos Mercadores, Banco, tavernas, Quartel e estalagem** usam os sistemas de sempre. Na estalagem dá para dormir até de manhã, e a corte muda de lugar com a hora.
+- **Reconhecimento: a mesma pergunta em cada portão** (`src/game/sim/reputation.ts`). Cada reino vê o Comandante como Inimigo, Forasteiro, Conhecido, Respeitado, Cavaleiro, Vassalo ou Da família real.
+  - **Muralha interna:** aberta (com portagem para quem ninguém conhece); fechada em guerra ou com mandado de prisão, a não ser de disfarce.
+  - **Bairro Nobre:** a partir de Conhecido (Fama 15 ou relação 15).
+  - **Ponte do Castelo:** a partir de Respeitado (Fama 35 com alguma relação, ou relação 40).
+  - **Sala do Trono:** audiência marcada com o Camareiro-mor, que recebe no pátio; Cavaleiros entram direto. Honra abaixo de 20 fecha a sala.
+  - **Aposentos Reais e Arsenal:** Vassalos.
+  - **Saídas para quem não tem nome**, cada uma com seu custo: suborno (pode falhar e custa Honra), carta de apresentação (dada por um nobre amigo, ou falsa, comprada na Casa do Rato), intimidação (Temor), libré de criado (disfarce por algumas horas) e os **esgotos** (da boca no Bairro Baixo a um jardim do Bairro Nobre e à Masmorra).
+  - **Invadir tem risco:** sem licença, um guarda perto dá o "Alto!" (mais longe de dia, mais perto de noite ou de libré). Dá para pagar, correr (Shift) ou se entregar. Preso: multa, 2 dias de masmorra, Honra e relação caem.
+- **Nobreza de verdade** (`src/game/sim/nobility.ts`): cada reino tem quem governa (o título segue o nome do reino: Rei, Duquesa, Doge...), consorte, filhos, 2 a 4 lordes com casa e feudos, e cinco oficiais (Camareiro-mor, Chanceler, Marechal, Mestre dos Segredos, Sumo Sacerdote), cerca de 13 pessoas por reino.
+  - **Cada nobre tem:** idade, 2 traços entre 12, ambição, lealdade, habilidade com as armas, família, gosto para presentes e **memória do Comandante** (opinião de −100 a 100 e as 8 lembranças mais recentes).
+  - **Rotina por hora** (`scheduleOf`): trono de manhã, almoço no Grande Salão, conselho, jardim, catedral, liça, mercado ou taverna conforme os traços, palácio à noite. Quem está em lugar aberto aparece no mapa; quem está numa sala aparece lá dentro, com nome. Lordes também ficam nos paços dos próprios feudos, onde dá para falar com eles; em campanha, recebem na **tenda de guerra**, se o exército estiver em paz com o bando.
+  - **Vida:** envelhecem (o ano tem 80 dias), morrem pela idade, casam entre reinos, herdam e viajam à corte. Um dos governantes já começa velho.
+- **Conversa e favores** (`src/game/data/courtTalk.ts`, `src/game/sim/court.ts`):
+  - **Apresentar-se:** a primeira impressão sai da Fama, da Honra e do Temor, filtrados pelos traços (o devoto teme quem espalha terror; o cruel admira).
+  - **Conversar:** cinco assuntos; cada traço gosta de uns e detesta outros (uma conversa por dia).
+  - **Presentes:** cada nobre gosta de um bem; dar o bem certo vale o dobro de dar ouro (um por semana).
+  - **Favores de verdade:** levar carta a outro nobre (que pode ser aberta, com perda de Honra, e revelar uma conspiração), trazer um bem, derrotar um rival na Liça, copiar as cartas de um palácio, tirar um parente da masmorra e até envenenar um rival, que morre de verdade, com sucessão e tudo.
+  - **Títulos:** ser sagrado cavaleiro (Fama 25, relação 20, Honra 40, 150 de ouro).
+  - **Vassalagem:** jurar fidelidade dá uma aldeia em feudo, e os inimigos do reino viram inimigos do bando. O suserano convoca o bando à capital; faltar custa Honra e relação. Renegar custa caro.
+  - **Casamento:** com quem tiver opinião alta, conforme o lugar do Comandante no reino (a família real pede Cavaleiro; quem governa, Vassalo), por um dote.
+  - **Outros:** carta de apresentação, perdão real, tributo, resgate de presos (com o Camareiro ou na cela), segredos da corte e o Mestre dos Segredos, que vende os planos dos reinos vizinhos.
+  - **Insultar** tem preço, e os orgulhosos cobram.
+- **Conspirações:** um lorde ambicioso junta descontentes em segredo. O Mestre dos Segredos pode descobrir. Se ganhar força, o golpe mata quem governa ou abre uma guerra civil. O Comandante pode descobrir (carta aberta, palácio, nobre amigo) e **entrar**, **denunciar** ou **chantagear**.
+- **Liça e duelos** (`src/game/scenes/DuelScene.ts`): duelo em tempo real, até a rendição. O golpe avisa com um arco vermelho: dá para sair do alcance ou bloquear (Shift), e o bloqueio na hora certa atordoa quem atacou. Quanto melhor o adversário, mais rápido ele lê o golpe. Ninguém morre. Em **torneios** são três rodadas contra a própria corte, com bolsa e aposta em si mesmo (Fama mínima de 10).
+- **Festas da corte:** banquetes, torneios, casamentos, funerais e coroações são marcados com dias de antecedência e anunciados como notícia. Lordes viajam para a capital, e comparecer rende relação.
+- **Reinos por objetivos** (`src/game/sim/kingdoms.ts`): toda semana cada reino escolhe um plano: campanha, defesa, cruzada contra a calamidade, expansão para terras livres, obras ou recuperação. Pesam fome, ameaça, força relativa, tesouro e o jeito de quem governa.
+  - **Convocação:** tira gente do campo (a produção cai) e dá ao lorde um exército de até 34 homens, um bando de verdade no mapa.
+  - **Cerco:** o exército acampa diante dos muros; a comida da cidade some, a guarnição cai e, de 3 a 9 dias depois, vem o assalto ou a desistência. Cidade cercada fecha os portões e solta fumaça.
+  - **Batalha:** exércitos inimigos que se encontram se resolvem pela força (combate de verdade é o Marco 16). O lorde vencido morre, cai preso ou escapa. Preso, vira contrato de resgate.
+  - **Inverno:** os exércitos voltam para casa. Cidade tomada ganha dono novo, com lealdade baixa por um bom tempo.
+- **Guerra e paz:** cansaço de guerra (0–100) sobe com o tempo, com fome e perdas. Passado o limite, tratado: quem está mais cansado paga tributo e pode ceder uma aldeia; trégua de 40 dias. Aliados entram na guerra uns dos outros. Casamentos reais criam alianças. **Coalizão:** com 5 povoados ou Temor 60, os reinos que não gostam do bando se unem contra ele.
+- **Sucessão:** herdeiro adulto sobe; criança sobe com regente; sem linhagem, os lordes disputam. Com um rival ambicioso, vem a **guerra civil**: o pretendente leva as casas dele para um reino novo (`extraFactions`, vai no save), e os dois lados contratam o bando. Acaba com um lado esmagado ou com dois reinos.
+- **Lealdade dos povoados** (0–100): pesam impostos, fome, saques, cerco, convocação, cansaço de guerra, guarnição e conquista recente; nos povoados do bando, também a Honra e o Temor. Abaixo de 38 recusa impostos; abaixo de 28 pode estourar uma **revolta camponesa**, um bando que marcha contra os próprios muros e pode libertar a aldeia.
+- **Contratos emergentes** (`warContract` em `src/game/data/contracts.ts`): romper um cerco ou deter um exército de verdade, guerra civil, queimar a ponte do inimigo e libertar um nobre preso, com resgate ou pelos esgotos. Todos têm um **lado contrário**, que perde relação e guarda rancor.
+- **Notícias que andam** (`src/game/sim/rumors.ts`): o que acontece no mundo nasce num lugar e anda 6500 px por dia. Só entra no diário quando alcança alguém do bando (o Comandante, uma feitoria, um povoado do bando), dizendo onde e há quantos dias: "Chegou a Valelos (de 3 dias atrás): ...". O que aconteceu direto ao bando chega na hora. Taverna, arauto da Praça Real e mensageiro interceptado adiantam as notícias. Notícias antigas demais somem. As três mais novas aparecem no HUD.
+- **Fama, Honra e Temor** (0–100) na barra de recursos e no Livro da Nobreza. Fama vem de vitórias, contratos, calamidades e torneios, e paga até +50% nos contratos. Temor vem de saques, conquistas e massacres, esfria devagar, faz guarnições pequenas se renderem, ajuda a intimidar e baixa a lealdade.
+- **Livro da Nobreza** (mesa da Tenda e HUD da Cidade Alta): as últimas notícias, os favores, cada corte com o lugar do Comandante nela, cada nobre (idade, traços, opinião, onde costuma estar, a última lembrança) e as conspirações descobertas.
+- **Painéis e mapa:** o painel do povoado mostra lealdade, senhor e cerco. O Mapa do Continente marca capitais (♛), cercos (⚔) e exércitos dos reinos em paz com o bando (roxo).
+- **Tomar uma capital:** a corte foge para a maior cidade que sobrou, os portões abrem para o Comandante e o trono vira a administração da cidade.
+- **Primeira visita:** o sargento do Portão Velho diz o que o Comandante é ali e o que falta para o próximo portão. Quem é Forasteiro não fala com a família real, e só nobres curiosos o recebem.
+- **Gerador do mundo:** plantas de povoados nunca se sobrepõem (em mundos muito apertados, o povoado que não couber não nasce), e as capitais nascem longe do acampamento. A tempestade alcança 3600 px terra adentro, para pegar o centro das capitais do litoral.
+- **Save versão 8:** a mesma semente gera outro mundo, porque as capitais mudaram o gerador.
+- **Teste automatizado:** 57 verificações do marco.
+  - 15 da Cidade Alta;
+  - 16 do lado do jogador (favor, título, vassalagem, casamento, intriga, duelo, torneio, esgotos, invasão, prisão, salvar);
+  - 9 do mundo reagindo (notícias, contrato, tenda de guerra, revolta, sucessão, coalizão, trono);
+  - 10 das telas, com clique de verdade nas respostas depois de sair de um prédio;
+  - 7 de salvar e carregar no meio de uma guerra civil, com exércitos em campo.
+
+  Os testes dos Marcos 9 a 14 continuam passando. Eles foram adaptados ao que mudou: o centro de uma capital agora é sólido, a primeira visita abre uma fala, e os exércitos de lordes têm lógica própria. Três verificações antigas oscilam entre rodadas por causa do sorteio do próprio teste, sem relação com o marco: a bolha de detalhe e a noite (Marco 10) e os lobos (Marco 12).
+- **Simulação de dois anos, sem o jogador (três mundos):** 2 a 5 guerras, 1 a 4 guerras civis, 1 ou 2 governantes trocados em reinos que já existiam, 0 a 13 povoados mudando de mãos e 6 a 17 nobres mortos. Os 160 dias rodam em 3 a 5 s.
+- **Desempenho:** 165 fps na Cidade Alta, de dia e de noite, com 100 moradores (0,2 ms de JavaScript por quadro). No campo, comparado lado a lado com a versão anterior, nada piorou: acampamento 133 × 135 fps; 300 inimigos 96–115 × 114 fps (2,1–2,6 ms × 2,2 ms). A medida oscila muito nesta máquina: a mesma versão variou de 66 a 135 fps entre rodadas.
+- **Ficou de fora:**
+  - **Marco 16:** batalhas de verdade entre exércitos da IA, cercos físicos e prisioneiros do bando.
+  - **Equilíbrio:** calibrado por simulação, sem jogar de verdade. Os números de Fama, preços de suborno e dificuldade dos duelos ainda pedem ajuste jogando.
 
 ## Marco 16 — Guerra de verdade: cercos e prisioneiros
 **Objetivo:** guerras com escolhas de verdade e consequências morais. GDD 8.11.

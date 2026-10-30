@@ -84,7 +84,7 @@ export class TradeRoutes {
     for (const t of towns) {
       if (count >= max) break;
       if (!open(t) || caravans.some((c) => c.cargo?.from === t.id && !c.cargo.own)) continue;
-      const chance = CARAVAN.DAILY_CHANCE * (t.kind === "CITY" ? 1.5 : 1) * (t.buildings.includes("MARKET") ? 1.3 : 1);
+      const chance = CARAVAN.DAILY_CHANCE * (t.kind === "CITY" || t.kind === "CAPITAL" ? 1.5 : 1) * (t.buildings.includes("MARKET") ? 1.3 : 1);
       if (Math.random() > chance) continue;
       let best: { plan: TradePlan; to: Settlement; days: number } | null = null;
       for (const r of roads.reachable(t.id, CARAVAN.MAX_DAYS).slice(0, 6)) {
@@ -108,6 +108,8 @@ export class TradeRoutes {
     const store = useGameStore.getState();
     const cost = store.caravanDeparts(from.id, plan.good, plan.qty, own?.id);
     if (cost <= 0 && !own) return false;
+    // Pedágio: cada povoado do bando no meio do caminho cobra a passagem
+    if (!own) store.roadToll(route.via.filter((id) => store.settlements.some((t) => t.id === id && t.owner === "PLAYER")).length);
     const def = isFactionOwner(from.owner) ? this.world.factions.find((f) => f.id === from.owner) : undefined;
     const guards = CARAVAN.GUARDS[0] + Math.floor(Math.random() * (CARAVAN.GUARDS[1] - CARAVAN.GUARDS[0] + 1));
     const cargo: CaravanCargo = { good: plan.good, qty: cost > 0 ? plan.qty : 0, from: from.id, to: to.id, cost, own: own?.id };
@@ -478,6 +480,14 @@ export class TradeRoutes {
     }
     if (ev.type !== "DESTROYED") return news;
     const band = ev.band;
+    // Rota infestada: os salteadores caíram
+    const route = s.activeContract?.contract;
+    if (route?.kind === "ROUTE" && route.bandId === band.id) {
+      const ours = nearArmy(band.anchor);
+      s.finishContract(ours, ours ? "a estrada está livre" : "outro bando limpou a estrada antes");
+      news.push({ text: ours ? `${band.name} não existem mais: a estrada está aberta às caravanas.` : `Alguém acabou com ${band.name} antes do bando.`, tone: ours ? "good" : "bad" });
+      return news;
+    }
     // Goblins com carga roubada abatidos pelo bando: a carga volta
     if (band.loot && band.materialized && nearArmy(band.anchor)) {
       const text = s.recoverCargo(band.id);

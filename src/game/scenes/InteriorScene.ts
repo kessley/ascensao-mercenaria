@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { buildInterior, type Furniture, type InteriorDef, type Npc, type Spot, type Talk } from "../data/interiors";
 import { drawTroopShape } from "../entities/shapes";
 import { registerDialogHandler } from "../interiorBridge";
+import { courtChoice, nobleTalk } from "../data/courtTalk";
 import { useGameStore, type CampPanel } from "../../store/useGameStore";
 import { COLORS, GOODS, GOOD_LIST, WORLD } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
@@ -11,6 +12,8 @@ export interface InteriorData {
   key: string;
   title: string;
   settlementId?: string;
+  /** Cena para onde volta ao sair (a Cidade Alta, no Marco 15; senão, o mundo). */
+  returnTo?: string;
 }
 
 interface NpcView {
@@ -49,7 +52,7 @@ export class InteriorScene extends Phaser.Scene {
   private facing = -Math.PI / 2;
   private npcs: NpcView[] = [];
   private solids: Phaser.Geom.Rectangle[] = [];
-  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "ESC" | "ONE" | "TWO" | "THREE" | "FOUR" | "UP" | "DOWN" | "LEFT" | "RIGHT", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"W" | "A" | "S" | "D" | "E" | "ESC" | "ONE" | "TWO" | "THREE" | "FOUR" | "FIVE" | "SIX" | "SEVEN" | "EIGHT" | "NINE" | "UP" | "DOWN" | "LEFT" | "RIGHT", Phaser.Input.Keyboard.Key>;
   private near: { kind: "NPC"; v: NpcView } | { kind: "SPOT"; spot: Spot } | { kind: "DOOR" } | null = null;
   private leaving = false;
   /** O que fazer no mundo ao sair (ex.: descansar até o amanhecer). */
@@ -91,7 +94,7 @@ export class InteriorScene extends Phaser.Scene {
 
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Teclado indisponível");
-    this.keys = keyboard.addKeys("W,A,S,D,E,ESC,ONE,TWO,THREE,FOUR,UP,DOWN,LEFT,RIGHT") as typeof this.keys;
+    this.keys = keyboard.addKeys("W,A,S,D,E,ESC,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,UP,DOWN,LEFT,RIGHT") as typeof this.keys;
     this.keys.E.on("down", () => this.interact());
     this.keys.ESC.on("down", () => {
       const s = useGameStore.getState();
@@ -106,9 +109,14 @@ export class InteriorScene extends Phaser.Scene {
     this.keys.TWO.on("down", () => choose(1));
     this.keys.THREE.on("down", () => choose(2));
     this.keys.FOUR.on("down", () => choose(3));
-    registerDialogHandler((id) => this.onChoice(id));
+    this.keys.FIVE.on("down", () => choose(4));
+    this.keys.SIX.on("down", () => choose(5));
+    this.keys.SEVEN.on("down", () => choose(6));
+    this.keys.EIGHT.on("down", () => choose(7));
+    this.keys.NINE.on("down", () => choose(8));
+    const unregister = registerDialogHandler((id) => this.onChoice(id));
     store.enterInterior({ key: def.key, title: def.title, settlementId: def.settlementId });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => registerDialogHandler(null));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, unregister);
   }
 
   update(_time: number, delta: number): void {
@@ -305,6 +313,11 @@ export class InteriorScene extends Phaser.Scene {
       gfx.fillStyle(0x3a2a1a, 1);
       gfx.fillCircle(0, -4, 5);
     }
+    if (npc.crown) {
+      gfx.fillStyle(0xe0b040, 1);
+      gfx.fillTriangle(-9, -11, -3, -18, 0, -11);
+      gfx.fillTriangle(9, -11, 3, -18, 0, -11);
+    }
     if (npc.mark === "WOUNDED") {
       gfx.fillStyle(0xffffff, 1);
       gfx.fillRect(-7, -2, 14, 4);
@@ -427,8 +440,9 @@ export class InteriorScene extends Phaser.Scene {
     if (!n) return;
     if (n.kind === "DOOR") return this.exit();
     if (n.kind === "NPC") {
-      // Vira para o Comandante e fala
-      this.say(n.v.npc.name, n.v.npc.talk);
+      // Nobres falam conforme o momento (Marco 15): a fala é montada na hora
+      const noble = n.v.npc.nobleId ? s.nobles.find((x) => x.id === n.v.npc.nobleId) : undefined;
+      this.say(n.v.npc.name, noble ? nobleTalk(noble, s) : n.v.npc.talk);
       return;
     }
     this.say(n.spot.label, n.spot.talk);
@@ -453,9 +467,39 @@ export class InteriorScene extends Phaser.Scene {
       this.exit();
       return;
     }
+    // Marco 15: a corte (nobres, títulos, favores) e o que a Cidade Alta faz ao sair do prédio
+    if (id === "cityrest") {
+      if (store.gold < 5) {
+        this.say(speaker, { text: "Sem 5 de ouro, sem quarto." });
+        return;
+      }
+      useGameStore.setState({ gold: store.gold - 5 });
+      this.after = "cityrest";
+      this.exit();
+      return;
+    }
+    if (id.startsWith("cityleave:") || id.startsWith("cityenter:")) {
+      this.after = id;
+      this.exit();
+      return;
+    }
+    if (id.startsWith("court:")) {
+      const out = courtChoice(id, this.def.settlementId ?? "");
+      if (out.scene === "DUEL") {
+        this.after = "duel";
+        this.exit();
+        return;
+      }
+      if (out.talk) this.say(out.speaker ?? speaker, out.talk);
+      return;
+    }
     const [kind, townId, arg] = id.split(":");
     if (kind === "round") {
-      this.say(speaker, { text: store.buyRound(townId) });
+      const text = store.buyRound(townId);
+      // Depois da segunda caneca, as notícias de longe chegam antes (Marco 15)
+      const t = store.settlements.find((x) => x.id === townId);
+      const heard = t ? store.hearNews(t, `em ${t.name}`, WORLD.DAY_DISTANCE) : 0;
+      this.say(speaker, { text: heard > 0 ? `${text} (${heard} notícia(s) nova(s) no diário.)` : text });
       return;
     }
     if (kind === "donate") {
@@ -500,7 +544,7 @@ export class InteriorScene extends Phaser.Scene {
     const finish = () => {
       useGameStore.getState().leaveInterior();
       const after = this.after;
-      this.scene.wake("WorldScene", { from: this.data0?.key, after });
+      this.scene.wake(this.data0?.returnTo ?? "WorldScene", { from: this.data0?.key, after });
       this.scene.stop();
     };
     if (!this.def) return finish();

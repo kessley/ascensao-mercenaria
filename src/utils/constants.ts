@@ -853,7 +853,7 @@ export const TIME = {
 /** Salvar e carregar (Marco 10). */
 export const SAVE = {
   /** Versão do formato; saves de outra versão do gerador não são carregados. */
-  VERSION: 7,
+  VERSION: 8,
   /** Espaços manuais (além do automático). */
   SLOTS: 3,
 } as const;
@@ -916,8 +916,8 @@ export const WEATHER = {
   STORM_RANGE: 0.6,
   /** Dos dias de chuva na costa e no mar, quantos viram tempestade no outono e no inverno. */
   STORM_SHARE: 0.45,
-  /** Até onde a tempestade entra terra adentro (px do mar). */
-  STORM_REACH: 2600,
+  /** Até onde a tempestade entra terra adentro (px do mar): alcança o centro das capitais do litoral. */
+  STORM_REACH: 3600,
   /** Visão do bando (e percepção dos inimigos) conforme o tempo. */
   VISION: { CLEAR: 1, RAIN: 0.85, FOG: 0.5, SNOW: 0.75, STORM: 0.6 } as Record<Weather, number>,
 } as const;
@@ -1028,9 +1028,9 @@ export const REALM = {
   /** Reconstruir um povoado em ruínas. */
   REBUILD_COST: { gold: 180, iron: 15 },
   /** População máxima por tipo de povoado. */
-  MAX_POPULATION: { VILLAGE: 300, CITY: 900, FORT: 500 },
+  MAX_POPULATION: { VILLAGE: 300, CITY: 900, FORT: 500, CAPITAL: 1500 },
   /** Defesa base de cada tipo de povoado (somada à guarnição). */
-  BASE_DEFENSE: { VILLAGE: 2, CITY: 6, FORT: 12 },
+  BASE_DEFENSE: { VILLAGE: 2, CITY: 6, FORT: 12, CAPITAL: 16 },
   /** Guarnição máxima sem e com quartel. */
   GARRISON_CAP: 12,
   GARRISON_CAP_BARRACKS: 30,
@@ -1038,7 +1038,7 @@ export const REALM = {
    * Guarnição de cada tipo de povoado no começo da campanha. Os reinos repõem 1 homem por
    * semana até esse número (os povoados do bando crescem até o teto, acima).
    */
-  BASE_GARRISON: { VILLAGE: 6, CITY: 14, FORT: 20 },
+  BASE_GARRISON: { VILLAGE: 6, CITY: 14, FORT: 20, CAPITAL: 26 },
   /** Armar milícia: +N homens por X de ouro. */
   MILITIA: { MEN: 5, GOLD: 40 },
   /** Impostos: multiplicador da renda e efeito diário na prosperidade. */
@@ -1084,6 +1084,123 @@ export const REALM = {
     { min: 2, label: "Barão" },
     { min: 4, label: "Rei" },
   ],
+} as const;
+
+/**
+ * Nobreza e reinos vivos (Marco 15). Um ano são 80 dias de jogo: nos dois anos que a campanha
+ * leva para virar uma saga, reis velhos morrem, herdeiros crescem e guerras começam e acabam.
+ */
+export const KINGDOM = {
+  YEAR_DAYS: 80,
+  /** Maioridade: herdeiro mais novo que isso abre uma regência (e uma chance de crise). */
+  ADULT: 16,
+  /** Morte natural por semana: base + (idade − velhice) × por ano. */
+  DEATH_BASE: 0.0008,
+  DEATH_OLD_FROM: 45,
+  DEATH_PER_YEAR: 0.0024,
+  /** Exércitos em campo por reino e tamanho (base + por povoado), teto da convocação. */
+  MAX_ARMIES: 2,
+  ARMY_SIZE: { BASE: 8, PER_TOWN: 2, MAX: 34 },
+  /** Fração da gente tirada do campo em cada convocação (baixa a produção) e quanto volta por semana. */
+  LEVY_PER_ARMY: 0.08,
+  LEVY_RETURN: 0.03,
+  LEVY_MAX: 0.3,
+  /** Guerra: chance semanal de um reino sem guerra começar uma e a trégua depois da paz (dias). */
+  WAR_CHANCE: 0.1,
+  TRUCE_DAYS: 40,
+  /** Cansaço de guerra (0–100). */
+  WEARINESS_WEEK: 4,
+  WEARINESS_TOWN_LOST: 12,
+  WEARINESS_ARMY_LOST: 8,
+  WEARINESS_FAMINE: 2,
+  WEARINESS_REST: 5,
+  /** Passado isto, o reino aceita a paz; a chance cresce com o cansaço. */
+  WEARINESS_PEACE: 55,
+  /** Tributo pago pelo lado mais cansado (ouro do tesouro). */
+  PEACE_TRIBUTE: 200,
+  /** Reino rico: renda semanal por 10 habitantes e custo semanal de cada exército. */
+  TREASURY_PER_10_POP: 1,
+  ARMY_UPKEEP: 40,
+  ARMY_COST: 120,
+  /** Cerco de um exército da IA: dias mínimos antes do assalto; a comida da cidade some aos poucos. */
+  SIEGE_MIN_DAYS: 3,
+  SIEGE_MAX_DAYS: 9,
+  SIEGE_FOOD_PER_DAY: 0.08,
+  /** Aliança e casamento entre reinos: chance semanal. */
+  ALLIANCE_CHANCE: 0.05,
+  MARRIAGE_CHANCE: 0.1,
+  /** Quem jura a Coroa ao bando: chance semanal de coalizão e os limiares. */
+  COALITION_TOWNS: 5,
+  COALITION_FEAR: 60,
+  COALITION_CHANCE: 0.25,
+  /** Conspiração: chance semanal de nascer e força necessária para o golpe. */
+  PLOT_CHANCE: 0.1,
+  PLOT_STRENGTH: 100,
+  /** Lealdade dos povoados (0–100): alvo por dia e limiares. */
+  LOYALTY_START: 70,
+  LOYALTY_DRIFT: 0.06,
+  LOYALTY_NO_TAX: 38,
+  LOYALTY_REVOLT: 28,
+  /** Bando camponês: tamanho por 100 habitantes. */
+  REVOLT_PER_100: 2.5,
+  REVOLT_MAX: 22,
+  /** Notícias andam a isto por dia (px) e somem depois de tantos dias sem chegar a ninguém. */
+  NEWS_SPEED: 6500,
+  NEWS_MAX_AGE: 30,
+} as const;
+
+/** Fama, Honra e Temor (Marco 15), todos de 0 a 100. */
+export const REPUTE = {
+  FAME: { VICTORY: 1, BIG_VICTORY: 3, CONTRACT: 2, CALAMITY: 20, TOURNAMENT: 8, DUEL: 3 },
+  FEAR: { ROB: 3, MASSACRE: 8, CONQUER: 5, INTIMIDATE: 1, ASSASSINATE: 10 },
+  /** Temor esfria devagar quando o bando se comporta. */
+  FEAR_DECAY: 0.08,
+  /** Contratos pagam até +50% com a fama. */
+  CONTRACT_FAME_BONUS: 0.005,
+} as const;
+
+/** A corte e a Cidade Alta (Marco 15). */
+export const COURT = {
+  /** Portagem na muralha interna para quem ninguém conhece. */
+  TOLL: 5,
+  /** Suborno por portão (a chance cai com a honra do guarda sorteado). */
+  BRIBE: { NOBLE: 25, CASTLE: 80 } as Record<string, number>,
+  BRIBE_CHANCE: 0.7,
+  /** Multa e dias presos por invadir ou por suborno recusado. */
+  FINE: 60,
+  JAIL_DAYS: 2,
+  /** Disfarce do Bairro Baixo: preço e duração (dias). */
+  DISGUISE_GOLD: 30,
+  DISGUISE_DAYS: 0.4,
+  FORGED_LETTER_GOLD: 90,
+  /** Conversa: uma por dia com cada nobre rende opinião; presente: uma vez por semana. */
+  TALK_OPINION: 4,
+  GIFT_OPINION: 10,
+  GIFT_COOLDOWN: 7,
+  /** Opinião mínima para pedir favores, intimidade (segredos, aposentos) e casamento. */
+  OPINION_FAVOR: 5,
+  OPINION_SECRET: 30,
+  OPINION_MARRY: 55,
+  /** Sagrar cavaleiro: fama, relação e custo da cerimônia. */
+  KNIGHT: { FAME: 25, RELATION: 20, HONOR: 40, GOLD: 150 },
+  /** Vassalagem: exige ser cavaleiro. */
+  VASSAL: { RELATION: 35, FAME: 35 },
+  /** Convocação do suserano: dias de prazo e castigo por faltar. */
+  SUMMONS_DAYS: 6,
+  SUMMONS_HONOR: -10,
+  SUMMONS_RELATION: -20,
+  SUMMONS_CHANCE: 0.12,
+  /** Liteira entre os bairros. */
+  LITTER_GOLD: 2,
+  LITTER_DAYS: 0.02,
+  /** Torneio e banquete: de quantos em quantos dias cada capital faz um e o aviso antecipado. */
+  TOURNAMENT_EVERY: 26,
+  FEAST_EVERY: 14,
+  EVENT_NOTICE: 5,
+  TOURNAMENT_PURSE: 200,
+  TOURNAMENT_FAME_MIN: 10,
+  /** Resgate de um nobre preso (por nível da nobreza). */
+  RANSOM: 300,
 } as const;
 
 export type BuildingId =
@@ -1170,6 +1287,7 @@ export const MARKET = {
     VILLAGE: { peasants: 0.92, burghers: 0.07, nobles: 0.01 },
     CITY: { peasants: 0.55, burghers: 0.38, nobles: 0.07 },
     FORT: { peasants: 0.6, burghers: 0.25, nobles: 0.15 },
+    CAPITAL: { peasants: 0.45, burghers: 0.42, nobles: 0.13 },
   },
   /** Necessidades por 100 pessoas por dia (comida = grão ou carne, o mais barato primeiro). */
   NEEDS: {
@@ -1269,6 +1387,8 @@ export const TRADE = {
   OWN_CARAVAN_MAX: 3,
   /** Taxa de mercado dos povoados do bando (por caravana que chega): baixa, normal e alta. */
   MARKET_TAX: [0.02, 0.05, 0.1] as const,
+  /** Pedágio de estrada: cada caravana alheia que atravessa um povoado do bando. */
+  ROAD_TOLL: 4,
   /** Uma rodada na taverna: notícias e preços de longe. */
   TAVERN_ROUND: 8,
   /** Ração de cerveja: por semana, cada 20 soldados bebem 1 unidade; humor do acampamento. */

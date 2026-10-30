@@ -104,6 +104,22 @@ export interface TownLayout {
   hall: Point;
   /** Casas em ruínas (só desenho: entulho). */
   rubble: Rect[];
+  /**
+   * Capital (Marco 15): a muralha interna em volta da Cidade Alta. Quem passa pelo portão dela
+   * vai para outro mapa, bem maior (ver capitalLayout.ts).
+   */
+  inner: InnerCity | null;
+}
+
+/** Muralha interna de uma capital: o miolo é sólido (a Cidade Alta é outro mapa). */
+export interface InnerCity {
+  rect: Rect;
+  walls: Rect[];
+  towers: Rect[];
+  /** Diante do portão, do lado de fora (onde o aviso aparece). */
+  door: Point;
+  /** Largura do portão, no meio do lado sul da muralha. */
+  gateWidth: number;
 }
 
 /** Tamanho externo da muralha por tipo de povoado. */
@@ -111,7 +127,11 @@ export const TOWN_SIZE: Record<SettlementKind, { w: number; h: number }> = {
   VILLAGE: { w: 1400, h: 1100 },
   CITY: { w: 2600, h: 2100 },
   FORT: { w: 1800, h: 1600 },
+  CAPITAL: { w: 3800, h: 3000 },
 };
+
+/** Muralha interna da capital (centrada, um pouco ao norte: a praça do mercado fica diante do portão). */
+const INNER_SIZE = { w: 1700, h: 1160, thickness: 56, tower: 110, gate: 200 };
 
 interface KindSpec {
   wallKind: "PALISADE" | "STONE";
@@ -174,6 +194,20 @@ const SPEC: Record<SettlementKind, KindSpec> = {
     empty: 0.05,
     fields: 0,
   },
+  CAPITAL: {
+    wallKind: "STONE",
+    thickness: 56,
+    ring: 180,
+    street: 180,
+    cols: 6,
+    rows: 5,
+    gates: ["N", "S", "E", "W"],
+    tower: 120,
+    towerEvery: 640,
+    square: { w: 860, h: 420 },
+    empty: 0.08,
+    fields: 8,
+  },
 };
 
 const GATE_WIDTH = 230;
@@ -183,6 +217,7 @@ const CAMP_SIZE: Record<SettlementKind, { w: number; d: number; tents: number }>
   VILLAGE: { w: 400, d: 250, tents: 2 },
   CITY: { w: 400, d: 260, tents: 3 },
   FORT: { w: 540, d: 380, tents: 4 },
+  CAPITAL: { w: 480, d: 300, tents: 4 },
 };
 /** O exército barrado no portão espera a esta distância do muro, do lado de fora. */
 const WAIT_OUT = 420;
@@ -282,23 +317,29 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
   }
 
   // --- Praça no centro, paço/castelo e templo ---
-  const square: Rect = { x: cx - spec.square.w / 2, y: cy - spec.square.h / 2, w: spec.square.w, h: spec.square.h };
+  // Capital: a muralha interna ocupa o centro; a praça fica diante do portão dela
+  const inner = kind === "CAPITAL" ? innerCity(cx, cy - 170) : null;
+  const squareCenter = inner ? { x: cx, y: inner.rect.y + inner.rect.h + 120 + spec.square.h / 2 } : { x: cx, y: cy };
+  const square: Rect = { x: squareCenter.x - spec.square.w / 2, y: squareCenter.y - spec.square.h / 2, w: spec.square.w, h: spec.square.h };
+  // Ninguém anda por dentro da muralha interna: os cruzamentos de lá saem da grade de ruas
+  if (inner) dropNodesInside(nodes, edges, inset(inner.rect, -70));
   const keepBlock = blocks.find((b) => b.r === Math.max(0, spec.rows / 2 - 1) - (kind === "CITY" ? 1 : 0) && b.c === Math.max(0, spec.cols / 2 - 1)) ?? blocks[0];
   let keep: Rect;
-  if (kind === "FORT") keep = inset(keepBlock.rect, 30);
+  if (inner) keep = inner.rect;
+  else if (kind === "FORT") keep = inset(keepBlock.rect, 30);
   else if (kind === "CITY") keep = inset(keepBlock.rect, 24);
   else {
     // Casa do Conselho: no canto do quarteirão voltado para a praça
     const r = keepBlock.rect;
     keep = { x: r.x + r.w - 230, y: r.y + r.h - 160, w: 210, h: 140 };
   }
-  const keepDoor = { x: keep.x + keep.w / 2, y: keep.y + keep.h + 14 };
+  const keepDoor = inner ? inner.door : { x: keep.x + keep.w / 2, y: keep.y + keep.h + 14 };
   let temple: Rect | null = null;
-  if (kind === "CITY") {
-    const tb = blocks.find((b) => b.r === 0 && b.c === spec.cols / 2) ?? blocks[1];
+  if (kind === "CITY" || kind === "CAPITAL") {
+    const tb = inner ? (blocks.find((b) => b.r === 4 && b.c === 4) ?? blocks[1]) : (blocks.find((b) => b.r === 0 && b.c === spec.cols / 2) ?? blocks[1]);
     temple = { x: tb.rect.x + tb.rect.w / 2 - 120, y: tb.rect.y + 20, w: 240, h: tb.rect.h - 40 };
   }
-  const solidsTaken = [keep, ...(temple ? [temple] : []), inset(square, -30)];
+  const solidsTaken = [inner ? inset(keep, -20) : keep, ...(temple ? [temple] : []), inset(square, -30)];
   // Acampamentos da guarnição no quarteirão ao lado de cada portão (em ruínas o terreno fica vazio)
   const allCamps: GarrisonCamp[] = [];
   gates.forEach((g, i) => {
@@ -331,11 +372,11 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
 
   // Barracas do mercado em volta da praça
   const stalls: Rect[] = [];
-  const nStalls = kind === "CITY" ? 8 : kind === "VILLAGE" ? 4 : 2;
+  const nStalls = kind === "CAPITAL" ? 14 : kind === "CITY" ? 8 : kind === "VILLAGE" ? 4 : 2;
   for (let k = 0; k < nStalls; k++) {
     const a = (k / nStalls) * Math.PI * 2 + 0.3;
-    const px = cx + Math.cos(a) * (square.w / 2 - 70);
-    const py = cy + Math.sin(a) * (square.h / 2 - 60);
+    const px = squareCenter.x + Math.cos(a) * (square.w / 2 - 70);
+    const py = squareCenter.y + Math.sin(a) * (square.h / 2 - 60);
     stalls.push({ x: px - 34, y: py - 22, w: 68, h: 44 });
   }
 
@@ -404,10 +445,49 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
     edges,
     fields,
     camps,
-    market: { x: cx, y: cy },
+    market: squareCenter,
     hall: keepDoor,
     rubble,
+    inner,
   };
+}
+
+/** Muralha interna da capital: sólida por inteiro, com torres e um portão ao sul. */
+function innerCity(cx: number, cy: number): InnerCity {
+  const { w, h, thickness: t, tower, gate } = INNER_SIZE;
+  const rect: Rect = { x: cx - w / 2, y: cy - h / 2, w, h };
+  const walls: Rect[] = [
+    { x: rect.x, y: rect.y, w, h: t },
+    { x: rect.x, y: rect.y + t, w: t, h: h - t },
+    { x: rect.x + w - t, y: rect.y + t, w: t, h: h - t },
+    { x: rect.x + t, y: rect.y + h - t, w: w / 2 - gate / 2 - t, h: t },
+    { x: cx + gate / 2, y: rect.y + h - t, w: w / 2 - gate / 2 - t, h: t },
+  ];
+  const towers: Rect[] = [];
+  const at = (x: number, y: number) => towers.push({ x: x - tower / 2, y: y - tower / 2, w: tower, h: tower });
+  for (const x of [rect.x, rect.x + w]) for (const y of [rect.y, rect.y + h / 2, rect.y + h]) at(x, y);
+  for (const x of [rect.x + w / 3, rect.x + (2 * w) / 3]) at(x, rect.y);
+  // As duas torres do portão
+  at(cx - gate / 2 - tower / 2, rect.y + h);
+  at(cx + gate / 2 + tower / 2, rect.y + h);
+  return { rect, walls, towers, door: { x: cx, y: rect.y + h + 56 }, gateWidth: gate };
+}
+
+/** Tira da grade de ruas os cruzamentos dentro de um retângulo (e as ligações deles). */
+function dropNodesInside(nodes: Point[], edges: [number, number][], r: Rect): void {
+  const keep: number[] = [];
+  const map = new Map<number, number>();
+  nodes.forEach((p, i) => {
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return;
+    map.set(i, keep.length);
+    keep.push(i);
+  });
+  const kept = keep.map((i) => nodes[i]);
+  const links = edges.filter(([a, b]) => map.has(a) && map.has(b)).map(([a, b]): [number, number] => [map.get(a) as number, map.get(b) as number]);
+  nodes.length = 0;
+  nodes.push(...kept);
+  edges.length = 0;
+  edges.push(...links);
 }
 
 /** Direção "para fora" de cada lado da muralha. */
@@ -601,6 +681,7 @@ export function townSolids(layout: TownLayout): { rect: Rect; type: "WALL" | "BU
   return [
     ...layout.walls.map((rect) => ({ rect, type: "WALL" as const })),
     ...layout.towers.map((rect) => ({ rect, type: "WALL" as const })),
+    ...(layout.inner?.towers ?? []).map((rect) => ({ rect, type: "WALL" as const })),
     ...layout.houses.map((hs) => ({ rect: hs.rect, type: "BUILDING" as const })),
     { rect: layout.keep, type: "BUILDING" as const },
     ...(layout.temple ? [{ rect: layout.temple, type: "BUILDING" as const }] : []),

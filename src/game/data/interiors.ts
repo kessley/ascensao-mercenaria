@@ -2,10 +2,12 @@ import type { CampPanel, GameState } from "../../store/useGameStore";
 import { fullName } from "./lieutenants";
 import { hasFollower } from "../sim/campEvents";
 import { isSick, isFactionOwner, inRevolt, type Settlement } from "../sim/realm";
+import { nobleName } from "../sim/nobility";
 import { freightOf } from "../sim/trade";
 import { GOODS, GOOD_LIST, TRADE, TROOPS, type Good, type TroopType } from "../../utils/constants";
 import { dailyRations } from "../../utils/economy";
 import { createRng, seedFromText } from "../worldgen/rng";
+import { courtInterior, fieldTent } from "./courtInteriors";
 import type { Point } from "../../utils/math";
 
 /**
@@ -68,6 +70,9 @@ export interface Npc {
   wander?: number;
   mark?: "WOUNDED" | "SICK" | "SLEEP";
   talk: Talk;
+  /** Marco 15: um nobre de verdade (a conversa é montada na hora) e se usa coroa. */
+  nobleId?: string;
+  crown?: boolean;
 }
 
 /** Ponto de interação num objeto (mesa de estratégia, quadro de preços, cama...). */
@@ -124,6 +129,8 @@ const room = (key: string, title: string, style: InteriorStyle, w: number, h: nu
 });
 
 const f = (kind: FurnitureKind, x: number, y: number, w: number, h: number, color: number, solid = true): Furniture => ({ kind, x, y, w, h, color, solid });
+export const furniture = f;
+export const makeRoom = room;
 const bye = { id: "bye", label: "Até mais." };
 const pick = <T>(r: () => number, list: readonly T[]): T => list[Math.floor(r() * list.length)];
 
@@ -134,6 +141,7 @@ export function buildInterior(key: string, s: GameState): InteriorDef | null {
     if (parts[1] === "Q") return quarters(key, s, parts[2]);
     return campSite(key, s, parts[1]);
   }
+  if (parts[0] === "field") return fieldTent(key, s, parts[1]);
   if (parts[0] === "town") {
     const t = s.settlements.find((x) => x.id === parts[1]);
     if (!t || t.owner === "RUINED") return null;
@@ -146,8 +154,12 @@ export function buildInterior(key: string, s: GameState): InteriorDef | null {
         return guild(key, s, t);
       case "temple":
         return temple(key, s, t);
+      case "garrison":
+        return garrison(key, s, t);
       case "house":
         return house(key, s, t, Number(parts[3] ?? 0));
+      default:
+        return courtInterior(key, s, t, parts[2], parts[3]);
     }
   }
   return null;
@@ -255,6 +267,21 @@ function campSite(key: string, s: GameState, kind: string): InteriorDef | null {
       if (hasFollower(s.followers, "SMITH")) d.npcs.push({ id: "helper", name: "Ajudante de ferreiro", x: 140, y: 150, color: 0x8a6a4a, wander: 20, talk: { text: "Com dois martelos, sai mais barato. O mestre que o diga." } });
       return d;
     }
+    case "PEDDLER": {
+      const d = room(key, "Banca do mascate", "TENT", 460, 340);
+      d.furniture.push(f("COUNTER", 110, 120, 240, 34, C.WOOD));
+      for (let i = 0; i < 4; i++) d.furniture.push(f("CRATE", 50 + i * 60, 40, 44, 44, [0xb07ac0, 0xe0a040, 0xe8dcc0, 0xc0584a][i]));
+      const man = s.followers.find((x) => x.role === "PEDDLER");
+      d.npcs.push({
+        id: "peddler",
+        name: man ? `${man.name}, o mascate` : "Mascate",
+        x: 230,
+        y: 100,
+        color: 0xd9b25f,
+        talk: { text: "Vinho para a tropa, ataduras, cobertores... tudo de primeira, Comandante. Quase tudo.", options: [{ id: panelAction({ kind: "PEDDLER" }), label: "Ver a banca" }, bye] },
+      });
+      return d;
+    }
     case "STABLE": {
       const d = room(key, "Estábulo", "WOOD", 640, 400);
       const horses = (s.depot.HORSES ?? 0) + s.scouts.length + s.messengers.length;
@@ -317,7 +344,7 @@ function quarters(key: string, s: GameState, battalionId: string): InteriorDef |
 // --- Povoados ---
 
 /** O que se ouve da gente de um povoado (fome, preços, guerra, febre, impostos...). */
-function townGossip(s: GameState, t: Settlement, r: () => number): string[] {
+export function townGossip(s: GameState, t: Settlement, r: () => number): string[] {
   const out: string[] = [];
   const name = (id: string) => s.world?.factions.find((f) => f.id === id)?.name ?? "reino";
   if (t.econ.famine) out.push("Os celeiros estão vazios. Meu filho chora de fome à noite.", "O pão custa uma fortuna. Comemos sopa de casca.");
@@ -330,6 +357,12 @@ function townGossip(s: GameState, t: Settlement, r: () => number): string[] {
   if (t.lastRaidDay !== null && s.day - t.lastRaidDay <= 5) out.push("Os saqueadores levaram tudo do armazém. Tudo!");
   const war = s.wars.find((w) => w.peace === undefined && (w.a === t.owner || w.b === t.owner));
   if (war) out.push(`Estamos em guerra com o ${name(war.a === t.owner ? war.b : war.a)}. Levaram meu irmão para o exército e as armas sumiram do mercado.`);
+  // A corte na boca do povo (Marco 15)
+  const ruler = s.nobles.find((n) => n.alive && n.factionId === t.owner && n.rank === "RULER");
+  if (ruler && ruler.age >= 62) out.push(`${ruler.name} anda velho. Que os deuses nos livrem de uma sucessão.`);
+  if (t.besiegedBy) out.push("Os portões estão fechados e o pão sumiu. Quanto tempo ainda aguentamos?");
+  if (t.loyalty !== undefined && t.loyalty < 35) out.push("Ninguém aqui morre de amores pelo senhor destas terras. Fica o aviso.");
+  if ((s.factions.find((f) => f.id === t.owner)?.levy ?? 0) > 0.12) out.push("Levaram os homens para a guerra. Quem vai colher o trigo?");
   if (t.owner === "PLAYER") {
     if (inRevolt(t, s.day)) out.push("Não pagamos mais nada! Que o senhor venha cobrar, se tiver coragem.");
     else if (t.econ.unrest > 50) out.push("Se o senhor não fizer algo pela carestia, vai ter revolta.");
@@ -350,6 +383,14 @@ function hall(key: string, s: GameState, t: Settlement): InteriorDef {
     d.furniture.push(f("BENCH", 60, 150 + i * 80, 140, 26, C.WOOD), f("BENCH", 440, 150 + i * 80, 140, 26, C.WOOD));
   }
   const ruler = isFactionOwner(t.owner) ? s.factions.find((x) => x.id === t.owner)?.ruler : undefined;
+  // Marco 15: quem manda ali, se estiver em casa (e a família)
+  s.nobles
+    .filter((n) => n.alive && n.at === t.id && !n.armyId && !n.captiveOf)
+    .slice(0, 4)
+    .forEach((n, i) => {
+      const realm = s.world?.factions.find((r) => r.id === n.factionId)?.name ?? "reino";
+      d.npcs.push({ id: `noble-${n.id}`, name: nobleName(n, realm), x: 240 + i * 60, y: 200, color: n.female ? 0xd080b0 : 0x8080d0, wander: 12, nobleId: n.id, crown: n.rank === "RULER", talk: { text: "..." } });
+    });
   d.npcs.push({
     id: "steward",
     name: own ? "Administrador" : ruler ? `Intendente de ${ruler}` : "Conselheiro",
@@ -451,6 +492,29 @@ function temple(key: string, s: GameState, t: Settlement): InteriorDef {
     },
   });
   if (sick) for (let i = 0; i < 4; i++) d.npcs.push({ id: `sick${i}`, name: "Febril", x: 100 + i * 100, y: 460, color: 0xa0b080, mark: "SICK", talk: { text: "Água... por favor..." } });
+  return d;
+}
+
+/** Barraca da guarnição: um catre por soldado (quantos são se vê aqui dentro). */
+function garrison(key: string, s: GameState, t: Settlement): InteriorDef {
+  const r = createRng(seedFromText(`${key}:${s.day}`)).next;
+  const d = room(key, `Guarnição de ${t.name}`, "TENT", 600, 420, { settlementId: t.id });
+  d.furniture.push(f("RACK", 30, 40, 24, 120, C.DARK), f("TABLE", 250, 40, 110, 50, C.WOOD));
+  const men = Math.min(12, t.garrison);
+  for (let i = 0; i < men; i++) {
+    const x = 110 + (i % 6) * 72;
+    const y = 130 + Math.floor(i / 6) * 120;
+    d.furniture.push(f("BED", x - 20, y - 26, 40, 62, 0x7a6a50));
+    d.npcs.push({ id: `gs${i}`, name: "Soldado da guarnição", x, y: y + 50, color: 0x7f8c8d, talk: { text: pick(r, townGossip(s, t, r)) } });
+  }
+  d.npcs.push({
+    id: "sgt",
+    name: "Sargento da guarnição",
+    x: 305,
+    y: 112,
+    color: 0x95a5a6,
+    talk: { text: `${t.garrison} homens guardam ${t.name}. ${t.garrison < 6 ? "Pouco, se quer saber." : "Ninguém entra sem a nossa licença."}`, options: [{ id: panelAction({ kind: "TOWN", settlementId: t.id, at: "CAMP" }), label: "Tratar da guarnição" }, bye] },
+  });
   return d;
 }
 

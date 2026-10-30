@@ -26,7 +26,7 @@ export function InteriorView() {
         <div className="pointer-events-auto absolute bottom-16 left-1/2 w-[40rem] max-w-[92vw] -translate-x-1/2 rounded-lg border-2 border-amber-200/60 bg-neutral-950/95 p-4 shadow-2xl">
           <div className="mb-1 text-sm font-bold text-amber-300">{dialog.speaker}</div>
           <p className="text-sm leading-relaxed text-neutral-100">{dialog.text}</p>
-          <div className="mt-3 flex flex-col gap-1">
+          <div className="mt-3 flex max-h-72 flex-col gap-1 overflow-y-auto">
             {dialog.options.map((o, i) => (
               <button
                 key={o.id}

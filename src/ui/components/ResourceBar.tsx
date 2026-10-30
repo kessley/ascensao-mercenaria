@@ -18,6 +18,9 @@ export function ResourceBar() {
   const goods = freightWeight(freight);
   const fieldCargo = away && !packed ? cargo : 0;
   const carried = GOOD_LIST.map((g) => ({ g, n: freightOf(freight, g) })).filter((x) => x.n > 0);
+  const fame = useGameStore((s) => s.fame);
+  const honor = useGameStore((s) => s.honor);
+  const fear = useGameStore((s) => s.fear);
 
   return (
     <div className="flex gap-4 whitespace-nowrap rounded bg-black/60 px-4 py-2 text-sm font-mono text-white">
@@ -41,6 +44,9 @@ export function ResourceBar() {
         {packed && <span className="text-amber-200"> · nas carroças</span>}
       </span>
       <span className="text-sky-300">Ferro: {iron}</span>
+      <span title="Fama, Honra e Temor: o nome do bando (Livro da Nobreza, na mesa da Tenda)">
+        <span className="text-amber-300">★{Math.round(fame)}</span> <span className="text-sky-200">⚖{Math.round(honor)}</span> <span className="text-rose-400">☠{Math.round(fear)}</span>
+      </span>
       {freight.length > 0 && (
         <span
           className="text-violet-300"

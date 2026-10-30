@@ -97,7 +97,8 @@ export interface RegionDef {
   biome: Biome;
 }
 
-export type SettlementKind = "VILLAGE" | "CITY" | "FORT";
+/** CAPITAL (Marco 15): cidade enorme, com a Cidade Alta atrás de uma muralha interna (um mapa à parte). */
+export type SettlementKind = "VILLAGE" | "CITY" | "FORT" | "CAPITAL";
 
 /** Mercado de um povoado (preços base, antes da prosperidade). */
 /** Recursos da terra em volta de um povoado (Marco 11, completado no Marco 12). */
@@ -222,6 +223,7 @@ export const SETTLEMENT_KIND_LABEL: Record<SettlementKind, string> = {
   VILLAGE: "Aldeia",
   CITY: "Cidade",
   FORT: "Fortaleza",
+  CAPITAL: "Capital",
 };
 
 export function regionAt(world: WorldDef, p: Point): RegionDef {
@@ -253,10 +255,11 @@ export interface PointOfInterest {
   y: number;
 }
 
-export function pointsOfInterest(world: WorldDef, settlements: readonly { id: string; name: string; x: number; y: number }[]): PointOfInterest[] {
+export function pointsOfInterest(world: WorldDef, settlements: readonly { id: string; name: string; x: number; y: number; kind?: SettlementKind }[]): PointOfInterest[] {
   return [
     { id: "CAMP", name: "Acampamento", kind: "CAMP", ...world.camp.gate },
-    ...settlements.map((t) => ({ id: t.id, name: t.name, kind: "TOWN" as const, x: t.x, y: t.y + 280 })),
+    // Na capital, o centro fica dentro da muralha interna: o destino é a praça, diante do portão
+    ...settlements.map((t) => ({ id: t.id, name: t.name, kind: "TOWN" as const, x: t.x, y: t.y + (t.kind === "CAPITAL" ? 740 : 280) })),
     ...world.sites.map((s) => ({ id: s.id, name: s.name, kind: "SITE" as const, x: s.center.x, y: s.center.y })),
   ];
 }

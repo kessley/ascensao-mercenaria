@@ -34,18 +34,29 @@ export function settlementName(rng: Rng, used: Set<string>): string {
   return fallback;
 }
 
-const FIRST_NAMES = [
-  "Afonso", "Beatriz", "Sancho", "Urraca", "Teresa", "Fernão", "Leonor", "Gonçalo", "Mafalda",
-  "Rodrigo", "Elvira", "Nuno", "Inês", "Martim", "Sancha", "Egas", "Guiomar", "Vasco", "Brites",
-  "Mendo", "Aldonça", "Paio", "Dulce", "Soeiro",
-];
-const EPITHETS = [
-  "o Velho", "a Justa", "o Cruel", "a Sábia", "o Gordo", "o Calvo", "a Brava", "o Piedoso",
-  "a Ruiva", "o Manco", "o Lobo", "a de Ferro", "o Tardio", "o Conquistador",
-];
+const MALE_NAMES = ["Afonso", "Sancho", "Fernão", "Gonçalo", "Rodrigo", "Nuno", "Martim", "Egas", "Vasco", "Mendo", "Paio", "Soeiro"];
+const FEMALE_NAMES = ["Beatriz", "Urraca", "Teresa", "Leonor", "Mafalda", "Elvira", "Inês", "Sancha", "Guiomar", "Brites", "Aldonça", "Dulce"];
+const MALE_EPITHETS = ["o Velho", "o Justo", "o Cruel", "o Sábio", "o Gordo", "o Calvo", "o Bravo", "o Piedoso", "o Ruivo", "o Manco", "o Lobo", "o de Ferro", "o Tardio", "o Conquistador"];
+const FEMALE_EPITHETS = ["a Velha", "a Justa", "a Cruel", "a Sábia", "a Gorda", "a Calva", "a Brava", "a Piedosa", "a Ruiva", "a Manca", "a Loba", "a de Ferro", "a Tardia", "a Conquistadora"];
 
-export function personName(rng: Rng): string {
-  return `${rng.pick(FIRST_NAMES)} ${rng.pick(EPITHETS)}`;
+/** Nome com alcunha, sempre no gênero certo ("Urraca a Brava"). */
+export function personName(rng: Rng, female = rng.chance(0.5)): string {
+  return `${rng.pick(female ? FEMALE_NAMES : MALE_NAMES)} ${rng.pick(female ? FEMALE_EPITHETS : MALE_EPITHETS)}`;
+}
+
+/** Só o primeiro nome (nobres sem alcunha ganham uma com o tempo, ou ao subir ao trono). */
+export function firstName(rng: Rng, female: boolean): string {
+  return rng.pick(female ? FEMALE_NAMES : MALE_NAMES);
+}
+
+/** O nome é de mulher? (reis e rainhas vêm da história como texto). */
+export function isFemaleName(name: string): boolean {
+  return FEMALE_NAMES.includes(name.split(" ")[0]);
+}
+
+/** Alcunha nova (coroação). */
+export function epithet(rng: Rng, female: boolean): string {
+  return rng.pick(female ? FEMALE_EPITHETS : MALE_EPITHETS);
 }
 
 const REALM_FORMS = ["Reino de", "Ducado de", "Baronato de", "Liga de", "Condado de", "Principado de"];
@@ -112,3 +123,13 @@ export function bandName(rng: Rng): string {
 export function ofRealm(name: string): string {
   return /^Liga /.test(name) ? `da ${name}` : `do ${name}`;
 }
+
+/** "o Reino de X" / "a Liga de X". */
+export const theRealm = (name: string) => (/^Liga /.test(name) ? `a ${name}` : `o ${name}`);
+/** "no Reino de X" / "na Liga de X". */
+export const inRealm = (name: string) => (/^Liga /.test(name) ? `na ${name}` : `no ${name}`);
+/** "ao Reino de X" / "à Liga de X". */
+export const toRealm = (name: string) => (/^Liga /.test(name) ? `à ${name}` : `ao ${name}`);
+const cap = (t: string) => t[0].toUpperCase() + t.slice(1);
+/** Começo de frase: "O Reino de X" / "A Liga de X". */
+export const TheRealm = (name: string) => cap(theRealm(name));
