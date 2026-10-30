@@ -58,8 +58,9 @@ export interface FieldArmy {
   since: number;
   /** A cena já pôs o bando no mapa (id do bando). */
   bandId?: string;
-  /** Dia em que chegou e começou o cerco. */
+  /** Dia em que chegou e começou o cerco; como pretende tomar a cidade (Marco 16). */
   sieging?: number;
+  siegeMode?: "ASSAULT" | "STARVE";
   /** Acabou: tomou a cidade, desistiu ou foi chamado de volta (a cena desmonta o bando). */
   outcome?: "TOOK" | "FAILED" | "RECALLED";
 }
@@ -180,7 +181,8 @@ function raiseArmy(s: RealmState, world: WorldDef, day: number, f: FactionState,
   if (own.length === 0 || (f.treasury ?? 0) < KINGDOM.ARMY_COST) return null;
   if (s.armies.filter((a) => a.factionId === f.id).length >= KINGDOM.MAX_ARMIES) return null;
   if (s.armies.some((a) => a.factionId === f.id && a.targetId === target.id)) return null;
-  const from = nearestTown(target, own) as Settlement;
+  // Socorro a uma cidade do próprio reino: sai de outra cidade
+  const from = (nearestTown(target, own.filter((t) => t.id !== target.id)) ?? nearestTown(target, own)) as Settlement;
   const free = [...lordsOf(s.nobles, f.id), ...s.nobles.filter((n) => n.alive && n.factionId === f.id && n.office === "MARSHAL" && !n.captiveOf)].filter((n) => !n.armyId && isAdult(n));
   const lord = free.sort((a, b) => b.martial - a.martial)[0] ?? null;
   const size = Math.min(KINGDOM.ARMY_SIZE.MAX, KINGDOM.ARMY_SIZE.BASE + own.length * KINGDOM.ARMY_SIZE.PER_TOWN + (lord?.martial ?? 2));
@@ -427,9 +429,37 @@ function royalMarriage(s: RealmState, world: WorldDef, day: number, r: Rng, log:
 export function beginSiege(s: RealmState, world: WorldDef, army: FieldArmy, day: number): RealmLog[] {
   const t = s.settlements.find((x) => x.id === army.targetId);
   if (!t) return [];
+  // Socorro que chegou à própria cidade: não há o que cercar, vai para casa
+  if (t.owner === army.factionId) {
+    army.outcome = "RECALLED";
+    return [];
+  }
   army.sieging = day;
   t.besiegedBy = army.factionId;
   return [{ text: `Cerco a ${t.name}: o exército ${ofRealm(realmName(world, army.factionId))} acampou diante dos muros.`, tone: t.owner === "PLAYER" ? "bad" : "info", where: here(t) }];
+}
+
+/** Assalto ou fome (Marco 16): conforme a tropa, o que há nos armazéns, a estação e o jeito do lorde. */
+function siegePlan(s: RealmState, a: FieldArmy, t: Settlement, day: number): "ASSAULT" | "STARVE" {
+  const lord = s.nobles.find((n) => n.id === a.lordId);
+  const hot = lord?.traits.includes("BRAVE") || lord?.traits.includes("CRUEL");
+  const patient = lord?.traits.includes("CUNNING") || lord?.traits.includes("COWARD") || lord?.traits.includes("SCHOLAR");
+  const ratio = a.size / Math.max(1, settlementDefense(t));
+  // No inverno não se espera no frio; cidade com fome não precisa de escada
+  if (t.econ.famine) return "STARVE";
+  if (seasonOf(day) === "WINTER" || hot) return ratio >= 0.7 ? "ASSAULT" : "STARVE";
+  if (patient) return ratio >= 1.6 ? "ASSAULT" : "STARVE";
+  return ratio >= 1.2 ? "ASSAULT" : "STARVE";
+}
+
+/** Socorro: um reino manda um exército até a própria cidade cercada (Marco 16). */
+export function reliefArmy(s: RealmState, world: WorldDef, day: number, townId: string): RealmLog[] {
+  const t = s.settlements.find((x) => x.id === townId);
+  const f = t ? s.factions.find((x) => x.id === t.owner) : undefined;
+  if (!t || !f) return [];
+  const log: RealmLog[] = [];
+  raiseArmy(s, world, day, f, t, log);
+  return log;
 }
 
 /** Um dia de cada cerco da IA: a comida acaba, a guarnição cai e chega a hora do assalto. */
@@ -453,15 +483,30 @@ export function siegesDay(s: RealmState, world: WorldDef, day: number): RealmLog
     }
     t.econ = { ...t.econ, stock: { ...t.econ.stock, GRAIN: t.econ.stock.GRAIN * (1 - KINGDOM.SIEGE_FOOD_PER_DAY), MEAT: t.econ.stock.MEAT * (1 - KINGDOM.SIEGE_FOOD_PER_DAY) } };
     if (t.garrison > 1 && r.chance(0.35)) t.garrison -= 1;
-    if (r.chance(0.15)) a.size = Math.max(2, a.size - 1);
+    // Quem cerca também come: no inverno, a fome e a doença levam mais gente
+    if (r.chance(seasonOf(day) === "WINTER" ? 0.35 : 0.15)) a.size = Math.max(2, a.size - 1);
+    a.siegeMode ??= siegePlan(s, a, t, day);
+    // Guarnição com força sai para queimar as máquinas
+    if (t.garrison >= a.size * 0.5 && r.chance(0.25)) {
+      a.size = Math.max(2, a.size - 2);
+      t.garrison = Math.max(1, t.garrison - 1);
+    }
     const days = day - a.sieging;
+    // A cidade pede socorro ao reino dela no segundo dia
+    if (days === 2 && isFactionOwner(t.owner) && t.owner !== "PLAYER") {
+      const help = s.factions.find((x) => x.id === t.owner);
+      if (help) raiseArmy(s, world, day, help, t, log);
+    }
     if (days < KINGDOM.SIEGE_MIN_DAYS) continue;
-    // Assalto: a fome e os dias jogam a favor de quem cerca
+    // Assalto custa gente; a fome só cobra dias
     const hungry = t.econ.famine ? 0.6 : 1;
     const defense = settlementDefense(t) * hungry * (t.kind === "CAPITAL" ? 1.3 : 1);
-    if (a.size * (0.8 + r.next() * 0.5) + days * 1.2 > defense) {
-      takeTown(s, world, a, t, day, log);
-      continue;
+    if (a.siegeMode === "ASSAULT" || t.econ.famine || days >= KINGDOM.SIEGE_MAX_DAYS - 1) {
+      if (a.size * (0.8 + r.next() * 0.5) + days * 1.2 > defense) {
+        takeTown(s, world, a, t, day, log);
+        continue;
+      }
+      if (a.siegeMode === "ASSAULT") a.size = Math.max(2, a.size - Math.ceil(defense * 0.12));
     }
     if (days >= KINGDOM.SIEGE_MAX_DAYS) {
       a.outcome = "FAILED";
@@ -531,7 +576,8 @@ export function armyLost(s: RealmState, world: WorldDef, army: FieldArmy, by: st
     const captor = s.factions.find((f) => f.id === by);
     lord.captiveOf = by;
     if (captor) lord.at = captor.seatId ?? lord.at;
-    log.push({ text: `${nameOf(lord, world)} foi capturado e levado à masmorra ${ofRealm(realmName(world, by))}.`, tone: "info", where: at });
+    if (by === "PLAYER") log.push({ text: `${nameOf(lord, world)} foi capturado pelo bando.`, tone: "good" });
+    else log.push({ text: `${nameOf(lord, world)} foi capturado e levado à masmorra ${ofRealm(realmName(world, by))}.`, tone: "info", where: at });
   } else {
     lord.at = lord.fiefs[0] ?? s.factions.find((f) => f.id === lord.factionId)?.seatId ?? lord.at;
     log.push({ text: `O exército de ${nameOf(lord, world)} foi destroçado; o lorde escapou.`, tone: "info", where: at });

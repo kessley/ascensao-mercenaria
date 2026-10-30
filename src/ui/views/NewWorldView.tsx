@@ -12,11 +12,11 @@ import {
   type CalamityRateId,
   type WorldAgeId,
   type WorldOptions,
+  WAR_AI,
+  type WarDifficulty,
   type WorldSizeId,
 } from "../../utils/constants";
 import { Button } from "../components/Button";
-import { SavePanel } from "../components/SavePanel";
-import { listSaves } from "../../game/save/saveGame";
 import { MAP_W, drawWorldMap, mapHeight } from "./WorldMapView";
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
@@ -56,12 +56,11 @@ function Choice<T extends string>({
  * compartilhável) e das opções (tamanho, idade da história, frequência de calamidades).
  * Mostra o mapa com relevo e rios, os reinos com seus governantes e a crônica simulada.
  */
-export function NewWorldView() {
+export function NewWorldView({ onBack }: { onBack: () => void }) {
   const startCampaign = useGameStore((s) => s.startCampaign);
-  const loadGame = useGameStore((s) => s.loadGame);
-  const [saves] = useState(listSaves);
   const [seedText, setSeedText] = useState(() => String(randomSeed()));
   const [options, setOptions] = useState<WorldOptions>(DEFAULT_WORLD_OPTIONS);
+  const [difficulty, setDifficulty] = useState<WarDifficulty>("VETERAN");
   const world = useMemo(() => generateWorld(seedFromText(seedText) || 1, options), [seedText, options]);
   // Geografia em números para o painel: biomas que mais aparecem, rios, pontes, ruínas
   const facts = useMemo(() => {
@@ -92,7 +91,7 @@ export function NewWorldView() {
     <div className="flex h-screen w-screen flex-col gap-3 overflow-y-auto bg-neutral-950 p-5 text-white">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-wide">Ascensão Mercenária</h1>
+          <h1 className="font-serif text-3xl tracking-wide text-amber-100">Nova campanha</h1>
           <p className="text-sm text-neutral-400">Um mundo novo a cada campanha. Escolha onde os seus mercenários vão começar.</p>
         </div>
         <div className="flex items-end gap-2">
@@ -104,11 +103,6 @@ export function NewWorldView() {
               className="w-44 rounded border border-neutral-600 bg-neutral-900 px-2 py-1.5 font-mono text-sm text-white"
             />
           </label>
-          {saves.length > 0 && (
-            <Button className="border-sky-500 bg-sky-800 hover:bg-sky-700" onClick={() => loadGame(saves[0].slot)} title={`${saves[0].bandName} · dia ${saves[0].day}`}>
-              Continuar
-            </Button>
-          )}
           <Choice<WorldSizeId> label="Tamanho" value={options.size} options={WORLD_SIZES} onChange={(size) => setOptions({ ...options, size })} />
           <Choice<WorldAgeId> label="Idade" value={options.age} options={WORLD_AGES} onChange={(age) => setOptions({ ...options, age })} />
           <Choice<CalamityRateId>
@@ -117,8 +111,18 @@ export function NewWorldView() {
             options={CALAMITY_RATES}
             onChange={(calamities) => setOptions({ ...options, calamities })}
           />
+          <Choice<WarDifficulty> label="Dificuldade" value={difficulty} options={WAR_AI.DIFFICULTY} onChange={setDifficulty} />
+          <Button variant="quiet" onClick={onBack}>
+            Voltar
+          </Button>
           <Button onClick={() => setSeedText(String(randomSeed()))}>Outro mundo</Button>
-          <Button className="bg-amber-600 hover:bg-amber-500 border-amber-400" onClick={() => startCampaign(world)}>
+          <Button
+            variant="gold"
+            onClick={() => {
+              startCampaign(world);
+              useGameStore.getState().setWarDifficulty(difficulty);
+            }}
+          >
             Começar campanha
           </Button>
         </div>
@@ -148,7 +152,6 @@ export function NewWorldView() {
         </div>
 
         <aside className="flex min-w-[18rem] flex-1 flex-col gap-3 text-sm">
-          {saves.length > 0 && <SavePanel canSave={false} />}
           <section>
             <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-neutral-400">O bando</h3>
             <p>{world.bandName}</p>

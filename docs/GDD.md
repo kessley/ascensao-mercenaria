@@ -83,7 +83,8 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
   - **Estandarte do Comandante:** As tropas seguem e protegem a bandeira do seu senhor. Enxergá-la dá coesão (perdem menos moral e se recuperam mais rápido); se o estandarte vacila — o Comandante gravemente ferido —, o pânico se espalha entre quem o vê.
   - **Grito de Guerra:** O Comandante, que luta na linha de frente, pode bradar o nome do bando: as tropas próximas recobram o ânimo e as que estão em pânico bem perto dele se reagrupam. Depois de iniciado o choque, influenciar a batalha passa a depender muito mais da presença do líder e de enviar reservas aonde a linha cede do que de ordens detalhadas.
   - **Habilidade de Comando:** Cada Mensageiro ganha autoridade com as entregas. Autoridade maior significa cavalgar mais rápido, esquivar mais e, na entrega, levantar a moral da tropa; os mais experientes conseguem até reagrupar um batalhão em pânico — algo que uma ordem comum não faz.
-- **Batedores (Reconhecimento):** Cavaleiros leves, muito rápidos e esquivos, que nunca entram em combate: diante do inimigo, recuam mantendo distância. Ampliam a visão do Comandante conforme a posição — à frente da marcha (vanguarda), num ponto mandado explorar ou numa colina, de onde enxergam mais longe. Também morrem de vez.
+- **Batedores (Reconhecimento):** Cavaleiros leves, muito rápidos e esquivos, que nunca entram em combate. Enxergam longe e ficam fora da percepção do inimigo: contornam antes de serem notados e lembram por um tempo onde viram cada bando. Vão à frente da marcha, vigiam um ponto, exploram uma região, patrulham uma rota ou seguem um bando à distância; a postura furtiva troca velocidade por discrição. Longe do Comandante ficam fora de contato: o que veem só chega quando voltam. Também morrem de vez, e veteranos valem mais que novatos.
+  - **Harpias:** águias treinadas de alguns batedores. Levam relatórios e trazem ordens simples a até um dia de marcha, de dia e sem tempestade. Uma flecha acaba com a ave e com o que ela levava. Vêm do falcoeiro da corte ou de ninhos nas montanhas.
 - **Névoa de Guerra:** O jogador só vê o que suas tropas veem (Comandante, batalhões, batedores e mensageiros). O terreno já explorado fica conhecido, mas inimigos fora de vista desaparecem, deixando apenas a última posição conhecida ("fantasma"). Colinas ampliam a visão; florestas a reduzem e escondem tropas.
 - **Dinamismo Estratégico:** Alternância livre entre formações militares rígidas (Parede de Escudos, Cunha) e combate disperso orgânico.
 - **Armas Combinadas (Arranjos de Grupo):** Além da formação interna de cada Batalhão, o jogador define como vários Batalhões se dispõem entre si ao marchar juntos ou acompanhar o Comandante: Linha única, Arqueiros atrás (protegidos pela linha de frente), Cavalaria nos flancos (infantaria no centro, cavalaria nas pontas para flanquear, arqueiros atrás) ou Coluna (estreita, para atravessar lama e floresta). Grupos também podem receber ordens coordenadas, como concentrar todo o ataque em um único alvo (Foco no alvo).
@@ -286,7 +287,7 @@ Todas as etapas usam a semente:
 > - **Reconhecimento:** cada portão pergunta quem é o Comandante naquele reino; quem não tem nome ainda tem suborno, disfarce, cartas, intimidação e os esgotos.
 > - **Role playing:** conversa por assuntos e traços, presentes, favores que mexem em gente de verdade, títulos, casamento, intriga, duelos e torneios.
 >
-> Ainda não: batalhas de verdade entre exércitos da IA (Marco 16).
+> Batalhas de verdade entre exércitos da IA: Marco 16.
 - **Personagens da nobreza:** cada reino tem rei, herdeiros e 2 a 4 lordes vassalos. Cada um tem traços (como os tenentes), idade, ambição, feudos e **memória pessoal do Comandante** (favores e ofensas). Nobres morrem, casam, conspiram e traem.
 - **IA de reino por objetivos:** toda semana o reino avalia as suas necessidades (fome, ameaça, oportunidade, vingança, riqueza) e escolhe um **plano**: campanha contra um vizinho, defesa de uma fronteira, cruzada contra a calamidade, expansão para terras livres ou uma rota comercial. Os planos viram **ações visíveis**:
   - convocação de recrutas, que tira braços do campo e baixa a produção;
@@ -332,6 +333,8 @@ Além da relação com cada reino e com cada personagem, o bando tem três reput
 
   Nobres capturados lembram de como foram tratados.
 - **Comandante capturado:** uma derrota grave pode terminar com a captura do Comandante, em vez da volta ao acampamento. O bando, liderado por um tenente, precisa pagar o resgate ou libertá-lo à força.
+
+> Implementado no Marco 16 (detalhes e números no Roadmap): além do que está aqui, **o inimigo passou a pensar**. Todo bando que luta tem comandante e tenentes de verdade, esquadrões em formação e moral pelas mesmas regras do jogador. O comandante decide só com o que os soldados viram, escolhe planos conforme a personalidade (flanco, emboscada, caça ao Comandante, recuo fingido, resistir, retirada) e procura o bando na campanha. A dificuldade muda a qualidade das decisões, nunca os atributos. Guarnições pequenas fecham os portões; só as fortes saem a campo.
 
 ### 8.12 Mares e continentes
 - **Navios:**

@@ -1,5 +1,6 @@
 import type { Enemy } from "../entities/Enemy";
 import type { WarbandsSave } from "../systems/Warbands";
+import type { Scout } from "../entities/Scout";
 import type { ShipSave } from "../world/TradeRoutes";
 import { SAVE, type EnemyKind, type WorldOptions } from "../../utils/constants";
 
@@ -26,7 +27,7 @@ export interface FieldSave {
   /** Batalhões descansando nos alojamentos. */
   quartered: string[];
   battalions: { id: string; x: number; y: number; morale: number }[];
-  scouts: { id: string; x: number; y: number; hp: number }[];
+  scouts: ({ id: string; x: number; y: number; hp: number } & Partial<ReturnType<Scout["serialize"]>>)[];
   messengers: { id: string; x: number; y: number }[];
   /** Névoa já explorada (compactada). */
   fog: string;
@@ -39,6 +40,8 @@ export interface FieldSave {
   forced?: boolean;
   /** Marco 14: barcaças e navios em viagem (as caravanas vão com os bandos). */
   trade?: { seq: number; ships: ShipSave[] };
+  /** Marco 16: escadas e portões caídos do cerco em curso. */
+  siegeWorks?: { ladders: { x: number; y: number; w: number; h: number }[]; broken: number[] };
 }
 
 export interface SaveFile {

@@ -4,6 +4,7 @@ import { WorldMapView } from "./WorldMapView";
 import { InteriorView } from "./InteriorView";
 import { CapitalView } from "./CapitalView";
 import { CampEventView } from "../components/CampEventView";
+import { ScenarioOverlay } from "../components/scenario/ScenarioOverlay";
 import { useGameStore } from "../../store/useGameStore";
 
 /**
@@ -22,6 +23,7 @@ export function WorldOverlayView() {
       <PlacePanelView />
       {!inside && !city && <WorldMapView />}
       <CampEventView />
+      <ScenarioOverlay />
     </>
   );
 }

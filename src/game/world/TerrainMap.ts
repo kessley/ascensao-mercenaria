@@ -118,11 +118,20 @@ export class TerrainMap {
 
   private towns: readonly TownLayout[] = [];
   private extraSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
+  /** Cerco (Marco 16): portões fechados (sólidos) e escadas (passagens na muralha). */
+  private siegeSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
+  private breaches: readonly Rect[] = [];
+
+  setSiegeWorks(solids: readonly Rect[], breaches: readonly Rect[]): void {
+    this.siegeSolids = solids.map((rect) => ({ rect, type: "WALL" as const }));
+    this.breaches = breaches;
+    this.indexSolids();
+  }
 
   private indexSolids(): void {
     const buckets = new Map<number, { rect: Rect; type: "WALL" | "BUILDING" }[]>();
     const stride = 100000;
-    for (const group of [...this.towns.map((l) => townSolids(l)), this.extraSolids]) {
+    for (const group of [...this.towns.map((l) => townSolids(l)), this.extraSolids, this.siegeSolids]) {
       for (const solid of group) {
         const r = solid.rect;
         for (let by = Math.floor(r.y / TOWN_BUCKET); by <= Math.floor((r.y + r.h) / TOWN_BUCKET); by++) {
@@ -171,7 +180,11 @@ export class TerrainMap {
   typeAt(x: number, y: number): TerrainType {
     const solids = this.townBuckets.get(Math.floor(y / TOWN_BUCKET) * 100000 + Math.floor(x / TOWN_BUCKET));
     if (solids) {
-      for (const { rect: r, type } of solids) if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return type;
+      for (const { rect: r, type } of solids) {
+        if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
+        if (type === "WALL" && this.breaches.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)) continue;
+        return type;
+      }
     }
     if (this.ditch && this.inDitch(x, y)) return "MUD";
     const g = this.geo?.geoType(x, y, this.burned, this.season);

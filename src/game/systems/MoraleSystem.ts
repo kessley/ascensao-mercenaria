@@ -1,10 +1,27 @@
-import type { Battalion } from "../entities/Battalion";
-import type { Commander } from "../entities/Commander";
 import type { Unit } from "../entities/Unit";
 import { BALANCE, SUPPORT } from "../../utils/constants";
-import { angleDiff, angleTo, clamp, distance } from "../../utils/math";
+import { angleDiff, angleTo, clamp, distance, type Point } from "../../utils/math";
 
 const M = BALANCE.MORALE;
+
+/**
+ * Quem tem moral: os batalhões do jogador e os esquadrões inimigos (Marco 16). As regras são
+ * as mesmas para os dois lados, de propósito.
+ */
+export interface MoraleGroup {
+  readonly isDestroyed: boolean;
+  pendingDeaths: number;
+  readonly center: Point;
+  readonly soldiers: readonly Unit[];
+  readonly facing: number;
+  morale: number;
+  readonly panicking: boolean;
+  readonly mods: { moraleLoss: number };
+  readonly leaderPassive: { moraleLoss?: number; recovery?: number; panicBelow?: number } | null;
+  readonly fatigueRecovery: number;
+  panic(): void;
+  rally(): void;
+}
 
 /** O batalhão enxerga o estandarte do Comandante? E ele está vacilando (Comandante muito ferido)? */
 export interface BannerSight {
@@ -20,9 +37,9 @@ export interface BannerSight {
  * - abaixo de PANIC_BELOW entra em pânico; acima de RALLY_ABOVE volta ao controle.
  */
 export function updateMorale(
-  battalion: Battalion,
+  battalion: MoraleGroup,
   enemies: readonly Unit[],
-  commander: Commander,
+  commander: Unit | null,
   dt: number,
   time: number,
   banner: BannerSight = { seen: false, faltering: false },
@@ -60,7 +77,7 @@ export function updateMorale(
 
   // Tropa exausta custa a se recompor
   if (threats === 0) delta += M.RECOVERY_PER_SEC * (passive?.recovery ?? 1) * battalion.fatigueRecovery * dt;
-  if (commander.isAlive && distance(commander, center) <= M.COMMANDER_AURA_RADIUS) {
+  if (commander?.isAlive && distance(commander, center) <= M.COMMANDER_AURA_RADIUS) {
     delta += M.COMMANDER_AURA_PER_SEC * dt;
   }
 

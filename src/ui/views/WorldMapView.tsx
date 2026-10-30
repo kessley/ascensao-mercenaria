@@ -3,7 +3,8 @@ import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
 import { PALISADE } from "../../game/data/campLayout";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
-import { SEASONS, WEATHER, WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { SEASONS, SUPPORT, WEATHER, WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import type { ScoutOrder } from "../../game/entities/Scout";
 import { seasonDay, seasonOf, weatherAt } from "../../utils/season";
 import { geoOf } from "../../game/worldgen/geoMap";
 import { groundColor } from "../../game/world/TerrainMap";
@@ -57,6 +58,9 @@ function reliefOf(world: WorldDef): HTMLCanvasElement {
 const SNAP_RADIUS = 450;
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+
+/** "visto hoje", "visto há 2 dias": toda informação tem idade. */
+const agoText = (days: number) => (days <= 0 ? "visto hoje" : days === 1 ? "visto ontem" : `visto há ${days} dias`);
 
 /** Cor da bandeira de um povoado no mapa. */
 function ownerFill(world: WorldDef, calamities: readonly Calamity[], owner: string): string {
@@ -316,6 +320,20 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.fill();
   }
 
+  // Batedores: ao vivo, ou o último lugar em que o Comandante soube deles
+  for (const sc of snap.scouts ?? []) {
+    ctx.globalAlpha = sc.live ? 1 : 0.5;
+    ctx.fillStyle = "#3f8f6b";
+    ctx.beginPath();
+    ctx.arc(sc.x * s, sc.y * s, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#9dff6b";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    label(sc.live ? sc.name : `${sc.name}?`, sc, -8, "#c6ff8a");
+    ctx.globalAlpha = 1;
+  }
+
   ctx.fillStyle = "#2f6fdf";
   for (const b of snap.battalions) {
     ctx.beginPath();
@@ -376,6 +394,8 @@ export function WorldMapView() {
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dest, setDest] = useState<Destination | null>(null);
+  /** Rota de patrulha sendo marcada, por batedor. */
+  const [route, setRoute] = useState<Record<string, Point[]>>({});
 
   const contractSiteId = activeContract?.contract.siteId || null;
   const contractTownIds = useMemo(() => {
@@ -428,6 +448,10 @@ export function WorldMapView() {
     sendBattleCommand({ type: "TRAVEL", ids: [], x: dest.point.x, y: dest.point.y });
   };
 
+  /** Bando que aparece perto do ponto escolhido (dá para mandar um batedor atrás dele). */
+  const bandNear = dest && snap ? (snap.warbands.filter((w) => !w.own).map((w) => ({ w, d: distance(w, dest.point) })).sort((a, b) => a.d - b.d).find((x) => x.d < SNAP_RADIUS)?.w ?? null) : null;
+  const scoutOrder = (id: string, order: ScoutOrder) => sendBattleCommand({ type: "SCOUT_ORDER", ids: [id], order });
+
   const blocked = engaged
     ? "Em combate: impossível viajar."
     : snap && snap.messengersOut > 0
@@ -458,6 +482,7 @@ export function WorldMapView() {
         />
         <div className="flex flex-wrap gap-x-4 text-xs text-neutral-400">
           <span><span className="text-amber-300">●</span> Comandante</span>
+          <span><span className="text-emerald-400">●</span> batedor (? = último lugar conhecido)</span>
           <span><span className="text-blue-400">■</span> seus povoados</span>
           <span><span className="text-red-500">■</span> bando à vista (- - - rumo)</span>
           <span><span className="text-red-500/50">■</span> ? última posição conhecida</span>
@@ -501,12 +526,63 @@ export function WorldMapView() {
           </>
         )}
 
+        {snap && (snap.scouts ?? []).length > 0 && (
+          <div className="flex flex-col gap-1 border-t border-neutral-700 pt-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Batedores</h3>
+            {(snap.scouts ?? []).map((sc) => (
+              <div key={sc.id} className="flex flex-col gap-1 text-xs">
+                <span className={sc.live ? "text-lime-300" : "text-neutral-400"}>
+                  {sc.name}
+                  {sc.live ? "" : " (fora de contato)"}
+                </span>
+                {dest && (
+                  <span className="flex flex-wrap gap-1">
+                    <button type="button" onClick={() => scoutOrder(sc.id, { kind: "REGION", point: dest.point, radius: SUPPORT.SCOUT.REGION_RADIUS })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
+                      Explorar região
+                    </button>
+                    <button type="button" onClick={() => scoutOrder(sc.id, { kind: "WATCH", point: dest.point })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
+                      Vigiar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const points = [...(route[sc.id] ?? []), dest.point];
+                        setRoute({ ...route, [sc.id]: points });
+                      }}
+                      className="rounded border border-neutral-600 px-1 hover:border-lime-400"
+                    >
+                      + rota{(route[sc.id] ?? []).length > 0 ? ` (${(route[sc.id] ?? []).length})` : ""}
+                    </button>
+                    {(route[sc.id] ?? []).length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          scoutOrder(sc.id, { kind: "PATROL", points: route[sc.id] });
+                          setRoute({ ...route, [sc.id]: [] });
+                        }}
+                        className="rounded border border-lime-600 px-1 text-lime-200 hover:border-lime-300"
+                      >
+                        Patrulhar
+                      </button>
+                    )}
+                    {bandNear && (
+                      <button type="button" onClick={() => scoutOrder(sc.id, { kind: "SHADOW", bandId: bandNear.id })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
+                        Seguir {bandNear.name}
+                      </button>
+                    )}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {snap && snap.warbands.length > 0 && (
           <div className="flex flex-col gap-1 border-t border-neutral-700 pt-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Exércitos avistados</h3>
             {snap.warbands.map((w) => (
               <div key={w.id} className={`text-xs ${w.visible ? "text-red-300" : "text-neutral-500"}`}>
-                {w.name}: {w.visible ? `${w.count} à vista` : `~${w.count}, visto no dia ${w.seenDay}`} — {regionName(world, w)}
+                {w.name}: {w.visible ? `${w.count} à vista` : `~${w.count}, ${agoText(day - w.seenDay)}`} — {regionName(world, w)}
               </div>
             ))}
           </div>

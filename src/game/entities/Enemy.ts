@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
-import { BALANCE, COLORS, ENEMIES, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
-import { distance, type Point } from "../../utils/math";
+import { BALANCE, COLORS, ENEMIES, FORMATIONS, SIEGE, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
+import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
+import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 
 /**
  * Goblin: quadrado vermelho. IA simples de aggro → perseguição → ataque, com coleira.
@@ -13,8 +14,12 @@ export class Enemy extends Unit {
    * de longe e o escuro o esconde (a cena atualiza a cada quadro).
    */
   static perception = 1;
+  /** O mesmo para quem anda sem tocha (batedores): vale o escuro, com o bando de tochas acesas ou não. */
+  static darkPerception = 1;
   /** O tempo (nevoeiro, neve, chuva) encurta de quão longe todos percebem o bando. */
   static weatherSight = 1;
+  /** Alguém avistou um batedor: a cena decide quem vai atrás dele (o bando inteiro, não). */
+  static onSpot: ((e: Enemy, scout: Unit) => void) | null = null;
 
   readonly kind: EnemyKind;
   /** Para onde volta sem alvo. Num bando errante, acompanha a marcha do bando. */
@@ -52,14 +57,101 @@ export class Enemy extends Unit {
   hostile = true;
   /** Alguém do bando atacou este não-hostil: ele (e o bando dele) passa a lutar, e o dono fica sabendo. */
   provoked = false;
+  /** Escolhido para ir atrás de um batedor visto (os outros ficam com o bando). */
+  huntsScouts = false;
+  /** Defensor no alto da muralha (Marco 16): alcança mais, bate mais forte, apanha menos de flecha. */
+  onWall = false;
+  /** Cerco: o defensor não sai por aí atrás de quem está do lado de fora dos muros. */
+  keepInside: { x: number; y: number; w: number; h: number } | null = null;
+  /** Reino de quem marcha em exército ou patrulha: reinos em guerra lutam de verdade na bolha. */
+  factionId: string | null = null;
+  /** Marco 16: o esquadrão em que este soldado luta (null = cada um por si, à moda antiga). */
+  squad: EnemySquad | null = null;
+  /** Quem manda nele (também vale para batedores e arautos, que andam fora dos esquadrões). */
+  command: SquadCommand | null = null;
+  /** Lugar na formação do esquadrão. */
+  slot = 0;
+  /** Próxima olhada em volta: ninguém procura alvo a cada quadro. */
+  nextLookAt = 0;
+  /** De quem foge (lido de tempos em tempos) e até quando continua na lista dos que fogem. */
+  fleeFrom: Point | null = null;
+  routedAt = 0;
+  /** Quem manda neste soldado por fora do esquadrão: batedores e arautos do inimigo. */
+  driver: ((dt: number) => void) | null = null;
+  /** Arauto levando uma ordem. */
+  mission: { squad: EnemySquad; order: SquadOrder } | null = null;
+  /** Para onde o batedor inimigo está indo e quem ele quer interceptar. */
+  wanderGoal: Point | null = null;
+  intercept: Unit | null = null;
+  private titleText: Phaser.GameObjects.Text | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind = "GOBLIN", color?: number) {
     super(scene, x, y, "ENEMY", ENEMIES[kind].stats);
     this.kind = kind;
     this.bodyColor = color ?? ENEMIES[kind].color;
-    this.canCharge = kind === "MUTINEER_RIDER";
+    this.canCharge = kind === "MUTINEER_RIDER" || kind === "OUTRIDER" || kind === "WOLF_RIDER" || kind === "LANCER";
     this.home = { x, y };
     this.drawBody();
+  }
+
+  /** Oficial: o nome aparece sobre ele (o jogador tem de saber em quem mirar). */
+  setTitle(title: string | null): void {
+    this.titleText?.destroy();
+    this.titleText = null;
+    if (!title) return;
+    this.titleText = this.scene.add.text(0, -this.radius - 20, title, { fontFamily: "monospace", fontSize: "11px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
+    this.add(this.titleText);
+  }
+
+  /** Mostra o escudo na Parede de Escudos. */
+  showShield(on: boolean): void {
+    if (this.shielded === on) return;
+    this.shielded = on;
+    this.drawBody();
+  }
+
+  private shielded = false;
+
+  /** Passa a decisão à cena: quem vai atrás do batedor avistado. */
+  spotScout(u: Unit): void {
+    Enemy.onSpot?.(this, u);
+  }
+
+  /** Fugindo ou deixando o campo: no fim do combate conta como derrotado. */
+  get routed(): boolean {
+    return !!this.squad?.panicking || !!this.command?.retreating;
+  }
+
+  /** Sumiu do mapa fugindo: não conta como abate. */
+  fled = false;
+
+  override speedMultiplier(): number {
+    const sq = this.squad;
+    if (!sq) return super.speedMultiplier();
+    return super.speedMultiplier() * FORMATIONS[sq.formation].speed * (sq.leaderPassive?.speed ?? 1);
+  }
+
+  override attackRange(): number {
+    return super.attackRange() * (this.squad?.leaderPassive?.range ?? 1) * (this.onWall && this.ranged ? SIEGE.WALL_RANGE : 1);
+  }
+
+  override outgoingDamage(target: Unit): number {
+    const sq = this.squad;
+    if (!sq) return super.outgoingDamage(target) * (this.onWall ? SIEGE.WALL_DAMAGE : 1);
+    // Na água a formação se desfaz, como para o bando do jogador
+    const formation = this.inShallows ? 1 : FORMATIONS[sq.formation].damageDealt;
+    return super.outgoingDamage(target) * formation * (sq.leaderPassive?.damage ?? 1);
+  }
+
+  override incomingMultiplier(source: Unit, kind: AttackKind): number {
+    const base = super.incomingMultiplier(source, kind) * (this.onWall && kind === "RANGED" ? SIEGE.WALL_ARROW_TAKEN : 1);
+    const sq = this.squad;
+    if (!sq) return base;
+    const withPassive = base * (sq.leaderPassive?.taken ?? 1);
+    if (this.inShallows) return withPassive;
+    const f = FORMATIONS[sq.formation];
+    if (f.frontArc !== undefined && angleDiff(sq.facing, angleTo(this, source)) > f.frontArc) return withPassive;
+    return withPassive * (kind === "RANGED" ? f.rangedTaken : f.meleeTaken);
   }
 
   /** Guarnição de um povoado do bando: aliada, desenhada como as tropas do bando (círculo). */
@@ -111,6 +203,15 @@ export class Enemy extends Unit {
     g.fillRect(-s, -s, s * 2, s * 2);
     g.lineStyle(2, COLORS.OUTLINE, 1);
     g.strokeRect(-s, -s, s * 2, s * 2);
+    // Quem manda se vê de longe: anel dourado no chefe, prateado no capitão (como os tenentes do jogador)
+    if (ENEMIES[this.kind].officer) {
+      g.lineStyle(3, ENEMIES[this.kind].officer === "CHIEF" ? 0xf1c40f : COLORS.LIEUTENANT, 1);
+      g.strokeRect(-s - 3, -s - 3, s * 2 + 6, s * 2 + 6);
+    }
+    if (this.shielded) {
+      g.fillStyle(COLORS.SHIELD, 1);
+      g.fillRect(s - 1, -s, 4, s * 2);
+    }
     g.fillStyle(COLORS.OUTLINE, 1);
     if (this.ranged) {
       g.fillRect(-s / 2, -s / 2, s, s);
@@ -146,14 +247,19 @@ export class Enemy extends Unit {
     return TIME.NIGHT_CREATURES.includes(this.kind);
   }
 
-  /** Aliado está ao alcance da percepção? Na floresta, só bem de perto. */
-  private canPerceive(ally: Unit): boolean {
+  /** De quão longe este inimigo percebe `ally` (o batedor usa a mesma conta para ficar fora dela). */
+  perceptionOf(ally: Unit): number {
+    const night = ally.unlit ? Enemy.darkPerception : Enemy.perception;
     // Criaturas da noite enxergam no escuro: apagar as tochas não as engana
-    const perception = this.nightCreature ? Math.max(1, Enemy.perception) : Enemy.perception;
+    const perception = this.nightCreature ? Math.max(1, night) : night;
     // Nevoeiro, neve e chuva escondem o bando de todos (Marco 13)
     const aggro = (ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_AGGRO_RANGE) * perception * Enemy.weatherSight;
-    const limit = ally.isInForest ? Math.min(aggro, BALANCE.FOREST_DETECT_RANGE) : aggro;
-    return distance(ally, this) <= limit;
+    return (ally.isInForest ? Math.min(aggro, BALANCE.FOREST_DETECT_RANGE) : aggro) * ally.stealth;
+  }
+
+  /** Aliado está ao alcance da percepção? Na floresta, só bem de perto. */
+  private canPerceive(ally: Unit): boolean {
+    return distance(ally, this) <= this.perceptionOf(ally);
   }
 
   /**
@@ -163,6 +269,8 @@ export class Enemy extends Unit {
   think(dt: number, allies: readonly Unit[], rivals: readonly Unit[] = []): void {
     if (!this.isAlive) return;
     if (this.kind === "WOLF") return this.thinkWolf(dt, allies);
+    if (this.driver) return this.driver(dt);
+    if (this.squad) return this.squad.drive(this, dt, allies, rivals);
 
     // Quem não luta foge do bando do jogador
     if (this.timid) {
@@ -192,14 +300,26 @@ export class Enemy extends Unit {
     const fightsBand = (this.hostile || this.provoked) && !this.friendly;
     const leash = ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_LEASH_RANGE;
     const t = this.target;
-    if (t && (!t.isAlive || distance(this.home, this) > Math.max(leash, BALANCE.GOBLIN_LEASH_RANGE) || (t.team === "ALLY" && !fightsBand))) {
+    // Atrás dos muros: larga quem saiu do alcance (ninguém persegue por cima da muralha)
+    const k = this.keepInside;
+    const walled = !!k && !!t && !this.inRange(t) && (t.x < k.x || t.x > k.x + k.w || t.y < k.y || t.y > k.y + k.h);
+    if (t && (walled || !t.isAlive || distance(this.home, this) > Math.max(leash, BALANCE.GOBLIN_LEASH_RANGE) || (t.team === "ALLY" && !fightsBand))) {
       this.target = null;
+      this.huntsScouts = false;
     }
     if (!this.target) {
       let best: Unit | null = null;
       let bestDist = Infinity;
       const consider = (u: Unit) => {
         if (!u.isAlive || !this.canPerceive(u)) return;
+        // Atrás dos muros: besteiro atira por cima; quem luta de perto espera a muralha ser vencida
+        const k = this.keepInside;
+        if (k && !this.ranged && (u.x < k.x || u.x > k.x + k.w || u.y < k.y || u.y > k.y + k.h)) return;
+        // Batedor à vista não arrasta o bando: um ou dois vão atrás dele (ver onSpot)
+        if (u.isScout && !this.huntsScouts) {
+          Enemy.onSpot?.(this, u);
+          if (!this.huntsScouts) return;
+        }
         // Carroças atraem saqueadores: a comida do bando vale mais que um soldado
         const d = distance(u, this) * u.lure;
         if (d < bestDist) {

@@ -17,6 +17,7 @@ export class Commander extends Unit {
     super(scene, x, y, "ALLY", BALANCE.COMMANDER);
     this.autoAttack = false;
     this.isHero = true;
+    this.role = "HERO";
     this.drawBody();
   }
 

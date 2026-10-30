@@ -8,6 +8,7 @@ import {
   beginSiege,
   nameOf,
   nobleDies,
+  reliefArmy,
   type Alliance,
   type CourtEvent,
   type FieldArmy,
@@ -170,6 +171,8 @@ export interface CourtActions {
   armyDestroyed: (id: string, byPlayer: boolean, at: Point) => void;
   armyDone: (id: string, size?: number) => void;
   armiesClash: (winnerId: string | null, loserId: string | null, at: Point) => void;
+  /** Cidade cercada pede socorro: o reino manda um exército (Marco 16). */
+  callRelief: (townId: string) => void;
   revoltHandled: (id: string) => void;
   /** Notícias de longe mais perto (taverna, arauto, mensageiro): chegam agora. `where`: "em Valelos". */
   hearNews: (at: Point, where: string, radius: number) => number;
@@ -685,12 +688,18 @@ export function courtSlice(set: Setter, get: () => GameState): CourtActions {
       const a = r.armies.find((x) => x.id === id);
       if (!a) return;
       const lord = s.nobles.find((n) => n.id === a.lordId);
-      const logs = armyLost(r, s.world, a, null, s.day, at);
+      // O lorde que caiu em campo já teve o destino resolvido (ver lordDown)
+      const logs = armyLost(r, s.world, a, byPlayer ? "PLAYER" : null, s.day, at);
       if (byPlayer && lord) {
         const i = r.nobles.findIndex((n) => n.id === lord.id);
         if (i >= 0) r.nobles[i] = remember(r.nobles[i], s.day, "teve o exército destruído pelo Comandante", -35);
       }
       commitRealm(set, get, r, logs);
+      // Lorde capturado pelo bando: entra na lista dos prisioneiros
+      const taken = lord ? get().nobles.find((n) => n.id === lord.id && n.captiveOf === "PLAYER") : undefined;
+      if (taken && !get().captiveOfficers.some((o) => o.nobleId === taken.id)) {
+        get().addCaptiveOfficer({ name: nameOfNoble(get(), taken), factionId: taken.factionId, nobleId: taken.id, ransom: RANSOM_OF(taken) });
+      }
       const c = get().activeContract?.contract;
       if (c?.armyId === id) get().finishContract(true, "o exército inimigo não existe mais");
     },
@@ -708,6 +717,13 @@ export function courtSlice(set: Setter, get: () => GameState): CourtActions {
       });
       const c = get().activeContract?.contract;
       if (c?.armyId === id) get().finishContract(a.outcome !== "TOOK", a.outcome === "TOOK" ? "a cidade caiu" : "o exército recuou");
+    },
+
+    callRelief: (townId) => {
+      const s = get();
+      if (!s.world) return;
+      const r = realmOf(s);
+      commitRealm(set, get, r, reliefArmy(r, s.world, s.day, townId));
     },
 
     armiesClash: (winnerId, loserId, at) => {

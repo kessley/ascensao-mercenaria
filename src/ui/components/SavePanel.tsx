@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGameStore } from "../../store/useGameStore";
 import { AUTO_SLOT, MANUAL_SLOTS, listSaves, slotLabel, type SaveMeta } from "../../game/save/saveGame";
 import { WorldChronicle } from "./tent/RealmPanels";
+import { WAR_AI, type WarDifficulty } from "../../utils/constants";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -69,10 +70,36 @@ export function SavePanel({ canSave = true }: { canSave?: boolean }) {
   );
 }
 
+/** Quão bem o inimigo decide: os atributos são os mesmos em todas (Marco 16). */
+function WarDifficultyChoice() {
+  const value = useGameStore((s) => s.warDifficulty);
+  const set = useGameStore((s) => s.setWarDifficulty);
+  const list = Object.entries(WAR_AI.DIFFICULTY) as [WarDifficulty, (typeof WAR_AI.DIFFICULTY)[WarDifficulty]][];
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className={sectionTitle}>Dificuldade da guerra</h2>
+      <div className="flex gap-1">
+        {list.map(([id, d]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => set(id)}
+            className={`rounded border px-2 py-1 text-xs ${id === value ? "border-amber-400 bg-amber-900/50 text-amber-100" : "border-neutral-600 text-neutral-300 hover:border-amber-400"}`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-neutral-400">{WAR_AI.DIFFICULTY[value].description} Ninguém ganha vida nem dano a mais: muda só a qualidade das decisões.</p>
+    </section>
+  );
+}
+
 /** Painel "Jogo" do HUD: salvar, carregar e a crônica do mundo (com "Novo mundo…"). */
 export function GamePanel() {
   return (
     <>
+      <WarDifficultyChoice />
       <SavePanel />
       <WorldChronicle />
     </>

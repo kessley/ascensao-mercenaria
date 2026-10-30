@@ -103,8 +103,9 @@ export interface CapitalLayout {
   tombs: Point[];
   /** Palácios das casas nobres, na ordem em que os lordes os ocupam. */
   palaces: CityBuilding[];
-  /** Onde os nobres ficam quando estão em lugares abertos. */
+  /** Onde os nobres ficam quando estão em lugares abertos e por onde chegam até lá. */
   hotspots: Partial<Record<CourtPlace, Point>>;
+  entries: Partial<Record<CourtPlace, Point>>;
   /** Entrada, ao lado do Portão Velho. */
   spawn: Point;
   exit: Point;
@@ -251,6 +252,7 @@ function build(townId: string): CapitalLayout {
   civic(5, 10, "Estalagem do Portão Velho", "inn", 1);
   civic(1, 9, "Casa do Rato (Ladrões)", "thieves", 2);
   civic(2, 10, "Taverna do Rato Manco", "tavern", 3);
+  civic(7, 10, "Falcoaria Real", "mews", 2);
   doors.push({ x: XS[2], y: YS[10], label: "Boca dos esgotos", action: "sewer", radius: 70 });
   // Liteiras nos grandes cruzamentos
   for (const [i, j] of [[6, 10], [6, 7], [6, 5], [9, 6], [3, 6], [9, 3]]) doors.push({ x: XS[i] + 90, y: YS[j] + 90, label: "Ponto de liteiras", action: "litter", radius: 60 });
@@ -322,13 +324,13 @@ function build(townId: string): CapitalLayout {
       link(a, index.get(`${i},${j + 1}`));
     }
   }
-  // Por dentro do castelo a grade é uma estrela: portão, pátio e portas
-  const hub = raw.length;
-  raw.push({ x: AVENUE_X, y: 1500, zone: "CASTLE" });
-  for (const p of [{ x: AVENUE_X, y: 2220 }, { x: AVENUE_X, y: 1230 }, { x: 3900, y: 1020 }, { x: 5700, y: 1020 }, { x: 3830, y: 1540 }, { x: 5770, y: 1540 }]) {
-    raw.push({ ...p, zone: "CASTLE" });
-    edges.push([hub, raw.length - 1]);
-  }
+  // Por dentro do castelo, caminhos retos entre o portão, o pátio e as portas (sem raspar nos prédios)
+  const yard: [number, number][] = [[AVENUE_X, 1500], [AVENUE_X, 2220], [AVENUE_X, 1240], [4200, 1240], [4200, 1030], [3900, 1030], [4200, 1540], [3830, 1540], [5400, 1240], [5400, 1030], [5700, 1030], [5400, 1540], [5770, 1540]];
+  const first = raw.length;
+  for (const [x, y] of yard) raw.push({ x, y, zone: "CASTLE" });
+  for (const [a, b] of [[0, 1], [0, 2], [2, 3], [3, 4], [4, 5], [3, 6], [6, 7], [0, 6], [2, 8], [8, 9], [9, 10], [8, 11], [11, 12], [0, 11]]) edges.push([first + a, first + b]);
+
+  const streetsNet = keepConnected(raw, edges);
 
   // --- Enfeites ---
   const lamps: Point[] = [];
@@ -387,8 +389,8 @@ function build(townId: string): CapitalLayout {
     gates,
     doors,
     districts,
-    nodes: raw,
-    edges,
+    nodes: streetsNet.nodes,
+    edges: streetsNet.edges,
     lamps,
     trees,
     fountains,
@@ -403,11 +405,63 @@ function build(townId: string): CapitalLayout {
       ARENA: { x: 1600, y: 4460 },
       STREET: { x: XS[1], y: YS[2] },
     },
+    entries: {
+      GARDEN: { x: AVENUE_X, y: 1500 },
+      YARD: { x: AVENUE_X, y: 1500 },
+      FOREYARD: { x: AVENUE_X, y: 1240 },
+      MARKET: { x: AVENUE_X, y: 5080 },
+      ARENA: { x: 1600, y: 4400 },
+      STREET: { x: XS[1], y: YS[3] - 80 },
+    },
     spawn: { x: AVENUE_X, y: H - 250 },
     exit: { x: AVENUE_X, y: H - 40 },
     nobleRect,
     castleRect,
   };
+}
+
+/**
+ * Cada zona fica só com a maior malha de ruas ligada: cruzamentos soltos (como a faixa entre o
+ * muro do Bairro Nobre e o fosso) não têm caminho para lugar nenhum.
+ */
+function keepConnected(nodes: (Point & { zone: CityZone })[], edges: [number, number][]): { nodes: (Point & { zone: CityZone })[]; edges: [number, number][] } {
+  const links: number[][] = nodes.map(() => []);
+  for (const [a, b] of edges) {
+    links[a].push(b);
+    links[b].push(a);
+  }
+  const group = new Array<number>(nodes.length).fill(-1);
+  const sizes: number[] = [];
+  nodes.forEach((_, start) => {
+    if (group[start] >= 0) return;
+    const id = sizes.length;
+    const stack = [start];
+    group[start] = id;
+    let size = 0;
+    while (stack.length) {
+      const u = stack.pop() as number;
+      size++;
+      for (const v of links[u]) {
+        if (group[v] >= 0) continue;
+        group[v] = id;
+        stack.push(v);
+      }
+    }
+    sizes.push(size);
+  });
+  const best = new Map<CityZone, number>();
+  nodes.forEach((n, i) => {
+    const cur = best.get(n.zone);
+    if (cur === undefined || sizes[group[i]] > sizes[cur]) best.set(n.zone, group[i]);
+  });
+  const map = new Map<number, number>();
+  const kept: (Point & { zone: CityZone })[] = [];
+  nodes.forEach((n, i) => {
+    if (group[i] !== best.get(n.zone)) return;
+    map.set(i, kept.length);
+    kept.push(n);
+  });
+  return { nodes: kept, edges: edges.filter(([a, b]) => map.has(a) && map.has(b)).map(([a, b]): [number, number] => [map.get(a) as number, map.get(b) as number]) };
 }
 
 type BlockStyle = "COMMON" | "SLUM" | "MERCHANT" | "ARTISAN";
@@ -450,7 +504,7 @@ export function districtAt(l: CapitalLayout, p: Point): District {
   return l.districts.find((d) => inRect(d.rect, p)) ?? l.districts[l.districts.length - 1];
 }
 
-/** Caminho pelas ruas (busca em largura na grade), só dentro da zona de partida. */
+/** Caminho pelas ruas (busca em largura na grade), só dentro da zona de partida; sem caminho, vazio. */
 export function cityPath(l: CapitalLayout, from: Point, to: Point, zone: CityZone): Point[] {
   const d2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
   let a = -1;
@@ -460,7 +514,7 @@ export function cityPath(l: CapitalLayout, from: Point, to: Point, zone: CityZon
     if (a < 0 || d2(n, from) < d2(l.nodes[a], from)) a = i;
     if (b < 0 || d2(n, to) < d2(l.nodes[b], to)) b = i;
   });
-  if (a < 0 || b < 0) return [to];
+  if (a < 0 || b < 0) return [];
   const prev = new Map<number, number>([[a, -1]]);
   const queue = [a];
   while (queue.length) {
@@ -472,7 +526,7 @@ export function cityPath(l: CapitalLayout, from: Point, to: Point, zone: CityZon
       queue.push(v);
     }
   }
-  if (!prev.has(b)) return [to];
+  if (!prev.has(b)) return [];
   const path: Point[] = [];
   for (let v = b; v !== -1; v = prev.get(v) as number) path.unshift(l.nodes[v]);
   return path;

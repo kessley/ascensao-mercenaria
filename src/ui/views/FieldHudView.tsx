@@ -3,10 +3,14 @@ import {
   type BattalionStatus,
   type BattleResult,
   type CommandReach,
+  type SiegeAction,
   type TrumpetCall,
 } from "../../store/useGameStore";
-import { FATIGUE, FORMATIONS, REALM, SEASONS, TERRAIN, TROOPS, WEATHER } from "../../utils/constants";
+import type { ScoutMode } from "../../game/entities/Scout";
+import type { HarpyState } from "../../game/entities/Harpy";
+import { FATIGUE, FORMATIONS, REALM, SEASONS, SIEGE, TERRAIN, TROOPS, WEATHER } from "../../utils/constants";
 import { titleFor } from "../../game/sim/realm";
+import { NOBLE_TRAITS } from "../../game/sim/nobility";
 import { contractGoal } from "../../game/data/contracts";
 import { SICKNESS_LABEL } from "../../game/sim/logistics";
 import { PHASE_LABEL, darknessAt, formatHour, phaseOf } from "../../utils/time";
@@ -16,6 +20,8 @@ import { Button } from "../components/Button";
 import { ResourceBar } from "../components/ResourceBar";
 import { SoundControl } from "../components/SoundControl";
 import { StatBar } from "../components/StatBar";
+import { PrisonersPanel } from "../components/tent/PrisonersPanel";
+import { ScenarioBanner } from "../components/scenario/ScenarioOverlay";
 
 const STATUS_LABEL: Record<BattalionStatus, string> = {
   READY: "Em posição",
@@ -47,6 +53,28 @@ const TRUMPET_CALLS: { call: TrumpetCall; label: string }[] = [
   { call: "RALLY", label: "Reunir" },
 ];
 
+const SCOUT_MODE_TEXT: Record<ScoutMode, string> = {
+  VANGUARD: "vanguarda",
+  EXPLORE: "de vigia",
+  RECALL: "recolhido",
+  REGION: "explorando região",
+  PATROL: "patrulhando",
+  SHADOW: "seguindo um bando",
+  RETURN: "voltando",
+};
+
+const HARPY_TEXT: Record<HarpyState, string> = {
+  PERCHED: "pousada",
+  TO_COMMANDER: "voando até o Comandante",
+  AT_COMMANDER: "com o Comandante",
+  TO_SCOUT: "voltando ao batedor",
+};
+
+function harpyText(h: { name: string; readyDay: number; state: HarpyState | null; sheltering: boolean; orders: number }, day: number): string {
+  if (!h.state) return `Harpia ${h.name}: em treino (${Math.max(0, h.readyDay - day)} dia(s))`;
+  return `Harpia ${h.name}: ${h.sheltering ? "abrigada" : HARPY_TEXT[h.state]}${h.orders > 0 ? " · ordem à espera" : ""}`;
+}
+
 const RESULT_TITLE: Record<BattleResult, string> = {
   VICTORY: "Vitória",
   DEFEAT: "Derrota",
@@ -62,7 +90,8 @@ function WorldClock() {
   const progress = useGameStore((s) => s.dayProgress);
   const hud = useGameStore((s) => s.battleHud);
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
-  const paused = hud?.inCamp || hud?.engaged;
+  const scenario = useGameStore((s) => s.scenario !== null);
+  const paused = scenario || hud?.inCamp || hud?.engaged;
   const phase = phaseOf(progress);
   const season = seasonOf(day);
   const flood = isFlood(day);
@@ -74,7 +103,7 @@ function WorldClock() {
         title="O dia passa com a marcha (fora do acampamento e fora de combate) e vira na aurora"
       >
         <div className="flex justify-between font-mono text-sm">
-          <span className="font-bold">Dia {day}</span>
+          <span className="font-bold">{scenario ? "Batalha" : `Dia ${day}`}</span>
           <span className="text-xs text-neutral-300">
             {formatHour(progress)} {paused ? "⏸" : phase === "NIGHT" ? "☾" : phase === "DAY" ? "☀" : "◐"}
           </span>
@@ -114,7 +143,7 @@ function WorldClock() {
           >
             {hud.torches ? "🔥 Tochas" : "Sem tochas"}
           </button>
-          {night && (
+          {night && !scenario && (
             <button
               type="button"
               disabled={!!hud.restBlocked}
@@ -190,8 +219,69 @@ function ContractBanner() {
  * O container ignora o mouse (pointer-events-none) para que os cliques cheguem ao jogo;
  * apenas os controles interativos reativam pointer-events.
  */
+/** O Comandante nas mãos do inimigo: pagar ou ir buscar (Marco 16). */
+function CaptivityBanner() {
+  const c = useGameStore((s) => s.captivity);
+  const gold = useGameStore((s) => s.gold);
+  const pay = useGameStore((s) => s.endCaptivity);
+  if (!c) return null;
+  return (
+    <div className="flex w-full items-center gap-2 rounded bg-red-950/80 px-3 py-1.5 text-xs text-red-100">
+      <span>
+        O Comandante está preso com {c.by}. {c.acting} leva o bando enquanto isso.{c.bandId ? " Derrote quem o levou (marcado no mapa) para soltá-lo." : ""}
+      </span>
+      <button type="button" disabled={gold < c.ransom} onClick={() => pay("PAID")} className="pointer-events-auto shrink-0 rounded border border-red-400 px-1.5 hover:bg-red-900 disabled:cursor-not-allowed disabled:border-neutral-600 disabled:text-neutral-500">
+        Pagar resgate ({c.ransom})
+      </button>
+    </div>
+  );
+}
+
+/** Cerco em curso (Marco 16): quanto a cidade aguenta e o que dá para fazer. */
+function SiegeBanner() {
+  const siege = useGameStore((s) => s.siege);
+  const town = useGameStore((s) => s.settlements.find((t) => t.id === s.siege?.settlementId));
+  const day = useGameStore((s) => s.day);
+  const send = useGameStore((s) => s.sendBattleCommand);
+  if (!siege?.walled || !town) return null;
+  const act = (action: SiegeAction, label: string, title: string, disabled = false) => (
+    <button
+      key={action}
+      type="button"
+      disabled={disabled}
+      title={title}
+      onClick={() => send({ type: "SIEGE", ids: [], action })}
+      className="pointer-events-auto rounded border border-amber-700 px-1.5 hover:border-amber-300 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+    >
+      {label}
+    </button>
+  );
+  const food = siege.food ?? 0;
+  const wood = Math.floor(siege.wood ?? 0);
+  return (
+    <div className="flex w-full flex-col gap-1 rounded bg-black/70 px-3 py-1.5 text-xs text-amber-100">
+      <span>
+        Cerco de {town.name} · dia {day - (siege.startDay ?? day)} · comida lá dentro: {food > 0 ? `${food} dia(s)` : `fome há ${-food} dia(s)`} · guarnição {town.garrison}
+      </span>
+      <span>
+        Madeira {wood} · escadas {siege.ladders ?? 0} · aríete {siege.ram ?? 0}
+        {siege.reliefDay !== undefined ? " · pediram socorro" : ""}
+      </span>
+      <span className="flex flex-wrap gap-1">
+        {act("WAIT", "Esperar um dia", "A fome trabalha; a madeira junta; a tropa come e adoece com o tempo")}
+        {act("LADDER", `Escada (${SIEGE.LADDER_WOOD})`, "Madeira para uma escada", wood < SIEGE.LADDER_WOOD)}
+        {act("RAM", `Aríete (${SIEGE.RAM_WOOD})`, "Madeira para um aríete", wood < SIEGE.RAM_WOOD)}
+        {act("ASSAULT", "Ao assalto!", "Põe escadas nos muros e o aríete no portão")}
+        {act("DEMAND", "Exigir rendição", "Depende do Temor e da fome lá dentro")}
+        {act("LIFT", "Levantar cerco", "Vai embora")}
+      </span>
+    </div>
+  );
+}
+
 export function FieldHudView() {
   const hud = useGameStore((s) => s.battleHud);
+  const day = useGameStore((s) => s.day);
   const report = useGameStore((s) => s.battleReport);
   const clearReport = useGameStore((s) => s.clearReport);
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
@@ -199,6 +289,8 @@ export function FieldHudView() {
   const setCampPanel = useGameStore((s) => s.setCampPanel);
   const settlements = useGameStore((s) => s.settlements);
   const campPacked = useGameStore((s) => s.campPacked);
+  const scenario = useGameStore((s) => s.scenario !== null);
+  const setScenarioPaused = useGameStore((s) => s.setScenarioPaused);
   const seats = settlements.filter((t) => t.owner === "PLAYER");
   const title = titleFor(seats.length) + (seats[0] ? ` de ${seats[0].name}` : "");
 
@@ -215,10 +307,10 @@ export function FieldHudView() {
             </span>
           )}
           <span className="text-sm font-bold">
-            Comandante <span className="font-normal text-blue-300">· {title}</span>
+            Comandante {!scenario && <span className="font-normal text-blue-300">· {title}</span>}
           </span>
           {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
-          {hud && !hud.inCamp && (
+          {hud && !hud.inCamp && !scenario && (
             <button
               type="button"
               disabled={!!hud.foundBlocked}
@@ -230,7 +322,7 @@ export function FieldHudView() {
               {hud.foundBlocked && <span className="block text-[10px]">{hud.foundBlocked}</span>}
             </button>
           )}
-          {hud && campPacked && (
+          {hud && campPacked && !scenario && (
             <button
               type="button"
               disabled={!!hud.pitchBlocked}
@@ -284,81 +376,90 @@ export function FieldHudView() {
                 {s.alive && (
                   <span className="text-neutral-400">
                     {" "}
-                    ·{" "}
-                    {s.fleeing
-                      ? "recuando"
-                      : s.mode === "VANGUARD"
-                        ? "vanguarda"
-                        : s.mode === "EXPLORE"
-                          ? "explorando"
-                          : "recolhido"}
+                    · {s.fleeing ? "recuando" : SCOUT_MODE_TEXT[s.mode]}
+                    {s.sneaking ? " · furtivo" : ""}
+                    {!s.contact && <span className="text-amber-300"> · fora de contato</span>}
                   </span>
                 )}
+                {s.alive && s.harpy && <span className="block text-[10px] text-sky-300">{harpyText(s.harpy, day)}</span>}
               </button>
               {s.alive && (
                 <span className="pointer-events-auto flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      sendBattleCommand({
-                        type: "SCOUT_MODE",
-                        ids: [s.id],
-                        mode: "VANGUARD",
-                      })
-                    }
-                    className="rounded border border-neutral-600 px-1 hover:border-lime-400"
-                  >
+                  <button type="button" onClick={() => sendBattleCommand({ type: "SCOUT_MODE", ids: [s.id], mode: "VANGUARD" })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
                     Vanguarda
                   </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      sendBattleCommand({
-                        type: "SCOUT_MODE",
-                        ids: [s.id],
-                        mode: "RECALL",
-                      })
-                    }
-                    className="rounded border border-neutral-600 px-1 hover:border-lime-400"
-                  >
+                  <button type="button" onClick={() => sendBattleCommand({ type: "SCOUT_MODE", ids: [s.id], mode: "RECALL" })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
                     Recolher
                   </button>
+                  <button
+                    type="button"
+                    title="Metade da distância em que é percebido, 60% do passo"
+                    onClick={() => sendBattleCommand({ type: "SCOUT_STEALTH", ids: [s.id] })}
+                    className={`rounded border px-1 hover:border-lime-400 ${s.sneaking ? "border-lime-400 text-lime-300" : "border-neutral-600"}`}
+                  >
+                    Furtivo
+                  </button>
+                  {s.harpy?.state === "PERCHED" && !s.contact && (
+                    <button type="button" title="Solta a ave com o relatório" onClick={() => sendBattleCommand({ type: "HARPY_SEND", ids: [s.id] })} className="rounded border border-sky-600 px-1 text-sky-200 hover:border-sky-300">
+                      Harpia
+                    </button>
+                  )}
                 </span>
               )}
             </div>
           ))}
         </div>
-        <div className="absolute left-1/2 top-[4.5rem] -translate-x-1/2">
+        <div className="absolute left-1/2 top-[4.5rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col items-center gap-1">
+          <ScenarioBanner />
           <ContractBanner />
           <SummonsBanner />
+          <SiegeBanner />
+          <CaptivityBanner />
+          {hud && hud.feed.length > 0 && (
+            <ol className="flex w-full flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
+              {hud.feed.map((line, i) => (
+                <li key={i} className={i === hud.feed.length - 1 ? "" : "opacity-60"}>
+                  {line}
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
-        {hud && hud.feed.length > 0 && (
-          <ol className="absolute left-1/2 top-[6.75rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
-            {hud.feed.map((line, i) => (
-              <li key={i} className={i === hud.feed.length - 1 ? "" : "opacity-60"}>
-                {line}
-              </li>
-            ))}
-          </ol>
-        )}
         {/* Direita: relógio, recursos, som e mapa; abaixo, câmera e inimigos à vista */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-start gap-3">
             <WorldClock />
-            <ResourceBar />
+            {!scenario && <ResourceBar />}
             <SoundControl />
-            <Button className="pointer-events-auto" onClick={() => setWorldMapOpen(true)} title="Tab: Mapa do Continente">
-              Mapa
-            </Button>
-            <Button className="pointer-events-auto" onClick={() => setCampPanel({ kind: "GAME" })} title="Salvar, carregar, novo mundo">
-              Jogo
-            </Button>
+            {scenario ? (
+              <Button className="pointer-events-auto" onClick={() => setScenarioPaused(true)} title="Esc: pausa, recomeçar ou sair">
+                Pausa
+              </Button>
+            ) : (
+              <>
+                <Button className="pointer-events-auto" onClick={() => setWorldMapOpen(true)} title="Tab: Mapa do Continente">
+                  Mapa
+                </Button>
+                <Button className="pointer-events-auto" onClick={() => setCampPanel({ kind: "GAME" })} title="Salvar, carregar, novo mundo">
+                  Jogo
+                </Button>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {hud && hud.enemiesInSight > 0 && (
               <span className="rounded bg-black/60 px-3 py-1.5 font-mono text-sm text-red-300">
                 À vista: {hud.enemiesInSight}
               </span>
+            )}
+            {hud && hud.foes.length > 0 && (
+              <div className="flex flex-col gap-0.5 rounded bg-black/60 px-2 py-1 text-xs text-red-200">
+                {hud.foes.slice(0, 3).map((f) => (
+                  <span key={f.key} title={f.trait ? `Dizem que é ${NOBLE_TRAITS[f.trait].label.toLowerCase()}` : undefined}>
+                    {f.name} · {f.status} · moral {f.morale}
+                  </span>
+                ))}
+              </div>
             )}
             {hud && (
               <div className="pointer-events-auto flex items-center gap-1 rounded bg-black/60 px-2 py-1.5 text-sm">
@@ -403,6 +504,37 @@ export function FieldHudView() {
           {hud?.battalions.map((b) => {
             const panic = b.status === "FLEEING";
             const ring = panic ? "ring-2 ring-red-500" : b.selected ? "ring-2 ring-lime-400" : "";
+            // Muitos batalhões: cartões de uma linha, para todos caberem na tela
+            if (hud.battalions.length > 3) {
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={b.status === "DESTROYED"}
+                  onClick={(e) => sendBattleCommand({ type: "SELECT", ids: [b.id], additive: e.shiftKey })}
+                  title={`${TROOPS[b.troopType].label} · ${FORMATIONS[b.formation].label} · moral ${Math.round(b.morale)}`}
+                  className={`pointer-events-auto flex w-72 flex-col gap-1 rounded bg-black/60 px-2 py-1 text-left outline-none hover:bg-black/75 disabled:opacity-60 ${ring}`}
+                >
+                  <span className="flex justify-between gap-2 text-xs">
+                    <span className="truncate font-bold">
+                      <span className="mr-1 font-mono text-amber-200">{b.level}</span>
+                      {b.name}
+                    </span>
+                    <span className={`shrink-0 ${panic || b.status === "DESTROYED" ? "font-bold text-red-400" : b.pendingOrder ? "text-amber-300" : "text-neutral-300"}`}>
+                      {b.pendingOrder ? "✉ a caminho" : STATUS_LABEL[b.status]}
+                    </span>
+                  </span>
+                  <span className="grid grid-cols-2 gap-1">
+                    <span className="h-1.5 overflow-hidden rounded bg-neutral-800">
+                      <span className="block h-full bg-blue-500" style={{ width: `${b.max > 0 ? (b.alive / b.max) * 100 : 0}%` }} />
+                    </span>
+                    <span className="h-1.5 overflow-hidden rounded bg-neutral-800">
+                      <span className={`block h-full ${panic ? "bg-red-500" : "bg-yellow-400"}`} style={{ width: `${b.morale}%` }} />
+                    </span>
+                  </span>
+                </button>
+              );
+            }
             return (
               <button
                 key={b.id}
@@ -472,8 +604,14 @@ export function FieldHudView() {
           <div>F reunir · 1 Linha 2 Parede 3 Cunha 4 Disperso</div>
           <div className="text-amber-200">Anel forte: voz · fraco: trombeta · além: bandeira/mensageiro</div>
           <div>C câmera presa/solta · setas/borda/botão do meio · H centralizar · roda zoom</div>
-          <div className="text-sky-200">E interagir · Tab Mapa do Continente (viagem rápida) · T tochas · M som</div>
-          <div className="text-lime-200">V marcha forçada · G forragear</div>
+          {scenario ? (
+            <div className="text-sky-200">T tochas · M som · V marcha forçada · Esc pausa</div>
+          ) : (
+            <>
+              <div className="text-sky-200">E interagir · Tab Mapa do Continente (viagem rápida) · T tochas · M som</div>
+              <div className="text-lime-200">V marcha forçada · G forragear</div>
+            </>
+          )}
         </div>
       </div>
 
@@ -519,15 +657,17 @@ export function FieldHudView() {
             >
               {hud.forced ? "» Marcha forçada" : "Passo normal"}
             </button>
-            <button
-              type="button"
-              disabled={!!hud.forageBlocked}
-              onClick={() => sendBattleCommand({ type: "FORAGE", ids: [] })}
-              title={hud.forageBlocked ?? "G: um quarto de dia coletando comida da região (rende pouco no inverno e no deserto; esgota a região e irrita o dono)"}
-              className="rounded border border-lime-700 px-1.5 py-0.5 text-xs text-lime-200 hover:bg-lime-900/50 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
-            >
-              Forragear
-            </button>
+            {!scenario && (
+              <button
+                type="button"
+                disabled={!!hud.forageBlocked}
+                onClick={() => sendBattleCommand({ type: "FORAGE", ids: [] })}
+                title={hud.forageBlocked ?? "G: um quarto de dia coletando comida da região (rende pouco no inverno e no deserto; esgota a região e irrita o dono)"}
+                className="rounded border border-lime-700 px-1.5 py-0.5 text-xs text-lime-200 hover:bg-lime-900/50 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+              >
+                Forragear
+              </button>
+            )}
             <span className="self-center text-[10px] text-neutral-400" title="Carroças do trem de suprimentos em campo">
               🛒 {hud.wagonsAlive}
             </span>
@@ -537,7 +677,7 @@ export function FieldHudView() {
 
       {report && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60">
-          <div className="flex w-96 flex-col gap-4 rounded-lg border border-neutral-600 bg-neutral-900 p-6">
+          <div className="flex max-h-[90vh] w-96 flex-col gap-4 overflow-y-auto rounded-lg border border-neutral-600 bg-neutral-900 p-6">
             <h2
               className={`text-3xl font-bold ${report.result === "VICTORY" ? "text-yellow-400" : report.result === "DEFEAT" ? "text-red-500" : "text-neutral-200"}`}
             >
@@ -568,12 +708,13 @@ export function FieldHudView() {
                   {name} foi dizimado e está perdido para sempre.
                 </li>
               ))}
-              {report.notes.map((note) => (
-                <li key={note} className="text-neutral-400">
+              {report.notes.map((note, i) => (
+                <li key={i} className="text-neutral-400">
                   {note}
                 </li>
               ))}
             </ul>
+            <PrisonersPanel />
             <Button onClick={clearReport}>Continuar</Button>
           </div>
         </div>

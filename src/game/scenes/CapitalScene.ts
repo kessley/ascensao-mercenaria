@@ -35,10 +35,13 @@ interface Walker {
 interface Guard extends Walker {
   /** Posto fixo num portão (senão faz ronda pelas ruas). */
   post: boolean;
+  /** Saiu da ronda numa perseguição: volta às ruas quando ninguém estiver olhando. */
+  lost?: boolean;
 }
 
 interface NobleView {
   id: string;
+  place: CourtPlace;
   name: string;
   x: number;
   y: number;
@@ -93,6 +96,10 @@ export class CapitalScene extends Phaser.Scene {
   private walkers: Walker[] = [];
   private guards: Guard[] = [];
   private nobles = new Map<string, NobleView>();
+  /** Nobres indo embora a pé, até a porta por onde vieram. */
+  private goers: NobleView[] = [];
+  /** A primeira leva de gente pode nascer à vista: a tela ainda está escura. */
+  private populated = false;
   private near: Near = null;
   private leaving = false;
   private clock = 0;
@@ -114,6 +121,8 @@ export class CapitalScene extends Phaser.Scene {
     this.walkers = [];
     this.guards = [];
     this.nobles = new Map();
+    this.goers = [];
+    this.populated = false;
     this.near = null;
     this.leaving = false;
     this.clock = 0;
@@ -148,7 +157,7 @@ export class CapitalScene extends Phaser.Scene {
     this.night = new NightLayer(this);
     this.spawnGuards();
     this.updateGates(true);
-    this.refreshNobles();
+    this.refreshNobles(true);
 
     const cam = this.cameras.main;
     cam.setZoom(0.85);
@@ -401,17 +410,26 @@ export class CapitalScene extends Phaser.Scene {
     const h = hourOf(s.dayProgress);
     const hours = h >= 7 && h < 19 ? 1 : h >= 19 && h < 22 ? 0.4 : 0.08;
     const party = hasCourtEvent(s.courtEvents, this.townId, "TOURNAMENT", s.day) || hasCourtEvent(s.courtEvents, this.townId, "WEDDING", s.day) ? 1.3 : 1;
-    const want = Math.round(100 * ((t?.prosperity ?? 50) / 100) * hours * party);
-    this.walkers = this.walkers.filter((w) => distance(w, this.pos) < 1900);
-    // Ao chegar a rua já está cheia; depois, gente nova só aparece fora da vista
+    // Cada zona tem a sua gente: criados no Bairro Nobre e no castelo, povo nas ruas
+    const zone = zoneAt(this.layout, this.pos);
+    const want = Math.round((zone === "COMMON" ? 100 : 24) * ((t?.prosperity ?? 50) / 100) * hours * party);
     const v = this.cameras.main.worldView;
-    const first = this.walkers.length === 0;
-    const near = this.layout.nodes.filter((p) => p.zone === "COMMON" && distance(p, this.pos) < 1500 && (first || !Phaser.Geom.Rectangle.Contains(v, p.x, p.y)));
-    const count = this.walkers.length;
-    for (let i = count; i < want && near.length > 0 && i < count + (first ? want : 8); i++) {
+    const unseen = (p: Point) => p.x < v.x - 80 || p.x > v.right + 80 || p.y < v.y - 80 || p.y > v.bottom + 80;
+    // Ninguém some nem aparece à vista: quem sobra sai longe dos olhos do Comandante
+    this.walkers = this.walkers.filter((w) => !unseen(w) || distance(w, this.pos) < 1900);
+    let mine = this.walkers.filter((w) => w.zone === zone).length;
+    this.walkers = this.walkers.filter((w) => {
+      if (w.zone !== zone || mine <= want || !unseen(w)) return true;
+      mine--;
+      return false;
+    });
+    const first = !this.populated;
+    this.populated = true;
+    const near = this.layout.nodes.filter((p) => p.zone === zone && distance(p, this.pos) < 1700 && (first || unseen(p)));
+    for (let i = mine; i < want && near.length > 0 && i < mine + (first ? want : 8); i++) {
       const p = near[Math.floor(Math.random() * near.length)];
-      const lane = { x: (Math.random() - 0.5) * 110, y: (Math.random() - 0.5) * 110 };
-      this.walkers.push({ x: p.x + lane.x, y: p.y + lane.y, path: [], speed: 45 + Math.random() * 35, color: FOLK[Math.floor(Math.random() * FOLK.length)], zone: "COMMON", wait: Math.random() * 3, lane });
+      const lane = { x: (Math.random() - 0.5) * 90, y: (Math.random() - 0.5) * 90 };
+      this.walkers.push({ x: p.x + lane.x, y: p.y + lane.y, path: [], speed: 45 + Math.random() * 35, color: FOLK[Math.floor(Math.random() * FOLK.length)], zone, wait: Math.random() * 3, lane });
     }
   }
 
@@ -469,10 +487,25 @@ export class CapitalScene extends Phaser.Scene {
           return;
         }
         if (d < 900) {
-          g.x += ((this.pos.x - g.x) / d) * 270 * dt;
-          g.y += ((this.pos.y - g.y) / d) * 270 * dt;
+          // Guarda também não atravessa parede
+          const nx = g.x + ((this.pos.x - g.x) / d) * 270 * dt;
+          if (!this.blocked({ x: nx, y: g.y }, 10)) g.x = nx;
+          const ny = g.y + ((this.pos.y - g.y) / d) * 270 * dt;
+          if (!this.blocked({ x: g.x, y: ny }, 10)) g.y = ny;
+          g.lost = true;
+          g.path = [];
           continue;
         }
+      }
+      if (g.lost) {
+        const v = this.cameras.main.worldView;
+        if (Phaser.Geom.Rectangle.Contains(v, g.x, g.y)) continue;
+        const node = this.layout.nodes.filter((p) => p.zone === g.zone).reduce<Point | null>((best, p) => (!best || distance(p, g) < distance(best, g) ? p : best), null);
+        if (node) {
+          g.x = node.x;
+          g.y = node.y;
+        }
+        g.lost = false;
       }
       if (!g.post) this.walk(g, dt);
       if (sneaking && time > this.graceUntil && time > this.chaseUntil && distance(g, this.pos) < sight) {
@@ -507,32 +540,38 @@ export class CapitalScene extends Phaser.Scene {
     this.say("Sargento da guarda", { text: `${text} Solto na manhã do terceiro dia, diante do Portão Velho.` });
   }
 
-  private refreshNobles(): void {
+  /** Nobre que muda de lugar vai a pé até a porta por onde veio e some lá, nunca no meio da rua. */
+  private sendAway(v: NobleView): void {
+    const out = this.layout.entries[v.place];
+    this.nobles.delete(v.id);
+    if (!out) {
+      v.gfx.destroy();
+      v.label.destroy();
+      return;
+    }
+    v.tx = out.x;
+    v.ty = out.y;
+    this.goers.push(v);
+  }
+
+  private refreshNobles(first = false): void {
     const s = useGameStore.getState();
     const h = hourOf(s.dayProgress);
     const feast = hasCourtEvent(s.courtEvents, this.townId, "FEAST", s.day);
-    const wanted = new Map<string, Point>();
+    const wanted = new Map<string, { at: Point; place: CourtPlace }>();
     for (const n of s.nobles) {
       if (!n.alive || n.at !== this.townId || n.armyId || n.captiveOf) continue;
       const place = scheduleOf(n, h, s.day, feast) as CourtPlace;
       const spot = this.layout.hotspots[place];
       if (!spot) continue;
       const r = createRng(seedFromText(n.id));
-      wanted.set(n.id, { x: spot.x + r.range(-120, 120), y: spot.y + r.range(-40, 90) });
+      wanted.set(n.id, { at: { x: spot.x + r.range(-120, 120), y: spot.y + r.range(-40, 70) }, place });
     }
-    for (const [id, v] of this.nobles) {
-      if (wanted.has(id)) continue;
-      v.gfx.destroy();
-      v.label.destroy();
-      this.nobles.delete(id);
-    }
-    for (const [id, p] of wanted) {
-      const v = this.nobles.get(id);
-      if (v) {
-        v.tx = p.x;
-        v.ty = p.y;
-        continue;
-      }
+    for (const [id, v] of this.nobles) if (wanted.get(id)?.place !== v.place) this.sendAway(v);
+    for (const [id, w] of wanted) {
+      if (this.nobles.has(id)) continue;
+      const p = w.at;
+      const from = first ? p : (this.layout.entries[w.place] ?? p);
       const n = s.nobles.find((x) => x.id === id);
       if (!n) continue;
       const gfx = this.add.graphics().setDepth(5);
@@ -545,24 +584,41 @@ export class CapitalScene extends Phaser.Scene {
         gfx.fillTriangle(-9, -13, -3, -20, 0, -13);
         gfx.fillTriangle(9, -13, 3, -20, 0, -13);
       }
-      gfx.setPosition(p.x, p.y);
+      gfx.setPosition(from.x, from.y).setAlpha(first ? 1 : 0);
       const name = courtName(s, n);
-      const label = this.add.text(p.x, p.y - 26, name, { fontFamily: "monospace", fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(8);
-      this.nobles.set(id, { id, name, x: p.x, y: p.y, tx: p.x, ty: p.y, gfx, label });
+      const label = this.add.text(from.x, from.y - 26, name, { fontFamily: "monospace", fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(8);
+      this.nobles.set(id, { id, place: w.place, name, x: from.x, y: from.y, tx: p.x, ty: p.y, gfx, label });
     }
   }
 
   private updateNobleViews(dt: number): void {
-    for (const v of this.nobles.values()) {
+    const stepTo = (v: NobleView): number => {
       const d = distance(v, { x: v.tx, y: v.ty });
       if (d > 1) {
-        const step = Math.min(d, 60 * dt);
+        const step = Math.min(d, 80 * dt);
         v.x += ((v.tx - v.x) / d) * step;
         v.y += ((v.ty - v.y) / d) * step;
       }
       v.gfx.setPosition(v.x, v.y);
-      v.label.setPosition(v.x, v.y - 26).setAlpha(distance(v, this.pos) < 340 ? 1 : 0);
+      v.label.setPosition(v.x, v.y - 26);
+      return d;
+    };
+    for (const v of this.nobles.values()) {
+      stepTo(v);
+      // Sai da porta aos poucos
+      v.gfx.setAlpha(Math.min(1, v.gfx.alpha + dt * 2));
+      v.label.setAlpha(distance(v, this.pos) < 340 ? v.gfx.alpha : 0);
     }
+    this.goers = this.goers.filter((v) => {
+      const d = stepTo(v);
+      v.label.setAlpha(0);
+      if (d > 30) return true;
+      v.gfx.setAlpha(v.gfx.alpha - dt * 3);
+      if (v.gfx.alpha > 0) return true;
+      v.gfx.destroy();
+      v.label.destroy();
+      return false;
+    });
   }
 
   private drawCrowd(): void {

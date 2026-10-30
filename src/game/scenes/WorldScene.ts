@@ -3,7 +3,8 @@ import { Commander, type CommanderKeys } from "../entities/Commander";
 import { Battalion } from "../entities/Battalion";
 import { Enemy } from "../entities/Enemy";
 import { Messenger, type MissionStop } from "../entities/Messenger";
-import { Scout, type ScoutMode } from "../entities/Scout";
+import { Scout, type ScoutHazard, type ScoutMode, type ScoutOrder, type ScoutReport, type ScoutWorld } from "../entities/Scout";
+import { Harpy, type HarpyEvent, type HarpyWorld } from "../entities/Harpy";
 import { Unit, type TownAccess } from "../entities/Unit";
 import { Wagon } from "../entities/Wagon";
 import { WeatherLayer } from "../world/WeatherLayer";
@@ -14,7 +15,9 @@ import { FogOfWar, type VisionSource } from "../systems/FogOfWar";
 import { updateMorale } from "../systems/MoraleSystem";
 import { clampToWorld, separateUnits } from "../systems/MovementSystem";
 import { layoutGroup } from "../systems/GroupLayout";
-import { WarbandManager, bandSize, type Warband, type WarbandEvent } from "../systems/Warbands";
+import { WarbandManager, bandSize, type ArmyIntel, type Warband, type WarbandEvent } from "../systems/Warbands";
+import { SiegeWorks } from "../systems/SiegeWorks";
+import { HostManager, makeStaff, promoteRoster, type HostWorld, type StaffData, type WarHost } from "../systems/WarHost";
 import { TerrainMap, TerrainStreamer } from "../world/TerrainMap";
 import { NightLayer, type Light } from "../world/NightLayer";
 import { CampArea, type Interactable } from "../world/CampArea";
@@ -32,9 +35,13 @@ import { TradeRoutes, type TradeNews } from "../world/TradeRoutes";
 import { FRIEND_AT, bondOf, followerCap } from "../sim/campEvents";
 import { geoOf } from "../worldgen/geoMap";
 import { TheRealm, ofRealm } from "../worldgen/names";
+import { harpyNests, type HarpyNest } from "../worldgen/nests";
+import { seedFromText } from "../worldgen/rng";
 import { scaleGroups, type EnemyGroupDef } from "../data/battleMaps";
+import { fullName } from "../data/lieutenants";
 import { DIFFICULTY, type Contract } from "../data/contracts";
 import { ferryDocks, regionName, type WorldDef } from "../data/world";
+import { ENEMY_FACTIONS, armyStart, forceSize, forceStart, scenarioEnemyTotal, type BattleScenario, type ScenarioForce } from "../data/scenarios";
 import { isCalamityOwner, isFactionOwner, isRaiderKind, isSick, type Settlement } from "../sim/realm";
 import { AUTO_SLOT, registerFieldCapture, unregisterFieldCapture, type EnemySave, type FieldSave } from "../save/saveGame";
 import {
@@ -45,6 +52,7 @@ import {
   type BattleCommand,
   type BattleResult,
   type GameState,
+  type SiegeAction,
   type SupportReport,
   type TrumpetCall,
   type WarbandSighting,
@@ -74,11 +82,15 @@ import {
   WEATHER,
   TRADE,
   GOODS,
+  PRISONERS,
+  SIEGE,
+  WAR_AI,
   setWorldSize,
   type EnemyKind,
   type Formation,
   type Season,
   type TerrainType,
+  type TroopType,
   type Weather,
 } from "../../utils/constants";
 import { campMoraleBonus, cargoCapacity, dailyRations, startingMorale } from "../../utils/economy";
@@ -119,11 +131,20 @@ const FORMATION_KEYS: [keyof BattleKeys, Formation][] = [
   ["FOUR", "LOOSE"],
 ];
 
-const SCOUT_MODE_LABEL: Record<ScoutMode, string> = {
+const SCOUT_ORDER_LABEL: Record<ScoutOrder["kind"], string> = {
   VANGUARD: "Vanguarda",
-  EXPLORE: "Explorar",
   RECALL: "Recolher",
+  RETURN: "Voltar",
+  WATCH: "Vigiar",
+  REGION: "Explorar região",
+  PATROL: "Patrulhar rota",
+  SHADOW: "Seguir bando",
 };
+
+/** Ordens que o batedor recebe por trombeta; as outras precisam de voz, mensageiro ou harpia. */
+const SCOUT_BASIC_ORDERS: readonly ScoutMode[] = ["VANGUARD", "RECALL"];
+
+const SIDE_WORD = { N: "norte", S: "sul", E: "leste", W: "oeste" } as const;
 
 /** Arrasto menor que isto (px de mundo) conta como clique, não como caixa de seleção. */
 const DRAG_THRESHOLD = 6;
@@ -154,6 +175,8 @@ interface PendingDelivery {
 /** Combate em andamento no mundo: quem lutou, como estava no começo e o que já aconteceu. */
 interface Engagement {
   enemies: Set<Enemy>;
+  /** Oficiais caídos neste combate (podem ter se rendido feridos). */
+  officers: { name: string; factionId: string | null }[];
   /** Batalhões que entraram no combate (só eles ganham XP e entram no relatório). */
   participants: Set<Battalion>;
   /** Abates de cada batalhão (e do tenente) quando entrou no combate. */
@@ -163,6 +186,27 @@ interface Engagement {
   contractDone: boolean;
   /** Acontecimentos para o relatório (povoado tomado, líder abatido...). */
   notes: string[];
+}
+
+/** Batalha personalizada em andamento: o que só a cena acompanha. */
+interface ScenarioRun {
+  def: BattleScenario;
+  seconds: number;
+  /** Forças que ainda vão entrar em campo. */
+  pending: ScenarioForce[];
+  bands: Warband[];
+  /** Saíram do campo em ordem: contam como quem fugiu. */
+  left: Warband[];
+  fled: number;
+  officers: string[];
+  nextCourse: number;
+  /** Desde quando não há ninguém lutando do outro lado. */
+  clearSince: number | null;
+  /** Quem o objetivo de matar o chefe manda caçar: a primeira força. */
+  prey: Warband | null;
+  chiefDown: boolean;
+  /** Quantos soldados cada batalhão levou a campo. */
+  start: Map<string, number>;
 }
 
 /** A cena do mundo mais recente (ao carregar um jogo, a antiga ainda vive por um quadro). */
@@ -265,6 +309,14 @@ export class WorldScene extends Phaser.Scene {
   /** Batalhões descansando nos alojamentos (voltam a seguir o Comandante quando ele sai). */
   private quartered = new Set<string>();
   private warbands!: WarbandManager;
+  /** Comando inimigo em campo (Marco 16). */
+  private hosts!: HostManager;
+  /** Obras do cerco em curso: portões, escadas e aríete. */
+  private works: SiegeWorks | null = null;
+  /** Cerco levantado: a guarnição fica quieta por um tempo, mesmo com o bando por perto. */
+  private truce: { townId: string; until: number } | null = null;
+  /** Notícias do bando a caminho dos reinos (ver newsTick). */
+  private newsOfArmy: { key: string; at: ArmyIntel }[] = [];
   private engagement: Engagement | null = null;
   /** Inimigos do contrato ativo e do motim, já postos no mapa. */
   private contractEnemies: Enemy[] = [];
@@ -292,6 +344,12 @@ export class WorldScene extends Phaser.Scene {
   private feed: string[] = [];
   private deadScoutIds: string[] = [];
   private deadMessengerIds: string[] = [];
+  /** Harpias treinadas em campo (Marco 16). */
+  private harpies: Harpy[] = [];
+  /** Ninhos de harpia nas montanhas (saem da semente do mundo). */
+  private nests: HarpyNest[] = [];
+  /** Quando cada grupo inimigo reagiu pela última vez a um batedor visto. */
+  private spotAt = new Map<string, number>();
 
   /** Câmera presa no Comandante (padrão) ou solta para comandar a distância. */
   private cameraLocked = true;
@@ -330,10 +388,13 @@ export class WorldScene extends Phaser.Scene {
     super("WorldScene");
   }
 
+  /** Batalha personalizada em andamento (null = campanha). */
+  private run: ScenarioRun | null = null;
+
   /** Sem simulação com o mapa, um relatório ou um painel abertos (pausa tática). */
   private get ended(): boolean {
     const s = useGameStore.getState();
-    return s.worldMapOpen || s.battleReport !== null || s.campPanel !== null || s.campEvent !== null;
+    return s.worldMapOpen || s.battleReport !== null || s.campPanel !== null || s.campEvent !== null || s.scenarioPaused || s.scenarioResult !== null;
   }
 
   create(): void {
@@ -348,6 +409,8 @@ export class WorldScene extends Phaser.Scene {
     this.feed = [];
     this.deadScoutIds = [];
     this.deadMessengerIds = [];
+    this.harpies = [];
+    this.spotAt = new Map();
     this.reportedDead = new Set();
     this.cameraLocked = true;
     this.panDrag = null;
@@ -356,7 +419,7 @@ export class WorldScene extends Phaser.Scene {
     this.lastBannerFx = -Infinity;
     this.warCryAt = -Infinity;
     this.walkPath = null;
-    this.inCamp = true;
+    this.inCamp = !useGameStore.getState().scenario;
     this.quartered = new Set();
     this.engagement = null;
     this.contractEnemies = [];
@@ -368,6 +431,7 @@ export class WorldScene extends Phaser.Scene {
     this.lastSnapshotAt = -Infinity;
 
     this.siegeId = null;
+    this.works = null;
     this.gateRules = [];
     this.visit = null;
     this.lastGarrisonAt = -Infinity;
@@ -392,6 +456,7 @@ export class WorldScene extends Phaser.Scene {
     this.world = store.world;
     setWorldSize(this.world.cols, this.world.rows);
     this.onBridge = null;
+    Enemy.onSpot = (e, scout) => this.onScoutSpotted(e, scout);
 
     // Mundo gerado: chão, terreno, estradas, locais de contrato, povoados e o acampamento
     this.culler = new StaticCuller();
@@ -468,6 +533,44 @@ export class WorldScene extends Phaser.Scene {
       },
     );
 
+    // Marco 16: bando que entra na bolha ganha comando em campo
+    this.hosts = new HostManager({
+      scene: this,
+      terrainAt: (p) => Unit.terrain?.typeAt(p.x, p.y) ?? "GRASS",
+      isOpen: (p) => this.nav.isOpen(p),
+      nearestOpen: (p, r) => this.nav.nearestOpen(p, r),
+      listener: () => this.commander,
+      feed: (text) => this.pushFeed(text),
+      horn: (at) => sfx.trumpet("Avançar", at),
+      ambush: (at) => this.sprungAmbush(at),
+      sawArmy: (host, at, size) => {
+        const band = host.band;
+        if (!band) return;
+        const s = useGameStore.getState();
+        const day = s.day + s.dayProgress;
+        this.warbands.noteArmy(band.id, { x: at.x, y: at.y, day, size });
+        // O reino fica sabendo depois: a notícia anda até o povoado mais perto dele
+        if (band.ownerId && band.kind !== "HORDE") {
+          const own = s.settlements.filter((t) => t.owner === band.ownerId);
+          const near = own.length > 0 ? Math.min(...own.map((t) => distance(t, at))) : 0;
+          this.newsOfArmy.push({ key: band.ownerId, at: { x: at.x, y: at.y, day: day + near / WAR_AI.NEWS_SPEED, size } });
+        }
+      },
+      officerDown: (host, name, chief) => this.onOfficerDown(host, name, chief),
+      vanish: (e) => {
+        e.fled = true;
+        e.unitState = "DEAD";
+        e.destroy();
+      },
+      retreated: (band) => {
+        if (this.run) this.run.left.push(band);
+        else this.warbands.retarget(band);
+      },
+    });
+    this.warbands.hostile = (b) => this.bandHostile(b);
+    this.warbands.onEnterBubble = (b) => this.hosts.attachBand(b);
+    this.warbands.onLeaveBubble = (b) => this.hosts.detachBand(b);
+
     // Bandos marcham pelas mesmas regras de chão (lama, neve); inverno: os reinos recolhem os exércitos
     this.warbands.marchFactor = (p) => this.groundAt(p.x, p.y, "GRASS");
     this.warbands.setWinter(this.season === "WINTER");
@@ -493,6 +596,8 @@ export class WorldScene extends Phaser.Scene {
     this.fog.revealExplored(this.world.camp.center, WORLD.KNOWN_RADIUS + 300);
     for (const t of store.settlements) this.fog.revealExplored(t, WORLD.KNOWN_RADIUS);
     this.ghostGfx = this.add.graphics().setDepth(16);
+    this.nests = harpyNests(this.world);
+    this.syncHarpies();
     this.night = new NightLayer(this);
     this.weatherLayer = new WeatherLayer(this);
 
@@ -508,6 +613,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncSiege();
     // Jogo carregado: o campo volta como estava (posições, névoa, bandos, inimigos feridos)
     this.restoreField(useGameStore.getState().consumePendingField());
+    if (store.scenario) this.startScenarioField(store.scenario);
     const capture = () => this.captureField();
     registerFieldCapture(capture);
 
@@ -547,6 +653,7 @@ export class WorldScene extends Phaser.Scene {
       this.campLife.destroy();
       this.mapLife.destroy();
       this.trade.destroy();
+      this.hosts.clear();
       if (Unit.terrain === terrain) Unit.terrain = null;
       if (Unit.nav === nav) Unit.nav = null;
       if (Unit.armyNav === armyNav) {
@@ -563,7 +670,9 @@ export class WorldScene extends Phaser.Scene {
       Unit.ground = null;
       Unit.pace = 1;
       Enemy.perception = 1;
+      Enemy.darkPerception = 1;
       Enemy.weatherSight = 1;
+      Enemy.onSpot = null;
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
@@ -625,6 +734,7 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.lastFogAt >= SUPPORT.FOG_UPDATE_MS) this.updateVision(time);
     else this.updateReveal(allies, time);
     this.updateHostility();
+    this.works?.update(dt);
     const active = this.activeEnemies();
     // Só os hostis contam para alvos automáticos, moral e combate (patrulhas em paz, refugiados e mensageiros não)
     const hostiles = active.filter((e) => e.hostile);
@@ -642,10 +752,18 @@ export class WorldScene extends Phaser.Scene {
     }
     const foesOfFriendly = active.filter((e) => e.side === "WILD" || (e.hostile && !e.friendly));
     const wildAndFriendly = [...wild, ...friendly];
-    for (const e of active) {
-      const rivals = e.friendly ? foesOfFriendly : e.side === "WILD" ? town : e.side === "TOWN" ? (e.hostile ? wildAndFriendly : wild) : e.hostile ? friendly : [];
-      e.think(dt, allies, rivals);
-    }
+    const base = (e: Enemy): readonly Unit[] => (e.friendly ? foesOfFriendly : e.side === "WILD" ? town : e.side === "TOWN" ? (e.hostile ? wildAndFriendly : wild) : e.hostile ? friendly : []);
+    // Exércitos de reinos em guerra lutam de verdade quando se encontram na bolha
+    const warFoes = this.warFoes(active);
+    const rivalsOf = (e: Enemy): readonly Unit[] => {
+      // Batalha personalizada: goblins e reinos do cenário não brigam entre si
+      if (this.run) return [];
+      const extra = e.factionId ? warFoes.get(e.factionId) : undefined;
+      return extra ? [...base(e), ...extra] : base(e);
+    };
+    const hostWorld: HostWorld = { time, dt, allies, rivalsOf, bonus: WAR_AI.DIFFICULTY[store.warDifficulty].competence };
+    this.hosts.update(hostWorld);
+    for (const e of active) e.think(dt, allies, rivalsOf(e));
     this.handleWarbandEvents(this.warbands.update(dt));
     this.tradeNews(this.trade.update(dt, view, this.presence()));
     this.assignFollowSlots();
@@ -654,11 +772,14 @@ export class WorldScene extends Phaser.Scene {
     for (const b of this.battalions) b.update(dt, visibleEnemies);
     Wagon.load = this.loadPace();
     this.updateWagons(dt);
-    for (const s of this.scouts) s.think(dt, this.commander, active);
+    const scoutWorld = this.scoutWorld(active);
+    for (const s of this.scouts) s.think(dt, scoutWorld);
+    this.updateHarpies(dt, time, active);
     this.updateMessengers(dt);
 
     const everyone: Unit[] = [...allies, ...active];
     resolveAttacks(this, everyone, time);
+    this.hosts.afterCombat(hostWorld);
     const faltering = this.commander.hp / this.commander.maxHp < SUPPORT.BANNER_FALTER_HP;
     for (const b of this.battalions) {
       const seen = !b.isDestroyed && this.seesBanner(b.center);
@@ -687,13 +808,14 @@ export class WorldScene extends Phaser.Scene {
     this.updateTownVisit();
     this.updateGarrisons(time);
     this.updateGarrisonUnits();
-    this.wildlife.update(time, this.wildlifeContext());
+    if (!this.run) this.wildlife.update(time, this.wildlifeContext());
     this.updateCampLife(time, dt);
     this.updateMapLife(time, dt);
     this.updateBridgeCrossing();
     this.updatePrompt();
     this.checkObjectives();
     this.updateEngagement(time, active);
+    if (this.run) this.scenarioTick(this.run, dt);
     this.tickClock(time, dt);
 
     if (time - this.lastHudAt >= BALANCE.HUD_UPDATE_MS) {
@@ -713,6 +835,7 @@ export class WorldScene extends Phaser.Scene {
     const b = new Battalion(this, data, pos.x, pos.y, this.commander, lieutenant);
     // Fome, salários atrasados e o humor do acampamento: os batalhões já saem animados ou desanimados
     b.morale = startingMorale(store.hungryDays, store.arrearsWeeks, campMoraleBonus(store.campMood, store.followers)).value;
+    if ((data.turncoatUntil ?? 0) > store.day) b.morale = Math.max(30, b.morale - PRISONERS.TURNCOAT_MORALE);
     b.fatigue = this.fatigueById.get(data.id) ?? 0;
     if (!at && slot) this.quarter(b, index, slot);
     this.fieldSignatures.set(b, this.battalionSignature(data, lieutenant?.id ?? null));
@@ -720,10 +843,14 @@ export class WorldScene extends Phaser.Scene {
     return b;
   }
 
+  private riderBase(): Point {
+    const spawn = this.world.camp.spawn;
+    return this.inCamp ? { x: spawn.x + 220, y: spawn.y - 40 } : { x: this.commander.x, y: this.commander.y };
+  }
+
   private spawnRiders(): void {
     const store = useGameStore.getState();
-    const spawn = this.world.camp.spawn;
-    const base = this.inCamp ? { x: spawn.x + 220, y: spawn.y - 40 } : { x: this.commander.x, y: this.commander.y };
+    const base = this.riderBase();
     this.scouts = store.scouts.map((data, i) => new Scout(this, base.x + 60, base.y - 40 + i * 40, data));
     this.messengers = store.messengers.map((data, i) => new Messenger(this, base.x - 30 + i * 20, base.y + 40, data, i));
   }
@@ -776,15 +903,25 @@ export class WorldScene extends Phaser.Scene {
     this.battalions.sort((a, b) => order(a.id) - order(b.id));
     this.followKey = "";
 
-    // Batedores e mensageiros: recriados se a lista ou o nível mudou (e ninguém está em missão)
-    const riderKey = [...store.scouts.map((r) => r.id), ...store.messengers.map((r) => `${r.id}:${r.level}`)].join("|");
-    const fieldKey = [
-      ...this.scouts.filter((s) => s.isAlive).map((s) => s.rider.id),
-      ...this.messengers.filter((m) => m.isAlive).map((m) => `${m.rider.id}:${m.rider.level}`),
-    ].join("|");
+    // Batedores continuam onde estão (podem estar longe, em missão): só entra quem é novo e sai quem não existe mais
+    for (const s of this.scouts) {
+      const data = store.scouts.find((d) => d.id === s.rider.id);
+      if (data) s.rider = data;
+      else if (s.isAlive) s.destroy();
+    }
+    this.scouts = this.scouts.filter((s) => store.scouts.some((d) => d.id === s.rider.id));
+    const riderBase = this.riderBase();
+    store.scouts.forEach((data, i) => {
+      if (!this.scouts.some((s) => s.rider.id === data.id)) this.scouts.push(new Scout(this, riderBase.x + 60, riderBase.y - 40 + i * 40, data));
+    });
+    this.syncHarpies();
+
+    // Mensageiros: recriados se a lista ou o nível mudou (e ninguém está em missão)
+    const riderKey = store.messengers.map((r) => `${r.id}:${r.level}`).join("|");
+    const fieldKey = this.messengers.filter((m) => m.isAlive).map((m) => `${m.rider.id}:${m.rider.level}`).join("|");
     if (riderKey !== fieldKey && this.messengers.every((m) => !m.isAlive || m.available)) {
-      for (const r of [...this.scouts, ...this.messengers]) r.destroy();
-      this.spawnRiders();
+      for (const r of this.messengers) r.destroy();
+      this.messengers = store.messengers.map((data, i) => new Messenger(this, riderBase.x - 30 + i * 20, riderBase.y + 40, data, i));
     } else if (riderKey !== fieldKey) {
       this.armyDirty = true; // tenta de novo quando os mensageiros voltarem
     }
@@ -836,9 +973,11 @@ export class WorldScene extends Phaser.Scene {
     }
     const site = this.world.sites.find((x) => x.id === contract.siteId);
     if (!site) return;
-    for (const group of scaleGroups(site.groups, DIFFICULTY[contract.difficulty].enemyMultiplier)) {
-      this.contractEnemies.push(...this.spawnEnemyGroup(group, { kind: "CONTRACT", contractId: contract.id }));
-    }
+    scaleGroups(site.groups, DIFFICULTY[contract.difficulty].enemyMultiplier).forEach((group, i) => {
+      const units = this.spawnEnemyGroup(group, { kind: "CONTRACT", contractId: contract.id }, undefined, true);
+      this.contractEnemies.push(...units);
+      this.attachGroup(`contract:${contract.id}:${i}`, units);
+    });
     // O cliente indicou o lugar: ele fica conhecido no mapa (destino da viagem rápida)
     this.fog?.revealExplored(site.center, 700);
     this.pushFeed(`Contrato: "${contract.title}" — o local (${site.name}) está marcado no Mapa do Continente.`);
@@ -1045,7 +1184,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private spots(): Interactable[] {
-    return [...this.campArea.interactables, ...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots()];
+    return [...this.campArea.interactables, ...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()];
   }
 
   /** Exércitos à vista, em paz com o bando: dá para ir à tenda do lorde (Marco 15). */
@@ -1064,6 +1203,21 @@ export class WorldScene extends Phaser.Scene {
     return out;
   }
 
+  /** Do que é feito o bando do jogador (o que um reino derrotado viu). */
+  private armyShares(): { infantry: number; archers: number; cavalry: number } {
+    const count = (t: string) => this.battalions.filter((b) => b.troopType === t).reduce((n, b) => n + b.aliveCount, 0);
+    const total = Math.max(1, this.battalions.reduce((n, b) => n + b.aliveCount, 0));
+    return { infantry: count("INFANTRY") / total, archers: count("ARCHERS") / total, cavalry: count("CAVALRY") / total };
+  }
+
+  /** Campos de batalha com o que os mortos deixaram: o primeiro a chegar leva (Marco 16). */
+  private spoilSpots(): Interactable[] {
+    const s = useGameStore.getState();
+    return s.battlefields
+      .filter((b) => (b.spoils ?? 0) > 0 && s.day - b.day <= WAR_AI.SPOILS_DAYS)
+      .map((b) => ({ label: `Saquear o campo de batalha (${b.spoils} mortos)`, door: { x: b.x, y: b.y }, panel: { kind: "GAME" } as const, bounds: new Phaser.Geom.Rectangle(b.x - 80, b.y - 80, 160, 160), radius: 200, enter: `spoils:${b.x}:${b.y}` }));
+  }
+
   /** Banca do mascate (quando ele segue o bando). */
   private followerSpots(): Interactable[] {
     const stall = this.campArea.packed ? null : this.campLife.peddlerStall();
@@ -1072,7 +1226,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private updatePrompt(): void {
-    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots()]);
+    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.settlementLayer.interactables, ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()]);
     const store = useGameStore.getState();
     store.setCampPrompt(this.nearestSpot && !store.campPanel ? `E — ${this.nearestSpot.enter ? "Entrar: " : ""}${this.nearestSpot.label}` : null);
   }
@@ -1149,6 +1303,12 @@ export class WorldScene extends Phaser.Scene {
   private enterBuilding(spot: Interactable): void {
     if (!spot.enter || this.interiorReturn) return;
     const store = useGameStore.getState();
+    // Espólio: não há interior, é só recolher (Marco 16)
+    if (spot.enter.startsWith("spoils:")) {
+      const [, x, y] = spot.enter.split(":");
+      this.pushFeed(store.lootBattlefield(Number(x), Number(y)));
+      return;
+    }
     if (this.engagement || this.enemies.some((e) => e.isAlive && e.hostile && distance(e, this.commander) < 900)) {
       this.pushFeed("Inimigos por perto: não é hora de entrar em lugar nenhum.");
       return;
@@ -1195,6 +1355,7 @@ export class WorldScene extends Phaser.Scene {
   advanceAbroad(days: number): void {
     this.handleWarbandEvents(this.warbands.advance(days));
     this.tradeNews(this.trade.advance(days));
+    this.advanceScouts(days);
     this.passTime(days);
   }
 
@@ -1258,6 +1419,7 @@ export class WorldScene extends Phaser.Scene {
   private allAllies(): Unit[] {
     const allies: Unit[] = [];
     if (this.commander.isAlive) allies.push(this.commander);
+    if (this.works?.ram?.isAlive) allies.push(this.works.ram);
     for (const b of this.battalions) for (const s of b.soldiers) if (s.isAlive) allies.push(s);
     for (const s of this.scouts) if (s.isAlive) allies.push(s);
     for (const m of this.messengers) if (m.isAlive) allies.push(m);
@@ -1464,7 +1626,7 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.lastWeatherAt < 1000) return;
     this.lastWeatherAt = time;
     const s = useGameStore.getState();
-    const w = weatherAt(this.world.seed, s.day, this.commander, geoOf(this.world.geo));
+    const w = s.scenario?.weather ?? weatherAt(this.world.seed, s.day, this.commander, geoOf(this.world.geo));
     if (w === this.weather) return;
     const was = this.weather;
     this.weather = w;
@@ -1485,7 +1647,7 @@ export class WorldScene extends Phaser.Scene {
   /** Previsão de amanhã: um tenente Cauteloso lê o céu. */
   private forecast(): Weather | null {
     const s = useGameStore.getState();
-    if (!s.lieutenants.some((l) => l.traits.includes("CAUTIOUS"))) return null;
+    if (s.scenario || !s.lieutenants.some((l) => l.traits.includes("CAUTIOUS"))) return null;
     return weatherAt(this.world.seed, s.day + 1, this.commander, geoOf(this.world.geo));
   }
 
@@ -1514,7 +1676,8 @@ export class WorldScene extends Phaser.Scene {
     const sheltered = this.settlementLayer.layouts.some((l) => insideTown(l, c, 600));
     s.setExposure({
       away,
-      swamp: away && (c.terrainType === "SWAMP" || geo.biomeAt(c.x, c.y) === "MARSH"),
+      // Acampamento de cerco que dura: a mesma doença do pântano
+      swamp: away && (c.terrainType === "SWAMP" || geo.biomeAt(c.x, c.y) === "MARSH" || (!!s.siege?.walled && s.day - (s.siege.startDay ?? s.day) >= SIEGE.CAMP_SICK_DAY)),
       // Cobertores do mascate protegem do frio
       cold: away && !sheltered && s.day >= s.blanketsUntil && this.season === "WINTER" && geo.temperatureAt(c.x, c.y) < SEASONS.SNOW_BELOW,
       sickTown: s.settlements.some((t) => isSick(t, s.day) && distance(t, c) < 2500),
@@ -1525,6 +1688,7 @@ export class WorldScene extends Phaser.Scene {
 
   private forageBlocked(): string | null {
     const s = useGameStore.getState();
+    if (this.run) return "Só na campanha";
     if (this.inCamp) return "Saia do acampamento";
     if (this.engagement) return "Em combate";
     if (s.mutiny) return "Motim no acampamento";
@@ -1560,6 +1724,7 @@ export class WorldScene extends Phaser.Scene {
 
   private pitchBlocked(): string | null {
     const s = useGameStore.getState();
+    if (this.run) return "Só na campanha";
     if (!s.campPacked) return "O acampamento está montado";
     if (this.engagement) return "Em combate";
     if (this.visibleEnemies().some((e) => distance(e, this.commander) < WORLD.TRAVEL_BLOCK_RADIUS)) return "Inimigos à vista";
@@ -1626,8 +1791,156 @@ export class WorldScene extends Phaser.Scene {
     return e;
   }
 
-  private spawnEnemyGroup(group: EnemyGroupDef, owner: Enemy["owner"], color?: number): Enemy[] {
-    const kinds = group.units.flatMap(([kind, n]) => Array<EnemyKind>(n).fill(kind));
+  // --- Batalha personalizada ---
+
+  /** Põe as tropas no campo: o bando em linha, de frente para o leste, e as forças inimigas. */
+  private startScenarioField(def: BattleScenario): void {
+    const start = new Map(useGameStore.getState().battalions.map((b) => [b.id, b.soldiers]));
+    this.run = { def, seconds: 0, pending: [...def.forces].filter((f) => forceSize(f) > 0), bands: [], left: [], fled: 0, officers: [], nextCourse: 0, clearSince: null, prey: null, chiefDown: false, start };
+    this.warbands.allied = true;
+    const at = armyStart(def);
+    this.placeArmy(at, 0);
+    this.deployArmy(at);
+    for (const f of this.run.pending.filter((x) => x.delay === 0)) this.enterForce(this.run, f);
+    this.run.pending = this.run.pending.filter((x) => x.delay > 0);
+    this.updateVision(this.time.now);
+    this.pushFeed(`${def.name}: ${def.description || "as tropas estão em posição."}`);
+  }
+
+  /** Linha de batalha: infantaria à frente, arqueiros atrás, cavalaria nas pontas. */
+  private deployArmy(at: Point): void {
+    const slots = layoutGroup(this.battalions, "CAVALRY_FLANKS", 0, at);
+    const front = at.x + 300;
+    for (const s of slots) {
+      const p = this.armyNav.nearestOpen({ x: front - s.back, y: at.y + s.lateral }, 500) ?? at;
+      s.battalion.teleportTo(p);
+      s.battalion.facing = 0;
+      s.battalion.order = { type: "HOLD", point: p };
+    }
+    this.followKey = "";
+  }
+
+  private enterForce(run: ScenarioRun, force: ScenarioForce): void {
+    const faction = ENEMY_FACTIONS[force.faction];
+    const origin = forceStart(run.def, force);
+    const band = this.warbands.spawnBand({
+      name: force.chief ? `Hoste de ${force.chief}` : faction.name,
+      kind: faction.band,
+      units: Object.entries(force.units).map(([kind, n]) => [kind as EnemyKind, n ?? 0]),
+      origin: this.nav.nearestOpen(origin, 2400) ?? origin,
+      ownerId: null,
+      chief: force.chief ? { name: force.chief, traits: [force.trait] } : undefined,
+    });
+    if (band.staff) band.staff = { ...band.staff, competence: force.competence, traits: [force.trait] };
+    if (force.stance === "HOLD") this.warbands.holdGround(band);
+    else run.nextCourse = 0;
+    run.bands.push(band);
+    if (force === run.def.forces[0]) run.prey = band;
+    this.scenarioStance.set(band, force.stance);
+    if (force.delay > 0 && run.def.objective !== "SURVIVE") this.pushFeed("Os batedores ouvem mais gente chegando.");
+  }
+
+  private scenarioStance = new WeakMap<Warband, ScenarioForce["stance"]>();
+
+  /** Quem ainda luta do outro lado. */
+  private scenarioFoes(run: ScenarioRun): number {
+    let n = 0;
+    for (const band of run.bands) {
+      if (run.left.includes(band)) continue;
+      n += band.materialized ? band.members.filter((m) => m.isAlive && !m.routed).length : band.roster.length;
+    }
+    return n;
+  }
+
+  private scenarioTick(run: ScenarioRun, dt: number): void {
+    run.seconds += dt;
+    for (const f of run.pending.filter((x) => run.seconds >= x.delay)) this.enterForce(run, f);
+    run.pending = run.pending.filter((x) => run.seconds < x.delay);
+    // Quem deixou o campo em ordem não volta: a batalha é aqui
+    for (const band of run.left) {
+      if (!this.warbands.bands.includes(band)) continue;
+      run.fled += bandSize(band);
+      this.warbands.disband(band);
+    }
+    // Quem vem atacar sabe onde a batalha está; o que fazer ao chegar sai do que os soldados veem
+    if (run.seconds >= run.nextCourse) {
+      run.nextCourse = run.seconds + 12;
+      const standing = this.battalions.filter((b) => !b.isDestroyed).map((b) => b.center);
+      const army = standing.length > 0 ? centroid(standing) : this.commander;
+      for (const band of run.bands) {
+        if (this.scenarioStance.get(band) === "ATTACK" && !run.left.includes(band) && this.warbands.bands.includes(band)) this.warbands.marchOn(band, army);
+      }
+    }
+    const foes = this.scenarioFoes(run);
+    useGameStore.setState({ scenarioHud: { seconds: run.seconds, enemies: foes, enemyTotal: scenarioEnemyTotal(run.def), waiting: run.pending.length > 0 } });
+
+    if (run.def.objective === "SLAY_CHIEF" && run.chiefDown) return this.endScenario(run, "VICTORY", "O chefe caiu e o inimigo perdeu a cabeça.");
+    if (run.def.objective === "SURVIVE" && run.seconds >= run.def.surviveMinutes * 60) return this.endScenario(run, "VICTORY", "O bando resistiu até o fim.");
+    if (this.battalions.every((b) => b.isDestroyed)) return this.endScenario(run, "DEFEAT", "Todos os batalhões foram dizimados.");
+    if (foes > 0 || run.pending.length > 0) {
+      run.clearSince = null;
+      return;
+    }
+    run.clearSince ??= run.seconds;
+    if (run.seconds - run.clearSince >= 2.5) this.endScenario(run, "VICTORY", "O inimigo foi expulso do campo.");
+  }
+
+  private endScenario(run: ScenarioRun, outcome: "VICTORY" | "DEFEAT", reason: string): void {
+    const store = useGameStore.getState();
+    if (store.scenarioResult) return;
+    const total = scenarioEnemyTotal(run.def) - run.pending.reduce((n, f) => n + forceSize(f), 0);
+    const standing = this.scenarioFoes(run);
+    // Os que corriam quando a batalha acabou também saíram vivos
+    let routed = 0;
+    for (const band of run.bands) routed += band.materialized ? band.members.filter((m) => m.isAlive && m.routed).length : 0;
+    const fled = run.fled + routed;
+    if (outcome === "VICTORY") sfx.victory();
+    else sfx.defeat();
+    store.finishScenario({
+      outcome,
+      reason,
+      seconds: run.seconds,
+      enemyTotal: total,
+      enemyKilled: Math.max(0, total - standing - fled),
+      enemyFled: fled,
+      battalions: this.battalions.map((b) => ({ name: b.name, troop: b.troopType, start: run.start.get(b.id) ?? b.aliveCount, alive: b.aliveCount, kills: b.kills })),
+      commanderHp: Math.max(0, Math.round(this.commander.hp)),
+      commanderMaxHp: this.commander.maxHp,
+      officers: run.officers,
+    });
+  }
+
+  /** Reino → soldados em campo dos reinos em guerra com ele. */
+  private warFoes(active: readonly Enemy[]): Map<string, Enemy[]> {
+    const out = new Map<string, Enemy[]>();
+    const owners = new Map<string, Enemy[]>();
+    for (const e of active) {
+      if (!e.factionId) continue;
+      const list = owners.get(e.factionId);
+      if (list) list.push(e);
+      else owners.set(e.factionId, [e]);
+    }
+    if (owners.size < 2) return out;
+    const wars = useGameStore.getState().wars;
+    for (const a of owners.keys()) {
+      for (const [b, units] of owners) {
+        if (a === b || !kingdomsAtWar(wars, a, b)) continue;
+        out.set(a, [...(out.get(a) ?? []), ...units]);
+      }
+    }
+    return out;
+  }
+
+  /** Grupo fixo com comando (local de contrato, covil): sem bando, mas com chefe e esquadrões. */
+  private attachGroup(key: string, units: Enemy[], chief?: { name: string; traits: StaffData["traits"]; martial?: number }): WarHost {
+    const kinds = units.map((u) => u.kind);
+    const base = kinds.includes("SKELETON") || kinds.includes("ORC") ? 2 : kinds.includes("BANDIT") ? 2 : kinds.includes("SOLDIER") ? 3 : 1;
+    return this.hosts.attachGroup(key, units, makeStaff(kinds, base, chief));
+  }
+
+  private spawnEnemyGroup(group: EnemyGroupDef, owner: Enemy["owner"], color?: number, led = false): Enemy[] {
+    const plain = group.units.flatMap(([kind, n]) => Array<EnemyKind>(n).fill(kind));
+    const kinds = led ? promoteRoster(plain) : plain;
     const cols = Math.ceil(Math.sqrt(kinds.length));
     return kinds.map((kind, i) => {
       const x = group.x + ((i % cols) - (cols - 1) / 2) * 30 + Phaser.Math.Between(-6, 6);
@@ -1654,7 +1967,8 @@ export class WorldScene extends Phaser.Scene {
     const anchors = this.presence();
     const r2 = WORLD.ACTIVE_RADIUS ** 2;
     for (const e of this.enemies) {
-      const near = anchors.some((a) => (a.x - e.x) ** 2 + (a.y - e.y) ** 2 <= r2);
+      // Batalha personalizada: o campo é pequeno, ninguém dorme
+      const near = !!this.run || anchors.some((a) => (a.x - e.x) ** 2 + (a.y - e.y) ** 2 <= r2);
       if (e.dormant && near) e.dormant = false;
       else if (!e.dormant && !near && !e.target) e.dormant = true;
     }
@@ -1665,8 +1979,12 @@ export class WorldScene extends Phaser.Scene {
   /** Inimigos "quentes": perseguindo alguém do bando ou à vista e perto de uma tropa. */
   private isHot(e: Enemy, allyPoints: readonly Point[]): boolean {
     if (!e.hostile) return false;
-    if (e.target?.isAlive && e.target.team === "ALLY") return true;
-    if (!e.revealed) return false;
+    // Ir atrás de um batedor não é combate: o bando nem fica sabendo
+    if (e.target?.isAlive && e.target.team === "ALLY" && !e.target.isScout) return true;
+    // Quem foge não está lutando: o combate acaba sem esperar ele sumir no horizonte
+    if (e.routed) return false;
+    // Cerco: quem está atrás dos muros só conta se estiver atirando (dá para acampar fora do alcance)
+    if (!e.revealed || e.keepInside) return false;
     const r2 = WORLD.ENGAGE_RADIUS ** 2;
     return allyPoints.some((a) => (a.x - e.x) ** 2 + (a.y - e.y) ** 2 <= r2);
   }
@@ -1684,6 +2002,7 @@ export class WorldScene extends Phaser.Scene {
       if (!this.engagement) {
         this.engagement = {
           enemies: new Set(),
+          officers: [],
           participants: new Set(),
           startKills: new Map(),
           quietSince: null,
@@ -1715,16 +2034,108 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.engagement.quietSince >= WORLD.ENGAGE_END_MS) this.endEngagement(this.engagementResult());
   }
 
+  /** O campo ficou com o bando se o inimigo morreu, fugiu ou largou a luta. */
   private engagementResult(): BattleResult {
     const eng = this.engagement;
     if (!eng) return "RETREAT";
-    return [...eng.enemies].every((e) => !e.isAlive) ? "VICTORY" : "RETREAT";
+    return [...eng.enemies].every((e) => !e.isAlive || e.routed) ? "VICTORY" : "RETREAT";
+  }
+
+  /** Oficial inimigo caído: nota no combate; um lorde tem o destino resolvido na hora. */
+  private onOfficerDown(host: WarHost, name: string, chief: boolean): void {
+    const eng = this.engagement;
+    const armyId = host.band?.armyId;
+    if (chief && armyId) {
+      const text = useGameStore.getState().lordDown(armyId);
+      if (text) {
+        eng?.notes.push(text);
+        this.pushFeed(text);
+      }
+      return;
+    }
+    eng?.notes.push(chief ? `${name}, que comandava o ${host.band?.name ?? "bando"}, caiu em combate.` : `O capitão ${name} caiu em combate.`);
+    if (this.run) {
+      this.run.officers.push(name);
+      if (chief && host.band === this.run.prey) this.run.chiefDown = true;
+    }
+    eng?.officers.push({ name, factionId: host.band?.ownerId ?? null });
+  }
+
+  /** Quem se rendeu: uma parte dos que caíram e dos que fugiam perto da tropa (Marco 16). */
+  private takePrisoners(eng: Engagement): void {
+    const P = PRISONERS;
+    const store = useGameStore.getState();
+    const tally = new Map<string, { label: string; count: number; factionId: string | null; ransom: number; troop: TroopType | null }>();
+    const points = this.battalions.filter((b) => !b.isDestroyed).map((b) => b.center);
+    for (const e of eng.enemies) {
+      const fallen = !e.isAlive && !e.fled;
+      const routed = e.isAlive && e.routed && points.some((p) => distance(p, e) < P.CAPTURE_RADIUS);
+      if (!fallen && !routed) continue;
+      if (Math.random() > (fallen ? P.SHARE_FALLEN : P.SHARE_ROUTED)) continue;
+      const c = this.captiveClass(e);
+      if (!c) continue;
+      const key = `${c.label}|${c.troop}`;
+      const had = tally.get(key);
+      if (had) had.count++;
+      else tally.set(key, { ...c, count: 1 });
+      if (routed) {
+        e.fled = true;
+        e.unitState = "DEAD";
+        e.destroy();
+      }
+    }
+    store.addCaptives([...tally.values()]);
+    const taken = [...tally.values()].reduce((n, g) => n + g.count, 0);
+    if (taken > 0) eng.notes.push(`${taken} inimigo${taken > 1 ? "s se renderam" : " se rendeu"}: veja a lista de prisioneiros.`);
+    for (const o of eng.officers) {
+      if (Math.random() > P.OFFICER_CAPTURE) continue;
+      store.addCaptiveOfficer({ name: o.name, factionId: o.factionId, nobleId: null, ransom: P.RANSOM_OFFICER });
+      eng.notes.push(`${o.name} se rendeu ferido.`);
+    }
+  }
+
+  /** De quem é e no que vira quem se rende. */
+  private captiveClass(e: Enemy): { label: string; factionId: string | null; ransom: number; troop: TroopType | null } | null {
+    const P = PRISONERS;
+    const def = e.factionId ? this.world.factions.find((f) => f.id === e.factionId) : undefined;
+    const troop: TroopType = e.ranged ? "ARCHERS" : e.kind === "LANCER" || e.kind === "OUTRIDER" ? "CAVALRY" : "INFANTRY";
+    switch (e.kind) {
+      case "SOLDIER":
+      case "CROSSBOW":
+      case "LANCER":
+      case "OUTRIDER":
+      case "HERALD":
+        return { label: def ? `soldados ${ofRealm(def.name)}` : "soldados", factionId: e.factionId, ransom: P.RANSOM_SOLDIER, troop };
+      case "BANDIT":
+      case "BANDIT_ARCHER":
+        return { label: "salteadores", factionId: null, ransom: P.RANSOM_BANDIT, troop };
+      case "GOBLIN":
+      case "GOBLIN_ARCHER":
+      case "WOLF_RIDER":
+        return { label: "goblins", factionId: null, ransom: 0, troop: null };
+      case "ORC":
+        return { label: "orcs", factionId: null, ransom: 0, troop: null };
+      default:
+        return null;
+    }
+  }
+
+  /** Emboscada do inimigo: quem foi pego perde o ânimo. */
+  private sprungAmbush(at: Point): void {
+    const caught = this.battalions.filter((b) => !b.isDestroyed && distance(b.center, at) < 640);
+    for (const b of caught) b.morale = Math.max(0, b.morale - WAR_AI.AMBUSH_MORALE);
+    this.engagement?.notes.push("O inimigo emboscou o bando.");
   }
 
   /** Contrato cumprido (todos os inimigos do local mortos), povoado tomado ou líder de calamidade abatido. */
   private checkObjectives(): void {
     if (this.contractId && this.contractEnemies.length > 0 && this.contractEnemies.every((e) => !e.isAlive)) {
       if (this.engagement) this.engagement.contractDone = true;
+      // Largaram o local sem ninguém lutando: o serviço está feito do mesmo jeito
+      else {
+        useGameStore.getState().finishContract(true, "os inimigos abandonaram o local");
+        this.contractId = null;
+      }
       this.contractEnemies = [];
     }
     const store = useGameStore.getState();
@@ -1762,13 +2173,155 @@ export class WorldScene extends Phaser.Scene {
     const id = store.siege?.settlementId ?? null;
     if (id === this.siegeId) return;
     this.siegeId = id;
+    this.closeWorks();
     const t = id ? store.settlements.find((x) => x.id === id) : null;
     if (!t) return;
     const layout = this.settlementLayer.layoutOf(t.id);
+    if (store.siege?.walled && layout) {
+      this.openWorks(t.id, layout);
+      this.pushFeed(`${t.name}: os portões se fecham. Agora é fome ou escada.`);
+      this.updateGateRules();
+      return;
+    }
     for (const c of layout?.camps ?? []) this.fog.revealExplored(c.fire, 500);
     this.fog.revealExplored(t, 600);
     const n = Math.min(REALM.SIEGE_MAX_DEFENDERS, Math.max(REALM.SIEGE_MIN_DEFENDERS, t.garrison));
     this.pushFeed(`${t.name}: a guarnição (${n}) sai dos acampamentos para lutar.`);
+  }
+
+  // --- Cerco de verdade (Marco 16) ---
+
+  private openWorks(townId: string, layout: TownLayout): void {
+    const weak = Math.abs(seedFromText(townId)) % Math.max(1, layout.gates.length);
+    this.works = new SiegeWorks(
+      this,
+      layout,
+      weak,
+      () => this.applyWorks(),
+      (g) => this.pushFeed(`O portão ${SIDE_WORD[g.side]} de ${this.placeName(g)} caiu!`),
+    );
+    this.applyWorks();
+    // O mensageiro sai pedindo socorro (matá-lo no caminho é impedir o exército)
+    const s = useGameStore.getState();
+    const t = s.settlements.find((x) => x.id === townId);
+    if (t && isFactionOwner(t.owner) && t.owner !== "PLAYER") {
+      const def = this.world.factions.find((f) => f.id === t.owner);
+      const help = s.settlements.filter((x) => x.owner === t.owner && x.id !== t.id).sort((a, b) => distance(a, t) - distance(b, t))[0];
+      if (def && help) {
+        const gate = layout.gates[0];
+        const band = this.warbands.spawnBand({ name: `Mensageiro de ${t.name}`, kind: "COURIER", units: [["COURIER", 1]], origin: gate.outside, ownerId: t.owner, color: def.color, goalId: help.id });
+        band.reliefFor = t.id;
+        useGameStore.setState((st) => (st.siege ? { siege: { ...st.siege, reliefDay: s.day + SIEGE.RELIEF_DAYS } } : {}));
+      }
+    }
+  }
+
+  private closeWorks(): void {
+    if (!this.works) return;
+    this.works.destroy();
+    this.works = null;
+    Unit.terrain?.setSiegeWorks([], []);
+    this.afterWorks(null);
+  }
+
+  /** Portões e escadas mudaram: colisão e rotas em volta dos muros. */
+  private applyWorks(): void {
+    const w = this.works;
+    if (!w) return;
+    const c = w.change;
+    Unit.terrain?.setSiegeWorks(c.solids, c.breaches);
+    this.afterWorks(w.layout);
+    this.updateGateRules();
+  }
+
+  private afterWorks(layout: TownLayout | null): void {
+    const l = layout ?? this.settlementLayer.layoutOf(this.siegeId ?? "");
+    if (!l) {
+      this.nav.invalidateAll();
+      this.armyNav.invalidateAll();
+      return;
+    }
+    const r = Math.max(l.bounds.w, l.bounds.h) / 2 + 300;
+    this.nav.invalidate({ x: l.cx, y: l.cy }, r);
+    this.armyNav.invalidate({ x: l.cx, y: l.cy }, r);
+  }
+
+  private siegeCommand(action: SiegeAction): void {
+    const s = useGameStore.getState();
+    const c = s.siege;
+    const t = c ? s.settlements.find((x) => x.id === c.settlementId) : undefined;
+    if (!c?.walled || !t) return;
+    switch (action) {
+      case "WAIT": {
+        if (this.engagement) return this.pushFeed("Em combate: agora não dá para esperar.");
+        this.passTime(1);
+        break;
+      }
+      case "LADDER":
+      case "RAM":
+        this.pushFeed(s.siegeBuild(action));
+        break;
+      case "DEMAND":
+        this.pushFeed(s.demandSurrender());
+        break;
+      case "LIFT":
+        s.liftSiege();
+        this.truce = { townId: t.id, until: this.time.now + 90000 };
+        this.pushFeed(`O cerco a ${t.name} foi levantado.`);
+        break;
+      case "ASSAULT": {
+        const w = this.works;
+        if (!w) return;
+        let any = false;
+        while (useGameStore.getState().useLadder()) {
+          if (w.addLadder(this.commander)) any = true;
+        }
+        if (useGameStore.getState().useRam()) {
+          const g = w.nearestGate(this.commander);
+          if (g) {
+            w.spawnRam(this.armyNav.nearestOpen(g.gate.wait, 400) ?? g.gate.wait);
+            any = true;
+          }
+        }
+        this.pushFeed(any ? "Ao assalto! Escadas nos muros, aríete no portão!" : "Sem escadas nem aríete, o assalto não tem por onde entrar.");
+        break;
+      }
+    }
+    this.publishHud();
+  }
+
+  /** Comandante preso: o mapa sabe onde ele está, e às vezes ele foge sozinho. */
+  private captivityTick(): void {
+    const s = useGameStore.getState();
+    const c = s.captivity;
+    if (!c) return;
+    const band = this.warbands.bands.find((b) => b.id === c.bandId);
+    if (band) band.lastSeen = { x: band.anchor.x, y: band.anchor.y, day: s.day };
+    // Levaram para trás de um muro: agora, só com ouro
+    else if (c.bandId) useGameStore.setState({ captivity: { ...c, bandId: null } });
+  }
+
+  /** Um dia de cerco: comida, madeira, fome, surtida, socorro. */
+  private siegeTick(): void {
+    const s = useGameStore.getState();
+    const c = s.siege;
+    const t = c ? s.settlements.find((x) => x.id === c.settlementId) : undefined;
+    if (!c?.walled || !t) return;
+    const soldiers = this.battalions.reduce((n, b) => n + b.aliveCount, 0);
+    const r = s.siegeDay(soldiers);
+    if (r.surrendered) {
+      this.pushFeed(`${t.name} não aguentou a fome e abriu os portões.`);
+      s.conquerSettlement(t.id);
+      return;
+    }
+    if (r.sally && this.works) {
+      this.works.sally(SIEGE.SALLY_MS);
+      this.pushFeed(`Surtida! A guarnição de ${t.name} saiu para queimar as obras.`);
+    }
+    if (c.reliefDay !== undefined && s.day >= c.reliefDay) {
+      useGameStore.setState((st) => (st.siege ? { siege: { ...st.siege, reliefDay: undefined } } : {}));
+      useGameStore.getState().callRelief(t.id);
+    }
   }
 
   /** Atacamos um soldado de um povoado em paz: é atacar o povoado (guerra e cerco). */
@@ -1817,6 +2370,8 @@ export class WorldScene extends Phaser.Scene {
       presence,
       hostile: (t) => this.gateRules.some((r) => r.id === t.id && r.visitor),
       siegeId: this.siegeId,
+      walled: !!s.siege?.walled && !this.works?.open,
+      sallying: !!this.works && this.time.now < this.works.sallyUntil,
       hour: hourOf(s.dayProgress),
       danger: (id) => {
         const t = s.settlements.find((x) => x.id === id);
@@ -1842,7 +2397,8 @@ export class WorldScene extends Phaser.Scene {
     for (const t of s.settlements) {
       const layout = this.settlementLayer.layoutOf(t.id);
       if (!layout || t.owner === "RUINED") continue;
-      const army = t.owner !== "PLAYER";
+      // Escada ou portão caído: a tropa entra por ali
+      const army = t.owner !== "PLAYER" && !(this.works?.open && this.siegeId === t.id);
       const war = isCalamityOwner(t.owner) || s.factions.some((f) => f.id === t.owner && f.atWar) || s.siege?.settlementId === t.id || (!!t.besiegedBy && !s.factions.some((f) => f.id === t.besiegedBy && f.atWar && t.owner === "PLAYER"));
       rules.push({ id: t.id, name: t.name, bounds: layout.bounds, army, visitor: army && war });
     }
@@ -1903,7 +2459,8 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const r of this.gateRules) {
       if (!r.visitor || army.every((p) => rectDistance(r.bounds, p) > REALM.SALLY_RADIUS)) continue;
-      if (store.garrisonSally(r.id)) break;
+      if (this.truce?.townId === r.id && time < this.truce.until) continue;
+      if (store.garrisonSally(r.id, this.battalions.reduce((n, b) => n + b.aliveCount, 0))) break;
     }
   }
 
@@ -1913,12 +2470,13 @@ export class WorldScene extends Phaser.Scene {
       if (c.defeated || this.calamityObjects.has(c.id)) continue;
       const objects = drawCalamityLair(this, c);
       const guard: EnemyGroupDef["units"] = [[c.kind === "NECROMANCER" ? "SKELETON" : "ORC", 6 + c.power]];
-      this.spawnEnemyGroup({ x: c.lair.x + 120, y: c.lair.y + 60, units: guard }, { kind: "CALAMITY", id: c.id });
+      const guards = this.spawnEnemyGroup({ x: c.lair.x + 120, y: c.lair.y + 60, units: guard }, { kind: "CALAMITY", id: c.id });
       const [boss] = this.spawnEnemyGroup(
         { x: c.lair.x, y: c.lair.y, units: [[c.kind === "NECROMANCER" ? "NECROMANCER" : "ORC_WARLORD", 1]] },
         { kind: "CALAMITY", id: c.id },
       );
       this.calamityObjects.set(c.id, { objects, boss });
+      this.attachGroup(`calamity:${c.id}`, [...guards, boss], { name: c.leader, traits: ["CRUEL"], martial: 5 + c.power }).standFast = true;
     }
   }
 
@@ -1970,6 +2528,8 @@ export class WorldScene extends Phaser.Scene {
         origin: { x: origin.x, y: origin.y + 300 },
         ownerId: f.id,
         color: def?.color,
+        chief: lord ? { name: lord.name, traits: lord.traits, martial: lord.martial } : undefined,
+        doctrine: store.warLessons[f.id],
       });
       store.chronicle(`${TheRealm(def?.name ?? "reino")} pôs um exército (${size}) em marcha contra os ${this.world.bandName}.`, "bad");
     }
@@ -2023,6 +2583,8 @@ export class WorldScene extends Phaser.Scene {
         color: def.color,
         goalId: target.id,
         armyId: a.id,
+        chief: lord ? { name: lord.name, traits: lord.traits, martial: lord.martial } : undefined,
+        doctrine: store.warLessons[a.factionId],
       });
       useGameStore.getState().armySpawned(a.id, spawned.id);
     }
@@ -2048,6 +2610,8 @@ export class WorldScene extends Phaser.Scene {
   private endEngagement(result: BattleResult): void {
     const eng = this.engagement;
     this.engagement = null;
+    // Batalha personalizada: quem decide o fim é scenarioTick
+    if (this.run) return;
     const clock = useGameStore.getState();
     this.lastCombatDay = clock.day + clock.dayProgress;
     if (!eng && result !== "DEFEAT") return;
@@ -2065,7 +2629,22 @@ export class WorldScene extends Phaser.Scene {
         lieutenantKills: b.lieutenantKills - start.lieutenantKills,
       };
     });
-    const killed = eng ? [...eng.enemies].filter((e) => !e.isAlive).length : 0;
+    // Quem fugiu de um local de contrato não volta: o lugar está limpo
+    if (eng && result === "VICTORY") {
+      // Bando que perdeu o campo não fica por perto para tentar de novo
+      for (const h of this.hosts.hosts) if (h.members.some((m) => eng.enemies.has(m))) h.giveUp();
+      for (const e of this.contractEnemies) {
+        if (!e.isAlive || !e.routed) continue;
+        e.fled = true;
+        e.unitState = "DEAD";
+        e.destroy();
+      }
+      this.contractEnemies = this.contractEnemies.filter((e) => e.isAlive);
+    }
+    if (eng && result === "VICTORY") this.takePrisoners(eng);
+    const killed = eng ? [...eng.enemies].filter((e) => !e.isAlive && !e.fled).length : 0;
+    const fled = eng ? [...eng.enemies].filter((e) => e.fled || (e.isAlive && e.routed)).length : 0;
+    if (eng && fled > 0) eng.notes.push(`${fled} inimigo${fled > 1 ? "s fugiram" : " fugiu"} do campo.`);
     if (eng && killed >= 4) {
       const fallen = [...eng.enemies];
       store.markBattlefield(fallen.reduce((n, e) => n + e.x, 0) / fallen.length, fallen.reduce((n, e) => n + e.y, 0) / fallen.length);
@@ -2087,6 +2666,12 @@ export class WorldScene extends Phaser.Scene {
       mutinyOver,
       notes: eng?.notes ?? [],
     });
+    // Flechas dos muros num cerco: é o dia a dia, não uma batalha com relatório
+    if (this.works && result === "RETREAT" && killed === 0 && !contractDone) {
+      const hurt = useGameStore.getState().battleReport;
+      store.clearReport();
+      if (hurt && hurt.casualties + hurt.wounded > 0) this.pushFeed(`Flechas dos muros: ${hurt.casualties + hurt.wounded} homem(ns) fora de combate. Acampem mais longe.`);
+    }
     // O que já foi informado não entra no próximo relatório
     for (const m of this.messengers) m.deliveries = 0;
     for (const id of [...this.deadScoutIds, ...this.deadMessengerIds]) this.reportedDead.add(id);
@@ -2102,9 +2687,11 @@ export class WorldScene extends Phaser.Scene {
    * recua carregando-o ferido para o acampamento.
    */
   private defeat(): void {
+    if (this.run) return this.endScenario(this.run, "DEFEAT", "O Comandante caiu em combate.");
     if (!this.engagement) {
       this.engagement = {
         enemies: new Set(this.activeEnemies().filter((e) => e.target)),
+        officers: [],
         participants: new Set(this.battalions.filter((b) => !b.isDestroyed)),
         startKills: new Map(),
         quietSince: null,
@@ -2115,7 +2702,10 @@ export class WorldScene extends Phaser.Scene {
     }
     const store = useGameStore.getState();
     const mutiny = !!store.mutiny;
+    // Quem está em volta faz prisioneiros: bichos e mortos-vivos, não
+    const captor = this.hosts.hosts.find((h) => !!h.band && h.band.kind !== "HORDE" && h.members.some((m) => distance(m, this.commander) < 700));
     this.endEngagement("DEFEAT");
+    if (captor?.band && !mutiny && !useGameStore.getState().captivity && Math.random() < PRISONERS.COMMANDER_CAPTURE) this.commanderTaken(captor);
     // Cerco perdido: a guarnição volta para trás dos muros
     if (useGameStore.getState().siege) useGameStore.getState().liftSiege();
     if (mutiny) {
@@ -2147,7 +2737,8 @@ export class WorldScene extends Phaser.Scene {
       this.quarter(b, i, slot);
     });
     for (const r of [...this.scouts, ...this.messengers]) {
-      if (!r.isAlive) continue;
+      // Batedor em missão longe dali não fica sabendo: segue o que estava fazendo
+      if (!r.isAlive || (r instanceof Scout && r.onMission)) continue;
       r.x = spawn.x + Phaser.Math.Between(150, 260);
       r.y = spawn.y + Phaser.Math.Between(-60, 60);
       r.target = null;
@@ -2163,6 +2754,26 @@ export class WorldScene extends Phaser.Scene {
     this.armyDirty = true;
   }
 
+  /** O Comandante foi levado: um tenente assume o bando até resgatá-lo. */
+  private commanderTaken(captor: WarHost): void {
+    const band = captor.band;
+    if (!band) return;
+    const s = useGameStore.getState();
+    const acting = s.lieutenants[0];
+    s.beginCaptivity({
+      by: captor.name,
+      factionId: band.ownerId,
+      bandId: band.id,
+      acting: acting ? fullName(acting) : "o sargento mais velho",
+      ransom: PRISONERS.COMMANDER_RANSOM + Math.round(s.fame * PRISONERS.COMMANDER_RANSOM_FAME),
+    });
+    band.spotted = true;
+    band.lastSeen = { x: band.anchor.x, y: band.anchor.y, day: s.day };
+    s.chronicle(`O Comandante caiu nas mãos de ${captor.name}. ${acting ? fullName(acting) : "Um sargento"} assume o bando.`, "bad");
+    this.pushFeed(`O Comandante foi levado por ${captor.name}!`);
+    if (band.armyId) this.warbands.sendHome(band);
+  }
+
   /**
    * Relógio do mundo: fora do acampamento e fora de combate, o dia corre com a marcha
    * (DAY_DISTANCE por dia) e devagar com o tempo parado (DAY_SECONDS). Dentro das muralhas de
@@ -2170,6 +2781,8 @@ export class WorldScene extends Phaser.Scene {
    * do acampamento o tempo para.
    */
   private tickClock(time: number, dt: number): void {
+    // Batalha personalizada: a hora e o tempo escolhidos valem até o fim
+    if (this.run) return;
     const moved = distance(this.commander, this.lastCommanderPos);
     this.lastCommanderPos = { x: this.commander.x, y: this.commander.y };
     if (!this.inCamp && !this.engagement && moved < 200) {
@@ -2202,11 +2815,16 @@ export class WorldScene extends Phaser.Scene {
     // As notícias que chegaram hoje aparecem no HUD (as três mais novas)
     for (const l of useGameStore.getState().log.filter((e) => e.id > logBefore && e.text.startsWith("Chegou")).slice(-3)) this.pushFeed(l.text);
     this.applySeason();
+    this.syncHarpies();
     // Inverno: os goblins saem menos dos covis
     const band = this.warbands.maybeSpawnGoblins(after, this.world.lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1);
     if (band) useGameStore.getState().chronicle(`Rumores: um bando goblin deixou seu covil nos ermos.`, "bad");
     this.spawnArmies(after);
     this.spawnAgents();
+    this.newsTick();
+    this.siegeTick();
+    useGameStore.getState().captivesDay();
+    this.captivityTick();
     // Comércio (Marco 14): o mar fecha com a tempestade; mercadores mandam carga
     this.tradeNews(this.trade.weatherCheck(after));
     this.tradeNews(this.trade.daily(after));
@@ -2241,7 +2859,7 @@ export class WorldScene extends Phaser.Scene {
         const near = ev.winner.spotted || ev.loser.spotted || distance(this.commander, ev.at) < 5000;
         if (near) this.pushFeed(`${ev.winner.name} destroçou o ${ev.loser.name} perto de ${this.placeName(ev.at)}.`);
         store.armiesClash(ev.winner.armyId ?? null, ev.loser.armyId ?? null, ev.at);
-        store.markBattlefield(ev.at.x, ev.at.y);
+        store.markBattlefield(ev.at.x, ev.at.y, ev.losses + 8);
         continue;
       }
       if (ev.type === "SKIRMISH") {
@@ -2283,6 +2901,11 @@ export class WorldScene extends Phaser.Scene {
       if (ev.type === "DESTROYED") {
         // Mensageiro real abatido pelo bando: os despachos são lidos
         if (band.kind === "COURIER") {
+          // Quem pedia socorro não chegou: o exército não vem
+          if (band.reliefFor && store.siege?.settlementId === band.reliefFor) {
+            useGameStore.setState((st) => (st.siege ? { siege: { ...st.siege, reliefDay: undefined } } : {}));
+            this.pushFeed("O mensageiro da cidade foi abatido: o pedido de socorro não chegou.");
+          }
           if (band.materialized && band.ownerId) {
             this.pushFeed(`Mensageiro real interceptado! ${store.interceptCourier(band.ownerId)}`);
             this.revealArmiesOf(band.ownerId);
@@ -2290,9 +2913,15 @@ export class WorldScene extends Phaser.Scene {
           continue;
         }
         if (band.kind === "REFUGEES") continue;
+        // Quem prendia o Comandante caiu: ele está livre
+        if (store.captivity?.bandId === band.id) this.pushFeed(store.endCaptivity("RESCUED"));
         // Exército de um lorde caiu: quem esteve perto do bando conta como obra do bando
         if (band.armyId) {
-          store.armyDestroyed(band.armyId, distance(this.commander, band.anchor) < 2500, band.anchor);
+          const near = distance(this.commander, band.anchor) < 2500;
+          store.armyDestroyed(band.armyId, near, band.anchor);
+          store.markBattlefield(band.anchor.x, band.anchor.y, 14);
+          // Quem foi destruído pelo bando aprende: o próximo exército vem preparado
+          if (near && band.ownerId) store.learnFrom(band.ownerId, this.armyShares());
           this.pushFeed(`O ${band.name} não existe mais.`);
           continue;
         }
@@ -2431,6 +3060,7 @@ export class WorldScene extends Phaser.Scene {
   /** Pode fundar uma vila aqui? (null = sim; senão, o motivo) */
   private foundBlocked(): string | null {
     const store = useGameStore.getState();
+    if (this.run) return "Só na campanha";
     if (this.inCamp) return "Saia do acampamento";
     if (this.engagement) return "Em combate";
     // A mesma regra do store: distância medida de onde a aldeia nasce (à frente do Comandante)
@@ -2541,7 +3171,8 @@ export class WorldScene extends Phaser.Scene {
       elapsed = totalDays * t;
       this.handleWarbandEvents(this.warbands.advance(totalDays / steps));
       this.tradeNews(this.trade.advance(totalDays / steps));
-      this.fog.revealExplored(at, SUPPORT.VISION.SCOUT);
+      this.advanceScouts(totalDays / steps);
+      this.fog.revealExplored(at, SUPPORT.VISION.MARCH);
       const band = this.warbands.bands.find((b) => this.bandHostile(b) && distance(b.anchor, at) < interceptRadius);
       if (band) {
         interceptedBy = band.name;
@@ -2693,6 +3324,33 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Notícias do bando: o que os soldados viram chega ao reino com atraso, e quem passa perto de um
+   * povoado é visto por alguém. Acampamento perto de um bando deixa de ser segredo.
+   */
+  private newsTick(): void {
+    const s = useGameStore.getState();
+    const now = s.day + s.dayProgress;
+    const size = this.battalions.reduce((n, b) => n + b.aliveCount, 0);
+    const here: Point = { x: this.commander.x, y: this.commander.y };
+    for (const t of s.settlements) {
+      if (!isFactionOwner(t.owner) || t.owner === "PLAYER" || distance(t, here) > WAR_AI.TOWN_WATCH) continue;
+      this.warbands.noteArmy(t.owner, { ...here, day: now, size });
+    }
+    this.newsOfArmy = this.newsOfArmy.filter((n) => {
+      if (n.at.day > now) return true;
+      this.warbands.noteArmy(n.key, n.at);
+      return false;
+    });
+    if (this.campArea.packed) return;
+    const camp = this.world.camp.center;
+    for (const b of this.warbands.bands) {
+      if (distance(b.anchor, camp) > WAR_AI.CAMP_SEEN || !this.bandHostile(b)) continue;
+      this.warbands.noteCamp(b.id);
+      if (b.ownerId) this.warbands.noteCamp(b.ownerId);
+    }
+  }
+
   /** Patrulhas e mensageiros: cada reino mantém os seus em movimento. */
   private spawnAgents(): void {
     const s = useGameStore.getState();
@@ -2796,6 +3454,7 @@ export class WorldScene extends Phaser.Scene {
   /** Pode descansar até o amanhecer? (null = sim; senão, o motivo) */
   private restBlocked(): string | null {
     const store = useGameStore.getState();
+    if (this.run) return "Só na campanha";
     if (this.engagement) return "Em combate";
     if (store.mutiny) return "Motim no acampamento";
     if (this.visibleEnemies().some((e) => distance(e, this.commander) < WORLD.TRAVEL_BLOCK_RADIUS)) return "Inimigos à vista";
@@ -2904,6 +3563,7 @@ export class WorldScene extends Phaser.Scene {
     Unit.darkness = d;
     // Tochas denunciam o bando de longe; no escuro ele passa despercebido
     Enemy.perception = 1 + d * ((this.torches ? TIME.NIGHT_AGGRO_TORCHES : TIME.NIGHT_AGGRO_DARK) - 1);
+    Enemy.darkPerception = 1 + d * (TIME.NIGHT_AGGRO_DARK - 1);
     this.night.update(this.cameras.main, d, d > 0.01 ? this.nightLights() : []);
   }
 
@@ -2987,7 +3647,7 @@ export class WorldScene extends Phaser.Scene {
       commander: { x: c.x, y: c.y, hp: c.hp, facing: c.facing },
       quartered: [...this.quartered],
       battalions: this.battalions.filter((b) => !b.isDestroyed).map((b) => ({ id: b.id, ...b.center, morale: b.morale })),
-      scouts: this.scouts.filter((s) => s.isAlive).map((s) => ({ id: s.rider.id, x: s.x, y: s.y, hp: s.hp })),
+      scouts: this.scouts.filter((s) => s.isAlive).map((s) => this.scoutSave(s)),
       messengers: this.messengers.filter((m) => m.isAlive).map((m) => ({ id: m.rider.id, x: m.x, y: m.y })),
       fog: this.fog.exportExplored(),
       warbands: this.warbands.serialize(),
@@ -2997,6 +3657,7 @@ export class WorldScene extends Phaser.Scene {
       fatigue: Object.fromEntries(this.battalions.map((b) => [b.id, b.fatigue])),
       forced: this.forced,
       trade: this.trade.serialize(),
+      siegeWorks: this.works?.serialize(),
     };
   }
 
@@ -3034,6 +3695,9 @@ export class WorldScene extends Phaser.Scene {
       s.x = saved.x;
       s.y = saved.y;
       s.restoreHp(saved.hp);
+      s.restore(saved);
+      s.inContact = distance(s, this.commander) <= SUPPORT.SCOUT.LIVE_RANGE;
+      s.setVisible(s.inContact);
     }
     for (const m of this.messengers) {
       const saved = field.messengers.find((x) => x.id === m.rider.id);
@@ -3064,6 +3728,18 @@ export class WorldScene extends Phaser.Scene {
         if (lair) lair.boss = e;
       }
     }
+    // Comando dos grupos que voltaram (locais de contrato e covis)
+    const byOwner = new Map<string, Enemy[]>();
+    for (const e of this.enemies) {
+      const o = e.owner;
+      if (!e.isAlive || (o?.kind !== "CONTRACT" && o?.kind !== "CALAMITY")) continue;
+      const key = o.kind === "CONTRACT" ? `contract:${o.contractId}` : `calamity:${o.id}`;
+      byOwner.set(key, [...(byOwner.get(key) ?? []), e]);
+    }
+    for (const [key, units] of byOwner) {
+      if (this.hosts.hosts.some((h) => h.key.startsWith(key))) continue;
+      this.attachGroup(key, units).standFast = key.startsWith("calamity:");
+    }
     // Um líder de calamidade sem registro no save volta inteiro (nunca é dado por morto)
     for (const [id, lair] of this.calamityObjects) {
       if (lair.boss.isAlive) continue;
@@ -3076,6 +3752,7 @@ export class WorldScene extends Phaser.Scene {
       lair.boss = boss;
     }
 
+    if (field.siegeWorks) this.works?.restore(field.siegeWorks);
     this.torches = field.torches;
     this.forced = field.forced ?? false;
     // Carroças onde estavam (no acampamento, estacionadas)
@@ -3129,7 +3806,8 @@ export class WorldScene extends Phaser.Scene {
     });
     this.followKey = "";
     [...this.scouts, ...this.messengers].forEach((r, i) => {
-      if (!r.isAlive) return;
+      // Batedor em missão não anda com o exército
+      if (!r.isAlive || (r instanceof Scout && r.onMission)) return;
       const p = back(-60 + i * 25, (i % 2 === 0 ? -1 : 1) * 50);
       r.x = p.x;
       r.y = p.y;
@@ -3164,8 +3842,8 @@ export class WorldScene extends Phaser.Scene {
         name: band.name,
         x: band.lastSeen.x,
         y: band.lastSeen.y,
-        // Só se conta quem está à vista; da última vez, o tamanho é estimado
-        count: seen.length > 0 ? seen.length : bandSize(band),
+        // Só se conta quem está à vista; da última vez, o que foi contado (ou a estimativa)
+        count: seen.length > 0 ? seen.length : (band.reportedCount ?? bandSize(band)),
         visible: seen.length > 0,
         seenDay: band.lastSeen.day,
         heading: seen.length > 0 ? band.goalPoint : null,
@@ -3183,6 +3861,10 @@ export class WorldScene extends Phaser.Scene {
       battalions: this.battalions.filter((b) => !b.isDestroyed).map((b) => b.center),
       warbands,
       messengersOut: this.messengers.filter((m) => m.isAlive && !m.available).length,
+      scouts: this.scouts
+        .filter((s) => s.isAlive)
+        .map((s) => ({ id: s.rider.id, name: s.rider.name, ...(s.inContact ? { x: s.x, y: s.y } : s.lastContact), live: s.inContact, mode: s.mode })),
+      day,
       calamityLairs: useGameStore
         .getState()
         .calamities.filter((c) => c.revealed && !c.defeated)
@@ -3237,11 +3919,14 @@ export class WorldScene extends Phaser.Scene {
     const add = (p: Point, base: number) => sources.push({ x: p.x, y: p.y, radius: this.visionAt(p, base) * night });
     if (this.commander.isAlive) add(this.commander, V.COMMANDER);
     for (const b of this.battalions) if (!b.isDestroyed) add(b.center, V.BATTALION);
-    for (const s of this.scouts) if (s.isAlive) add(s, V.SCOUT);
+    // Fora de contato o batedor enxerga, mas ninguém fica sabendo (ver recordScoutViews)
+    for (const s of this.scouts) if (s.isAlive && s.inContact) add(s, s.vision);
     for (const m of this.messengers) if (m.isAlive) add(m, V.MESSENGER);
+    // Batalha personalizada sem névoa: todo o campo à vista
+    if (this.run && !this.run.def.fog) sources.push({ x: this.world.camp.center.x, y: this.world.camp.center.y, radius: 20000 });
     // Torres de vigia do acampamento (obra): enxergam longe em volta dele
     if (!this.campArea.packed && useGameStore.getState().campWorks.includes("TOWERS")) {
-      for (const t of this.campArea.watchtowers) sources.push({ x: t.x, y: t.y, radius: V.SCOUT * 1.1 * night });
+      for (const t of this.campArea.watchtowers) sources.push({ x: t.x, y: t.y, radius: V.TOWER * night });
     }
     return sources;
   }
@@ -3251,6 +3936,8 @@ export class WorldScene extends Phaser.Scene {
     // Bandos entram na bolha (viram unidades) ou saem dela (voltam a ser dados)
     this.warbands.updateBubble(this.presence());
     this.updateDormancy();
+    this.updateScoutContact(time);
+    this.recordScoutViews();
     this.fog.update(this.visionSources(), this.cameras.main.worldView);
     this.updateReveal(this.allAllies(), time);
     this.noteSightings();
@@ -3498,6 +4185,24 @@ export class WorldScene extends Phaser.Scene {
   private dispatch(recipient: OrderRecipient, order: string, apply: () => void, channel: OrderChannel = "COMPLEX"): boolean {
     const name = this.recipientName(recipient);
     const reach = this.reachOf(recipient, channel);
+    // Batalhão destacado muito longe: a harpia leva a ordem ao batedor que está perto dele
+    const relay = !reach && recipient instanceof Battalion ? this.relayFor(recipient) : null;
+    if (relay && recipient instanceof Battalion) {
+      recipient.pendingOrder = order;
+      relay.orders.push({
+        label: order,
+        relay: {
+          to: () => (recipient.isDestroyed ? null : recipient.center),
+          apply: () => {
+            recipient.pendingOrder = null;
+            apply();
+            this.pushFeed(`${relay.scout.rider.name} levou "${order}" a ${name}.`);
+          },
+        },
+      });
+      this.pushFeed(`"${order}" para ${name} vai na harpia de ${relay.scout.rider.name}.`);
+      return true;
+    }
     if (reach === "VOICE") {
       apply();
       return true;
@@ -3636,6 +4341,11 @@ export class WorldScene extends Phaser.Scene {
       if (s.isAlive || this.deadScoutIds.includes(s.rider.id)) continue;
       this.deadScoutIds.push(s.rider.id);
       this.pushFeed(`O batedor ${s.rider.name} foi abatido.`);
+      // Longe de qualquer combate, a notícia entra direto (no combate, vai no relatório)
+      if (!this.engagement) {
+        this.reportedDead.add(s.rider.id);
+        useGameStore.getState().scoutLost(s.rider.id);
+      }
     }
   }
 
@@ -3711,7 +4421,7 @@ export class WorldScene extends Phaser.Scene {
     // Tab: Mapa do Continente (viagem rápida e observação de exércitos)
     this.keys.TAB.on("down", () => {
       const store = useGameStore.getState();
-      if (store.battleReport) return;
+      if (store.battleReport || this.run) return;
       store.setCampPanel(null);
       store.setWorldMapOpen(!store.worldMapOpen);
     });
@@ -3819,6 +4529,11 @@ export class WorldScene extends Phaser.Scene {
 
     this.keys.ESC.on("down", () => {
       const store = useGameStore.getState();
+      // Batalha personalizada: com nada selecionado, Esc abre (ou fecha) a pausa
+      if (this.run && !store.scenarioResult && (store.scenarioPaused || !this.battalions.some((b) => b.selected))) {
+        store.setScenarioPaused(!store.scenarioPaused);
+        return;
+      }
       if (store.worldMapOpen) store.setWorldMapOpen(false);
       if (store.campPanel) store.setCampPanel(null);
       store.setContextMenu(null);
@@ -3871,7 +4586,7 @@ export class WorldScene extends Phaser.Scene {
     const point = { x, y };
     let accepted = false;
     for (const s of selectedScouts) {
-      accepted = this.dispatch(s, "Explorar", () => s.setMode("EXPLORE", point)) || accepted;
+      accepted = this.orderScout(s, { kind: "WATCH", point }) || accepted;
     }
 
     const enemy = nearest(
@@ -3984,6 +4699,12 @@ export class WorldScene extends Phaser.Scene {
         case "REST":
           this.restUntilDawn();
           break;
+        case "SIEGE":
+          this.siegeCommand(cmd.action);
+          break;
+        case "REVEAL":
+          for (const id of cmd.ids) this.revealArmiesOf(id);
+          break;
         case "FORCED_MARCH":
           this.setForced(!this.forced);
           break;
@@ -4017,9 +4738,19 @@ export class WorldScene extends Phaser.Scene {
           break;
         }
         case "SCOUT_MODE":
+          for (const s of this.scouts.filter((x) => cmd.ids.includes(x.rider.id) && x.isAlive)) this.orderScout(s, { kind: cmd.mode });
+          break;
+        case "SCOUT_ORDER":
+          for (const s of this.scouts.filter((x) => cmd.ids.includes(x.rider.id) && x.isAlive)) this.orderScout(s, cmd.order);
+          break;
+        case "SCOUT_STEALTH":
           for (const s of this.scouts.filter((x) => cmd.ids.includes(x.rider.id) && x.isAlive)) {
-            this.dispatch(s, SCOUT_MODE_LABEL[cmd.mode], () => s.setMode(cmd.mode), "BASIC");
+            if (s.inContact) s.setSneaking(!s.sneaking);
+            else this.pushFeed(`${s.rider.name} está fora de contato.`);
           }
+          break;
+        case "HARPY_SEND":
+          for (const h of this.harpies.filter((x) => cmd.ids.includes(x.scout.rider.id))) this.sendHarpy(h, true);
           break;
         case "FOLLOW":
           for (const b of picked) this.dispatch(b, "Reunir ao estandarte", () => b.orderFollow(this.commander), "BASIC_VISUAL");
@@ -4082,6 +4813,285 @@ export class WorldScene extends Phaser.Scene {
 
   private battalionAt(x: number, y: number): Battalion | null {
     return this.battalions.find((b) => !b.isDestroyed && b.containsPoint({ x, y })) ?? null;
+  }
+
+  // --- Batedores longe do bando e harpias (Marco 16) ---
+
+  private scoutWorld(active: readonly Enemy[]): ScoutWorld {
+    return {
+      commander: this.commander,
+      threats: active,
+      time: this.time.now,
+      day: useGameStore.getState().day,
+      bandAt: (id) => this.warbands.bands.find((b) => b.id === id)?.anchor ?? null,
+      isExplored: (p) => this.fog.isExplored(p),
+      isOpen: (p) => this.nav.isOpen(p),
+      lookout: (p) => this.lookoutNear(p),
+    };
+  }
+
+  /** Colina perto do ponto (enxerga mais longe); na falta dela, mata (esconde). */
+  private lookoutNear(p: Point): Point | null {
+    const terrain = Unit.terrain;
+    if (!terrain) return null;
+    let forest: Point | null = null;
+    for (const r of [0, 240, 480]) {
+      for (let i = 0; i < (r === 0 ? 1 : 8); i++) {
+        const q = { x: p.x + Math.cos((i * Math.PI) / 4) * r, y: p.y + Math.sin((i * Math.PI) / 4) * r };
+        const t = terrain.typeAt(q.x, q.y);
+        if (t === "HILL") return q;
+        if (t === "FOREST") forest ??= q;
+      }
+    }
+    return forest;
+  }
+
+  /** Ordem para um batedor: fora de contato, só a harpia chega até ele. */
+  private orderScout(s: Scout, order: ScoutOrder): boolean {
+    const label = SCOUT_ORDER_LABEL[order.kind];
+    const channel: OrderChannel = (SCOUT_BASIC_ORDERS as readonly string[]).includes(order.kind) ? "BASIC" : "COMPLEX";
+    if (!s.inContact && !this.reachOf(s, channel)) {
+      const h = this.harpyOf(s);
+      if (!h) {
+        this.pushFeed(`${s.rider.name} está fora de contato: só recebe ordens quando voltar.`);
+        return false;
+      }
+      h.orders = [...h.orders.filter((o) => !("order" in o)), { label, order }];
+      this.pushFeed(`"${label}" para ${s.rider.name}: vai na próxima viagem da harpia.`);
+      return true;
+    }
+    return this.dispatch(s, label, () => s.setOrder(order), channel);
+  }
+
+  /** Inimigo avistou um batedor: um ou dois vão atrás, e o bando fica sabendo que há gente por perto. */
+  private onScoutSpotted(e: Enemy, scout: Unit): void {
+    const o = e.owner;
+    const key = o ? `${o.kind}:${"id" in o ? o.id : "contractId" in o ? o.contractId : "settlementId" in o ? o.settlementId : "pack" in o ? o.pack : ""}` : `solo:${e.x | 0}`;
+    const now = this.time.now;
+    if (now - (this.spotAt.get(key) ?? -Infinity) < 4000) return;
+    this.spotAt.set(key, now);
+    const group = this.enemies.filter((x) => x.isAlive && !x.dormant && x.hostile && !x.target && (o ? x.owner?.kind === o.kind && distance(x, e) < 700 : x === e));
+    group.sort((a, b) => distance(a, scout) - distance(b, scout));
+    for (const h of group.slice(0, 2)) {
+      h.huntsScouts = true;
+      h.target = scout;
+    }
+    if (o?.kind === "WARBAND") {
+      const band = this.warbands.bands.find((b) => b.id === o.id);
+      if (band) band.alert = Math.max(band.alert ?? 0, 2);
+    }
+    if (scout instanceof Scout && scout.inContact) this.pushFeed(`${scout.rider.name} foi avistado! ${e.kind === "WOLF" ? "Os lobos vão" : "O inimigo manda gente"} atrás dele.`);
+  }
+
+  /** Entrou ou saiu do alcance do Comandante: ao voltar, conta o que viu. */
+  private updateScoutContact(time: number): void {
+    for (const s of this.scouts) {
+      if (!s.isAlive) continue;
+      const live = distance(s, this.commander) <= SUPPORT.SCOUT.LIVE_RANGE;
+      if (live) s.lastContact = { x: s.x, y: s.y };
+      if (live !== s.inContact) {
+        s.inContact = live;
+        s.setVisible(live);
+        if (live) {
+          if (s.hasNews) this.deliverReport(s, s.takeReport(), "RIDE");
+        } else {
+          s.awaySince = time;
+        }
+      }
+      if (live && s.mode === "RETURN") {
+        s.setOrder({ kind: "VANGUARD" });
+        useGameStore.getState().scoutReturned(s.rider.id);
+      }
+    }
+  }
+
+  /** O que cada batedor fora de contato vê vai para o relatório dele; ninguém mais fica sabendo. */
+  private recordScoutViews(): void {
+    const s0 = useGameStore.getState();
+    for (const s of this.scouts) {
+      if (!s.isAlive) continue;
+      // Ninho à vista
+      for (const n of this.nests) {
+        if (s0.nestsFound.includes(n.id) || distance(n, s) > SUPPORT.HARPY.NEST_REACH) continue;
+        if (s.inContact) s0.nestFound(n.id, s.rider.name);
+        else s.noteNest(n.id);
+      }
+      // Um batedor perto dos muros conta a guarnição e acha o portão mal cuidado
+      for (const t of s0.settlements) {
+        if (t.owner === "PLAYER" || t.owner === "RUINED" || distance(t, s) > s.vision + 400) continue;
+        const had = useGameStore.getState().townIntel[t.id];
+        if (had && s0.day - had.day < 2) continue;
+        const layout = this.settlementLayer.layoutOf(t.id);
+        if (layout) useGameStore.getState().noteTownIntel(t.id, SIDE_WORD[layout.gates[Math.abs(seedFromText(t.id)) % Math.max(1, layout.gates.length)].side]);
+      }
+      if (s.inContact) continue;
+      s.noteView();
+      for (const band of this.warbands.bands) {
+        if (!band.materialized) continue;
+        const seen = band.members.filter((m) => m.isAlive && s.notices(m));
+        if (seen.length === 0) continue;
+        const c = centroid(seen);
+        const hostile = this.bandHostile(band);
+        s.noteSighting({ bandId: band.id, name: band.name, x: c.x, y: c.y, day: s0.day, count: s.countOf(bandSize(band)), hostile });
+        if (hostile && bandSize(band) >= SUPPORT.HARPY.ALERT_SIZE && !s.alerted.has(band.id)) {
+          s.alerted.add(band.id);
+          s.urgent = true;
+        }
+      }
+    }
+  }
+
+  /** O relatório chegou (a cavalo ou na garra da harpia): a névoa abre e os bandos entram no mapa, com a data. */
+  private deliverReport(s: Scout, report: ScoutReport, via: "RIDE" | "HARPY"): void {
+    const store = useGameStore.getState();
+    for (const p of report.views) this.fog.revealExplored(p, report.radius);
+    const news: string[] = [];
+    for (const v of report.sightings) {
+      const band = this.warbands.bands.find((b) => b.id === v.bandId);
+      if (band) {
+        if (!band.lastSeen || band.lastSeen.day <= v.day) band.lastSeen = { x: v.x, y: v.y, day: v.day };
+        band.reportedCount = v.count;
+        band.spotted = true;
+      }
+      const ago = store.day - v.day;
+      news.push(`${v.name} (uns ${v.count}) perto de ${this.placeName(v)}${ago > 0 ? `, há ${ago} dia${ago > 1 ? "s" : ""}` : ""}`);
+      if (v.hostile) store.chronicle(`${s.rider.name} avistou ${v.name} perto de ${this.placeName(v)} (uns ${v.count}).`, "bad");
+    }
+    for (const id of report.nests) store.nestFound(id, s.rider.name);
+    if (news.length === 0 && report.nests.length === 0 && report.views.length < 3) return;
+    const who = via === "HARPY" ? `A harpia de ${s.rider.name} chegou` : `${s.rider.name} voltou`;
+    this.pushFeed(`${who}: ${news.length > 0 ? news.slice(0, 3).join("; ") : "nada de hostil na região"}.`);
+    this.publishHud();
+  }
+
+  /** Harpias em campo = as dos batedores vivos, já treinadas. */
+  private syncHarpies(): void {
+    const s = useGameStore.getState();
+    this.harpies = this.harpies.filter((h) => {
+      const data = s.scouts.find((x) => x.id === h.scout.rider.id);
+      if (data?.harpy && data.harpy.readyDay <= s.day && h.scout.isAlive) return true;
+      h.destroy();
+      return false;
+    });
+    for (const scout of this.scouts) {
+      const data = scout.rider.harpy;
+      if (!data || data.readyDay > s.day || !scout.isAlive || this.harpyOf(scout)) continue;
+      this.harpies.push(new Harpy(this, scout, this.time.now));
+    }
+  }
+
+  private harpyOf(s: Scout): Harpy | null {
+    return this.harpies.find((h) => h.scout === s) ?? null;
+  }
+
+  /** Dá para a ave voar aqui agora? Noite fechada e tempestade a seguram no chão. */
+  private canFly(p: Point): boolean {
+    if (Unit.darkness > SUPPORT.HARPY.DARK_LIMIT) return false;
+    return weatherAt(this.world.seed, useGameStore.getState().day, p, geoOf(this.world.geo)) !== "STORM";
+  }
+
+  /** Solta a ave com o que o batedor tem. Sem novidade, ela vai assim mesmo: as ordens voltam com ela. */
+  private sendHarpy(h: Harpy, manual = false): void {
+    const s = h.scout;
+    const refuse = (why: string) => {
+      if (manual) this.pushFeed(why);
+    };
+    if (h.state !== "PERCHED") return refuse(`A harpia de ${s.rider.name} está fora.`);
+    if (!s.isAlive || s.inContact) return refuse(`${s.rider.name} está perto: conta pessoalmente.`);
+    if (distance(s, this.commander) > SUPPORT.HARPY.RANGE) return refuse(`Longe demais para a harpia de ${s.rider.name}.`);
+    if (!this.canFly(s)) return refuse("Noite fechada ou tempestade: a harpia não voa.");
+    h.launch(s.hasNews ? s.takeReport() : null, this.time.now);
+    s.urgent = false;
+  }
+
+  private updateHarpies(dt: number, time: number, active: readonly Enemy[]): void {
+    if (this.harpies.length === 0) return;
+    const world: HarpyWorld = {
+      commander: this.commander,
+      archers: active.filter((e) => e.ranged && e.hostile),
+      canFly: (p) => this.canFly(p),
+      canSee: (p) => this.fog.canSee(p),
+      time,
+    };
+    for (const h of [...this.harpies]) {
+      if (h.state === "PERCHED" && h.scout.isAlive && !h.scout.inContact && (h.scout.urgent || time - h.lastFlightAt >= SUPPORT.HARPY.REPORT_EVERY_MS)) this.sendHarpy(h);
+      const ev = h.update(dt, world);
+      if (ev) this.onHarpyEvent(h, ev);
+    }
+  }
+
+  private onHarpyEvent(h: Harpy, ev: HarpyEvent): void {
+    const s = h.scout;
+    if (ev.type === "AT_COMMANDER") {
+      if (ev.report) this.deliverReport(s, ev.report, "HARPY");
+      return;
+    }
+    if (ev.type === "SHOT") {
+      this.pushFeed(`A harpia ${s.rider.harpy?.name ?? ""} de ${s.rider.name} foi derrubada por uma flecha${ev.report ? ": o relatório se perdeu" : ""}!`);
+      useGameStore.getState().harpyLost(s.rider.id);
+      h.destroy();
+      this.harpies = this.harpies.filter((x) => x !== h);
+      return;
+    }
+    for (const o of ev.orders) {
+      if ("order" in o) {
+        s.setOrder(o.order);
+        this.pushFeed(`${s.rider.name} recebeu "${o.label}" pela harpia.`);
+      } else {
+        s.relay = { to: o.relay.to, apply: o.relay.apply, label: o.label };
+      }
+    }
+  }
+
+  /** Batedor com harpia perto de um batalhão destacado, longe de todo o resto. */
+  private relayFor(b: Battalion): Harpy | null {
+    const c = b.center;
+    if (distance(c, this.commander) < SUPPORT.HARPY.RELAY_MIN_DISTANCE) return null;
+    let best: Harpy | null = null;
+    let bestDist: number = SUPPORT.HARPY.RELAY_RADIUS;
+    for (const h of this.harpies) {
+      if (!h.scout.isAlive || h.scout.inContact) continue;
+      const d = distance(h.scout, c);
+      if (d <= bestDist) {
+        best = h;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  /** Dias que passam de uma vez: os batedores em missão seguem como dados, e as harpias também. */
+  private advanceScouts(days: number): void {
+    if (this.scouts.length === 0) return;
+    const hazards: ScoutHazard[] = this.warbands.bands
+      .filter((b) => this.bandHostile(b))
+      .map((b) => ({ x: b.anchor.x, y: b.anchor.y, size: bandSize(b), bandId: b.id, name: b.name }));
+    const world = this.scoutWorld([]);
+    for (const s of this.scouts) {
+      const before = s.isAlive;
+      const r = s.advance(days, world, hazards);
+      if (before && r === "HURT") this.pushFeed(`${s.rider.name} foi surpreendido em campo e volta ferido.`);
+    }
+    for (const h of this.harpies) {
+      const s = h.scout;
+      if (!s.isAlive || s.inContact) continue;
+      h.idleDays += days;
+      if (h.idleDays < 0.3 || distance(s, this.commander) > SUPPORT.HARPY.RANGE) continue;
+      h.idleDays = 0;
+      if (s.hasNews) this.deliverReport(s, s.takeReport(), "HARPY");
+      for (const o of h.orders) if ("order" in o) s.setOrder(o.order);
+      h.orders = h.orders.filter((o) => !("order" in o));
+    }
+  }
+
+  /** Batedor para o save: a ave que estava no ar devolve o que levava (ela volta pousada). */
+  private scoutSave(s: Scout): FieldSave["scouts"][number] {
+    const h = this.harpyOf(s);
+    if (h?.cargo) {
+      s.restoreReport(h.cargo);
+      h.cargo = null;
+    }
+    return { id: s.rider.id, x: s.x, y: s.y, hp: s.hp, ...s.serialize() };
   }
 
   private scoutAt(x: number, y: number): Scout | null {
@@ -4164,7 +5174,13 @@ export class WorldScene extends Phaser.Scene {
         mode: s.mode,
         alive: s.isAlive,
         selected: s.selected,
-        fleeing: s.unitState === "FLEEING",
+        fleeing: s.evading,
+        contact: s.inContact,
+        sneaking: s.sneaking,
+        rank: s.rank,
+        harpy: s.rider.harpy
+          ? { name: s.rider.harpy.name, readyDay: s.rider.harpy.readyDay, state: this.harpyOf(s)?.state ?? null, sheltering: this.harpyOf(s)?.sheltering ?? false, orders: this.harpyOf(s)?.orders.length ?? 0 }
+          : null,
       })),
       messengers: this.messengers.map((m) => ({
         id: m.rider.id,
@@ -4173,6 +5189,9 @@ export class WorldScene extends Phaser.Scene {
         state: m.isAlive ? m.riderState : "DEAD",
       })),
       feed: this.feed,
+      foes: this.hosts.hosts
+        .filter((h) => h.members.some((m) => m.revealed && m.hostile))
+        .map((h) => ({ key: h.key, name: h.name, trait: h.staff.traits[0] ?? null, status: h.status, morale: Math.round(h.morale), count: h.members.filter((m) => m.revealed).length })),
       support: this.supportReport(),
       camera: { locked: this.cameraLocked, zoom: this.cameras.main.zoom },
       warCryIn: Math.max(0, Math.ceil((SUPPORT.WAR_CRY.COOLDOWN_MS - (this.time.now - this.warCryAt)) / 1000)),
