@@ -286,6 +286,8 @@ export function courtChoice(id: string, townId: string): ChoiceOutcome {
       const ev = store.courtEvents.find((e) => e.id === a);
       return startTournament(ev?.id ?? "", Number(b));
     }
+    case "harpy":
+      return say(store.harpyBuy(a));
     case "pray": {
       const gold = Number(a);
       return say(store.donateTemple(townId, gold) ? "Os sinos tocam. A honra do bando cresce nas conversas da cidade." : "Promessa de esmola não enche o tesouro dos deuses.");

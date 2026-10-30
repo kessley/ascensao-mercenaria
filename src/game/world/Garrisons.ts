@@ -1,6 +1,6 @@
 import type { Enemy } from "../entities/Enemy";
 import { isCalamityOwner, type Settlement } from "../sim/realm";
-import { garrisonPosts, streetPath, wallWalk, type GarrisonPost, type TownLayout } from "./townLayout";
+import { garrisonPosts, insideTown, streetPath, wallPosts, wallWalk, type GarrisonPost, type TownLayout } from "./townLayout";
 import { REALM, type EnemyKind } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
@@ -40,6 +40,10 @@ export interface GarrisonContext {
   /** A guarnição luta contra o bando (guerra, calamidade, cerco)? */
   hostile: (t: Settlement) => boolean;
   siegeId: string | null;
+  /** Cerco com os portões fechados: a tropa fica atrás dos muros (Marco 16). */
+  walled: boolean;
+  /** Surtida em curso: os portões abertos e a tropa sai. */
+  sallying: boolean;
   hour: number;
   /** Perigo perto (bando hostil): a tropa forma atrás do portão. */
   danger: (id: string) => boolean;
@@ -142,10 +146,21 @@ export class GarrisonManager {
 
       this.syncCount(t, layout, g, ctx);
       const calamity = isCalamityOwner(t.owner);
-      for (const x of g.guards) {
+      const behindWalls = ctx.siegeId === t.id && ctx.walled && !ctx.sallying;
+      g.guards.forEach((x, k) => {
         x.unit.hostile = hostile;
         if (hostile) x.unit.provoked = false;
-      }
+        x.unit.keepInside = behindWalls ? layout.bounds : null;
+        // Besteiros sobem na muralha (a altura vale para eles); o resto forma atrás dos portões
+        x.unit.onWall = behindWalls && x.unit.ranged;
+        // Sentinela de fora correu para dentro antes de o portão fechar
+        if (behindWalls && !insideTown(layout, x.unit)) {
+          const gate = layout.gates[k % layout.gates.length];
+          x.unit.x = gate.inside.x;
+          x.unit.y = gate.inside.y;
+        }
+      });
+      for (const m of g.militia) m.keepInside = behindWalls ? layout.bounds : null;
 
       // Cerco: moradores armados completam a defesa até o mínimo
       if (ctx.siegeId === t.id && !g.militiaRaised) {
@@ -228,6 +243,14 @@ export class GarrisonManager {
     const now = e.scene.time.now;
     const night = ctx.hour >= 21 || ctx.hour < 5;
     const alarm = ctx.danger(townId) || e.hostile;
+    // Cerco: besteiros em cima da muralha, de frente para quem cerca
+    if (e.onWall) {
+      const posts = wallPosts(layout);
+      const p = posts[guard.slot % posts.length];
+      e.home = { x: p.x, y: p.y };
+      e.unitState = e.moveTowards(p.x, p.y, dt) ? "IDLE" : "MOVING";
+      return;
+    }
     const walk = (p: Point, mult: number) => {
       e.home = { x: p.x, y: p.y };
       const arrived = e.moveTowards(p.x, p.y, dt, mult);

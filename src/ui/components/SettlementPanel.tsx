@@ -180,6 +180,8 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const siege = useGameStore((s) => s.siege);
   const mutiny = useGameStore((s) => s.mutiny);
   const besiege = useGameStore((s) => s.besiege);
+  const blockade = useGameStore((s) => s.blockade);
+  const intel = useGameStore((s) => s.townIntel[settlementId]);
   const rebuild = useGameStore((s) => s.rebuildSettlement);
   const nobles = useGameStore((s) => s.nobles);
   if (!t || !world) return <p className="text-sm text-neutral-400">Este povoado não existe mais.</p>;
@@ -266,12 +268,20 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
                 ? `Atacar ${t.name} é declarar guerra ao ${factionDef?.name}. O reino mandará exércitos contra os seus povoados.`
                 : `${t.name} é livre. Tomá-la pela espada assusta todos os reinos.`}
           </p>
-          <Button variant="danger" disabled={!!siege || !!mutiny} onClick={() => besiege(t.id)}>
+          {intel && (
+            <p className="text-xs text-sky-300">
+              Batedores (dia {intel.day}): cerca de {intel.garrison} na guarnição, comida para uns {intel.food} dias, e o portão {intel.weakGate} está mal cuidado.
+            </p>
+          )}
+          <Button variant="danger" disabled={!!siege || !!mutiny} onClick={() => blockade(t.id)}>
             {siege
               ? "Já há um cerco em andamento"
               : occupied
-                ? `Libertar ${t.name}`
-                : `Atacar ${t.name} (${Math.min(REALM.SIEGE_MAX_DEFENDERS, Math.max(REALM.SIEGE_MIN_DEFENDERS, t.garrison))} defensores)`}
+                ? `Cercar ${t.name}: fechar os muros e libertá-la`
+                : `Cercar ${t.name}: fome, escadas e aríete (${Math.min(REALM.SIEGE_MAX_DEFENDERS, Math.max(REALM.SIEGE_MIN_DEFENDERS, t.garrison))} defensores)`}
+          </Button>
+          <Button variant="danger" disabled={!!siege || !!mutiny} onClick={() => besiege(t.id)}>
+            Atacar agora: a guarnição sai e luta do lado de fora
           </Button>
         </section>
       )}

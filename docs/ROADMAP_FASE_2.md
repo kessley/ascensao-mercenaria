@@ -2,7 +2,7 @@
 
 Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, estações, comércio, reinos) alimenta os outros. Os marcos estão em ordem de dependência.
 
-**Estado:** Marcos 10 a 15 ✅ OK · próximo: Marco 16. **OK** = concluído e jogável em greybox.
+**Estado:** Marcos 10 a 16 ✅ OK · próximo: Marco 17. **OK** = concluído e jogável em greybox.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 1 — O bando](ROADMAP_FASE_1.md) · Design: [GDD.md](GDD.md), seção 8 (as regras para os marcos novos estão na 8.1)
 
@@ -554,29 +554,147 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 - **Primeira visita:** o sargento do Portão Velho diz o que o Comandante é ali e o que falta para o próximo portão. Quem é Forasteiro não fala com a família real, e só nobres curiosos o recebem.
 - **Gerador do mundo:** plantas de povoados nunca se sobrepõem (em mundos muito apertados, o povoado que não couber não nasce), e as capitais nascem longe do acampamento. A tempestade alcança 3600 px terra adentro, para pegar o centro das capitais do litoral.
 - **Save versão 8:** a mesma semente gera outro mundo, porque as capitais mudaram o gerador.
-- **Teste automatizado:** 57 verificações do marco.
+- **Gente da Cidade Alta:** cada zona tem a sua malha de ruas ligada e a sua gente (povo nas ruas, criados no Bairro Nobre e no castelo). Ninguém atravessa muro, fosso ou prédio, nem os guardas numa perseguição. Moradores só surgem e somem longe da vista, e os nobres mudam de lugar a pé, saindo por uma porta ou entrada.
+- **Teste automatizado:** 65 verificações do marco.
   - 15 da Cidade Alta;
   - 16 do lado do jogador (favor, título, vassalagem, casamento, intriga, duelo, torneio, esgotos, invasão, prisão, salvar);
   - 9 do mundo reagindo (notícias, contrato, tenda de guerra, revolta, sucessão, coalizão, trono);
   - 10 das telas, com clique de verdade nas respostas depois de sair de um prédio;
   - 7 de salvar e carregar no meio de uma guerra civil, com exércitos em campo.
+  - 8 da gente da cidade (malha de ruas, sólidos, ninguém brotando à vista, perseguição).
 
-  Os testes dos Marcos 9 a 14 continuam passando. Eles foram adaptados ao que mudou: o centro de uma capital agora é sólido, a primeira visita abre uma fala, e os exércitos de lordes têm lógica própria. Três verificações antigas oscilam entre rodadas por causa do sorteio do próprio teste, sem relação com o marco: a bolha de detalhe e a noite (Marco 10) e os lobos (Marco 12).
+  Os testes dos Marcos 9 a 14 continuam passando. Eles foram adaptados ao que mudou: o centro de uma capital agora é sólido, a primeira visita abre uma fala, e os exércitos de lordes têm lógica própria. Quatro verificações antigas oscilam entre rodadas por causa do sorteio do próprio teste, sem relação com o marco: a bolha de detalhe e a noite (Marco 10), os lobos (Marco 12) e o surto de doença (Marco 13).
 - **Simulação de dois anos, sem o jogador (três mundos):** 2 a 5 guerras, 1 a 4 guerras civis, 1 ou 2 governantes trocados em reinos que já existiam, 0 a 13 povoados mudando de mãos e 6 a 17 nobres mortos. Os 160 dias rodam em 3 a 5 s.
 - **Desempenho:** 165 fps na Cidade Alta, de dia e de noite, com 100 moradores (0,2 ms de JavaScript por quadro). No campo, comparado lado a lado com a versão anterior, nada piorou: acampamento 133 × 135 fps; 300 inimigos 96–115 × 114 fps (2,1–2,6 ms × 2,2 ms). A medida oscila muito nesta máquina: a mesma versão variou de 66 a 135 fps entre rodadas.
 - **Ficou de fora:**
   - **Marco 16:** batalhas de verdade entre exércitos da IA, cercos físicos e prisioneiros do bando.
   - **Equilíbrio:** calibrado por simulação, sem jogar de verdade. Os números de Fama, preços de suborno e dificuldade dos duelos ainda pedem ajuste jogando.
 
-## Marco 16 — Guerra de verdade: cercos e prisioneiros
-**Objetivo:** guerras com escolhas de verdade e consequências morais. GDD 8.11.
-- **Exércitos da IA lutam entre si:** dentro da bolha, em tempo real (o jogador pode assistir, entrar ou saquear os restos); fora dela, pela resolução abstrata.
-- **Cercos físicos:** muralhas e portões no Campo; escadas e aríete construídos com madeira durante o cerco; bônus de altura para os defensores; cerco por fome com estoque de comida dos dois lados; surtidas; pedido de socorro.
-- **Prisioneiros:** resgatar, recrutar, libertar ou executar, com efeito na Honra e no Temor e na lealdade dos tenentes. Nobres capturados lembram.
+## Marco 16 — Guerra de verdade: inimigos que pensam, cercos e prisioneiros ✅ OK
+**Objetivo:** o inimigo passa a jogar o jogo: observa, planeja, toma a iniciativa e usa a mesma guerra de informação que o jogador. Sobre essa base entram as batalhas entre exércitos, os cercos e as consequências morais da vitória. GDD 8.11.
+
+**Regra central — a IA não trapaceia.** O inimigo só sabe o que viu ou ouviu, tem névoa própria, ordens com atraso e moral. A dificuldade vem de decidir melhor, nunca de ganhar mais vida ou dano. Vale para a dificuldade escolhida também: ela muda a qualidade das decisões, não os atributos.
+
+**Ordem de construção:** cinco etapas, cada uma jogável sozinha. Batedores vêm primeiro: resolvem um problema de hoje e criam o sistema de percepção que a IA usa depois.
+
+### Etapa 1 — Batedores que voltam vivos e harpias
+**O problema de hoje:** o batedor só recua a 230 px, mas o goblin o percebe a 260 (lobos a 480; à noite, com tochas, o goblin chega a 364). Ele sempre é notado antes de reagir. Depois de recuar, volta direto ao mesmo objetivo e provoca de novo. Também foge de quem não é hostil (mercadores, refugiados, patrulhas em paz).
+
+- **Visão maior:** de 460 para cerca de 900 px, valendo as regras atuais de colina, floresta, noite e clima.
+- **Distância segura:** o batedor calcula a percepção real de cada hostil (tipo, noite, tochas, clima, floresta) e fica fora dela com folga de 120 px. Em vez de fugir depois, contorna antes.
+- **Memória do perigo:** a área de um bando visto fica marcada por um tempo, e a rota passa em volta dela. Assim acaba o vai e volta.
+- **Postura furtiva:** o batedor anda devagar e só é percebido a metade da distância normal, o que permite chegar perto para contar a tropa. Colina dá visão; mata esconde.
+- **Ser visto tem outro custo:** um batedor avistado não atrai o bando inteiro. Um ou dois perseguidores saem atrás dele, e o bando sobe para **Alerta** (Etapa 2). O inimigo não sabe onde está o exército, mas sabe que existe um. O batedor perseguido foge para longe do bando, nunca na direção dele.
+- **Novas ordens:**
+  - **Explorar região:** o jogador marca uma área no mapa, e o batedor a percorre sozinho, priorizando o que nunca foi visto, até cobrir tudo ou ficar em risco.
+  - **Patrulhar rota:** ronda entre pontos marcados.
+  - **Seguir bando:** acompanha um inimigo à distância e informa para onde ele marcha.
+  - **Vigia:** a ordem de ponto atual, parado em colina ou mata.
+- **Relatório com idade:** perto do bando (até cerca de 1.100 px, o alcance do estandarte), a visão é ao vivo, como hoje. Além disso, o batedor comum só entrega o que viu ao voltar. O mapa mostra quando cada informação foi obtida ("visto há 2 dias").
+- **Longe do bando:** um batedor explorando continua andando na viagem rápida, como dados, com o risco resolvido no abstrato. Pode voltar ferido, atrasado ou não voltar.
+- **Harpia (águia treinada, especialização de um batedor):**
+  - **Comunicação:** leva relatórios ao Comandante e traz ordens simples de volta (explorar, vigiar, seguir, voltar), a até cerca de um dia de marcha e sem depender de mensageiro.
+  - **Alerta automático:** ao avistar exército, a harpia parte sozinha com o aviso.
+  - **Retransmissão:** batalhão destacado perto de um batedor com harpia recebe ordens de longe; o batedor cavalga a última parte.
+  - **Custo e limites:** a ave é cara, come por dia e leva dias de treino. Faz uma viagem por vez (ida e volta), não voa à noite nem em tempestade, e arqueiros podem abatê-la. A morte é permanente, e o batedor volta a ser comum.
+  - **Onde conseguir:** falcoeiro da Cidade Alta (exige reputação) ou ninho nas montanhas, encontrado explorando.
+- **Experiência:** as `missions` do batedor passam a valer. Veteranos notam mais longe, contam a tropa com mais precisão e voltam com mais frequência.
+
+### Etapa 2 — Comando inimigo: a batalha
+- **Três níveis de comando:**
+  - **Comandante inimigo:** unidade real em campo. Decide o plano a cada poucos segundos. Em exércitos, é o próprio lorde, com os traços e a memória do Marco 15. Bandos ganham um chefe com nome.
+  - **Tenentes inimigos:** lideram grupos, têm nome, traço e passiva, e a morte deles abala a moral do grupo, como no bando do jogador.
+  - **Soldados:** obedecem ao grupo em vez de cada um escolher o alvo mais próximo. O inimigo ganha formação e moral; hoje ele luta até morrer. Reaproveitar a lógica de `Battalion` mantém as regras iguais.
+- **Tamanho da hierarquia:** patrulha e caravana têm 1 sargento; goblins, chefe e no máximo 1 tenente; bandidos, chefe e 1 a 2 tenentes; exércitos, lorde e 2 a 4 tenentes; calamidades, o chefão e capitães.
+- **Estados de alerta:** Desavisado → Desconfiado (achou rastro ou batedor) → Alerta (sentinelas, formação, envia batedores) → Caçando (vai atrás do bando) ou Fugindo.
+- **Ciclo de decisão:** perceber → estimar forças (com erro, se viu pouco) → escolher um plano pelo terreno, moral, hora e clima → ordenar → reavaliar quando algo mudar.
+- **Planos táticos:**
+  - **Linha e flanco:** segura a frente enquanto um grupo contorna.
+  - **Emboscada:** espera em mata, vau ou ponte.
+  - **Golpe na retaguarda:** vai atrás de carroças, arqueiros e feridos.
+  - **Decapitação:** caça o Comandante quando ele avança sozinho.
+  - **Caça aos mensageiros:** cavalaria e arqueiros interceptam quem leva ordens.
+  - **Recuo fingido:** recua para puxar a tropa para os arqueiros ou para a reserva.
+  - **Resistir:** fortifica colina, ponte ou passo e espera reforços.
+  - **Retirada organizada:** cede quando perde a conta, sem morrer até o último, e leva a informação junto.
+- **As mesmas fraquezas do jogador:** ordens saem do comandante por voz, trombeta e mensageiro. Matar o comandante, os tenentes ou o mensageiro deixa grupos sem ordens, repetindo a última ou em pânico. Isso cria objetivos dentro da batalha.
+- **Personalidade muda o jogo:** Corajoso ataca e aceita risco; Cauteloso observa e fortifica; Ambicioso busca a glória de matar o Comandante; Honrado não executa nem saqueia feridos. O jogador aprende a ler quem enfrenta.
+- **Competência:** vai de 1 (goblins: reagem devagar, conhecem poucos planos) a 5 (grandes lordes). Dificuldade da campanha: Recruta, Veterano ou Lendária.
+- **Sinais para o jogador:** todo plano deixa pistas (rastros, sentinelas, trombetas, grupo sumindo na mata) e tem resposta. Perder deve parecer "fui enganado", não "o jogo roubou".
+
+### Etapa 3 — Comando inimigo: a campanha
+- **Inimigos procuram o bando:** patrulhas de caça, batedores inimigos e rumores das aldeias formam uma posição estimada do jogador, com idade, como a do jogador sobre eles.
+- **Metas estratégicas:** interceptar comboios, atacar o acampamento quando a tropa está longe, juntar bandos antes de lutar, cortar abastecimento, proteger uma cidade ameaçada e fugir quando estiver mais fraco.
+- **Adaptação:** quem perdeu para o bando lembra como perdeu. Lordes ajustam a composição (mais lanças contra cavalaria, por exemplo), baseados no que viram.
+- **Exércitos da IA lutam entre si:** dentro da bolha, com tropas de verdade e os comandantes acima (o jogador pode assistir, entrar ou saquear os restos). Fora dela, a resolução abstrata passa a considerar competência, moral e terreno.
+- **Desempenho:** só os grupos pensam, em ciclos espaçados e distribuídos entre quadros. Soldados continuam baratos. Fora da bolha, a IA vive como dados.
+
+### Etapa 4 — Cercos físicos
+- **No Campo:** muralhas e portões reais; escadas e aríete construídos com madeira durante o cerco; bônus de altura para os defensores.
+- **Fome:** estoque de comida dos dois lados, com doença rondando; surtidas; pedido de socorro por mensageiro ou harpia, que pode ser interceptado.
+- **A IA sabe cercar e defender:** escolhe entre assalto e fome conforme tropa, estoque e estação; defensores fazem surtidas contra máquinas e sitiantes famintos.
+- **Reconhecimento vale ouro:** batedor mede a guarnição, acha portão fraco e descobre o estoque de comida.
+
+### Etapa 5 — Prisioneiros e consequências
+- **Prisioneiros:** resgatar, recrutar, libertar ou executar, com efeito na Honra, no Temor e na lealdade dos tenentes. Nobres capturados lembram.
+- **Tenentes e comandantes inimigos capturáveis:** valem resgate e informação (planos, rotas, senhas).
 - **Comandante capturado:** um tenente lidera o bando no resgate, pagando ou à força.
 - **Convocações de vassalagem** em campanhas da IA.
 
-**Pronto quando:** tomar uma cidade murada exige escolher entre um assalto caro e um cerco longo, e o que o jogador faz com os prisioneiros muda como o mundo o trata.
+**Pronto quando:**
+- um batedor atravessa um território hostil, mapeia a região e volta sem provocar um bando por descuido, e a harpia entrega um aviso a um dia de marcha;
+- o inimigo surpreende o jogador em campo, com emboscada, flanco, retirada ou caça ao Comandante, e sempre houve pistas para perceber antes;
+- matar o comandante inimigo muda a batalha, e dois lordes de traços diferentes pedem jogos diferentes;
+- numa arena com forças iguais, a IA nova vence a antiga em pelo menos 75% de 50 lutas, sem bônus de atributos, e um teste confirma que nenhuma decisão usa informação que ela não viu;
+- o desempenho com 300 inimigos fica dentro da margem do Marco 15 (96–115 fps nesta máquina);
+- tomar uma cidade murada exige escolher entre um assalto caro e um cerco longo, e o que o jogador faz com os prisioneiros muda como o mundo o trata.
+
+**Pedido junto com o marco:** inimigos com comandante e tenentes, organizados e ativos, que não esperem o bando chegar e saibam jogar o jogo; batedores que explorem o mapa sem provocar todo mundo, com mais visão e uma harpia para comunicação de longe.
+
+**Implementado:**
+- **Batedor** (`src/game/entities/Scout.ts`): visão de 900 px (+10% por patente) e distância segura calculada com a mesma conta do inimigo (`Enemy.perceptionOf`), mais 120 px de folga. Ele contorna quem está à frente, guarda por 20 s a área de cada hostil visto e, com o destino dentro dela, para na borda. Quem está em paz não o assusta, ele não leva tocha e, na mata, o inimigo só é notado de perto.
+  - **Ser visto:** um ou dois inimigos vão atrás dele e o bando entra em alerta, mas isso não abre combate. Perseguido, ele foge para longe do exército.
+  - **Ordens:** vigia, explorar região, patrulhar rota e seguir bando, no Mapa do Continente; postura furtiva no HUD (metade da distância de percepção, 60% do passo).
+  - **Relatório com idade:** a até 1.100 px do Comandante a visão é ao vivo. Além disso, ele fica fora de contato, e a névoa e os bandos vistos só entram no mapa quando ele volta ou manda a harpia. O mapa mostra "visto há 2 dias" e o último lugar conhecido dele.
+  - **Dias que passam de uma vez:** em viagem rápida ele segue como dados, com risco de voltar ferido ou não voltar.
+  - **Patente:** novato, experiente e veterano (3 e 8 missões), com mais visão, mais esquiva e contagem de tropas menos errada.
+- **Harpia** (`src/game/entities/Harpy.ts`): voa em linha reta a 900 px/s, até um dia de marcha, uma viagem por vez. Sai sozinha com o alerta de um exército, traz ordens simples de volta e, com um batalhão destacado perto do batedor, leva a ordem até ele. Não voa em noite fechada nem em tempestade, e arqueiros podem derrubá-la (o relatório se perde). Custa 400 de ouro na **Falcoaria Real** da Cidade Alta (Fama 20), ou sai de um dos 4 **ninhos** das montanhas, que os batedores acham explorando (`src/game/worldgen/nests.ts`). Come 1 ração por dia.
+- **Comando inimigo** (`src/game/systems/WarHost.ts`, `EnemySquad.ts`, `src/game/sim/warMind.ts`): todo bando que luta ganha comandante e tenentes de verdade, promovidos da própria tropa (o total de gente não muda). Lordes comandam os exércitos com os traços e a habilidade do Marco 15; bandos têm chefe com nome. Exércitos grandes trazem batedores, arautos e lanceiros.
+  - **Mesmas regras:** esquadrões em formação (`src/game/systems/formation.ts`) e moral pela mesma função do jogador (`updateMorale`). Goblins sentem mais medo; mortos-vivos, nenhum.
+  - **Alerta:** desavisado, alerta (sentinelas enxergam mais longe) e caçando, com a memória de quem viu (25 s).
+  - **Planos:** ataque direto, linha e flanco, emboscada, golpe na retaguarda, caça ao Comandante, recuo fingido, resistir na colina e retirada com retaguarda. Cada um ganha pontos pela situação e pela personalidade; quem sabe menos erra mais e conhece menos planos. Caça aos mensageiros corre por cima do plano, com batedores e cavalaria.
+  - **Sem trapaça:** `choosePlan` é uma função pura que só recebe o que os soldados viram, com a posição de quando viram.
+  - **Quem manda cai:** ordens saem por voz, trombeta ou arauto. Morto o comandante, todos perdem 30 de moral e um tenente assume sabendo menos; sem ninguém, cada esquadrão luta por si.
+  - **Pistas:** o nome dos oficiais aparece sobre eles (anel dourado no chefe, prateado no capitão), a trombeta inimiga é ouvida com a direção, e o HUD mostra quem comanda e o que dá para ler do campo ("abrindo as alas").
+  - **Fim de combate:** quem foge ou larga o campo conta como vencido, e o local de um contrato fica limpo.
+  - **Dificuldade:** Recruta, Veterano e Lendária, na criação do mundo e no painel Jogo. Soma −1, 0 ou +1 na competência; os atributos não mudam.
+- **Campanha** (`review` em `src/game/systems/Warbands.ts`): quatro vezes por dia cada bando revê o rumo com o que sabe. Vai atrás do bando do jogador se tem força, foge se está fraco e perto, junta-se a outro bando quando sozinho não dá e cai sobre o acampamento quando a tropa está longe. O que os soldados veem chega ao reino com o atraso da notícia; quem passa perto de um povoado é visto.
+  - **Adaptação:** exército destruído pelo bando ensina o reino: muita flecha pede cavalaria; muita cavalaria, besteiros.
+  - **Exércitos em guerra** lutam com tropas de verdade dentro da bolha, com o comando dos dois lados. Fora dela, a resolução abstrata pesa a competência. O campo de batalha fica com espólio por 3 dias, para quem chegar primeiro.
+- **Cerco físico** (`src/game/systems/SiegeWorks.ts`): guarnição pequena fecha os portões ao ver o exército; guarnição forte sai a campo. Portões fechados são sólidos, e os besteiros sobem na muralha (+40% de alcance, +15% de dano, −40% de flecha recebida).
+  - **Escolhas:** esperar a fome (comida calculada pelo tipo e pelos armazéns), escadas (3 de madeira) e aríete (10), feitos com a madeira que a tropa corta por dia, ou exigir rendição, que depende do Temor e da fome. Acampar perto demais dos muros custa gente; depois de 4 dias o acampamento adoece.
+  - **Do outro lado:** surtidas, deserção na fome e rendição, e um mensageiro que sai pedindo socorro. Matá-lo no caminho impede o exército de socorro.
+  - **IA:** cada lorde escolhe assalto ou fome pela tropa, pelos armazéns, pela estação e pelo jeito dele; a fome também pesa no sitiante, a guarnição faz surtidas, e a cidade cercada pede socorro.
+  - **Reconhecimento:** batedor perto dos muros conta a guarnição e a comida e acha o portão mal cuidado (45% menos vida).
+- **Prisioneiros** (`src/store/warSlice.ts`, `PrisonersPanel`): depois de uma vitória, parte dos caídos e dos que fugiam perto da tropa se rende. Resgatar, recrutar (batalhão novo, de moral baixa e que deserta nas duas primeiras semanas), libertar ou executar, no relatório e na Tenda. Honra, Temor, relação com o reino e lealdade dos tenentes mudam conforme a escolha.
+  - **Oficiais:** valem resgate e informação: interrogar revela os exércitos do reino e dá a senha dos portões. Lorde que cai em campo morre, é preso ou escapa; preso, lembra de como foi tratado, e executá-lo marca toda a casa dele.
+  - **Comandante capturado:** derrota diante de quem faz prisioneiros pode terminar com ele preso. Um tenente assume, o mapa marca quem o levou, e dá para pagar o resgate ou destruir aquele bando; com o tempo, ele pode fugir sozinho.
+  - **Convocações:** com o suserano em campanha, o bando é chamado à frente de batalha, não à capital.
+- **Save versão 9.**
+- **Teste automatizado:** 102 verificações do marco.
+  - 15 de batedores e harpias;
+  - 17 do comando inimigo (organização, sem trapaça, sucessão, personalidade);
+  - 12 de cada plano em campo;
+  - 12 da campanha;
+  - 18 dos cercos;
+  - 16 dos prisioneiros;
+  - 12 de ponta a ponta (Falcoaria, ninho, retransmissão, patente, dificuldade, colina, saque, contrato).
+- **Arena (50 lutas por modo, forças iguais, mesmos oficiais, sem bônus):** os dois lados com a mesma tropa e os mesmos oficiais. Com as mesmas regras de moral, o lado com comando venceu 46 de 50 (92%), contra um lado em que cada um luta por si. Contra a IA antiga de verdade, que nunca sente medo e luta até morrer, venceu 30 de 50 (60%). A meta de 75% vale para a primeira comparação: na segunda, a moral faz o lado com comando largar a luta, e o outro nunca foge.
+- **Desempenho:** 118 fps com 300 inimigos em marcha e 91 fps em combate com 297 ativos, dentro da margem do Marco 15. O JavaScript gasta 2,2 a 2,5 ms por quadro com comando, contra 2,4 a 2,8 ms sem ele, porque os soldados agora olham em volta a cada 180 a 340 ms. A medida oscila com a carga da máquina: a mesma versão marcou de 45 a 118 fps entre rodadas.
+- **Testes dos marcos anteriores:** continuam passando, com três ajustes. O da patrulha contra goblins lia a lista de mortos depois de ela ser limpa; o da emboscada noturna ganhou um bando maior, com chefe bravo, porque um bando fraco agora recua em vez de atacar; o de um combate montado à mão ganhou o campo novo. A verificação da câmera cruzando o continente oscila entre rodadas (até 173 ms); o marco não mexeu no carregamento do mapa, mas a comparação com a versão anterior não foi feita.
+- **Ficou de fora:**
+  - **Equilíbrio:** calibrado por simulação, sem jogar de verdade. Tamanho dos bandos, chance de rendição, custo de escadas e aríete e chance de capturar o Comandante ainda pedem ajuste jogando.
+  - **Cercos da IA em campo:** quando um exército da IA cerca uma cidade, a chegada, a fome e o assalto continuam na simulação; o jogador pode atacar o acampamento dele, mas não vê escadas e aríetes inimigos nos muros.
 
 ## Marco 17 — Mares e continentes (o novo Mapa Múndi)
 **Objetivo:** a terceira escala de mapa: o planeta, com outros continentes e o oceano entre eles. GDD 8.2 e 8.12.

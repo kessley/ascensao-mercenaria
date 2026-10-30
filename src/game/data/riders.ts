@@ -1,11 +1,18 @@
 import { SUPPORT } from "../../utils/constants";
 
+/** Harpia: águia treinada de um batedor (Marco 16). Só serve depois do treino (`readyDay`). */
+export interface HarpyData {
+  name: string;
+  readyDay: number;
+}
+
 /** Batedor: cavaleiro de reconhecimento (persistente; morte permanente). */
 export interface ScoutData {
   id: string;
   name: string;
-  /** Batalhas em que voltou vivo. */
+  /** Missões de onde voltou vivo (batalhas e explorações): dá patente. */
   missions: number;
+  harpy?: HarpyData | null;
 }
 
 /** Mensageiro a cavalo: leva as ordens do Comandante às tropas fora do raio de comando. */
@@ -18,6 +25,7 @@ export interface MessengerData {
 }
 
 const RIDER_NAMES = ["Iago", "Brisa", "Tarek", "Nell", "Odo", "Sabine", "Kael", "Runa", "Pim", "Vesna", "Lio", "Asha", "Teo", "Mika"];
+const HARPY_NAMES = ["Garra", "Sombra", "Vento", "Rainha", "Flecha", "Cinza", "Trovão", "Nuvem"];
 const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
 export function newScout(): ScoutData {
@@ -26,6 +34,19 @@ export function newScout(): ScoutData {
 
 export function newMessenger(): MessengerData {
   return { id: crypto.randomUUID(), name: pick(RIDER_NAMES), level: 1, deliveries: 0 };
+}
+
+export function newHarpy(readyDay: number): HarpyData {
+  return { name: pick(HARPY_NAMES), readyDay };
+}
+
+/** Patente do batedor (0 novato, 1 experiente, 2 veterano), pelas missões. */
+export function scoutRank(missions: number): number {
+  let rank = 0;
+  SUPPORT.SCOUT.RANK_AT.forEach((need, i) => {
+    if (missions >= need) rank = i;
+  });
+  return rank;
 }
 
 /** Nível de comando correspondente ao total de entregas. */

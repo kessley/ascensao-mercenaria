@@ -62,6 +62,7 @@ export class Messenger extends Unit {
     this.canRally = profile.canRally;
     this.signalRange = profile.signalRange;
     this.autoAttack = false;
+    this.role = "COURIER";
     this.canCharge = true; // terreno afeta como cavalaria
     this.evasion = profile.evasion;
     this.drawBody();

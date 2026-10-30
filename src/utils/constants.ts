@@ -113,7 +113,22 @@ export type EnemyKind =
   /** Marco 14: caravana de mercadores (o mercador, os guardas e a carroça de carga). */
   | "MERCHANT"
   | "CARAVAN_GUARD"
-  | "CART";
+  | "CART"
+  /** Marco 16: quem comanda (chefes, lordes, tenentes) e quem vê e leva ordens pelo inimigo. */
+  | "GOBLIN_CHIEF"
+  | "GOBLIN_CAPTAIN"
+  | "BANDIT_CHIEF"
+  | "BANDIT_CAPTAIN"
+  | "SERGEANT"
+  | "CAPTAIN"
+  | "LORD"
+  | "ORC_CHIEF"
+  | "ORC_CAPTAIN"
+  | "DEATH_KNIGHT"
+  | "OUTRIDER"
+  | "WOLF_RIDER"
+  | "HERALD"
+  | "LANCER";
 export type Formation = "LINE" | "SHIELD_WALL" | "WEDGE" | "LOOSE";
 export type TerrainType =
   | "GRASS"
@@ -193,6 +208,8 @@ export interface EnemyDef {
   aggroRange?: number;
   /** Líder de uma calamidade: maior, com coroa; a morte dele encerra a calamidade. */
   boss?: boolean;
+  /** Marco 16: chefe (anel dourado) ou capitão (prateado). */
+  officer?: "CHIEF" | "CAPTAIN";
 }
 
 /** Amotinados usam os atributos da tropa de origem, mas aparecem como quadrados roxos. */
@@ -307,7 +324,145 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     aggroRange: 0,
     stats: { hp: 160, speed: 90, damage: 0, range: 0, cooldown: 1e9, radius: 15 },
   },
+  // Marco 16: oficiais valem o mesmo que os tenentes do jogador (2,5× a vida, 1,5× o dano do soldado)
+  GOBLIN_CHIEF: { label: "Chefe goblin", color: 0x9c2a1c, officer: "CHIEF", stats: { hp: 140, speed: 108, damage: 12, range: 8, cooldown: 900, radius: 13 } },
+  GOBLIN_CAPTAIN: { label: "Capitão goblin", color: 0xa83a2a, officer: "CAPTAIN", stats: { hp: 100, speed: 106, damage: 10.5, range: 8, cooldown: 950, radius: 12 } },
+  BANDIT_CHIEF: { label: "Chefe dos salteadores", color: 0x6d4620, officer: "CHIEF", stats: { hp: 150, speed: 112, damage: 13, range: 8, cooldown: 900, radius: 13 } },
+  BANDIT_CAPTAIN: { label: "Capitão dos salteadores", color: 0x7a5228, officer: "CAPTAIN", stats: { hp: 112, speed: 112, damage: 12, range: 8, cooldown: 900, radius: 12 } },
+  SERGEANT: { label: "Sargento", color: 0x7f8c8d, officer: "CHIEF", stats: { hp: 175, speed: 110, damage: 13.5, range: 8, cooldown: 900, radius: 13 } },
+  CAPTAIN: { label: "Capitão", color: 0x7f8c8d, officer: "CAPTAIN", stats: { hp: 190, speed: 112, damage: 14, range: 8, cooldown: 880, radius: 13 } },
+  LORD: { label: "Lorde", color: 0x7f8c8d, officer: "CHIEF", stats: { hp: 320, speed: 115, damage: 17, range: 9, cooldown: 800, radius: 15 } },
+  ORC_CHIEF: { label: "Chefe orc", color: 0x3a5a1e, officer: "CHIEF", stats: { hp: 300, speed: 110, damage: 18, range: 9, cooldown: 950, radius: 15 } },
+  ORC_CAPTAIN: { label: "Capitão orc", color: 0x41622a, officer: "CAPTAIN", stats: { hp: 212, speed: 110, damage: 16.5, range: 9, cooldown: 1000, radius: 14 } },
+  DEATH_KNIGHT: { label: "Cavaleiro morto", color: 0x8d8775, officer: "CAPTAIN", stats: { hp: 180, speed: 98, damage: 14, range: 8, cooldown: 1000, radius: 13 } },
+  // Olhos do inimigo: enxergam longe e não ficam para lutar (ver WarHost)
+  OUTRIDER: { label: "Batedor inimigo", color: 0x6b7f7f, aggroRange: 520, stats: { hp: 55, speed: 240, damage: 6, range: 8, cooldown: 1000, radius: 10 } },
+  WOLF_RIDER: { label: "Goblin montado em lobo", color: 0x8a5a4a, aggroRange: 480, stats: { hp: 48, speed: 215, damage: 7, range: 8, cooldown: 950, radius: 10 } },
+  HERALD: { label: "Arauto inimigo", color: 0xd8c86a, aggroRange: 0, stats: { hp: 50, speed: 235, damage: 4, range: 8, cooldown: 1200, radius: 9 } },
+  // Cavalaria dos exércitos: o braço rápido de quem flanqueia e caça mensageiros
+  LANCER: { label: "Lanceiro montado", color: 0x7f8c8d, stats: { hp: 80, speed: 190, damage: 10, range: 10, cooldown: 1000, radius: 11 } },
 };
+
+/**
+ * Inteligência do inimigo (Marco 16). Ninguém ganha vida nem dano: a dificuldade vem de decidir
+ * melhor. Competência vai de 1 (reage devagar, conhece poucos planos) a 5 (grande capitão).
+ */
+export const WAR_AI = {
+  /** Intervalo entre decisões por competência (índice = competência − 1), em ms. */
+  THINK_MS: [2600, 2000, 1500, 1100, 800],
+  /** Olhar em volta (ms). */
+  PERCEIVE_MS: 450,
+  /** Plano escolhido dura ao menos isso: só a retirada e a chance de pegar o Comandante interrompem (ms). */
+  PLAN_LOCK_MS: 7000,
+  /** Sentinelas: quantas vezes a distância de percepção de um soldado; em alerta, mais ainda. */
+  SENTRY_SIGHT: 1.25,
+  ALERT_SIGHT: 1.7,
+  /** Por quanto tempo uma posição vista continua valendo (ms). */
+  MEMORY_MS: 25000,
+  /** Sem ver ninguém por este tempo, o alerta cai um nível (ms). */
+  CALM_MS: 20000,
+  /** Até quantos ficam de sentinela olhando em volta. */
+  EYES: 8,
+  /** Trombeta inimiga: atraso da ordem e até onde o Comandante ouve (px). */
+  HORN_DELAY_MS: 700,
+  HORN_HEARD: 1500,
+  HORN_FEED_MS: 9000,
+  /** Sem comandante: quanto tempo até um tenente assumir (ms), e o golpe na moral de todos. */
+  SUCCESSION_MS: 3000,
+  LEADER_DEATH_MORALE: 30,
+  /** Soldados por esquadrão; abaixo do mínimo, não se divide. */
+  SQUAD_SIZE: 10,
+  SQUAD_MIN: 3,
+  /** Um tenente a cada tantos soldados, no máximo 4. */
+  LIEUTENANT_EVERY: 9,
+  MAX_LIEUTENANTS: 4,
+  /** Até onde um soldado corre atrás de quem achou (do centro do esquadrão). */
+  PURSUIT: 420,
+  /** O alvo da ordem de ataque é visto de longe (o esquadrão foi mandado até ele). */
+  ATTACK_SIGHT: 700,
+  /** Antes de avançar, quem sabe o que faz forma a linha: os arqueiros chegam junto (ms). */
+  FORM_UP_MS: 3000,
+  FORM_UP_DISTANCE: 300,
+  /** Flanco: a que distância lateral do inimigo, e o tempo máximo de contorno (ms). */
+  FLANK_RADIUS: 360,
+  FLANK_MS: 9000,
+  /** Comandante do bando exposto: sem batalhão a esta distância. */
+  EXPOSED_RADIUS: 260,
+  /** Emboscada: dispara quando alguém chega a esta distância; golpe na moral de quem é pego. */
+  AMBUSH_TRIGGER: 240,
+  AMBUSH_MORALE: 20,
+  AMBUSH_MAX_MS: 45000,
+  /** Recuo fingido: distância da isca e tempo máximo (ms). */
+  FEINT_DISTANCE: 480,
+  FEINT_MS: 7000,
+  /** Procura de terreno em volta do bando (px). */
+  COVER_RADIUS: 900,
+  /** Retirada: até onde vai antes de se considerar a salvo. */
+  RETREAT_DISTANCE: 2600,
+  /** Retaguarda: quem fica segurando enquanto os outros saem (ms). */
+  REARGUARD_MS: 8000,
+  /** Um lanceiro a cada tantos soldados nos exércitos grandes. */
+  LANCER_EVERY: 6,
+  LANCER_FROM: 16,
+  /** Bandos amigos a esta distância contam uns aos outros o que viram (px, a cada PERCEIVE). */
+  SHARE_RADIUS: 1500,
+  /** Fugitivo longe de todos e fora de vista: some do mapa (ms). */
+  ROUTED_GONE_MS: 7000,
+  ROUTED_GONE_RADIUS: 1100,
+  /** Bandos que perderam mais que isso largam a luta de vez. */
+  BROKEN_SHARE: 0.55,
+  /** Cerca de quanto vale a disciplina por tipo (multiplica a perda de moral; 0 = não sente medo). */
+  DISCIPLINE: {
+    GOBLIN: 1.3,
+    GOBLIN_ARCHER: 1.3,
+    BANDIT: 1.2,
+    BANDIT_ARCHER: 1.2,
+    SOLDIER: 1,
+    CROSSBOW: 1,
+    ORC: 0.8,
+    SKELETON: 0,
+    CARAVAN_GUARD: 1.2,
+  } as Partial<Record<EnemyKind, number>>,
+  /** Campanha: de quantos em quantos dias cada bando revê o rumo. */
+  REVIEW_DAYS: 0.25,
+  /** Por quantos dias uma posição do bando do jogador ainda vale, por competência. */
+  INTEL_DAYS: [0.6, 1, 1.5, 2, 3],
+  /** De quão longe ele larga o rumo para ir atrás do bando, por competência. */
+  HUNT_RADIUS: [1800, 3000, 5000, 7000, 9000],
+  /** Exército com alvo marcado só desvia de perto. */
+  ARMY_DETOUR: 2600,
+  /** Vai atrás com pelo menos esta fração da força estimada; foge abaixo de FLEE_SHARE, se estiver perto. */
+  HUNT_SHARE: 0.8,
+  FLEE_SHARE: 0.55,
+  FLEE_RADIUS: 3200,
+  /** Bandos do mesmo tipo a esta distância se juntam antes de lutar. */
+  GATHER_RADIUS: 3000,
+  GATHER_MEET: 500,
+  /** O bando do jogador longe do acampamento (conhecido): é hora de ir lá. */
+  CAMP_RAID_DISTANCE: 5000,
+  /** Quem passa perto do acampamento fica sabendo onde ele é. */
+  CAMP_SEEN: 2600,
+  /** Passou perto de um povoado do reino: a notícia chega ao reino. */
+  TOWN_WATCH: 2000,
+  /** Velocidade da notícia entre um bando e o resto do reino (px por dia). */
+  NEWS_SPEED: 20000,
+  /** Peso da competência na resolução abstrata de uma batalha. */
+  BATTLE_SKILL: 0.1,
+  /** Espólio de um campo de batalha (ouro e ferro por morto), por quantos dias ele fica. */
+  SPOILS_GOLD: 2,
+  SPOILS_IRON: 0.25,
+  SPOILS_DAYS: 3,
+  /** Doutrina: a partir desta parcela da tropa vista, o reino ajusta os exércitos seguintes. */
+  LESSON_SHARE: 0.35,
+  /** Dificuldade: soma na competência (mesmos atributos em todas). */
+  DIFFICULTY: {
+    RECRUIT: { label: "Recruta", competence: -1, description: "O inimigo reage devagar e erra mais." },
+    VETERAN: { label: "Veterano", competence: 0, description: "Cada comandante joga com o que sabe." },
+    LEGENDARY: { label: "Lendária", competence: 1, description: "Todo comandante joga como um capitão acima do que é." },
+  },
+} as const;
+
+export type WarDifficulty = keyof typeof WAR_AI.DIFFICULTY;
 
 /**
  * Lobos (Marco 12): alcateias nas matas e na tundra, longe dos povoados. Atacam quem anda
@@ -435,7 +590,7 @@ export const SUPPORT = {
   WAR_CRY: { RADIUS: 450, MORALE: 15, RALLY_RADIUS: 300, COOLDOWN_MS: 30000 },
   /** Avançar: distância à frente da formação; Recuar: volta para junto do Comandante. */
   ADVANCE_DISTANCE: 300,
-  VISION: { COMMANDER: 320, BATTALION: 240, SCOUT: 460, MESSENGER: 160 },
+  VISION: { COMMANDER: 320, BATTALION: 240, SCOUT: 900, MESSENGER: 160, TOWER: 506, MARCH: 460 },
   /** Quem está na colina enxerga mais longe; na floresta, menos. */
   VISION_HILL_BONUS: 1.35,
   VISION_FOREST_PENALTY: 0.7,
@@ -449,12 +604,80 @@ export const SUPPORT = {
   SCOUT: {
     stats: { hp: 60, speed: 260, damage: 0, range: 0, cooldown: 1e9, radius: 10 } satisfies UnitStats,
     evasion: 0.6,
-    /** Inimigos a esta distância fazem o batedor recuar (nunca entra em combate). */
-    DANGER_RADIUS: 230,
+    /**
+     * O batedor fica fora da percepção de cada hostil (a conta é a mesma do inimigo: tipo, noite,
+     * clima, floresta) com esta folga. Amotinados percebem de 2000: o limite evita correr do mapa.
+     */
+    SAFE_MARGIN: 120,
+    SAFE_MAX: 800,
+    /** Por quanto tempo a área de um bando visto continua evitada (ms). */
+    DANGER_MEMORY_MS: 20000,
+    /** Bando visto perde a importância a esta distância do batedor (área coberta pela memória). */
+    DANGER_CLUSTER: 260,
     VANGUARD_DISTANCE: 380,
+    /** Postura furtiva: percebido a esta fração da distância, andando a esta fração do passo. */
+    STEALTH: 0.5,
+    STEALTH_SPEED: 0.6,
+    /** Hostil na mata só é notado a esta distância (+ STEALTH_FOREST_RANK por patente). */
+    FOREST_NOTICE: 140,
+    FOREST_NOTICE_RANK: 50,
+    /** Até aqui do Comandante a visão é ao vivo; além disso, ele só conta o que viu ao voltar. */
+    LIVE_RANGE: 1100,
+    /** Região a explorar: raio padrão e o tamanho das células da varredura. */
+    REGION_RADIUS: 2200,
+    SCAN_CELL: 480,
+    /** Sem progresso por este tempo (rio, montanha): desiste daquele pedaço. */
+    STUCK_MS: 3500,
+    /** Sem harpia: tempo de vigia ou de sombra longe do bando antes de voltar para contar (ms). */
+    AWAY_MS: 45000,
+    /** Parte da vida abaixo da qual ele larga a missão e volta. */
+    RETREAT_HP: 0.5,
+    /** Passo da marcha nos dias que passam de uma vez (cavalo descansado, px por dia). */
+    DAY_DISTANCE: 24000,
+    /** Dias que passam de uma vez: chance por encontro com hostis (a esquiva e a patente reduzem). */
+    CAUGHT_CHANCE: 0.35,
+    CAUGHT_DAMAGE: 0.5,
+    /** Missões para cada patente, bônus de visão e de esquiva, e o erro na contagem das tropas. */
+    RANK_AT: [0, 3, 8],
+    RANK_LABEL: ["novato", "experiente", "veterano"],
+    RANK_VISION: 0.1,
+    RANK_EVASION: 0.05,
+    COUNT_ERROR: [0.3, 0.15, 0.05],
     COST: 50,
     WAGE: 6,
     MAX: 2,
+  },
+  /**
+   * Harpia (Marco 16): águia treinada de um batedor. Leva relatórios e traz ordens simples a até
+   * um dia de marcha. Uma viagem por vez, de dia e sem tempestade; arqueiros podem abatê-la.
+   */
+  HARPY: {
+    SPEED: 900,
+    RANGE: 14400,
+    COST: 400,
+    /** Fama para o falcoeiro da Cidade Alta vender uma ave. */
+    FAME: 20,
+    TRAIN_DAYS: 5,
+    /** Rações por dia (sem comida, ela caça sozinha). */
+    RATIONS: 1,
+    /** Sem novidade, ela vai e volta mesmo assim neste intervalo: é por onde as ordens chegam (ms). */
+    REPORT_EVERY_MS: 40000,
+    /** Exército ou bando deste tamanho: ela parte na hora. */
+    ALERT_SIZE: 8,
+    /** Descanso em cada ponta (ms). */
+    REST_MS: 3000,
+    /** Arqueiros alcançam a ave até aqui além do próprio alcance; chance de acerto por segundo. */
+    SHOT_REACH: 80,
+    SHOT_PER_SEC: 0.25,
+    /** Batalhão destacado: o batedor com harpia a esta distância dele faz a última parte a cavalo. */
+    RELAY_RADIUS: 1800,
+    RELAY_MIN_DISTANCE: 3000,
+    RELAY_REACH: 180,
+    /** Noite fechada: não voa. */
+    DARK_LIMIT: 0.6,
+    /** Ninhos nas montanhas do continente. */
+    NESTS: 4,
+    NEST_REACH: 500,
   },
   MESSENGER: {
     stats: { hp: 45, speed: 240, damage: 0, range: 0, cooldown: 1e9, radius: 9 } satisfies UnitStats,
@@ -821,6 +1044,94 @@ export const WORLD = {
   TOWN_PROSPERITY_REGEN: 4,
 } as const;
 
+/** Prisioneiros (Marco 16): o que se faz com quem se rendeu muda como o mundo trata o bando. */
+export const PRISONERS = {
+  /** Dos que caíram, quantos se renderam feridos; dos que fugiam perto da tropa, quantos foram pegos. */
+  SHARE_FALLEN: 0.3,
+  SHARE_ROUTED: 0.5,
+  CAPTURE_RADIUS: 800,
+  /** Comem isto por dia (cada um) e fogem com esta chance. */
+  RATIONS: 0.25,
+  ESCAPE_PER_DAY: 0.02,
+  /** Resgate por cabeça. */
+  RANSOM_SOLDIER: 14,
+  RANSOM_BANDIT: 5,
+  RANSOM_OFFICER: 90,
+  OFFICER_CAPTURE: 0.5,
+  LORD_CAPTURE: 0.45,
+  LORD_DEATH: 0.25,
+  RANSOM_RELATION: 2,
+  FREE_HONOR: 2,
+  FREE_RELATION: 4,
+  FREE_LOYALTY: 2,
+  FREE_OFFICER_HONOR: 4,
+  FREE_OFFICER_RELATION: 8,
+  FREE_NOBLE_OPINION: 30,
+  EXECUTE_HONOR: 5,
+  EXECUTE_FEAR: 3,
+  EXECUTE_RELATION: 6,
+  EXECUTE_LOYALTY: 6,
+  EXECUTE_LOYALTY_CRUEL: 3,
+  EXECUTE_OFFICER_HONOR: 10,
+  EXECUTE_OFFICER_FEAR: 7,
+  EXECUTE_OFFICER_RELATION: 25,
+  EXECUTE_NOBLE_OPINION: 25,
+  /** Quem foi recrutado à força: dias até virar gente da casa, moral a menos e chance de sumir por semana. */
+  TURNCOAT_DAYS: 14,
+  TURNCOAT_MORALE: 25,
+  TURNCOAT_DESERT: 0.4,
+  /** Comandante caído diante de quem faz prisioneiros: chance de não voltar para casa. */
+  COMMANDER_CAPTURE: 0.6,
+  COMMANDER_RANSOM: 200,
+  COMMANDER_RANSOM_FAME: 6,
+  RESCUE_FAME: 5,
+  /** Preso há tantos dias, ele pode achar um jeito de fugir. */
+  ESCAPE_AFTER_DAYS: 12,
+  COMMANDER_ESCAPE: 0.05,
+} as const;
+
+/**
+ * Cerco de verdade (Marco 16): portões fechados, escadas e aríete feitos de madeira, comida dos
+ * dois lados, surtidas e socorro. Tomar uma cidade murada é escolher entre pagar em gente ou em dias.
+ */
+export const SIEGE = {
+  /** Madeira cortada por dia por soldado em volta dos muros. */
+  WOOD_PER_SOLDIER: 0.25,
+  LADDER_WOOD: 3,
+  RAM_WOOD: 10,
+  /** Até quantas escadas. */
+  MAX_LADDERS: 4,
+  LADDER_WIDTH: 46,
+  RAM: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18 } satisfies UnitStats,
+  RAM_DPS: 34,
+  GATE_HP: { PALISADE: 260, STONE: 620 },
+  /** O portão mal cuidado que um batedor pode achar. */
+  WEAK_GATE: 0.55,
+  /** Altura: quem está na muralha alcança mais longe, bate mais forte e apanha menos de flecha. */
+  WALL_RANGE: 1.4,
+  WALL_DAMAGE: 1.15,
+  WALL_ARROW_TAKEN: 0.6,
+  /** Comida da cidade: dias por tipo de povoado (mais o que há nos armazéns). */
+  FOOD_DAYS: { VILLAGE: 4, FORT: 8, CITY: 7, CAPITAL: 11 } as Record<string, number>,
+  /** Sem comida: fração da guarnição que some por dia; a tantos dias de fome, a cidade se rende. */
+  STARVE_LOSS: 0.15,
+  SURRENDER_AFTER: 3,
+  /** Ao ver o exército chegar: guarnição com pelo menos esta fração dele sai a campo; menor, fecha os portões. */
+  FIELD_SHARE: 0.9,
+  /** Surtida: chance por dia e quanto tempo os portões ficam abertos (ms). */
+  SALLY_CHANCE: 0.3,
+  SALLY_MS: 22000,
+  /** Socorro: quantos dias depois de o mensageiro sair chega um exército do reino. */
+  RELIEF_DAYS: 5,
+  /** Depois de tantos dias, a tropa do bando acampada adoece como num pântano. */
+  CAMP_SICK_DAY: 4,
+  /** Fama/Temor na rendição exigida: chance por ponto de Temor. */
+  DEMAND_FEAR: 0.008,
+  DEMAND_HUNGER: 0.25,
+  /** Honra por poupar quem se rendeu; temor por um saque depois do assalto. */
+  SURRENDER_HONOR: 3,
+} as const;
+
 /** Horas do dia, dia e noite (Marco 10). O dia é contado de aurora a aurora. */
 export const TIME = {
   /** Hora em que o contador de dias vira (dayProgress 0 = 6h). */
@@ -837,7 +1148,7 @@ export const TIME = {
   /** Marchar no escuro é mais lento (o cansaço de verdade chega com a fadiga, no Marco 13). */
   NIGHT_SPEED: 0.85,
   /** Criaturas da noite (goblins e mortos-vivos) ganham força e velocidade no escuro. */
-  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "SKELETON", "NECROMANCER", "WOLF"] as readonly EnemyKind[],
+  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "GOBLIN_CHIEF", "GOBLIN_CAPTAIN", "WOLF_RIDER", "SKELETON", "DEATH_KNIGHT", "NECROMANCER", "WOLF"] as readonly EnemyKind[],
   NIGHT_CREATURE_DAMAGE: 1.25,
   NIGHT_CREATURE_SPEED: 1.1,
   /** Emboscada noturna: inimigo que surge do escuro e ataca em poucos segundos abala a moral. */
@@ -853,7 +1164,7 @@ export const TIME = {
 /** Salvar e carregar (Marco 10). */
 export const SAVE = {
   /** Versão do formato; saves de outra versão do gerador não são carregados. */
-  VERSION: 8,
+  VERSION: 9,
   /** Espaços manuais (além do automático). */
   SLOTS: 3,
 } as const;

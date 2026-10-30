@@ -2,8 +2,9 @@ import type { Enemy } from "../entities/Enemy";
 import { clampToWorldBounds } from "../data/world";
 import { chiefName } from "../worldgen/names";
 import { isCalamityOwner, isRaiderKind, type BandKind, type CalamityKind, type Settlement } from "../sim/realm";
-import { AGENTS, WORLD, type EnemyKind, type Good } from "../../utils/constants";
+import { AGENTS, WAR_AI, WORLD, type EnemyKind, type Good } from "../../utils/constants";
 import { centroid, distance, type Point } from "../../utils/math";
+import { makeStaff, promoteRoster, type Doctrine, type StaffData, type WarHost } from "./WarHost";
 
 /** Carga de uma caravana (Marco 14): o que leva, de onde e para onde, e quanto custou. */
 export interface CaravanCargo {
@@ -18,6 +19,12 @@ export interface CaravanCargo {
 }
 
 export type WarbandGoal = { kind: "SETTLEMENT"; id: string } | { kind: "CAMP" } | { kind: "WANDER" };
+
+/** O que um lado sabe do bando do jogador: onde foi visto, quando e com quantos. */
+export interface ArmyIntel extends Point {
+  day: number;
+  size: number;
+}
 
 /** O que define um bando novo: goblins dos covis, exército de um reino ou horda de uma calamidade. */
 export interface BandSpec {
@@ -36,6 +43,10 @@ export interface BandSpec {
   goalId?: string;
   /** Exército de um lorde (Marco 15): o registro dele na simulação. */
   armyId?: string;
+  /** Quem comanda (o lorde, nos exércitos; sem isso, sai um chefe do próprio bando). */
+  chief?: { name: string; traits: StaffData["traits"]; martial?: number };
+  /** Lição aprendida com derrotas: o que reforçar neste exército. */
+  doctrine?: Doctrine;
 }
 
 /** Um integrante do bando enquanto ele é só dados (fora da bolha de detalhe). */
@@ -87,15 +98,30 @@ export interface Warband {
   /** Marco 15: exército de um lorde e se ele já está voltando para casa. */
   armyId?: string;
   homeward?: boolean;
+  /** Marco 16: atenção do bando (0 desavisado, 1 desconfiado, 2 alerta, 3 caçando). */
+  alert?: number;
+  /** Quantos um batedor contou (o mapa mostra isso, não a verdade). */
+  reportedCount?: number;
+  /** Marco 16: quem comanda o bando (vai no save) e o comando em campo (só dentro da bolha). */
+  staff?: StaffData;
+  host?: WarHost;
+  /** Mensageiro que leva o pedido de socorro de uma cidade cercada. */
+  reliefFor?: string;
+  /** Próxima revisão do rumo (dia) e o que ele está fazendo por conta própria. */
+  nextReview?: number;
+  aim?: "HUNT" | "FLEE" | "GATHER" | "CAMP";
 }
 
 /** Bando salvo: sempre como dados (quem estava em campo vira roster com a posição de agora). */
-export type WarbandSave = Omit<Warband, "materialized" | "members" | "offsets" | "route" | "trail" | "huntId"> & { route?: Point[] };
+export type WarbandSave = Omit<Warband, "materialized" | "members" | "offsets" | "route" | "trail" | "huntId" | "host"> & { route?: Point[] };
 
 export interface WarbandsSave {
   seq: number;
   lastGoblinDay: number;
   bands: WarbandSave[];
+  /** Marco 16: o que cada lado sabe do bando. */
+  intel?: [string, ArmyIntel][];
+  campKnown?: string[];
 }
 
 export type WarbandEvent =
@@ -155,6 +181,24 @@ export class WarbandManager {
   private winter = false;
   /** Dois reinos estão em guerra? (a cena consulta o store) */
   atWar: (a: string, b: string) => boolean = () => false;
+  /** Batalha personalizada: todas as forças estão do mesmo lado, seja qual for o bando. */
+  allied = false;
+  /** Onde o bando do jogador está (a última bolha calculada). */
+  private anchors: readonly Point[] = [];
+  /** Está na bolha, ou prestes a entrar: quem se encontra ali luta de verdade. */
+  private inBubble(b: Warband): boolean {
+    return b.materialized || this.anchors.some((a) => distance(a, b.anchor) <= WORLD.BUBBLE_RADIUS);
+  }
+
+  /** Este bando quer lutar com o do jogador? (a cena consulta o store) */
+  hostile: (band: Warband) => boolean = () => false;
+  /** O que cada reino (ou cada bando, entre os selvagens) sabe do bando do jogador. */
+  private intel = new Map<string, ArmyIntel>();
+  /** Quem já sabe onde fica o acampamento. */
+  private campKnown = new Set<string>();
+  /** Bando virou tropa ou voltou a ser dados: a cena liga e desliga o comando dele (Marco 16). */
+  onEnterBubble: (band: Warband) => void = () => {};
+  onLeaveBubble: (band: Warband) => void = () => {};
 
   setWinter(winter: boolean): void {
     if (winter === this.winter) return;
@@ -195,7 +239,10 @@ export class WarbandManager {
 
   /** Bando novo, ainda só dados: vira unidades quando entrar na bolha. */
   spawnBand(spec: BandSpec): Warband {
-    const kinds = spec.units.flatMap(([kind, n]) => Array<EnemyKind>(n).fill(kind));
+    const plain = spec.units.flatMap(([kind, n]) => Array<EnemyKind>(n).fill(kind));
+    // Marco 16: quem luta de verdade ganha comando; gente de paz e caravanas continuam como eram
+    const led = spec.kind === "GOBLIN" || spec.kind === "FACTION" || spec.kind === "HORDE" || spec.kind === "PATROL";
+    const kinds = led ? promoteRoster(plain, spec.kind === "FACTION", spec.doctrine) : plain;
     const cols = Math.ceil(Math.sqrt(kinds.length));
     const band: Warband = {
       id: `band-${++this.seq}`,
@@ -224,6 +271,7 @@ export class WarbandManager {
       huntId: null,
       cargo: spec.cargo,
       waiting: spec.cargo?.escort,
+      staff: led ? makeStaff(kinds, spec.kind === "GOBLIN" ? (kinds.includes("BANDIT") ? 2 : 1) : spec.kind === "HORDE" ? 2 : 3, spec.chief) : undefined,
     };
     // Caravana: a rota já vem pronta (pelas estradas, de praça em praça)
     if (spec.kind === "CARAVAN" && spec.route && spec.goalId) {
@@ -249,6 +297,7 @@ export class WarbandManager {
    * (Comandante, batalhões, batedores, mensageiros).
    */
   updateBubble(anchors: readonly Point[]): void {
+    this.anchors = anchors;
     const near = (p: Point, r: number) => anchors.some((a) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2 <= r * r);
     for (const band of this.bands) {
       if (!band.materialized) {
@@ -270,6 +319,108 @@ export class WarbandManager {
   /** Dias de viagem rápida: os bandos andam o mesmo tempo que o exército. */
   advance(days: number): WarbandEvent[] {
     return this.step(WORLD.WARBAND.DAY_DISTANCE * days);
+  }
+
+  /** Alguém viu o bando do jogador (ver WorldScene): vale para o bando e, com atraso, para o reino. */
+  noteArmy(key: string, intel: ArmyIntel): void {
+    const had = this.intel.get(key);
+    if (!had || had.day <= intel.day) this.intel.set(key, intel);
+  }
+
+  noteCamp(key: string): void {
+    this.campKnown.add(key);
+  }
+
+  /** O que este bando sabe: o que ele mesmo viu ou o que o reino dele ouviu, o que for mais novo. */
+  intelOf(band: Warband): ArmyIntel | null {
+    const own = this.intel.get(band.id) ?? null;
+    const shared = band.ownerId ? (this.intel.get(band.ownerId) ?? null) : null;
+    if (!own) return shared;
+    return !shared || own.day >= shared.day ? own : shared;
+  }
+
+  /** Muda o rumo para um ponto (sem caminho por terra, fica como está). */
+  private setCourse(band: Warband, to: Point, aim: Warband["aim"]): boolean {
+    const route = this.pathfind(band.anchor, to);
+    if (!route) return false;
+    band.goal = { kind: "WANDER" };
+    band.goalPoint = { ...to };
+    band.route = route;
+    band.rest = 0;
+    band.aim = aim;
+    return true;
+  }
+
+  /**
+   * Estratégia (Marco 16): de tempos em tempos cada bando revê o rumo com o que sabe do jogador.
+   * Vai atrás dele se tem força, foge se está fraco e perto, junta-se a outro bando quando sozinho
+   * não dá, e cai sobre o acampamento quando a tropa está longe. Sem notícia, segue o que fazia.
+   */
+  private review(band: Warband, now: number): void {
+    band.nextReview = now + WAR_AI.REVIEW_DAYS;
+    if (!band.staff || band.homeward || band.waiting || band.huntId || !this.hostile(band)) return;
+    if (band.kind === "FACTION" && this.winter) return;
+    // Tocaia de contrato (salteadores esperando a caravana): não sai do lugar
+    if (band.rest > 1e8) return;
+    const comp = band.staff.competence;
+    const intel = this.intelOf(band);
+    if (!intel || now - intel.day > WAR_AI.INTEL_DAYS[comp - 1]) {
+      if (band.aim) {
+        band.aim = undefined;
+        this.chooseGoal(band);
+      }
+      return;
+    }
+    const own = bandSize(band);
+    const d = distance(band.anchor, intel);
+    const brave = band.staff.traits.includes("BRAVE") || band.staff.traits.includes("CRUEL");
+    // Fraco e perto: sai do caminho (bravo não foge de bando nenhum)
+    if (!brave && own < intel.size * WAR_AI.FLEE_SHARE && d < WAR_AI.FLEE_RADIUS) {
+      const away = Math.atan2(band.anchor.y - intel.y, band.anchor.x - intel.x);
+      // Para longe; se ali for mar ou montanha, para o lado
+      for (const turn of [0, 0.7, -0.7, 1.4, -1.4]) {
+        const to = clampToWorldBounds({ x: band.anchor.x + Math.cos(away + turn) * 5000, y: band.anchor.y + Math.sin(away + turn) * 5000 }, 300);
+        if (this.setCourse(band, to, "FLEE")) return;
+      }
+    }
+    // Sozinho não dá: procura outro igual antes de lutar
+    if (own < intel.size && band.kind === "GOBLIN" && comp >= 2) {
+      const friend = this.bands.find((o) => o !== band && o.kind === "GOBLIN" && !o.loot && !o.waiting && distance(o.anchor, band.anchor) < WAR_AI.GATHER_RADIUS);
+      if (friend) {
+        if (!band.materialized && !friend.materialized && distance(friend.anchor, band.anchor) < WAR_AI.GATHER_MEET) {
+          friend.roster.push(...band.roster);
+          band.roster = [];
+          return;
+        }
+        if (this.setCourse(band, friend.anchor, "GATHER")) return;
+      }
+    }
+    const reach = band.armyId ? WAR_AI.ARMY_DETOUR : WAR_AI.HUNT_RADIUS[comp - 1];
+    if (own >= intel.size * WAR_AI.HUNT_SHARE && d < reach && this.setCourse(band, intel, "HUNT")) return;
+    // Bando do jogador longe de casa: o acampamento está à mercê
+    const camp = this.targets().camp;
+    if (camp && !band.armyId && band.aim !== "CAMP" && (this.campKnown.has(band.id) || (band.ownerId && this.campKnown.has(band.ownerId))) && distance(intel, camp) > WAR_AI.CAMP_RAID_DISTANCE && comp >= 2) {
+      const route = this.pathfind(band.anchor, camp);
+      if (route) {
+        band.goal = { kind: "CAMP" };
+        band.goalPoint = camp;
+        band.route = route;
+        band.aim = "CAMP";
+      }
+    }
+  }
+
+  /** Batalha personalizada: o bando vai direto a um ponto. */
+  marchOn(band: Warband, to: Point): void {
+    this.setCourse(band, to, "HUNT");
+  }
+
+  /** Batalha personalizada: o bando fica onde está até alguém aparecer. */
+  holdGround(band: Warband): void {
+    band.goal = { kind: "WANDER" };
+    band.goalPoint = { ...band.anchor };
+    band.route = [];
+    band.rest = 2e8;
   }
 
   /** O exército larga o cerco e volta para a casa mais perto do reino (Marco 15). */
@@ -308,6 +459,7 @@ export class WarbandManager {
 
   /** Remove o bando do mundo (virou guarnição do povoado tomado). */
   disband(band: Warband): void {
+    this.onLeaveBubble(band);
     for (const m of band.members) despawn(m);
     band.members = [];
     band.roster = [];
@@ -319,6 +471,8 @@ export class WarbandManager {
     return {
       seq: this.seq,
       lastGoblinDay: this.lastGoblinDay,
+      intel: [...this.intel],
+      campKnown: [...this.campKnown],
       bands: this.bands.map((b) => ({
         id: b.id,
         name: b.name,
@@ -341,6 +495,9 @@ export class WarbandManager {
         loot: b.loot,
         armyId: b.armyId,
         homeward: b.homeward,
+        alert: b.alert,
+        reportedCount: b.reportedCount,
+        staff: b.staff,
         // A rota das caravanas não se refaz pela grade: vai junto
         route: b.kind === "CARAVAN" ? b.route.map((p) => ({ ...p })) : undefined,
       })),
@@ -352,6 +509,8 @@ export class WarbandManager {
     for (const b of this.bands) this.disband(b);
     this.seq = data.seq;
     this.lastGoblinDay = data.lastGoblinDay;
+    this.intel = new Map(data.intel ?? []);
+    this.campKnown = new Set(data.campKnown ?? []);
     this.bands = data.bands.map((b) => ({
       ...b,
       roster: b.roster.map((r) => ({ ...r, hp: r.hp < 0 ? Infinity : r.hp })),
@@ -377,14 +536,17 @@ export class WarbandManager {
       e.hostile = (isRaiderKind(band.kind) && band.kind !== "FACTION" && band.kind !== "REBELS") || (band.provoked && (band.kind === "PATROL" || band.kind === "CARAVAN"));
       // Lado no mundo: goblins e hordas contra patrulhas, exércitos dos reinos e caravanas (lutam de verdade)
       e.side = band.kind === "GOBLIN" || band.kind === "HORDE" ? "WILD" : band.kind === "PATROL" || band.kind === "FACTION" || band.kind === "CARAVAN" ? "TOWN" : null;
+      e.factionId = band.kind === "PATROL" || band.kind === "FACTION" ? band.ownerId : null;
       e.home = { x: e.x, y: e.y };
       band.offsets.set(e, r.offset);
       return e;
     });
     band.roster = [];
+    this.onEnterBubble(band);
   }
 
   private dematerialize(band: Warband): void {
+    this.onLeaveBubble(band);
     const alive = band.members.filter((m) => m.isAlive);
     band.roster = alive.map((m) => ({ kind: m.kind, hp: m.hp, offset: band.offsets.get(m) ?? { x: 0, y: 0 } }));
     for (const m of band.members) despawn(m);
@@ -396,6 +558,7 @@ export class WarbandManager {
   private step(baseDist: number): WarbandEvent[] {
     const events: WarbandEvent[] = [];
     const gone = new Set<Warband>();
+    const now = this.clock();
     for (const band of this.bands) {
       const stepDist = baseDist * (band.kind === "COURIER" ? AGENTS.COURIER_SPEED : 1) * this.marchFactor(band.anchor, band);
       if (band.materialized) band.members = band.members.filter((m) => m.isAlive);
@@ -403,12 +566,14 @@ export class WarbandManager {
         events.push({ type: "DESTROYED", band });
         continue;
       }
-      if (band.members.some((m) => m.target)) {
+      if (band.members.some((m) => m.target) || band.host?.holding) {
         band.anchor = centroid(band.members);
         continue;
       }
       // Caravana escoltada: espera o bando no portão
       if (band.waiting) continue;
+      if (now >= (band.nextReview ?? 0)) this.review(band, now);
+      if (bandSize(band) === 0) continue;
       // O alvo pode ter mudado de dono no caminho (a horda não ataca o que já é dela)
       if (band.goal.kind === "SETTLEMENT" && !this.validTarget(band, band.goal.id)) this.chooseGoal(band);
       if (band.kind === "PATROL") this.hunt(band, (o) => o.kind === "GOBLIN" || o.kind === "HORDE", AGENTS.HUNT_RADIUS);
@@ -529,6 +694,7 @@ export class WarbandManager {
    * refugiados acaba com eles.
    */
   private skirmishes(events: WarbandEvent[]): void {
+    if (this.allied) return;
     const W = AGENTS.SKIRMISH_WEIGHT;
     for (const a of this.bands) {
       if (bandSize(a) === 0) continue;
@@ -566,9 +732,12 @@ export class WarbandManager {
         const rivals = a.kind === "FACTION" && b.kind === "FACTION" && a.id < b.id && !!a.ownerId && !!b.ownerId && this.atWar(a.ownerId, b.ownerId);
         const vermin = a.kind === "FACTION" && (b.kind === "HORDE" || b.kind === "GOBLIN");
         if (rivals || vermin) {
+          // Dentro da bolha, a batalha é de verdade (Marco 16): os dois lados em campo
+          if (this.inBubble(a) && this.inBubble(b)) continue;
           if (a.members.some((m) => m.target) || b.members.some((m) => m.target)) continue;
-          const sa = bandSize(a) * (W.FACTION ?? 1.2) * (0.8 + Math.random() * 0.4);
-          const sb = bandSize(b) * (W[b.kind] ?? 1) * (0.8 + Math.random() * 0.4);
+          const skill = (band: Warband) => 1 + ((band.staff?.competence ?? 2) - 3) * WAR_AI.BATTLE_SKILL;
+          const sa = bandSize(a) * (W.FACTION ?? 1.2) * skill(a) * (0.8 + Math.random() * 0.4);
+          const sb = bandSize(b) * (W[b.kind] ?? 1) * skill(b) * (0.8 + Math.random() * 0.4);
           const [winner, loser, sw, sl] = sa >= sb ? [a, b, sa, sb] : [b, a, sb, sa];
           const losses = Math.min(bandSize(winner) - 1, Math.round(bandSize(winner) * Math.min(0.8, sl / sw) * 0.5));
           this.kill(loser, bandSize(loser));

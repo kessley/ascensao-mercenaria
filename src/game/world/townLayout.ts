@@ -648,6 +648,16 @@ export function wallWalk(layout: TownLayout): Point[] {
   ];
 }
 
+/** Lugares ao longo da muralha, por dentro, para a tropa de um cerco (Marco 16). */
+export function wallPosts(layout: TownLayout): Point[] {
+  const [a, b, c, d] = wallWalk(layout);
+  const out: Point[] = [];
+  for (const [p, q] of [[a, b], [b, c], [c, d], [d, a]] as [Point, Point][]) {
+    for (let i = 1; i <= 4; i++) out.push({ x: p.x + ((q.x - p.x) * i) / 5, y: p.y + ((q.y - p.y) * i) / 5 });
+  }
+  return out;
+}
+
 /** Caminho de `from` até `to` pelas ruas (busca em largura na grade de cruzamentos da planta). */
 export function streetPath(layout: TownLayout, from: Point, to: Point): Point[] {
   const d2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;

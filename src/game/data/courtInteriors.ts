@@ -1,5 +1,5 @@
 import type { GameState } from "../../store/useGameStore";
-import { COURT, TRADE } from "../../utils/constants";
+import { COURT, SUPPORT, TRADE } from "../../utils/constants";
 import { COURT_EVENT_LABEL } from "../sim/kingdoms";
 import { hasCourtEvent } from "../sim/courtEvents";
 import { nobleName, scheduleOf, type CourtPlace, type Noble } from "../sim/nobility";
@@ -63,6 +63,8 @@ export function courtInterior(key: string, s: GameState, t: Settlement, what: st
       return library(key, s, t);
     case "armory":
       return armory(key, t);
+    case "mews":
+      return mews(key, s, t);
     case "dungeon":
       return dungeon(key, s, t);
     case "cathedral":
@@ -156,6 +158,33 @@ function library(key: string, s: GameState, t: Settlement): InteriorDef {
   const fam = s.nobles.filter((n) => n.alive && n.factionId === t.owner && (n.rank === "RULER" || n.rank === "HEIR" || n.rank === "CHILD"));
   d.spots.push({ x: 120, y: 100, label: "Genealogia da casa real", talk: { text: fam.map((n) => `${nobleName(n, "Reino")} (${n.age} anos)`).join("; ") || "A árvore da família acaba aqui." } });
   nobleAtPlace(s, t.id, "LIBRARY").slice(0, 3).forEach((n, i) => d.npcs.push(nobleNpc(s, n, 150 + i * 190, 200)));
+  return d;
+}
+
+/** Falcoaria (Marco 16): o falcoeiro da coroa vende harpias treinadas a quem tem nome. */
+function mews(key: string, s: GameState, t: Settlement): InteriorDef {
+  const d = makeRoom(key, `Falcoaria Real de ${t.name}`, "WOOD", 620, 460, { settlementId: t.id });
+  for (let i = 0; i < 4; i++) d.furniture.push(f("RACK", 50 + i * 140, 44, 90, 22, DARK));
+  d.furniture.push(f("HAY", 60, 330, 500, 70, 0xc8b070, false));
+  const H = SUPPORT.HARPY;
+  const free = s.scouts.filter((x) => !x.harpy);
+  const options = s.fame >= H.FAME ? free.map((x) => ({ id: `court:harpy:${x.id}`, label: `Comprar uma ave para ${x.name} (${H.COST} de ouro)` })) : [];
+  d.npcs.push({
+    id: "falcoeiro",
+    name: "Falcoeiro real",
+    x: 310,
+    y: 200,
+    color: 0x6a5a3a,
+    talk: {
+      text:
+        s.fame < H.FAME
+          ? "Harpia da coroa não pousa em qualquer luva. Volte quando o seu nome chegar antes do senhor."
+          : free.length === 0
+            ? "Seus batedores já têm ave. Cuide delas: flecha não escolhe."
+            : `Levam a mensagem na garra até um dia de marcha, de dia e sem tempestade. Em ${H.TRAIN_DAYS} dias aprendem a mão do dono. Uma flecha acaba com tudo.`,
+      options: [...options, bye],
+    },
+  });
   return d;
 }
 

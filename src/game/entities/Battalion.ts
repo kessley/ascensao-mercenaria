@@ -7,6 +7,7 @@ import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutena
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
 import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
 import { battalionMods, soldierStats, type BattalionMods } from "../../utils/progression";
+import { formationOffset } from "../systems/formation";
 
 export type BattalionOrder =
   | { type: "HOLD"; point: Point }
@@ -419,40 +420,7 @@ export class Battalion {
 
   /** Deslocamento do soldado `i` no referencial da formação: `lateral` (lado) e `depth` (para trás). */
   private slotOffset(i: number, count: number): { lateral: number; depth: number } {
-    const spacing = FORMATIONS[this.formation].spacing;
-    let lateral: number;
-    let depth: number;
-
-    switch (this.formation) {
-      case "SHIELD_WALL": {
-        // Uma fileira larga (duas se passar de 8)
-        const cols = Math.min(count, 8);
-        lateral = ((i % cols) - (cols - 1) / 2) * spacing;
-        depth = -Math.floor(i / cols) * spacing;
-        break;
-      }
-      case "WEDGE": {
-        // Triângulo com a ponta à frente: fileira r tem r+1 soldados
-        const r = Math.floor((Math.sqrt(8 * i + 1) - 1) / 2);
-        const pos = i - (r * (r + 1)) / 2;
-        lateral = (pos - r / 2) * spacing;
-        depth = -r * spacing;
-        break;
-      }
-      case "LOOSE": {
-        const cols = 4;
-        // Desalinhamento determinístico por soldado
-        lateral = ((i % cols) - (cols - 1) / 2) * spacing + Math.sin(i * 12.9898) * spacing * 0.25;
-        depth = -Math.floor(i / cols) * spacing + Math.cos(i * 78.233) * spacing * 0.25;
-        break;
-      }
-      default: {
-        const cols = 4;
-        lateral = ((i % cols) - (cols - 1) / 2) * spacing;
-        depth = -Math.floor(i / cols) * spacing;
-      }
-    }
-    return { lateral, depth };
+    return formationOffset(this.formation, i, count);
   }
 
   /** Leva o batalhão inteiro (em forma) para outro ponto: viagem rápida, recuo ao acampamento. */

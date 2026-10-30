@@ -12,6 +12,10 @@ import {
   GEO,
   REALM,
   SAVE,
+  PRISONERS,
+  SIEGE,
+  WAR_AI,
+  type WarDifficulty,
   WORLD,
   SUPPLY,
   CAMP_WORKS,
@@ -65,6 +69,8 @@ import { applyTrade, foodGood, initEconomy, quote, rationPackPrice } from "../ga
 import { generateNobles } from "../game/sim/nobility";
 import { hearRumors, rumorLine, type Ear, type Rumor } from "../game/sim/rumors";
 import { INITIAL_COURT, courtSlice, type CourtActions, type CourtState } from "./courtSlice";
+import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
+import { buildScenarioWorld, noteResult, scenarioDay, scenarioProgress, type BattleScenario, type ScenarioHud, type ScenarioResult } from "../game/data/scenarios";
 import {
   GUILD_BUILDINGS,
   addLot,
@@ -110,12 +116,17 @@ import { SKILLS, type SkillId } from "../game/data/skills";
 import { fullName, generateLieutenant, opinionOn, PASSIVES, type LieutenantData } from "../game/data/lieutenants";
 import {
   messengerLevelFor,
+  newHarpy,
   newMessenger,
   newScout,
   supportWages,
   type MessengerData,
   type ScoutData,
 } from "../game/data/riders";
+import type { ScoutMode, ScoutOrder } from "../game/entities/Scout";
+import type { NobleTrait } from "../game/sim/nobility";
+import type { Doctrine } from "../game/systems/WarHost";
+import type { HarpyState } from "../game/entities/Harpy";
 
 /** Um batalhão no Campo de Treino: treina de verdade até `until` (dia + fração do dia). */
 export interface TrainingOrder {
@@ -165,6 +176,8 @@ export interface BattalionData {
   /** Soldados em condição de lutar. */
   soldiers: number;
   maxSoldiers: number;
+  /** Marco 16: gente que veio de prisioneiro; até este dia, moral baixa e olho na porta. */
+  turncoatUntil?: number;
   /** Fora das fileiras (Marco 13): feridos na enfermaria e doentes (não lutam, mas comem e voltam). */
   wounded?: number;
   sick?: number;
@@ -221,14 +234,22 @@ export interface BattleHud {
     name: string;
     hp: number;
     maxHp: number;
-    mode: "VANGUARD" | "EXPLORE" | "RECALL";
+    mode: ScoutMode;
     alive: boolean;
     selected: boolean;
     fleeing: boolean;
+    /** Perto o bastante para a visão ser ao vivo. */
+    contact: boolean;
+    sneaking: boolean;
+    rank: number;
+    /** A harpia dele (state null = ainda em treino). */
+    harpy: { name: string; readyDay: number; state: HarpyState | null; sheltering: boolean; orders: number } | null;
   }[];
   messengers: { id: string; name: string; level: number; state: "IDLE" | "OUTBOUND" | "RETURNING" | "DEAD" }[];
   /** Últimos acontecimentos (mensageiros, interceptações...). */
   feed: string[];
+  /** Comandantes inimigos à vista (Marco 16): quem são e como estão. */
+  foes: { key: string; name: string; trait: NobleTrait | null; status: string; morale: number; count: number }[];
   /** Situação de batedores/mensageiros (usada também no recuo). */
   support: SupportReport;
   /** Câmera presa no Comandante ou solta; zoom atual. */
@@ -340,7 +361,21 @@ export interface MutinyState {
 /** Cerco em andamento: a guarnição do povoado está em campo. */
 export interface SiegeState {
   settlementId: string;
+  /** Cerco de verdade, com os portões fechados (sem isso, foi a guarnição que saiu para lutar). */
+  walled?: boolean;
+  startDay?: number;
+  /** Dias de comida que a cidade ainda tem (negativo: dias de fome). */
+  food?: number;
+  /** Madeira juntada, escadas e aríete prontos para usar. */
+  wood?: number;
+  ladders?: number;
+  ram?: number;
+  /** Mensageiro da cidade saiu pedindo socorro: quando o exército chega. */
+  reliefDay?: number;
 }
+
+/** Ordens do cerco (painel do HUD). */
+export type SiegeAction = "WAIT" | "LADDER" | "RAM" | "ASSAULT" | "LIFT" | "DEMAND";
 
 /** Bando que chegou a um povoado ou ao acampamento (combate abstrato, sem o exército por perto). */
 export interface BandArrival {
@@ -396,6 +431,10 @@ export interface WorldSnapshot {
   warbands: WarbandSighting[];
   /** Mensageiros fora (a viagem espera eles voltarem). */
   messengersOut: number;
+  /** Batedores: onde o Comandante sabe que estão (fora de contato, o último lugar). */
+  scouts?: { id: string; name: string; x: number; y: number; live: boolean; mode: ScoutMode }[];
+  /** Dia do retrato (para dizer há quanto tempo cada bando foi visto). */
+  day?: number;
   /** Covis de calamidade já vistos. */
   calamityLairs: { id: string; x: number; y: number; name: string }[];
   /** Barcaças e navios à vista (Marco 14). */
@@ -423,7 +462,11 @@ export type BattleCommand =
   | { type: "ARRANGEMENT"; ids: string[]; arrangement: GroupArrangement }
   | { type: "SELECT"; ids: string[]; additive: boolean }
   | { type: "SELECT_SCOUT"; ids: string[]; additive: boolean }
-  | { type: "SCOUT_MODE"; ids: string[]; mode: "VANGUARD" | "RECALL" }
+  | { type: "SCOUT_MODE"; ids: string[]; mode: "VANGUARD" | "RECALL" | "RETURN" }
+  /** Missão de um batedor (Marco 16): vigiar, explorar região, patrulhar rota, seguir bando. */
+  | { type: "SCOUT_ORDER"; ids: string[]; order: ScoutOrder }
+  /** Postura furtiva liga/desliga; soltar a harpia com o relatório. */
+  | { type: "SCOUT_STEALTH" | "HARPY_SEND"; ids: string[] }
   | { type: "CAMERA"; ids: string[]; action: "TOGGLE" | "CENTER" }
   /** Toque de trombeta pré-combinado para os batalhões `ids` (vazio = todo o exército). */
   | { type: "TRUMPET"; ids: string[]; call: TrumpetCall }
@@ -440,6 +483,10 @@ export type BattleCommand =
   | { type: "WAIT_TRAINING"; ids: string[] }
   /** Atravessar o rio de balsa (o exército inteiro passa para o outro cais). */
   | { type: "FERRY"; ids: string[]; ferryId: string }
+  /** Um preso contou onde estão os exércitos de um reino (`ids`: os reinos). */
+  | { type: "REVEAL"; ids: string[] }
+  /** Ordens do cerco de um povoado (Marco 16). */
+  | { type: "SIEGE"; ids: string[]; action: SiegeAction }
   /** Marcha forçada liga/desliga; forragear aqui; levantar e montar o acampamento (Marco 13). */
   | { type: "FORCED_MARCH" | "FORAGE" | "PACK_CAMP" | "PITCH_CAMP"; ids: string[] };
 
@@ -456,7 +503,7 @@ export interface BattalionContextMenu {
   y: number;
 }
 
-export interface GameState extends CourtState, CourtActions {
+export interface GameState extends CourtState, CourtActions, WarState, WarActions {
   /** Tela de criação do mundo ou campanha em andamento. */
   phase: "NEW_GAME" | "PLAYING";
   /** Campo a restaurar quando a cena do mundo for criada (jogo carregado). */
@@ -487,6 +534,13 @@ export interface GameState extends CourtState, CourtActions {
   lieutenantCandidates: LieutenantData[];
   /** Batedores e mensageiros a cavalo (Estábulo). */
   scouts: ScoutData[];
+  /** Quão bem o inimigo decide (Marco 16): os atributos não mudam. */
+  warDifficulty: WarDifficulty;
+  setWarDifficulty: (d: WarDifficulty) => void;
+  /** Filhotes de harpia achados em ninhos, esperando um batedor. */
+  harpyChicks: number;
+  /** Ninhos já encontrados. */
+  nestsFound: string[];
   messengers: MessengerData[];
   contracts: Contract[];
   log: LogEntry[];
@@ -523,7 +577,9 @@ export interface GameState extends CourtState, CourtActions {
   /** Batalhões treinando no Campo de Treino e quando o treino termina (dia + fração). */
   training: TrainingOrder[];
   /** Campos de batalha recentes (corvos voando em cima por uns dias). */
-  battlefields: { x: number; y: number; day: number }[];
+  battlefields: { x: number; y: number; day: number; spoils?: number }[];
+  /** O que cada reino aprendeu a reforçar depois de apanhar do bando (Marco 16). */
+  warLessons: Record<string, Doctrine | undefined>;
 
   // --- Estações e logística (Marco 13) ---
   /** Trem de carroças e as rações que ele leva (o resto, `rations`, fica no depósito do acampamento). */
@@ -583,6 +639,8 @@ export interface GameState extends CourtState, CourtActions {
 
   // --- Ações do acampamento ---
   recruitBattalion: (troopType: TroopType) => boolean;
+  /** Prisioneiros que aceitaram lutar pelo bando: um batalhão novo, de pouca confiança. */
+  recruitCaptives: (troop: TroopType, count: number, label: string) => number;
   /** Repõe soldados perdidos (até onde o ouro alcançar). */
   reinforceBattalion: (id: string) => boolean;
   buyRations: (packs: number) => boolean;
@@ -598,6 +656,19 @@ export interface GameState extends CourtState, CourtActions {
   advanceTime: (days: number) => void;
   /** Novo mundo a partir de um WorldDef gerado: zera a campanha inteira. */
   startCampaign: (world: WorldDef) => void;
+  /** Batalha personalizada em andamento (null = campanha). */
+  scenario: BattleScenario | null;
+  scenarioHud: ScenarioHud | null;
+  scenarioPaused: boolean;
+  scenarioResult: ScenarioResult | null;
+  /** Começa (ou recomeça) uma batalha personalizada. */
+  startScenario: (scenario: BattleScenario) => void;
+  setScenarioPaused: (paused: boolean) => void;
+  /** Volta ao menu; com um id, abre direto a tela dos cenários naquele. */
+  leaveScenario: (reopen: string | null) => void;
+  /** Cenário a reabrir no menu. */
+  menuTarget: string | null;
+  finishScenario: (result: ScenarioResult) => void;
   /** Salva a campanha no espaço; devolve o motivo se não der (ex.: em combate). */
   saveGame: (slot: string) => string | null;
   /** Carrega um save (o mundo é gerado de novo pela semente); devolve o motivo se falhar. */
@@ -621,10 +692,21 @@ export interface GameState extends CourtState, CourtActions {
   /** Ataca um povoado: guerra com o dono (se for um reino) e a guarnição sai para lutar. */
   besiege: (id: string) => boolean;
   /** Em guerra, o exército chegou perto dos muros: a guarnição sai dos acampamentos para lutar. */
-  garrisonSally: (id: string) => boolean;
+  garrisonSally: (id: string, soldiers?: number) => boolean;
   /** Soldados da guarnição mortos num cerco que não tomou o povoado. */
   garrisonLosses: (id: string, dead: number) => void;
   liftSiege: () => void;
+  /** Cerco com os muros fechados em vez de assalto imediato (Marco 16). */
+  blockade: (id: string) => boolean;
+  /** Um dia de cerco: comida, madeira, fome; devolve o que aconteceu de importante. */
+  siegeDay: (soldiers: number) => { surrendered: boolean; starving: boolean; sally: boolean };
+  siegeBuild: (what: "LADDER" | "RAM") => string;
+  useLadder: () => boolean;
+  useRam: () => boolean;
+  demandSurrender: () => string;
+  /** O que um batedor descobriu de um povoado. */
+  townIntel: Record<string, { day: number; garrison: number; food: number; weakGate: string }>;
+  noteTownIntel: (id: string, weakGate: string) => void;
   conquerSettlement: (id: string) => void;
   build: (id: string, building: BuildingId) => boolean;
   setTax: (id: string, rate: 0 | 1 | 2) => void;
@@ -652,7 +734,10 @@ export interface GameState extends CourtState, CourtActions {
   /** O bando atacou refugiados. */
   attackRefugees: (from: string) => void;
   /** Um combate terminou aqui: corvos por uns dias. */
-  markBattlefield: (x: number, y: number) => void;
+  markBattlefield: (x: number, y: number, spoils?: number) => void;
+  /** Recolhe o que ficou num campo de batalha; devolve o texto do que achou. */
+  lootBattlefield: (x: number, y: number) => string;
+  learnFrom: (factionId: string, army: { infantry: number; archers: number; cavalry: number }) => void;
   /** Pedágio ao cruzar a ponte de outro; devolve o texto do que aconteceu (ou null se não há cobrança). */
   crossBridge: (id: string) => string | null;
   /** Acontecimento do mundo que entra no diário (bandos avistados, destruídos...). */
@@ -745,6 +830,14 @@ export interface GameState extends CourtState, CourtActions {
 
   // --- Estábulo (Marco 6) ---
   hireScout: () => boolean;
+  /** Batedores e harpias (Marco 16). */
+  scoutLost: (id: string) => void;
+  scoutReturned: (id: string) => void;
+  nestFound: (id: string, by: string) => void;
+  /** Comprar uma ave do falcoeiro (ou dar um filhote de ninho) a um batedor. */
+  harpyBuy: (scoutId: string) => string;
+  harpyAdopt: (scoutId: string) => string;
+  harpyLost: (scoutId: string) => void;
   hireMessenger: () => boolean;
 
   // --- Batalha ---
@@ -854,9 +947,28 @@ const TRANSIENT_KEYS = new Set<string>([
   "dialog",
   "city",
   "duel",
+  "scenario",
+  "scenarioHud",
+  "scenarioPaused",
+  "scenarioResult",
+  "menuTarget",
 ]);
 function entry(day: number, text: string, tone: LogTone = "info"): LogEntry {
   return { id: ++logSeq, day, text, tone };
+}
+
+/** Os portões de um povoado se fecham: começa o cerco de verdade (Marco 16). */
+function closeGates(id: string, get: () => GameState, set: (partial: Partial<GameState>) => void): void {
+  const s = get();
+  const t = s.settlements.find((x) => x.id === id);
+  if (!t) return;
+  const stored = (t.econ?.stock.GRAIN ?? 0) + (t.econ?.stock.MEAT ?? 0);
+  const food = (SIEGE.FOOD_DAYS[t.kind] ?? 5) + Math.min(6, Math.floor(stored / Math.max(20, t.population / 4)));
+  set({
+    siege: { settlementId: id, walled: true, startDay: s.day, food, wood: 0, ladders: 0, ram: 0 },
+    campPanel: null,
+    log: appendLog(s.log, [entry(s.day, `Os portões de ${t.name} se fecharam: é um cerco. Lá dentro há comida para uns ${food} dias.`, "info")]),
+  });
 }
 
 /** Parte do estado que a passagem dos dias altera. */
@@ -958,6 +1070,10 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked);
     s.rations = meal.rations;
     s.cargo = meal.cargo;
+    // Harpias comem da carne do bando (sem comida, caçam sozinhas)
+    const birds = s.scouts.filter((x) => x.harpy).length * SUPPORT.HARPY.RATIONS;
+    if (s.exposure.away && !s.campPacked) s.cargo = Math.max(0, s.cargo - birds);
+    else s.rations = Math.max(0, s.rations - birds);
     // Enfermaria e doenças
     const health = healthDay(s.battalions, training, s.exposure, hasFollower(s.followers, "HEALER"), meal.hungry);
     s.battalions = health.battalions;
@@ -1003,6 +1119,14 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
         log.push(entry(s.day, "A cerveja acabou! A tropa esperava a ração da semana e reclama.", "bad"));
       }
     }
+
+    // Ex-prisioneiros somem na primeira chance (Marco 16)
+    for (const b of s.battalions) {
+      if ((b.turncoatUntil ?? 0) <= s.day || Math.random() > PRISONERS.TURNCOAT_DESERT) continue;
+      b.soldiers = Math.max(0, b.soldiers - 1);
+      log.push(entry(s.day, `Um dos ex-prisioneiros de ${b.name} sumiu durante a noite.`, "info"));
+    }
+    s.battalions = s.battalions.filter((b) => b.soldiers > 0);
 
     // Ambiciosos sem batalhão se ressentem a cada semana
     const idle = applyLoyalty(
@@ -1243,6 +1367,9 @@ function campaignState(world: WorldDef | null): CampaignState {
     lieutenants: [lieutenant],
     lieutenantCandidates: Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(1)),
     scouts: Array.from({ length: SUPPORT.START_SCOUTS }, newScout),
+    harpyChicks: 0,
+    nestsFound: [],
+    warDifficulty: "VETERAN",
     messengers: Array.from({ length: SUPPORT.START_MESSENGERS }, newMessenger),
     contracts,
     log: world
@@ -1270,6 +1397,8 @@ function campaignState(world: WorldDef | null): CampaignState {
     lastVictoryDay: null,
     training: [],
     battlefields: [],
+    warLessons: {},
+    townIntel: {},
     wagons: Array.from({ length: SUPPLY.START_WAGONS }, () => ({ id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp })),
     cargo: 0,
     exposure: NO_EXPOSURE,
@@ -1294,6 +1423,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     interior: null,
     dialog: null,
     ...INITIAL_COURT,
+    ...INITIAL_WAR,
     nobles: world ? generateNobles(world, settlements) : [],
     worldMapOpen: false,
     worldSnapshot: null,
@@ -1304,6 +1434,49 @@ function campaignState(world: WorldDef | null): CampaignState {
     groupArrangement: "ARCHERS_BACK",
     campPanel: null,
     campPrompt: null,
+    scenario: null,
+    scenarioHud: null,
+    scenarioPaused: false,
+    scenarioResult: null,
+    menuTarget: null,
+  };
+}
+
+/** Campanha mínima de uma batalha personalizada: o exército do cenário, sem economia nem eventos. */
+function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState {
+  const battalions: BattalionData[] = [];
+  const lieutenants: LieutenantData[] = [];
+  for (const spec of scenario.army.battalions) {
+    const b: BattalionData = {
+      ...newBattalion(battalions, spec.troop),
+      id: spec.id,
+      formation: spec.formation,
+      level: spec.level,
+      equipment: { weapon: spec.gear, armor: spec.gear },
+      soldiers: spec.soldiers,
+      maxSoldiers: spec.soldiers,
+    };
+    battalions.push(b);
+    if (spec.lieutenant) lieutenants.push({ ...generateLieutenant(1), battalionId: b.id });
+  }
+  return {
+    ...campaignState(world),
+    day: scenarioDay(scenario.season),
+    dayProgress: scenarioProgress(scenario.hour),
+    battalions,
+    lieutenants,
+    lieutenantCandidates: [],
+    scouts: Array.from({ length: scenario.army.scouts }, newScout),
+    messengers: Array.from({ length: scenario.army.messengers }, newMessenger),
+    wagons: Array.from({ length: scenario.army.wagons }, () => ({ id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp })),
+    contracts: [],
+    log: [],
+    gold: 0,
+    campPacked: true,
+    nextEventDay: Infinity,
+    nextCalamityDay: Infinity,
+    warDifficulty: scenario.difficulty,
+    scenario,
   };
 }
 
@@ -1321,9 +1494,25 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
   newGame: () => set(campaignState(null)),
 
+  startScenario: (scenario) => {
+    const world = buildScenarioWorld(scenario);
+    setWorldSize(world.cols, world.rows);
+    // O mapa de um cenário sai sempre igual: a chave do Phaser muda pelo contador
+    set({ ...scenarioState(scenario, world), loadNonce: get().loadNonce + 1 });
+  },
+  setScenarioPaused: (paused) => set({ scenarioPaused: paused }),
+  leaveScenario: (reopen) => set({ ...campaignState(null), menuTarget: reopen }),
+  finishScenario: (result) => {
+    const s = get();
+    if (!s.scenario || s.scenarioResult) return;
+    noteResult(s.scenario.id, result);
+    set({ scenarioResult: result, scenarioPaused: false, contextMenu: null });
+  },
+
   saveGame: (slot) => {
     const s = get();
     if (!s.world || s.phase !== "PLAYING") return "Nenhuma campanha em andamento.";
+    if (s.scenario) return "Batalhas personalizadas não são salvas.";
     const field = captureField();
     if (typeof field === "string") return field;
     const store: Record<string, unknown> = {};
@@ -1387,6 +1576,14 @@ export const useGameStore = create<GameState>()((set, get) => ({
       log: appendLog(s.log, [entry(s.day, `Recrutado: ${b.name} (${TROOPS[troopType].label}) por ${cost} de ouro${horses && horses.cost > 0 ? " (com cavalos do negociante)" : ""}.`)]),
     });
     return true;
+  },
+
+  recruitCaptives: (troop, count, label) => {
+    const s = get();
+    const n = Math.min(count, BALANCE.BATTALION_SIZE);
+    const b: BattalionData = { ...newBattalion(s.battalions, troop), soldiers: n, turncoatUntil: s.day + PRISONERS.TURNCOAT_DAYS };
+    set({ battalions: [...s.battalions, b], log: appendLog(s.log, [entry(s.day, `${n} ${label} formam ${b.name}. Ninguém confia neles ainda.`)]) });
+    return n;
   },
 
   reinforceBattalion: (id) => {
@@ -1691,10 +1888,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
         summons = null;
       }
       if (!summons && lord && day % 7 === 0 && Math.random() < COURT.SUMMONS_CHANCE && realm.wars.some((w) => w.peace === undefined && (w.a === lord.id || w.b === lord.id))) {
-        const seat = realm.settlements.find((t) => t.id === lord.seatId);
+        // Com exército do suserano em campanha, a convocação é para o cerco; senão, para a capital
+        const camp = realm.armies.find((a) => a.factionId === lord.id && !a.outcome);
+        const front = camp ? realm.settlements.find((t) => t.id === camp.targetId) : undefined;
+        const seat = front ?? realm.settlements.find((t) => t.id === lord.seatId);
         if (seat) {
-          summons = { factionId: lord.id, townId: seat.id, deadline: day + COURT.SUMMONS_DAYS, why: "a guerra" };
-          entries.push(entry(day, `CONVOCAÇÃO! ${lord.ruler} chama o bando a ${seat.name} até o dia ${summons.deadline}. Faltar custa honra e relação.`, "bad"));
+          summons = { factionId: lord.id, townId: seat.id, deadline: day + COURT.SUMMONS_DAYS, why: front ? `a campanha contra ${front.name}` : "a guerra" };
+          entries.push(entry(day, `CONVOCAÇÃO! ${lord.ruler} chama o bando a ${seat.name} até o dia ${summons.deadline}${front ? ", onde o exército do reino está em campanha" : ""}. Faltar custa honra e relação.`, "bad"));
         }
       }
       const passed = passDays({ ...state, gold: realm.gold, rations: realm.rations }, 1);
@@ -1774,6 +1974,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   ...courtSlice((partial) => set(partial), get),
+  ...warSlice(set, get),
 
   bandArrives: (targetId, band) => {
     const s = get();
@@ -1926,10 +2127,33 @@ export const useGameStore = create<GameState>()((set, get) => ({
     });
   },
 
-  markBattlefield: (x, y) => {
+  markBattlefield: (x, y, spoils) => {
     const s = get();
-    set({ battlefields: [...s.battlefields.filter((b) => s.day - b.day <= 2), { x: Math.round(x), y: Math.round(y), day: s.day }].slice(-12) });
+    set({ battlefields: [...s.battlefields.filter((b) => s.day - b.day <= WAR_AI.SPOILS_DAYS), { x: Math.round(x), y: Math.round(y), day: s.day, spoils }].slice(-12) });
   },
+
+  lootBattlefield: (x, y) => {
+    const s = get();
+    const b = s.battlefields.find((f) => f.x === x && f.y === y);
+    if (!b?.spoils) return "Já levaram tudo.";
+    const gold = Math.round(b.spoils * WAR_AI.SPOILS_GOLD);
+    const iron = Math.floor(b.spoils * WAR_AI.SPOILS_IRON);
+    set({
+      gold: s.gold + gold,
+      iron: s.iron + iron,
+      battlefields: s.battlefields.map((f) => (f === b ? { ...f, spoils: 0 } : f)),
+      log: appendLog(s.log, [entry(s.day, `O bando recolheu os restos de uma batalha alheia: ${gold} de ouro e ${iron} de ferro.`, "good")]),
+    });
+    return `Restos da batalha: +${gold} de ouro e +${iron} de ferro.`;
+  },
+
+  learnFrom: (factionId, army) =>
+    set((s) => {
+      const L = WAR_AI.LESSON_SHARE;
+      // Muita flecha pede cavalo; muita cavalaria pede besta; o resto, escudos
+      const doctrine: Doctrine = army.archers >= L ? "RIDERS" : army.cavalry >= L ? "BOWS" : "SHIELDS";
+      return { warLessons: { ...s.warLessons, [factionId]: doctrine } };
+    }),
 
   dismissFollower: (id) => {
     const s = get();
@@ -2065,12 +2289,17 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
-  garrisonSally: (id) => {
+  garrisonSally: (id, soldiers = 0) => {
     const s = get();
     const t = s.settlements.find((x) => x.id === id);
     if (!s.world || !t || s.siege || t.garrison <= 0) return false;
     const atWar = isFactionOwner(t.owner) && s.factions.some((f) => f.id === t.owner && f.atWar);
     if (!atWar && !isCalamityOwner(t.owner)) return false;
+    // Guarnição pequena não sai para morrer: fecha os portões e espera (Marco 16)
+    if (t.garrison < soldiers * SIEGE.FIELD_SHARE) {
+      closeGates(id, get, set);
+      return true;
+    }
     const text = isCalamityOwner(t.owner)
       ? `Os ocupantes de ${t.name} saíram dos acampamentos para enfrentar os ${s.world.bandName}.`
       : `A guarnição de ${t.name} saiu dos acampamentos para enfrentar os ${s.world.bandName}.`;
@@ -2082,6 +2311,83 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set((s) => ({ settlements: s.settlements.map((t) => (t.id === id ? { ...t, garrison: Math.max(0, t.garrison - dead) } : t)) })),
 
   liftSiege: () => set({ siege: null }),
+
+  blockade: (id) => {
+    const ok = get().besiege(id);
+    const s = get();
+    if (!ok || s.siege?.settlementId !== id) return ok;
+    closeGates(id, get, set);
+    return true;
+  },
+
+  siegeDay: (soldiers) => {
+    const s = get();
+    const c = s.siege;
+    const t = c ? s.settlements.find((x) => x.id === c.settlementId) : undefined;
+    if (!c?.walled || !t) return { surrendered: false, starving: false, sally: false };
+    const food = (c.food ?? 0) - 1;
+    const wood = (c.wood ?? 0) + soldiers * SIEGE.WOOD_PER_SOLDIER;
+    const starving = food <= 0;
+    const lost = starving ? Math.max(1, Math.round(t.garrison * SIEGE.STARVE_LOSS)) : 0;
+    const log: LogEntry[] = [];
+    if (food === 0) log.push(entry(s.day, `A comida de ${t.name} acabou. Os soldados começam a desertar pelos muros.`, "good"));
+    const surrendered = food <= -SIEGE.SURRENDER_AFTER || t.garrison - lost <= 0;
+    // Quem está cercado e ainda tem força sai para queimar as obras; quem passa fome tenta a sorte
+    const sally = !surrendered && t.garrison >= 4 && Math.random() < SIEGE.SALLY_CHANCE;
+    set({
+      siege: { ...c, food, wood },
+      settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, garrison: Math.max(0, x.garrison - lost) } : x)),
+      log: appendLog(s.log, log),
+    });
+    return { surrendered, starving, sally };
+  },
+
+  siegeBuild: (what) => {
+    const s = get();
+    const c = s.siege;
+    if (!c?.walled) return "Não há cerco.";
+    const cost = what === "LADDER" ? SIEGE.LADDER_WOOD : SIEGE.RAM_WOOD;
+    if ((c.wood ?? 0) < cost) return `Falta madeira (${Math.floor(c.wood ?? 0)} de ${cost}).`;
+    if (what === "LADDER" && (c.ladders ?? 0) >= SIEGE.MAX_LADDERS) return "Escadas de sobra.";
+    if (what === "RAM" && (c.ram ?? 0) >= 1) return "O aríete já está pronto.";
+    set({ siege: { ...c, wood: (c.wood ?? 0) - cost, ladders: (c.ladders ?? 0) + (what === "LADDER" ? 1 : 0), ram: (c.ram ?? 0) + (what === "RAM" ? 1 : 0) } });
+    return what === "LADDER" ? "Mais uma escada pronta." : "O aríete está pronto.";
+  },
+
+  useLadder: () => {
+    const c = get().siege;
+    if (!c || (c.ladders ?? 0) <= 0) return false;
+    set({ siege: { ...c, ladders: (c.ladders ?? 0) - 1 } });
+    return true;
+  },
+
+  useRam: () => {
+    const c = get().siege;
+    if (!c || (c.ram ?? 0) <= 0) return false;
+    set({ siege: { ...c, ram: (c.ram ?? 0) - 1 } });
+    return true;
+  },
+
+  demandSurrender: () => {
+    const s = get();
+    const c = s.siege;
+    const t = c ? s.settlements.find((x) => x.id === c.settlementId) : undefined;
+    if (!c || !t) return "Não há cerco.";
+    const hungry = (c.food ?? 5) <= 0 ? SIEGE.DEMAND_HUNGER : 0;
+    const chance = s.fear * SIEGE.DEMAND_FEAR + hungry + Math.max(0, 0.2 - t.garrison * 0.02);
+    if (Math.random() >= chance) return `${t.name} respondeu com flechas.`;
+    set({ honor: Math.min(100, s.honor + SIEGE.SURRENDER_HONOR) });
+    get().conquerSettlement(t.id);
+    return `${t.name} abriu os portões: ninguém precisou morrer.`;
+  },
+
+  noteTownIntel: (id, weakGate) =>
+    set((s) => {
+      const t = s.settlements.find((x) => x.id === id);
+      if (!t) return {};
+      const food = s.siege?.settlementId === id ? (s.siege.food ?? 0) : SIEGE.FOOD_DAYS[t.kind] ?? 5;
+      return { townIntel: { ...s.townIntel, [id]: { day: s.day, garrison: t.garrison, food, weakGate } } };
+    }),
 
   conquerSettlement: (id) => {
     const s = get();
@@ -2496,6 +2802,68 @@ export const useGameStore = create<GameState>()((set, get) => ({
     });
     return true;
   },
+
+  scoutLost: (id) =>
+    set((s) => {
+      const lost = s.scouts.find((x) => x.id === id);
+      if (!lost) return {};
+      return { scouts: s.scouts.filter((x) => x.id !== id), log: appendLog(s.log, [entry(s.day, `O batedor ${lost.name} não voltou.`, "bad")]) };
+    }),
+
+  scoutReturned: (id) => set((s) => ({ scouts: s.scouts.map((x) => (x.id === id ? { ...x, missions: x.missions + 1 } : x)) })),
+
+  nestFound: (id, by) =>
+    set((s) => {
+      if (s.nestsFound.includes(id)) return {};
+      return {
+        nestsFound: [...s.nestsFound, id],
+        harpyChicks: s.harpyChicks + 1,
+        log: appendLog(s.log, [entry(s.day, `${by} achou um ninho de harpia nas montanhas e trouxe um filhote. No Estábulo, um batedor pode criá-lo.`, "good")]),
+      };
+    }),
+
+  harpyBuy: (scoutId) => {
+    const s = get();
+    const H = SUPPORT.HARPY;
+    const scout = s.scouts.find((x) => x.id === scoutId);
+    if (!scout) return "Esse batedor não está mais no bando.";
+    if (scout.harpy) return `${scout.name} já tem uma ave.`;
+    if (s.fame < H.FAME) return "Aves reais não vão para quem ninguém conhece.";
+    if (s.gold < H.COST) return `Uma harpia treinada custa ${H.COST} de ouro.`;
+    const harpy = newHarpy(s.day + H.TRAIN_DAYS);
+    set({
+      gold: s.gold - H.COST,
+      scouts: s.scouts.map((x) => (x.id === scoutId ? { ...x, harpy } : x)),
+      log: appendLog(s.log, [entry(s.day, `${scout.name} ganhou a harpia ${harpy.name}: em ${H.TRAIN_DAYS} dias ela aprende a voltar para ele.`, "good")]),
+    });
+    return `${harpy.name} é sua. Em ${H.TRAIN_DAYS} dias ela aprende a mão de ${scout.name}.`;
+  },
+
+  harpyAdopt: (scoutId) => {
+    const s = get();
+    const H = SUPPORT.HARPY;
+    const scout = s.scouts.find((x) => x.id === scoutId);
+    if (!scout || scout.harpy || s.harpyChicks <= 0) return "";
+    const harpy = newHarpy(s.day + H.TRAIN_DAYS * 2);
+    set({
+      harpyChicks: s.harpyChicks - 1,
+      scouts: s.scouts.map((x) => (x.id === scoutId ? { ...x, harpy } : x)),
+      log: appendLog(s.log, [entry(s.day, `${scout.name} começou a criar o filhote ${harpy.name}.`, "good")]),
+    });
+    return harpy.name;
+  },
+
+  harpyLost: (scoutId) =>
+    set((s) => {
+      const scout = s.scouts.find((x) => x.id === scoutId);
+      if (!scout?.harpy) return {};
+      return {
+        scouts: s.scouts.map((x) => (x.id === scoutId ? { ...x, harpy: null } : x)),
+        log: appendLog(s.log, [entry(s.day, `${scout.name} perdeu a harpia ${scout.harpy.name}.`, "bad")]),
+      };
+    }),
+
+  setWarDifficulty: (d) => set({ warDifficulty: d }),
 
   hireMessenger: () => {
     const s = get();

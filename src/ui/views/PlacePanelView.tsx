@@ -1,6 +1,7 @@
 import { useGameStore, type CampPanel } from "../../store/useGameStore";
 import { fullName, PASSIVES } from "../../game/data/lieutenants";
 import { BattalionList, RecruitPanel } from "../components/tent/ArmyPanel";
+import { PrisonersPanel } from "../components/tent/PrisonersPanel";
 import { BattalionDetail, ForgePanel, IronTrader, TrainingPanel } from "../components/tent/ProgressionPanels";
 import { LieutenantCandidates, LieutenantRoster, LieutenantSheet } from "../components/tent/LieutenantPanels";
 import { CampLog } from "../components/tent/CampLog";
@@ -109,6 +110,7 @@ function PanelContent({ panel }: { panel: CampPanel }) {
         <>
           <ContractBoard />
           <BookButton />
+          <PrisonersPanel />
           <DiplomacyPanel />
           <LieutenantRoster />
           <FollowersPanel />

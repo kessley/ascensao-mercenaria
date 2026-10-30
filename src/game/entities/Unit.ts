@@ -9,6 +9,8 @@ export type Team = "ALLY" | "ENEMY";
 /** Quem passa pelos portões: todos (inimigos, gente do mundo), tropa do bando ou gente avulsa do bando. */
 export type TownAccess = "ANY" | "ARMY" | "VISITOR";
 export type UnitState = "IDLE" | "MOVING" | "ATTACKING" | "FLEEING" | "DEAD";
+/** O que a unidade é para quem a vê de longe (a IA do inimigo pensa nestes termos). */
+export type UnitRole = "TROOP" | "HERO" | "SCOUT" | "COURIER" | "WAGON";
 
 /**
  * Base de toda unidade em campo. Desenhada só com primitivas:
@@ -76,6 +78,13 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   townAccess: TownAccess = "ANY";
   /** Quão apetitoso é como alvo: < 1 = os saqueadores preferem (carroças). */
   lure = 1;
+  /** Fração da distância normal a que é percebido (batedor furtivo). */
+  stealth = 1;
+  /** Sem tocha: à noite não se denuncia, mesmo com o bando de tochas acesas. */
+  unlit = false;
+  /** Batedor: avistá-lo não arrasta o bando inteiro (ver Enemy.onSpot). */
+  isScout = false;
+  role: UnitRole = "TROOP";
 
   /** Última posição em terra firme (empurrões não jogam ninguém no rio). */
   safeX = NaN;

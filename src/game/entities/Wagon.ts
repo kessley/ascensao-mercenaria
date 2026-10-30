@@ -21,6 +21,7 @@ export class Wagon extends Unit {
     super(scene, x, y, "ALLY", SUPPLY.WAGON);
     this.wagonId = wagonId;
     this.autoAttack = false;
+    this.role = "WAGON";
     // Exército: espera no portão dos povoados alheios, como a tropa
     this.townAccess = "ARMY";
     this.lure = SUPPLY.WAGON_LURE;

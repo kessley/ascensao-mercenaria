@@ -1,6 +1,6 @@
 import { useGameStore } from "./store/useGameStore";
 import { GameEngine } from "./ui/GameEngine";
-import { NewWorldView } from "./ui/views/NewWorldView";
+import { MainMenuView } from "./ui/views/MainMenuView";
 import { WorldOverlayView } from "./ui/views/WorldOverlayView";
 
 function App() {
@@ -8,8 +8,8 @@ function App() {
   const seed = useGameStore((s) => s.world?.seed);
   const loadNonce = useGameStore((s) => s.loadNonce);
 
-  // Cada campanha gera um mundo novo: escolha a semente (ou continue um save) antes de começar
-  if (phase === "NEW_GAME") return <NewWorldView />;
+  // Menu inicial: campanha, batalhas personalizadas e saves
+  if (phase === "NEW_GAME") return <MainMenuView />;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
