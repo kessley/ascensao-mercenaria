@@ -1,8 +1,9 @@
 import type { TerrainZone } from "../world/TerrainMap";
 import type { EnemyGroupDef } from "../data/battleMaps";
-import { CAMP_HEIGHT, CAMP_WIDTH, CAMPFIRE, COMMANDER_SPAWN, PALISADE } from "../data/campLayout";
+import { CAMP_HEIGHT, CAMP_WIDTH, CAMPFIRE, campDefAt } from "../data/campLayout";
 import {
   SITE_THEME_LABEL,
+  ferryDocks,
   regionName,
   type Biome,
   type CrossingDef,
@@ -17,6 +18,7 @@ import {
 import {
   DEFAULT_WORLD_OPTIONS,
   GEO,
+  REALM,
   WORLD,
   WORLD_AGES,
   WORLD_HEIGHT,
@@ -31,6 +33,7 @@ import { TOWN_SIZE, nearestGate, townLayout, type TownLayout } from "../world/to
 import { generateGeography } from "./geography";
 import { GeoMap } from "./geoMap";
 import { simulateHistory } from "./history";
+import { resourcesAround } from "./resources";
 import { createRng, type Rng } from "./rng";
 import * as names from "./names";
 
@@ -133,6 +136,17 @@ function bestPoint(
   return best ?? fallback ?? randomPoint(rng, margin);
 }
 
+/** Recursos da terra barateiam o mercado local (comida farta, ferro de mina). */
+export function adjustMarket(m: SettlementSeed["market"], resources: readonly string[]): SettlementSeed["market"] {
+  const food = resources.includes("GRAIN") || resources.includes("FISH");
+  const iron = resources.includes("IRON");
+  return {
+    rationPrice: m.rationPrice * (food ? 0.75 : 1),
+    ironBuy: Math.max(2, Math.round(m.ironBuy * (iron ? 0.65 : 1))),
+    ironSell: Math.max(1, Math.round(m.ironSell * (iron ? 0.8 : 1))),
+  };
+}
+
 function market(rng: Rng, kind: SettlementKind): SettlementSeed["market"] {
   const j = () => rng.range(0.85, 1.15);
   switch (kind) {
@@ -163,7 +177,6 @@ const DESCRIPTIONS: Record<SettlementKind, string[]> = {
 };
 
 const POPULATION: Record<SettlementKind, [number, number]> = { VILLAGE: [110, 200], CITY: [480, 780], FORT: [240, 380] };
-const GARRISON: Record<SettlementKind, number> = { VILLAGE: 6, CITY: 14, FORT: 20 };
 const PORT_DESCRIPTIONS = [
   "Porto de pescadores e contrabandistas: o sal e as notícias chegam pelo mar.",
   "Cais de pedra e armazéns cheirando a peixe; os navios esperam o vento.",
@@ -361,14 +374,7 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
     600,
     WORLD.REGION_WIDTH,
   );
-  const origin = { x: Math.round(campCenter.x - CAMP_WIDTH / 2), y: Math.round(campCenter.y - CAMP_HEIGHT / 2) };
-  const local = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
-  const camp = {
-    origin,
-    center: local(CAMPFIRE),
-    spawn: local(COMMANDER_SPAWN),
-    gate: local({ x: PALISADE.x - PALISADE.rx - 40, y: PALISADE.y }),
-  };
+  const camp = campDefAt({ x: Math.round(campCenter.x - CAMP_WIDTH / 2) + CAMPFIRE.x, y: Math.round(campCenter.y - CAMP_HEIGHT / 2) + CAMPFIRE.y });
 
   // 3. Povoados: os primeiros serão capitais dos reinos da história
   const survivors = options.size === "SMALL" ? 3 : options.size === "LARGE" ? rng.int(4, 5) : rng.int(3, 4);
@@ -388,15 +394,21 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
       (q) => areaOk(q, w, h),
       rules,
       (q) => {
-        const river = geo.distanceToRiver(q, 1600);
-        return FERTILITY[geo.biomeAt(q.x, q.y)] + (river < 1300 ? 2 : 0) + (geo.nearSea(q, 900) ? 0.8 : 0) + rng.range(0, 1.2);
+        // Rio e mar contam a partir da muralha (a planta inteira fica em terra firme)
+        const reach = Math.max(w, h) / 2;
+        const river = geo.distanceToRiver(q, reach + 1800);
+        return FERTILITY[geo.biomeAt(q.x, q.y)] + (river < reach + 1500 ? 2 : 0) + (geo.nearSea(q, reach + 700) ? 0.8 : 0) + rng.range(0, 1.2);
       },
       400,
       700,
     );
     const [pmin, pmax] = POPULATION[kind];
-    const port = geo.nearSea(p, 900);
-    const river = geo.distanceToRiver(p, 1600) < 1300;
+    // Porto e rio contam a partir da muralha (Marco 14: desde que as cidades cresceram, o
+    // centro fica longe da água; o cais e o moinho ficam do lado de fora dos muros)
+    const half = Math.max(TOWN_SIZE[kind].w, TOWN_SIZE[kind].h) / 2;
+    const port = [half + 500, half + 1000, half + 1500].some((r) => geo.nearSea(p, r));
+    const river = geo.distanceToRiver(p, half + 1800) < half + 1500;
+    const resources = resourcesAround(geo, geoDef, p, rng, port, river);
     settlements.push({
       id: `S${i}`,
       name: names.settlementName(rng, usedNames),
@@ -405,11 +417,12 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
       y: Math.round(p.y),
       owner: "FREE",
       population: rng.int(pmin, pmax),
-      garrison: GARRISON[kind],
-      market: market(rng, kind),
+      garrison: REALM.BASE_GARRISON[kind],
+      market: adjustMarket(market(rng, kind), resources),
       description: port ? rng.pick(PORT_DESCRIPTIONS) : river ? rng.pick(RIVER_DESCRIPTIONS) : rng.pick(DESCRIPTIONS[kind]),
       port,
       river,
+      resources,
     });
   }
 
@@ -506,11 +519,8 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
   // 7. Estradas pelo caminho de menor custo: atravessar rio custa (vira ponte ou vau), montanha
   //    custa muito (vira passo); estradas já abertas são reaproveitadas
   const layouts = new Map<string, TownLayout>(settlements.map((s) => [s.id, townLayout(s.id, s.kind, s.x, s.y, s.owner === "RUINED")]));
-  const insideAnyTown = (x: number, y: number) =>
-    settlements.some((s) => {
-      const b = layouts.get(s.id)?.bounds;
-      return !!b && x > b.x - 90 && x < b.x + b.w + 90 && y > b.y - 90 && y < b.y + b.h + 90;
-    });
+  const townBounds = [...layouts.values()].map((l) => l.bounds);
+  const insideAnyTown = (x: number, y: number) => townBounds.some((b) => x > b.x - 90 && x < b.x + b.w + 90 && y > b.y - 90 && y < b.y + b.h + 90);
   const roadCost = (x: number, y: number): number => {
     if (insideAnyTown(x, y)) return Infinity;
     const hgt = geo.heightAt(x, y);
@@ -614,6 +624,25 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
       if (!rng.chance(0.65)) continue;
       const r = geo.riverAt(p.x, p.y);
       if (r && r.river.id === river.id) addCrossing("FORD", p, river, r.width);
+    }
+  }
+  // Balsas nos rios grandes, longe das pontes: cais nas duas margens
+  for (const river of geoDef.rivers) {
+    if (river.kind !== "GREAT") continue;
+    let run = rng.range(0.5, 1) * GEO.FERRY_EVERY;
+    for (let i = 1; i < river.points.length; i++) {
+      run -= distance(river.points[i - 1], river.points[i]);
+      if (run > 0) continue;
+      const p = river.points[i];
+      const r = geo.riverAt(p.x, p.y);
+      if (!r || r.river.id !== river.id || r.width < 110) continue;
+      if (geoDef.crossings.some((c) => distance(c, p) < 2200)) continue;
+      const angle = riverAngleAt(river, p);
+      const probe: CrossingDef = { id: "", kind: "FERRY", x: p.x, y: p.y, angle, width: r.width, riverId: river.id };
+      const [a, b] = ferryDocks(probe);
+      if (!landOk(a, 40) || !landOk(b, 40) || geo.riverAt(a.x, a.y) || geo.riverAt(b.x, b.y)) continue;
+      run = GEO.FERRY_EVERY * rng.range(0.8, 1.3);
+      geoDef.crossings.push({ ...probe, id: `X${geoDef.crossings.length}`, x: Math.round(p.x), y: Math.round(p.y), width: Math.round(r.width) });
     }
   }
 

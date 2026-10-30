@@ -24,8 +24,8 @@ O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 | [2 — O mundo que respira](ROADMAP_FASE_2.md) | 10 | Fundações do mundo grande (save, simulação em camadas, dia e noite) | ✅ OK |
 | | 11 | Geografia real: relevo, rios e mares | ✅ OK |
 | | 12 | Mundo vivo: gente andando (e cidades de verdade num mapa maior) | ✅ OK |
-| | 13 | Estações, clima e logística | ⏭ próximo |
-| | 14 | Economia e comércio | |
+| | 13 | Estações, clima e logística | ✅ OK |
+| | 14 | Economia e comércio | ⏭ próximo |
 | | 15 | Reinos vivos | |
 | | 16 | Guerra de verdade: cercos e prisioneiros | |
 | | 17 | Mares e continentes (o novo Mapa Múndi) | |

@@ -101,6 +101,17 @@ export class NavGrid {
     }
   }
 
+  /** Há estrada nesta célula? */
+  isRoad(x: number, y: number): boolean {
+    const i = this.index(x, y);
+    return i >= 0 && this.bonus[i] < 1;
+  }
+
+  /** Reavalia tudo (a estação mudou: rios congelaram, degelo, cheia). */
+  invalidateAll(): void {
+    this.state.fill(UNKNOWN);
+  }
+
   /** Reavalia as células perto de um ponto (ex.: ponte queimada ou reconstruída). */
   invalidate(p: Point, radius: number): void {
     const c0 = Math.max(0, Math.floor((p.x - radius) / this.cell));

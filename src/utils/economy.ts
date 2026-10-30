@@ -1,4 +1,4 @@
-import { BALANCE, ECONOMY, PROGRESSION, TROOPS } from "./constants";
+import { BALANCE, ECONOMY, PROGRESSION, SUPPLY, TROOPS } from "./constants";
 import type { BattalionData } from "../store/useGameStore";
 import { PASSIVES, type LieutenantData } from "../game/data/lieutenants";
 import { followerRations, hasFollower, type Follower } from "../game/sim/campEvents";
@@ -8,7 +8,8 @@ import { followerRations, hasFollower, type Follower } from "../game/sim/campEve
  * o que os seguidores comem. Com um cozinheiro, a tropa gasta 20% menos.
  */
 export function dailyRations(battalions: readonly BattalionData[], followers: readonly Follower[] = []): number {
-  const soldiers = battalions.reduce((sum, b) => sum + b.soldiers, 0);
+  // Feridos e doentes também comem
+  const soldiers = battalions.reduce((sum, b) => sum + b.soldiers + (b.wounded ?? 0) + (b.sick ?? 0), 0);
   const troops = Math.ceil(soldiers / ECONOMY.SOLDIERS_PER_RATION) * (hasFollower(followers, "COOK") ? 0.8 : 1);
   return Math.ceil(1 + troops + followerRations(followers));
 }
@@ -55,6 +56,11 @@ export function startingMorale(hungryDays: number, arrearsWeeks: number, camp = 
   const arrears = arrearsWeeks * ECONOMY.ARREARS_MORALE_PER_WEEK;
   const value = Math.max(ECONOMY.MIN_STARTING_MORALE, Math.min(BALANCE.MORALE.MAX, BALANCE.MORALE.MAX - hunger - arrears + camp));
   return { value, hunger, arrears, camp };
+}
+
+/** Rações que o exército em campo consegue levar: mochilas mais as carroças. */
+export function cargoCapacity(wagons: number): number {
+  return SUPPLY.PACK_CAPACITY + wagons * SUPPLY.WAGON_CAPACITY;
 }
 
 /** Dias até o próximo pagamento (no dia múltiplo de PAYDAY_INTERVAL). */

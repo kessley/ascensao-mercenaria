@@ -14,15 +14,29 @@ import { fullName, type LieutenantData, type TraitId } from "../data/lieutenants
 
 // --- Seguidores ---
 
-export type FollowerRole = "COOK" | "PEDDLER" | "HEALER" | "CHAPLAIN" | "FAMILY";
+export type FollowerRole = "COOK" | "PEDDLER" | "HEALER" | "CHAPLAIN" | "FAMILY" | "SMITH";
 
 export const FOLLOWERS: Record<FollowerRole, { label: string; effect: string; rations: number; max: number; pitch: string }> = {
   COOK: { label: "Cozinheiro", effect: "−20% de rações gastas", rations: 0.5, max: 1, pitch: "um cozinheiro de taverna falida" },
-  PEDDLER: { label: "Mascate", effect: "+25% no ouro do saque", rations: 0.5, max: 1, pitch: "um mascate com uma carroça de bugigangas" },
-  HEALER: { label: "Curandeira", effect: "salva 1 em cada 3 caídos depois do combate", rations: 0.5, max: 1, pitch: "uma curandeira de ervas e agulha" },
+  PEDDLER: { label: "Mascate", effect: "+25% no ouro do saque; vende vinho, ataduras e cobertores na banca", rations: 0.5, max: 1, pitch: "um mascate com uma carroça de bugigangas" },
+  HEALER: { label: "Curandeira", effect: "mais caídos ficam feridos em vez de mortos, e os feridos saram mais depressa", rations: 0.5, max: 1, pitch: "uma curandeira de ervas e agulha" },
   CHAPLAIN: { label: "Capelão", effect: "+10 na moral com que as tropas saem", rations: 0.5, max: 1, pitch: "um capelão sem paróquia" },
-  FAMILY: { label: "Família de soldado", effect: "deserções pela metade", rations: 1, max: 3, pitch: "a família de um dos soldados" },
+  FAMILY: { label: "Família de soldado", effect: "deserções pela metade", rations: 1, max: 4, pitch: "a família de um dos soldados" },
+  SMITH: { label: "Ajudante de ferreiro", effect: "−25% no ouro e no ferro da Ferraria", rations: 0.5, max: 1, pitch: "um ajudante de ferreiro com o próprio martelo" },
 };
+
+/**
+ * Quantos seguidores o bando atrai: crescem com o tamanho dele (soldados) e com a fama
+ * (inimigos abatidos em toda a carreira dos batalhões). Famílias, uma a cada 12 soldados.
+ */
+export function followerCap(battalions: readonly { soldiers: number; totalKills: number }[]): { total: number; families: number } {
+  const soldiers = battalions.reduce((n, b) => n + b.soldiers, 0);
+  const fame = battalions.reduce((n, b) => n + b.totalKills, 0);
+  return {
+    total: Math.min(12, 1 + Math.floor(soldiers / 8) + Math.floor(fame / 30)),
+    families: Math.min(FOLLOWERS.FAMILY.max, 1 + Math.floor(soldiers / 12)),
+  };
+}
 
 export interface Follower {
   id: string;
@@ -186,7 +200,9 @@ export function pickCampEvent(ctx: CampContext): CampEvent | null {
   if (bats.length >= 2) options.push({ w: 2, make: () => tentDispute(ctx) });
   if (bats.some((b) => b.soldiers < b.maxSoldiers)) options.push({ w: 2, make: () => deserterReturns(ctx) });
   if (ctx.rations >= 8) options.push({ w: 1, make: () => pilgrims(ctx) });
-  if (soldiers >= 12 && ctx.followers.length < 6) options.push({ w: 3, make: () => followerOffer(ctx) });
+  // Bando maior e mais famoso atrai mais gente (e com mais frequência, quando há vaga sobrando)
+  const room = followerCap(bats).total - ctx.followers.length;
+  if (soldiers >= 12 && room > 0) options.push({ w: 2 + Math.min(4, room), make: () => followerOffer(ctx) });
   const pairs = lieutenantPairs(ctx);
   if (pairs.rivals.length > 0) options.push({ w: 4, make: () => brawl(ctx, pick(pairs.rivals)) });
   if (pairs.friends.length > 0) options.push({ w: 3, make: () => camaraderie(ctx, pick(pairs.friends)) });
@@ -308,7 +324,10 @@ function victoryFeast(ctx: CampContext): CampEvent {
 }
 
 function followerOffer(ctx: CampContext): CampEvent | null {
-  const roles = (Object.keys(FOLLOWERS) as FollowerRole[]).filter((r) => ctx.followers.filter((f) => f.role === r).length < FOLLOWERS[r].max);
+  const cap = followerCap(ctx.battalions);
+  const roles = (Object.keys(FOLLOWERS) as FollowerRole[]).filter(
+    (r) => ctx.followers.filter((f) => f.role === r).length < (r === "FAMILY" ? cap.families : FOLLOWERS[r].max),
+  );
   if (roles.length === 0) return null;
   const role = pick(roles);
   const def = FOLLOWERS[role];

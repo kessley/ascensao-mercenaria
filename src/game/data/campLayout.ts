@@ -1,5 +1,6 @@
 import type { CampPanel } from "../../store/useGameStore";
 import type { Point } from "../../utils/math";
+import type { CampDef } from "./world";
 
 export const CAMP_WIDTH = 1800;
 export const CAMP_HEIGHT = 1300;
@@ -102,3 +103,15 @@ export const QUARTER_SLOTS: Point[] = [
 
 /** Distância do ponto de interação em que aparece o aviso "E — ...". */
 export const INTERACT_RADIUS = 70;
+
+/** Acampamento montado com a fogueira em `center` (o gerador e o acampamento móvel usam). */
+export function campDefAt(center: Point): CampDef {
+  const origin = { x: Math.round(center.x - CAMPFIRE.x), y: Math.round(center.y - CAMPFIRE.y) };
+  const local = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
+  return {
+    origin,
+    center: local(CAMPFIRE),
+    spawn: local(COMMANDER_SPAWN),
+    gate: local({ x: PALISADE.x - PALISADE.rx - 40, y: PALISADE.y }),
+  };
+}

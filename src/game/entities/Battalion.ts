@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Soldier } from "./Soldier";
 import type { Unit } from "./Unit";
 import type { Commander } from "./Commander";
-import { BALANCE, COLORS, FORMATIONS, LIEUTENANTS, TROOPS, type Formation, type TroopType } from "../../utils/constants";
+import { BALANCE, COLORS, FATIGUE, FORMATIONS, LIEUTENANTS, TROOPS, type Formation, type TroopType } from "../../utils/constants";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
 import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
@@ -41,6 +41,8 @@ export class Battalion {
   /** Soldados perdidos desde a última leitura do MoraleSystem. */
   pendingDeaths = 0;
   selected = false;
+  /** Fadiga (Marco 13): 0 descansado, 100 exausto. Lento, fraco e com moral que custa a voltar. */
+  fatigue = 0;
 
   private readonly label: Phaser.GameObjects.Text;
   private readonly bannerGfx: Phaser.GameObjects.Graphics;
@@ -53,6 +55,11 @@ export class Battalion {
    * sempre que o conjunto de batalhões seguindo o Comandante muda.
    */
   followSlot: { lateral: number; back: number } = { lateral: 0, back: BALANCE.FOLLOW_DISTANCE };
+  /**
+   * O Comandante entrou num povoado que barra o exército: quem o segue espera aqui, virado
+   * para o portão, até ele sair (a cena define e limpa).
+   */
+  followHold: { point: Point; facing: number } | null = null;
 
   /** Tenente no comando (dados persistentes), a unidade dele em campo e o que aconteceu. */
   readonly lieutenant: LieutenantData | null;
@@ -130,6 +137,21 @@ export class Battalion {
     return this.lieutenant && !this.lieutenantDied ? PASSIVES[this.lieutenant.passive] : null;
   }
 
+  /** Velocidade conforme a fadiga (mais lento a partir de FATIGUE.SLOW_FROM). */
+  get fatigueSpeed(): number {
+    const over = Math.max(0, this.fatigue - FATIGUE.SLOW_FROM) / (100 - FATIGUE.SLOW_FROM);
+    return 1 - over * FATIGUE.MAX_SLOW;
+  }
+
+  get fatigueDamage(): number {
+    return 1 - (this.fatigue / 100) * FATIGUE.MAX_DAMAGE_LOSS;
+  }
+
+  /** Recuperação de moral conforme a fadiga. */
+  get fatigueRecovery(): number {
+    return 1 - (this.fatigue / 100) * FATIGUE.MAX_RECOVERY_LOSS;
+  }
+
   get lieutenantAlive(): boolean {
     return !!this.lieutenant && !this.lieutenantDied;
   }
@@ -186,7 +208,8 @@ export class Battalion {
   restAt(slot: Point): void {
     if (this.isDestroyed) return;
     if (this.panicking) this.rally();
-    this.facing = Math.PI / 2;
+    // De frente para a barraca: as fileiras se estendem para longe dela (a barraca é sólida)
+    this.facing = -Math.PI / 2;
     this.order = { type: "HOLD", point: slot };
     for (const s of this.soldiers) s.target = null;
   }
@@ -324,12 +347,15 @@ export class Battalion {
         return this.order.point;
       case "FOLLOW": {
         const leader = this.order.leader;
-        if (leader.unitState === "MOVING") this.facing = leader.facing;
+        const hold = this.followHold;
+        if (hold) this.facing = hold.facing;
+        else if (leader.unitState === "MOVING") this.facing = leader.facing;
+        const at = hold ? hold.point : leader;
         const fx = Math.cos(this.facing);
         const fy = Math.sin(this.facing);
         return {
-          x: leader.x - fx * this.followSlot.back - fy * this.followSlot.lateral,
-          y: leader.y - fy * this.followSlot.back + fx * this.followSlot.lateral,
+          x: at.x - fx * this.followSlot.back - fy * this.followSlot.lateral,
+          y: at.y - fy * this.followSlot.back + fx * this.followSlot.lateral,
         };
       }
       case "ATTACK": {

@@ -50,10 +50,10 @@ export interface RiverDef {
   widths: number[];
 }
 
-/** Travessia de um rio: ponte (queimável) ou vau (raso). */
+/** Travessia de um rio: ponte (queimável), vau (raso) ou balsa (rios grandes, com cais nas duas margens). */
 export interface CrossingDef {
   id: string;
-  kind: "BRIDGE" | "FORD";
+  kind: "BRIDGE" | "FORD" | "FERRY";
   x: number;
   y: number;
   /** Direção do rio no ponto (a travessia é perpendicular a ela). */
@@ -100,6 +100,32 @@ export interface RegionDef {
 export type SettlementKind = "VILLAGE" | "CITY" | "FORT";
 
 /** Mercado de um povoado (preços base, antes da prosperidade). */
+/** Recursos da terra em volta de um povoado (Marco 11, completado no Marco 12). */
+export type ResourceId = "GRAIN" | "FISH" | "WOOD" | "STONE" | "IRON" | "SALT" | "FURS" | "HORSES" | "HERBS";
+
+export const RESOURCE_LABEL: Record<ResourceId, string> = {
+  GRAIN: "Grão",
+  FISH: "Peixe",
+  WOOD: "Madeira",
+  STONE: "Pedra",
+  IRON: "Ferro",
+  SALT: "Sal",
+  FURS: "Peles",
+  HORSES: "Cavalos",
+  HERBS: "Ervas",
+};
+
+/** Cais das duas margens de uma balsa (perpendicular ao rio). */
+export function ferryDocks(c: CrossingDef): [Point, Point] {
+  const nx = -Math.sin(c.angle);
+  const ny = Math.cos(c.angle);
+  const d = c.width / 2 + 70;
+  return [
+    { x: c.x + nx * d, y: c.y + ny * d },
+    { x: c.x - nx * d, y: c.y - ny * d },
+  ];
+}
+
 export interface MarketDef {
   rationPrice: number;
   ironBuy: number;
@@ -123,6 +149,8 @@ export interface SettlementSeed {
   garrison: number;
   market: MarketDef;
   description: string;
+  /** O que a terra em volta dá (barateia o mercado local; rende para o dono). */
+  resources: ResourceId[];
 }
 
 export type Temperament = "BELLIGERENT" | "MERCANTILE" | "PIOUS";

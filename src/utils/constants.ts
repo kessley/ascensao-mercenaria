@@ -107,7 +107,13 @@ export type EnemyKind =
   | "ORC_WARLORD"
   /** Marco 12: gente que não luta (refugiados) e o mensageiro a cavalo de um reino. */
   | "CIVILIAN"
-  | "COURIER";
+  | "COURIER"
+  /** Bicho do mato: alcateias atacam quem anda sozinho. */
+  | "WOLF"
+  /** Marco 14: caravana de mercadores (o mercador, os guardas e a carroça de carga). */
+  | "MERCHANT"
+  | "CARAVAN_GUARD"
+  | "CART";
 export type Formation = "LINE" | "SHIELD_WALL" | "WEDGE" | "LOOSE";
 export type TerrainType =
   | "GRASS"
@@ -120,7 +126,9 @@ export type TerrainType =
   | "WATER"
   | "MOUNTAIN"
   | "WALL"
-  | "BUILDING";
+  | "BUILDING"
+  /** Rio ou lago congelado no inverno (Marco 13): atravessa em qualquer ponto. */
+  | "ICE";
 export type AttackKind = "MELEE" | "RANGED";
 
 export interface UnitStats {
@@ -276,7 +284,53 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     aggroRange: 0,
     stats: { hp: 55, speed: 230, damage: 4, range: 10, cooldown: 1200, radius: 10 },
   },
+  WOLF: {
+    label: "Lobo",
+    color: 0x7a7468,
+    aggroRange: 480,
+    stats: { hp: 38, speed: 190, damage: 7, range: 8, cooldown: 800, radius: 9 },
+  },
+  MERCHANT: {
+    label: "Mercador",
+    color: 0xd9b25f,
+    aggroRange: 0,
+    stats: { hp: 30, speed: 95, damage: 0, range: 6, cooldown: 2000, radius: 8 },
+  },
+  CARAVAN_GUARD: {
+    label: "Guarda de caravana",
+    color: 0x9a7b4f,
+    stats: { hp: 55, speed: 100, damage: 8, range: 8, cooldown: 950, radius: 9 },
+  },
+  CART: {
+    label: "Carroça de mercador",
+    color: 0x8a6a3a,
+    aggroRange: 0,
+    stats: { hp: 160, speed: 90, damage: 0, range: 0, cooldown: 1e9, radius: 15 },
+  },
 };
+
+/**
+ * Lobos (Marco 12): alcateias nas matas e na tundra, longe dos povoados. Atacam quem anda
+ * sozinho (até 1 companheiro a ESCORT_RADIUS) e fogem de grupos de GROUP_SIZE ou mais.
+ */
+export const WOLF = {
+  PACK: [3, 5] as const,
+  MAX_PACKS: 2,
+  /** A cada tantos ms, uma chance de surgir uma alcateia perto de alguém do bando. */
+  SPAWN_EVERY_MS: 15000,
+  SPAWN_CHANCE: { DAY: 0.25, NIGHT: 0.6 },
+  /** Distância de quem está sozinho em que a alcateia aparece (fora de vista). */
+  SPAWN_DISTANCE: [1100, 1700] as const,
+  ESCORT_RADIUS: 280,
+  GROUP_RADIUS: 320,
+  GROUP_SIZE: 3,
+  SCARED_MS: 6000,
+  LEASH: 2400,
+  /** Alcateia longe de todos (ou assustada e fora de vista) some. */
+  DESPAWN_DISTANCE: 3200,
+  /** Pele de cada lobo abatido (ouro). */
+  PELT_GOLD: 4,
+} as const;
 
 /** Agentes do mundo vivo (Marco 12): patrulhas, mensageiros dos reinos e refugiados. */
 export const AGENTS = {
@@ -290,7 +344,7 @@ export const AGENTS = {
   /** Dois bandos a esta distância se enfrentam (resolvido no abstrato). */
   SKIRMISH_RADIUS: 420,
   /** Força de cada tipo de bando numa escaramuça. */
-  SKIRMISH_WEIGHT: { GOBLIN: 1, HORDE: 1.5, FACTION: 1.2, PATROL: 1.3, COURIER: 0.5, REFUGEES: 0.1 } as Record<string, number>,
+  SKIRMISH_WEIGHT: { GOBLIN: 1, HORDE: 1.5, FACTION: 1.2, PATROL: 1.3, COURIER: 0.5, REFUGEES: 0.1, CARAVAN: 1.1 } as Record<string, number>,
   /** O mensageiro real cavalga 3× mais rápido que um bando. */
   COURIER_SPEED: 3,
   /** Interceptar um mensageiro: ouro dos despachos e a relação que se perde se o reino não estiver em guerra. */
@@ -324,6 +378,11 @@ export const PROGRESSION = {
   LEVEL_WAGE_BONUS: 0.1,
 
   TRAINING_DAYS: 2,
+  /**
+   * No acampamento o relógio fica parado — menos enquanto alguém treina: aí um dia passa em
+   * tantos segundos (dá para assistir ao treino; ou esperar o fim de uma vez no Campo de Treino).
+   */
+  TRAINING_CAMP_DAY_SECONDS: 90,
   TRAINING_XP: 80,
   TRAINING_COST: 15,
 
@@ -564,6 +623,7 @@ export const TERRAIN: Record<TerrainType, TerrainDef> = {
   /** Muralhas, torres e construções dos povoados (Marco 12). */
   WALL: { label: "Muralha", speed: 0, cavalrySpeed: 0, breaksCharge: true, blocked: true },
   BUILDING: { label: "Construção", speed: 0, cavalrySpeed: 0, breaksCharge: true, blocked: true },
+  ICE: { label: "Gelo", speed: 0.8, cavalrySpeed: 0.6, breaksCharge: true },
 };
 
 /** Rios, vaus, pontes e montanhas (Marco 11). */
@@ -596,7 +656,24 @@ export const GEO = {
   BRIDGE_CONTROL_RADIUS: 4000,
   /** Grade de navegação (px por célula). */
   NAV_CELL: 80,
+  /** Balsas nos rios grandes (onde não há ponte): uma a cada tantos px de rio; preço e tempo da travessia. */
+  FERRY_EVERY: 6500,
+  FERRY_GOLD: 15,
+  FERRY_DAYS: 0.1,
 } as const;
+
+/** Renda semanal de cada recurso da terra para o dono do povoado (Marco 12). */
+export const RESOURCE_YIELD: Record<string, { gold?: number; rations?: number; iron?: number }> = {
+  GRAIN: { rations: 8 },
+  FISH: { rations: 6 },
+  WOOD: { gold: 8 },
+  STONE: { gold: 6 },
+  IRON: { iron: 3 },
+  SALT: { gold: 10 },
+  FURS: { gold: 8 },
+  HORSES: { gold: 8 },
+  HERBS: { gold: 5 },
+};
 
 /** Como vários batalhões se dispõem entre si ao marchar juntos ou seguir o Comandante. */
 export type GroupArrangement = "LINE" | "ARCHERS_BACK" | "CAVALRY_FLANKS" | "COLUMN";
@@ -760,7 +837,7 @@ export const TIME = {
   /** Marchar no escuro é mais lento (o cansaço de verdade chega com a fadiga, no Marco 13). */
   NIGHT_SPEED: 0.85,
   /** Criaturas da noite (goblins e mortos-vivos) ganham força e velocidade no escuro. */
-  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "SKELETON", "NECROMANCER"] as readonly EnemyKind[],
+  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "SKELETON", "NECROMANCER", "WOLF"] as readonly EnemyKind[],
   NIGHT_CREATURE_DAMAGE: 1.25,
   NIGHT_CREATURE_SPEED: 1.1,
   /** Emboscada noturna: inimigo que surge do escuro e ataca em poucos segundos abala a moral. */
@@ -776,10 +853,172 @@ export const TIME = {
 /** Salvar e carregar (Marco 10). */
 export const SAVE = {
   /** Versão do formato; saves de outra versão do gerador não são carregados. */
-  VERSION: 3,
+  VERSION: 7,
   /** Espaços manuais (além do automático). */
   SLOTS: 3,
 } as const;
+
+export type Season = "SPRING" | "SUMMER" | "AUTUMN" | "WINTER";
+/** STORM: tempestade na costa e no mar (fechamento do Marco 13): os navios não saem do porto. */
+export type Weather = "CLEAR" | "RAIN" | "FOG" | "SNOW" | "STORM";
+
+/** Calendário e estações (Marco 13). */
+export const SEASONS = {
+  ORDER: ["SPRING", "SUMMER", "AUTUMN", "WINTER"] as readonly Season[],
+  LABEL: { SPRING: "Primavera", SUMMER: "Verão", AUTUMN: "Outono", WINTER: "Inverno" } as Record<Season, string>,
+  /** Dias de cada estação (o ano tem 4 × DAYS). */
+  DAYS: 20,
+  /** A campanha começa no 11º dia da primavera (a cheia já passou). */
+  START_OFFSET: 10,
+  /** Primavera: lama fora das estradas. */
+  SPRING_MUD: 0.8,
+  /** Cheia: nos primeiros dias da primavera os vaus dos rios (não os riachos) ficam fundos. */
+  FLOOD_DAYS: 6,
+  /** Inverno: neve onde a temperatura é baixa (norte e montanhas): lenta fora da estrada. */
+  SNOW_BELOW: 0.46,
+  SNOW_SPEED: 0.6,
+  SNOW_ROAD_SPEED: 0.85,
+  /** Inverno: rios e lagos congelam abaixo desta temperatura; perto do limite o gelo é fino. */
+  FREEZE_BELOW: 0.4,
+  THIN_ICE: 0.05,
+  /** Gelo fino: chance por segundo de um cavaleiro ou carroça afundar (e o dano, fração da vida). */
+  THIN_ICE_CHANCE: 0.04,
+  THIN_ICE_DAMAGE: 0.6,
+  /** Outono: colheita (comida barata, renda de rações maior, impostos rurais) e feiras. */
+  HARVEST_RATION_PRICE: 0.7,
+  HARVEST_RATIONS: 1.5,
+  HARVEST_GOLD: 1.2,
+  FAIR_PROSPERITY: 6,
+  /** Verão: temporada de campanha (exércitos saem mais vezes, um contrato a mais na mesa). */
+  SUMMER_ARMY_EVERY: 0.6,
+  /** Inverno: goblins saem menos dos covis; orcs se arrastam; os reinos param. */
+  WINTER_GOBLIN_EVERY: 2,
+  WINTER_HORDE_EVERY: 1.5,
+} as const;
+
+/** Clima diário por região (Marco 13). */
+export const WEATHER = {
+  LABEL: { CLEAR: "Céu limpo", RAIN: "Chuva", FOG: "Nevoeiro", SNOW: "Neve", STORM: "Tempestade" } as Record<Weather, string>,
+  ICON: { CLEAR: "☀", RAIN: "☔", FOG: "🌫", SNOW: "❄", STORM: "⛈" } as Record<Weather, string>,
+  /** Cada célula de clima tem este tamanho (2×2 regiões): o tempo muda de lugar para lugar. */
+  CELL_REGIONS: 2,
+  /** Chance de chuva (ou neve, no frio do inverno) e de nevoeiro por estação. */
+  CHANCE: {
+    SPRING: { wet: 0.35, fog: 0.15 },
+    SUMMER: { wet: 0.15, fog: 0.05 },
+    AUTUMN: { wet: 0.3, fog: 0.22 },
+    WINTER: { wet: 0.35, fog: 0.15 },
+  } as Record<Season, { wet: number; fog: number }>,
+  /** Chuva: arqueiros e bestas com menos alcance; o chão fora da estrada vira lama. */
+  RAIN_RANGE: 0.75,
+  RAIN_MUD: 0.9,
+  /** Tempestade (costa e mar, no outono e no inverno): arcos quase inúteis, vento e mar bravo. */
+  STORM_RANGE: 0.6,
+  /** Dos dias de chuva na costa e no mar, quantos viram tempestade no outono e no inverno. */
+  STORM_SHARE: 0.45,
+  /** Até onde a tempestade entra terra adentro (px do mar). */
+  STORM_REACH: 2600,
+  /** Visão do bando (e percepção dos inimigos) conforme o tempo. */
+  VISION: { CLEAR: 1, RAIN: 0.85, FOG: 0.5, SNOW: 0.75, STORM: 0.6 } as Record<Weather, number>,
+} as const;
+
+/** Fadiga por batalhão (Marco 13): 0 descansado, 100 exausto. */
+export const FATIGUE = {
+  /** Um dia inteiro de marcha (DAY_DISTANCE) cansa isto. */
+  MARCH_PER_DAY: 28,
+  /** Multiplicadores: marcha noturna, terreno ruim (lama, pântano, floresta, vau, neve) e marcha forçada. */
+  NIGHT: 2,
+  ROUGH: 1.5,
+  FORCED: 2.5,
+  /** Lutando: por segundo, para cada batalhão com gente em combate. */
+  COMBAT_PER_SEC: 0.5,
+  /** Parado: recupera por dia de relógio (ao relento) e por segundo de verdade nos alojamentos. */
+  REST_PER_DAY: 60,
+  CAMP_PER_SEC: 2,
+  /** Descansar até o amanhecer. */
+  NIGHT_REST: { FIELD: 45, CAMP: 100 },
+  /** A partir daqui fica mais lento, e o efeito cresce até 100. */
+  SLOW_FROM: 40,
+  MAX_SLOW: 0.3,
+  MAX_DAMAGE_LOSS: 0.25,
+  MAX_RECOVERY_LOSS: 0.6,
+  EXHAUSTED: 80,
+  /** Marcha forçada: o dia rende mais caminho e as tropas andam mais depressa. */
+  FORCED_DAY: 1.35,
+  FORCED_SPEED: 1.2,
+} as const;
+
+/** Trem de carroças e forragem (Marco 13). */
+export const SUPPLY = {
+  /** Mochilas: o que a tropa carrega sem carroças; cada carroça leva mais isto. */
+  PACK_CAPACITY: 20,
+  WAGON_CAPACITY: 60,
+  START_WAGONS: 2,
+  MAX_WAGONS: 6,
+  WAGON_COST: 60,
+  /** Ao sair do acampamento as carroças carregam, mas deixam rações para tantos dias de quem fica. */
+  CAMP_RESERVE_DAYS: 3,
+  WAGON: { hp: 140, speed: 115, damage: 0, range: 0, cooldown: 1e9, radius: 16 } satisfies UnitStats,
+  /** Terreno ruim (lama, pântano, floresta, neve): carroças andam muito mais devagar. */
+  WAGON_ROUGH: 0.55,
+  /** Goblins e bandidos preferem as carroças (a distância delas "conta" menos). */
+  WAGON_LURE: 0.55,
+  /** Forragear: rações por soldado, tempo gasto, esgotamento da região e quanto volta por dia. */
+  FORAGE_PER_SOLDIER: 0.6,
+  FORAGE_DAYS: 0.25,
+  FORAGE_DEPLETION: 0.4,
+  FORAGE_REGROW_PER_DAY: 0.03,
+  FORAGE_SEASON: { SPRING: 0.6, SUMMER: 1, AUTUMN: 1.3, WINTER: 0.2 } as Record<Season, number>,
+  FORAGE_BIOME: { DESERT: 0.2, TUNDRA: 0.3, MOUNTAINS: 0.2, MARSH: 0.6, STEPPE: 0.7, PLAINS: 1.1, FOREST: 0.9, DEEP_FOREST: 0.8, HILLS: 0.8, COAST: 0.9, OCEAN: 0 } as Record<string, number>,
+  /** Forragear nas terras de um reino irrita o dono. */
+  FORAGE_RELATION: -4,
+  FORAGE_OWNER_RADIUS: 5000,
+} as const;
+
+/** Feridos, enfermaria e doenças (Marco 13). */
+export const HEALTH = {
+  /** Fração dos que caem em combate que fica ferida (e não morta); com curandeira, mais. */
+  WOUNDED_SHARE: 0.4,
+  WOUNDED_SHARE_HEALER: 0.55,
+  /** Por dia: chance de cada ferido voltar ou morrer, na enfermaria (acampamento) ou no campo. */
+  RECOVER: { CAMP: 0.3, FIELD: 0.12 },
+  DIE: { CAMP: 0.02, FIELD: 0.08 },
+  HEALER_RECOVER: 0.1,
+  HEALER_DIE: 0.5,
+  /** Doentes: chance por dia de sarar ou morrer, e de passar a doença a um companheiro. */
+  SICK_RECOVER: { CAMP: 0.25, FIELD: 0.12 },
+  SICK_DIE: { CAMP: 0.03, FIELD: 0.07 },
+  SPREAD: 0.06,
+  /** Surto: chance por batalhão e por dia conforme o que expõe a tropa. */
+  OUTBREAK: { SWAMP: 0.08, HUNGER: 0.1, COLD: 0.08, CROWDED: 0.06, SICK_TOWN: 0.12 },
+  /** Acampamento lotado: soldados acima disto. */
+  CAMP_CROWD: 60,
+  /** Povoado com febre: dias que dura; chance semanal de passar ao vizinho pela estrada. */
+  TOWN_SICK_DAYS: 10,
+  TOWN_SPREAD: 0.35,
+  TOWN_SPREAD_RADIUS: 9000,
+} as const;
+
+/** Acampamento móvel e fortificações (Marco 13). */
+export const CAMP_MOVE = {
+  /** Levantar e montar o acampamento (dias de trabalho). */
+  PACK_DAYS: 1.5,
+  PITCH_DAYS: 1,
+  /** Distância mínima de povoados e locais para montar. */
+  MIN_TOWN_DISTANCE: 3000,
+  /** Acampamento levantado: as carroças levam tudo, mas a coluna é mais lenta. */
+  PACKED_SPEED: 0.85,
+} as const;
+
+export type CampWork = "PALISADE" | "TOWERS" | "DITCH";
+/** Melhorias de um acampamento fixo (perdidas ao levantar o acampamento). */
+export const CAMP_WORKS: Record<CampWork, { label: string; gold: number; iron: number; effect: string }> = {
+  PALISADE: { label: "Paliçada reforçada", gold: 120, iron: 6, effect: "Um ataque ao acampamento desguarnecido leva 35% menos." },
+  TOWERS: { label: "Torres de vigia", gold: 90, iron: 4, effect: "Vigias enxergam longe em volta do acampamento; ataques levam 25% menos." },
+  DITCH: { label: "Fosso", gold: 70, iron: 0, effect: "Lama funda em volta da paliçada (só o portão é firme); ataques levam 25% menos." },
+};
+/** Quanto cada obra reduz o saque ao acampamento desguarnecido. */
+export const CAMP_WORK_RAID: Record<CampWork, number> = { PALISADE: 0.35, TOWERS: 0.25, DITCH: 0.25 };
 
 /** Reino do jogador, reinos rivais e calamidades (Marco 9). */
 export const REALM = {
@@ -795,6 +1034,11 @@ export const REALM = {
   /** Guarnição máxima sem e com quartel. */
   GARRISON_CAP: 12,
   GARRISON_CAP_BARRACKS: 30,
+  /**
+   * Guarnição de cada tipo de povoado no começo da campanha. Os reinos repõem 1 homem por
+   * semana até esse número (os povoados do bando crescem até o teto, acima).
+   */
+  BASE_GARRISON: { VILLAGE: 6, CITY: 14, FORT: 20 },
   /** Armar milícia: +N homens por X de ouro. */
   MILITIA: { MEN: 5, GOLD: 40 },
   /** Impostos: multiplicador da renda e efeito diário na prosperidade. */
@@ -815,8 +1059,16 @@ export const REALM = {
   /** Reino em guerra manda um exército a cada N dias (tamanho cresce com os povoados dele). */
   ARMY_EVERY_DAYS: 5,
   ARMY_BASE_SIZE: 6,
-  /** Guarnição que aparece no cerco (máximo em campo). */
-  SIEGE_MAX_DEFENDERS: 18,
+  /**
+   * Cerco (Marco 12: a guarnição mora nos acampamentos dos portões e sai de lá para lutar).
+   * Máximo em campo; abaixo do mínimo, moradores armados (milícia) completam a defesa.
+   */
+  SIEGE_MAX_DEFENDERS: 30,
+  SIEGE_MIN_DEFENDERS: 5,
+  /** Em guerra, o exército a esta distância dos muros faz a guarnição sair para lutar. */
+  SALLY_RADIUS: 800,
+  /** O bando se afastou tanto dos muros (sem combate): o cerco é levantado. */
+  SIEGE_LEAVE_RADIUS: 2600,
   /** Calamidades: primeira entre os dias, intervalo após derrotar uma, hordas e crescimento. */
   CALAMITY_FIRST_DAY: [8, 12] as const,
   CALAMITY_GAP_DAYS: [20, 28] as const,
@@ -834,13 +1086,200 @@ export const REALM = {
   ],
 } as const;
 
-export type BuildingId = "FARM" | "MINE" | "MARKET" | "WALLS" | "BARRACKS";
+export type BuildingId =
+  | "FARM"
+  | "MINE"
+  | "MARKET"
+  | "WALLS"
+  | "BARRACKS"
+  /** Marco 14: construções ligadas às cadeias de produção. */
+  | "SAWMILL"
+  | "SALTWORKS"
+  | "WEAVERY"
+  | "PASTURE"
+  | "MILL"
+  | "PORT";
 
-/** Construções da Sala de Administração de um povoado do jogador. */
-export const BUILDINGS: Record<BuildingId, { label: string; gold: number; iron: number; effect: string }> = {
-  FARM: { label: "Fazendas", gold: 80, iron: 0, effect: "+12 rações por semana" },
-  MINE: { label: "Mina", gold: 100, iron: 0, effect: "+5 ferro por semana" },
-  MARKET: { label: "Mercado", gold: 120, iron: 5, effect: "+40% de impostos" },
+/**
+ * Construções da Sala de Administração de um povoado do jogador (os povoados dos reinos
+ * também as têm, conforme a terra). `needs`: só onde há o recurso, o rio ou o mar.
+ */
+export const BUILDINGS: Record<
+  BuildingId,
+  { label: string; gold: number; iron: number; effect: string; needs?: "RIVER" | "PORT" | "SALT" | "WOOD" }
+> = {
+  FARM: { label: "Fazendas", gold: 80, iron: 0, effect: "lavouras maiores: muito mais grão" },
+  MINE: { label: "Mina", gold: 100, iron: 0, effect: "ferro (o dobro onde a terra dá ferro)" },
+  MARKET: { label: "Mercado", gold: 120, iron: 5, effect: "+40% de impostos e da taxa de mercado" },
   WALLS: { label: "Muralhas", gold: 150, iron: 15, effect: "defesa da guarnição em dobro" },
-  BARRACKS: { label: "Quartel", gold: 120, iron: 10, effect: "+3 milicianos por semana, guarnição até 30" },
+  BARRACKS: { label: "Quartel", gold: 120, iron: 10, effect: "+3 milicianos por semana, guarnição até 30; a armaria faz mais armas" },
+  SAWMILL: { label: "Serraria", gold: 90, iron: 4, effect: "madeira", needs: "WOOD" },
+  SALTWORKS: { label: "Salina", gold: 90, iron: 2, effect: "sal", needs: "SALT" },
+  WEAVERY: { label: "Tecelagem", gold: 110, iron: 3, effect: "tecido (gasta um pouco de carne: lã e couro)" },
+  PASTURE: { label: "Pastagem", gold: 70, iron: 0, effect: "carne; cavalos onde a terra dá cavalos" },
+  MILL: { label: "Moinho", gold: 100, iron: 4, effect: "+25% de grão e mais cerveja", needs: "RIVER" },
+  PORT: { label: "Porto", gold: 160, iron: 8, effect: "navios trazem luxos e sal; mais caravanas pelo mar", needs: "PORT" },
 };
+
+// --- Economia e comércio (Marco 14) ---
+
+export type Good = "GRAIN" | "MEAT" | "SALT" | "WOOD" | "IRON" | "CLOTH" | "ALE" | "ARMS" | "HORSES" | "LUXURY";
+export const GOOD_LIST: readonly Good[] = ["GRAIN", "MEAT", "SALT", "WOOD", "IRON", "CLOTH", "ALE", "ARMS", "HORSES", "LUXURY"];
+
+/**
+ * Bens: preço base (ouro por unidade) e peso nas carroças (cada carroça leva 60; uma ração
+ * pesa 1). Cavalos andam sozinhos (peso 0). Uma unidade de grão ou de carne vira 10 rações.
+ */
+export const GOODS: Record<Good, { label: string; icon: string; base: number; weight: number; color: string }> = {
+  GRAIN: { label: "Grão", icon: "🌾", base: 10, weight: 10, color: "#d9b44a" },
+  MEAT: { label: "Carne", icon: "🥩", base: 14, weight: 10, color: "#c0584a" },
+  SALT: { label: "Sal", icon: "🧂", base: 16, weight: 5, color: "#e8e4dc" },
+  WOOD: { label: "Madeira", icon: "🪵", base: 6, weight: 15, color: "#a0784a" },
+  IRON: { label: "Ferro", icon: "⛓", base: 8, weight: 2, color: "#8fa6b8" },
+  CLOTH: { label: "Tecido", icon: "🧵", base: 20, weight: 4, color: "#b07ac0" },
+  ALE: { label: "Cerveja e vinho", icon: "🍺", base: 12, weight: 6, color: "#e0a040" },
+  ARMS: { label: "Armas e armaduras", icon: "⚔", base: 45, weight: 6, color: "#a0a8b0" },
+  HORSES: { label: "Cavalos", icon: "🐎", base: 55, weight: 0, color: "#c08a50" },
+  LUXURY: { label: "Luxos", icon: "💎", base: 80, weight: 1, color: "#e07ac0" },
+};
+
+/** Necessidade (o que a gente consome): os bens e a comida (grão ou carne). */
+export type Need = Good | "FOOD";
+
+/** Mercado dos povoados (Marco 14): estoque, oferta e procura, nível de vida. */
+export const MARKET = {
+  /** Preço = base × (procura de tantos dias ÷ estoque), entre os limites. */
+  DEMAND_DAYS: 12,
+  MIN_PRICE: 0.3,
+  MAX_PRICE: 4,
+  /** O preço anda esta fração por dia rumo ao novo valor (compras e vendas mexem na hora). */
+  PRICE_SMOOTHING: 0.35,
+  /** Margem do mercador: o bando compra mais caro e vende mais barato. */
+  BUY_MARKUP: 1.08,
+  SELL_MARKDOWN: 0.92,
+  /** Estoque inicial (dias de procura) e teto (dias de procura e de produção, mais uma folga). */
+  START_DAYS: 10,
+  CAP_DAYS: 40,
+  CAP_BASE: 25,
+  CAP_PRODUCTION_DAYS: 15,
+  /** Perda diária: comida estraga (com sal no mercado, a carne dura mais). */
+  DECAY: { GRAIN: 0.005, MEAT: 0.03, ALE: 0.005 } as Partial<Record<Good, number>>,
+  SALTED_MEAT_DECAY: 0.01,
+  /** Gente por camada social, por tipo de povoado. */
+  STRATA: {
+    VILLAGE: { peasants: 0.92, burghers: 0.07, nobles: 0.01 },
+    CITY: { peasants: 0.55, burghers: 0.38, nobles: 0.07 },
+    FORT: { peasants: 0.6, burghers: 0.25, nobles: 0.15 },
+  },
+  /** Necessidades por 100 pessoas por dia (comida = grão ou carne, o mais barato primeiro). */
+  NEEDS: {
+    peasants: { FOOD: 1, SALT: 0.1, CLOTH: 0.08, ALE: 0.15, WOOD: 0.3 },
+    burghers: { FOOD: 1.1, SALT: 0.15, CLOTH: 0.3, ALE: 0.4, WOOD: 0.4, IRON: 0.2, LUXURY: 0.03, ARMS: 0.02 },
+    nobles: { FOOD: 1.5, CLOTH: 1, ALE: 1, LUXURY: 0.5, HORSES: 0.05, ARMS: 0.1 },
+  } as Record<"peasants" | "burghers" | "nobles", Partial<Record<Need, number>>>,
+  /** Guarnição: por soldado por dia. */
+  GARRISON: { FOOD: 0.03, ARMS: 0.004, HORSES: 0.0015 } as Partial<Record<Need, number>>,
+  /** Reino em guerra (com o bando ou com outro reino): armas e cavalos muito procurados. */
+  WAR_DEMAND: { ARMS: 3, HORSES: 3, FOOD: 1.3 } as Partial<Record<Need, number>>,
+  /** Calamidade por perto: a gente estoca comida. */
+  HOARD_RADIUS: 9000,
+  HOARD_FOOD: 1.25,
+  /** Inverno: lenha em dobro. */
+  WINTER_WOOD: 2,
+  /** Peso de cada necessidade no nível de vida (0–100). */
+  SOL_WEIGHT: { FOOD: 0.5, SALT: 0.08, CLOTH: 0.12, ALE: 0.12, WOOD: 0.1, LUXURY: 0.08 } as Partial<Record<Need, number>>,
+  /** Lavouras por estação (a colheita do outono enche os celeiros; o inverno os esvazia). */
+  HARVEST: { SPRING: 0.85, SUMMER: 1, AUTUMN: 1.7, WINTER: 0.45 } as Record<Season, number>,
+  /** Fome: comida abaixo desta fração da necessidade (gente morre, a prosperidade despenca). */
+  FAMINE_BELOW: 0.5,
+  /** Prosperidade por dia: base + (nível de vida − 60) ÷ 25. */
+  PROSPERITY_BASE: 1.5,
+  /** Agitação (povoados do bando): sobe com nível de vida baixo; em 100, revolta. */
+  UNREST_BELOW_SOL: 40,
+  REVOLT_DAYS: 14,
+  /** Comércio miúdo entre vizinhos: fração do estoque que passa por dia (e até que distância). */
+  DIFFUSION: 0.02,
+  /** Produção conforme o preço do que se faz (barato: menos gente trabalha nisso; caro: mais). */
+  ELASTIC: [0.45, 1.25] as const,
+  DIFFUSION_RADIUS: 18000,
+  /** Amostras do histórico de preços (uma a cada 2 dias). */
+  HISTORY: 20,
+} as const;
+
+/** Caravanas dos mercadores (Marco 14). */
+export const CARAVAN = {
+  /** Carga de uma caravana (peso). */
+  CAPACITY: 200,
+  /** No máximo uma caravana na estrada por tantos povoados. */
+  PER_SETTLEMENTS: 1,
+  MAX: 24,
+  /** Chance diária de um povoado mandar uma caravana. */
+  DAILY_CHANCE: 0.3,
+  /** Lucro esperado mínimo para valer a viagem; e o custo da viagem por dia de estrada. */
+  MIN_PROFIT: 25,
+  COST_PER_DAY: 8,
+  /** Distância máxima (dias de estrada). */
+  MAX_DAYS: 3.5,
+  /** Guardas por caravana. */
+  GUARDS: [2, 4] as const,
+  /** Barcaças (rio) e navios (costa): carga maior; o mar fecha com a tempestade. */
+  BARGE_CAPACITY: 200,
+  SHIP_CAPACITY: 260,
+  /** Dias de rio por dia de estrada: rio abaixo é mais rápido, rio acima mais lento. */
+  BARGE_SPEED: { DOWN: 1.5, UP: 0.7 },
+  SHIP_SPEED: 1.8,
+  /** Navio no mar numa tempestade: chance por dia de afundar com a carga. */
+  STORM_SINK: 0.25,
+  /** Saquear uma caravana: honra e relação com o reino dono. */
+  ROB_HONOR: -8,
+  ROB_RELATION: -12,
+  /** Prosperidade que uma caravana leva ao destino (e à origem, ao comprar). */
+  PROSPERITY: 2,
+} as const;
+
+/** Comércio do bando (Marco 14). */
+export const TRADE = {
+  /** O Comandante sozinho leva pouca coisa (a bolsa: peso). */
+  PURSE_CAPACITY: 6,
+  /** Carroças até esta distância do Comandante contam para comprar e vender. */
+  WAGON_REACH: 2600,
+  /** Carga pesada atrasa: as carroças cheias de mercadoria andam até isto mais devagar. */
+  LOAD_SLOW: 0.15,
+  /** Contrabando (vender num reino em guerra com o de origem da carga): preço e risco. */
+  SMUGGLE_BONUS: 1.5,
+  SMUGGLE_CATCH: 0.25,
+  SMUGGLE_FINE: 0.5,
+  SMUGGLE_RELATION: -10,
+  /** Feitoria: preço, manutenção semanal, margem melhor e preços sempre frescos. */
+  POST_COST: 300,
+  POST_UPKEEP: 6,
+  POST_MARGIN: 0.05,
+  /** Investir numa guilda: constrói a oficina no povoado e paga dividendos semanais. */
+  GUILD_COST: 250,
+  GUILD_SHARE: 0.35,
+  /** Empréstimo da casa de câmbio: juros por semana; atrasar custa honra e relação. */
+  LOAN_SIZES: [200, 500] as const,
+  LOAN_INTEREST: 0.06,
+  LOAN_WEEKS: 6,
+  LOAN_DEFAULT_HONOR: -10,
+  LOAN_DEFAULT_RELATION: -20,
+  /** Caravana própria: carroça, guardas e caravaneiro; salário semanal. */
+  OWN_CARAVAN_COST: 220,
+  OWN_CARAVAN_WAGE: 18,
+  OWN_CARAVAN_MAX: 3,
+  /** Taxa de mercado dos povoados do bando (por caravana que chega): baixa, normal e alta. */
+  MARKET_TAX: [0.02, 0.05, 0.1] as const,
+  /** Uma rodada na taverna: notícias e preços de longe. */
+  TAVERN_ROUND: 8,
+  /** Ração de cerveja: por semana, cada 20 soldados bebem 1 unidade; humor do acampamento. */
+  ALE_PER_20: 1,
+  ALE_MOOD: 6,
+  /** Cavalaria: um cavalo por cavaleiro (recrutar e repor). */
+  HORSES_PER_RIDER: 1,
+  /** Livro de Preços: observações guardadas por povoado. */
+  BOOK_HISTORY: 10,
+  /** Rações por unidade de grão ou carne (a Intendência converte). */
+  RATIONS_PER_FOOD: 10,
+  /** O vivandeiro do acampamento vende rações a este múltiplo do preço do mercado mais perto. */
+  SUTLER_MARKUP: 1.3,
+} as const;

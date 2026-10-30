@@ -2,7 +2,7 @@
 
 Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, estações, comércio, reinos) alimenta os outros. Os marcos estão em ordem de dependência.
 
-**Estado:** Marcos 10, 11 e 12 ✅ OK · próximo: Marco 13. **OK** = concluído e jogável em greybox.
+**Estado:** Marcos 10, 11, 12 e 13 ✅ OK · próximo: Marco 14. **OK** = concluído e jogável em greybox.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 1 — O bando](ROADMAP_FASE_1.md) · Design: [GDD.md](GDD.md), seção 8 (as regras para os marcos novos estão na 8.1)
 
@@ -131,9 +131,16 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
   - a câmera saltando pelo continente custa até ≈ 65 ms em 2 quadros.
 
   Teste automatizado com 22 verificações; os testes dos Marcos 9 e 10 continuam passando.
-- **Ficou de fora:**
-  - a balsa dos rios grandes (só há ponte);
-  - os recursos por bioma, que entram com os bens no Marco 14.
+- **Ficou de fora (resolvido no fechamento do Marco 12):**
+  - **Balsas nos rios grandes:** uma a cada ≈ 6500 px de rio, longe das pontes, com cais nas duas margens.
+    - **Interação:** "Balsa do X". O barqueiro leva o exército inteiro ao outro cais por 15 de ouro e 0,1 dia.
+    - **Uso:** bandos e a viagem rápida não usam balsas.
+    - **Mapa:** aparecem no chão e no Mapa do Continente.
+  - **Recursos por bioma** (`src/game/worldgen/resources.ts`): até três por povoado, pelo que há em volta.
+    - **De onde vêm:** grão, peixe, madeira, pedra, ferro, sal, peles, cavalos, ervas.
+    - **Mercado:** barateiam o mercado local (comida farta, ferro de mina).
+    - **Renda:** rendem por semana para o dono (ex.: ferro +3, grão +8 rações, sal +10 ouro).
+    - **Onde aparecem:** no painel do povoado e na tela de criação. Os bens e as cadeias de produção continuam no Marco 14.
 
 ## Marco 12 — Mundo vivo: gente andando ✅ OK
 **Objetivo:** o jogador entende o estado do bando e do mundo só de olhar. GDD 8.7.
@@ -171,10 +178,49 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
   - **Dentro:** rua de ronda junto ao muro, ruas em grade e quarteirões de casas em duas fileiras, com as portas voltadas para a rua. No centro, a praça do mercado com barracas e poço; há também paço, castelo ou Casa do Conselho, templo nas cidades e lavouras fora dos muros.
   - **Colisão:** muralha e construções bloqueiam (tipos `WALL` e `BUILDING`); só se entra pelos portões. Tropas, bandos e a viagem rápida chegam por eles, e as estradas do gerador terminam no portão voltado para o destino.
   - **Ruínas:** muros com brechas e 60% das casas em entulho. Reconstruir fecha as brechas.
-  - **Duas interações por povoado:** o Mercado (praça) e a Sala de Administração / Paço / Casa do Conselho (porta do paço).
+  - **Interações:** o Mercado (praça), a Sala de Administração / Paço / Casa do Conselho (porta do paço) e a Guarnição (um acampamento por portão).
   - **À noite:** luz na praça, nos portões e em algumas janelas.
   - **Fundar aldeia:** a planta inteira precisa caber em terra firme, à frente do Comandante. Quem estiver dentro de uma parede nova é posto na rua.
+- **Guarnições e portões** (pedidos junto com o marco: os soldados das cidades existem nelas, de verdade, e o exército do bando não entra):
+  - **Acampamentos da guarnição dentro das cidades:**
+    - **Onde ficam:** no quarteirão ao lado da rua de cada portão, por dentro dos muros (no lado sem paço, templo ou praça; as casas daquele canto dão lugar a ele).
+    - **O que tem:**
+      - pátio de terra batida com cerca de estacas aberta para a rua;
+      - barracas listradas com cordas e espeques;
+      - fogueira com lenha, armeiro com lanças e escudos;
+      - bonecos de treino, barris e a bandeira do dono.
+  - **Soldados de verdade** (`src/game/world/Garrisons.ts`): perto do bando, cada homem da guarnição é uma unidade do mundo (até 30 por povoado). Longe, volta a ser um número.
+    - **Papéis:**
+      - sentinelas do lado de fora dos portões;
+      - um vigia na fogueira;
+      - **rondas pelas ruas**, de cruzamento em cruzamento, também à noite, com tocha;
+      - o resto no acampamento: treino de manhã, conversa no pátio e sono diante das barracas à noite.
+    - **Perigo perto:** a tropa forma atrás do portão.
+    - **Mortes e reforço:** cada soldado que morre sai da guarnição; reforço novo sai de uma barraca.
+    - **Aparência:** a guarnição do bando é aliada, desenhada em círculos azuis.
+  - **Lados do mundo:** guarnições, patrulhas e exércitos dos reinos (o povoado) lutam de verdade contra goblins e hordas (os selvagens) quando se encontram.
+    - **A guarnição do bando:** também enfrenta quem for hostil ao bando.
+    - **Em paz:** os guardas não atacam o bando. Bater num deles é atacar o povoado: guerra e cerco.
+  - **Reposição:** os reinos e as aldeias livres repõem 1 homem por semana até a guarnição de origem (aldeia 6, cidade 14, fortaleza 20).
+  - **O exército do bando não entra em povoado alheio:** só nos do bando e nas ruínas.
+    - **No passo:** o soldado para no vão do portão.
+    - **Nas rotas:** as tropas usam uma grade de navegação própria, em que esses povoados são muro.
+    - **Ordem de marcha para dentro:** vira "esperar no portão", com aviso.
+    - **Comandante dentro:** se ele entra, quem o segue espera diante do portão até ele sair.
+    - **Viagem rápida:** termina diante do portão.
+  - **O Comandante entra sozinho:** também os batedores e mensageiros. Em guerra, sob calamidade ou durante um cerco, os portões fecham para todo o bando.
+  - **Atacar:** é feito pelo portão ("E — Portão de X"), do lado de fora, onde o exército está.
+    - **Defensores:** a própria guarnição. Abaixo de 5 homens, moradores armados completam a defesa.
+    - **Em guerra:** chegar a menos de 800 px dos muros já começa o cerco.
+    - **Cerco levantado:** afastar-se mais de 2600 px levanta o cerco. Os mortos fazem falta na guarnição.
 - **Vida no acampamento** (`src/game/world/CampLife.ts`):
+  - **Colisão:** a paliçada, as barracas, a fogueira e as estruturas bloqueiam todo mundo (soldados, inimigos, cavaleiros), não só o Comandante.
+  - **Enfeites:** torres de vigia no portão, poço, lenha, barris, feno, tochas nos caminhos (acesas à noite), estandartes e o chão com manchas e capim.
+  - **Treino de verdade:** o Campo de Treino manda batalhões treinar por 2 dias.
+    - **No campo:** eles vão até lá e treinam (fileiras diante dos bonecos, duelos de pares).
+    - **Ficam no acampamento:** não saem com o Comandante.
+    - **Tempo:** enquanto alguém treina, o tempo corre no acampamento, um dia a cada 90 s. Dá para "esperar o treino terminar" de uma vez ou interromper.
+    - **Recompensa:** o XP vem no fim.
   - **Rotina:** os soldados de verdade dos batalhões que descansam deixam a formação. Dormem na barraca à noite, comem na fogueira na hora das refeições, treinam, jogam dados, fazem tarefas, cuidam dos cavalos (cavalaria) e passeiam; um faz sentinela no portão, com tocha à noite.
   - **O estado do bando aparece no próprio acampamento:**
     - fome: fila na Intendência e gente sentada;
@@ -212,7 +258,7 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
   As escolhas mexem no **humor do acampamento** (−30..+30, soma na moral inicial e volta devagar ao normal), na **honra** (0–100, que ganha peso no Marco 15), na lealdade, no ouro, nas rações, na dívida e nos soldados.
 - **Mapa vivo** (`src/game/world/MapLife.ts`, só perto da câmera, um desenho por quadro, até 140 figuras):
   - **Moradores:** andam pelas ruas, vão à praça e entram em casa. A quantidade segue a população e a prosperidade; à noite quase ninguém; povoado saqueado ou em ruínas, ninguém.
-  - **Guardas** nos portões, com lança e a cor do dono; nas cidades de pedra, também fazem ronda.
+  - **Caçadores** saem do povoado mais perto atrás de um cervo, abatem um (a manada dispara) e voltam com a caça nas costas.
   - **Camponeses** trabalham nas lavouras.
   - **Viajantes e peregrinos** andam pelas estradas, com lanterna à noite, e dão meia-volta diante de um bando.
   - **Cervos** pastam e fogem.
@@ -228,18 +274,50 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
   - **Refugiados:** fogem de um povoado saqueado, ocupado ou arruinado até o povoado de pé mais perto. Um bando hostil que os alcance os massacra.
   - **Neutros:** patrulhas e mensageiros de reinos em paz e refugiados não atacam e não entram em combate nem nos alvos automáticos. Dá para atacá-los clicando neles, mas **provocar** uma patrulha ou um mensageiro custa −15 de relação (pode virar guerra), e atacar refugiados custa −6 de honra.
   - **No Mapa do Continente:** neutros em cinza-azulado, refugiados em bege.
-- **Save** versão 3, porque o mundo mudou de escala. Guarda honra, humor, seguidores, relações, campos de batalha e quem foi provocado.
-- **Teste automatizado** com 25 verificações; os testes dos Marcos 9, 10 e 11 continuam passando (com as expectativas de escala atualizadas).
+- **Save:**
+  - **Versão 3:** porque o mundo mudou de escala. Guarda honra, humor, seguidores, relações, campos de batalha e quem foi provocado.
+  - **Versão 4:** com os acampamentos da guarnição, as estradas mudaram.
+  - **Versão 5:** acampamentos dentro das cidades, balsas e recursos mudam o mundo gerado. Treinos em andamento vão no save; guarnições e lobos não (reaparecem quando o bando chega perto).
+- **Teste automatizado:**
+  - 25 verificações do marco;
+  - 23 das guarnições e dos portões;
+  - um teste do fechamento: guarnição real, rondas, guardas × goblins, patrulha × goblins, colisão do acampamento, treino, seguidores, lobos, balsa e recursos;
+  - os testes dos Marcos 9, 10 e 11 continuam passando, com as expectativas de escala atualizadas.
 - **Desempenho:**
   - ≈ 150 fps no acampamento com a rotina;
   - ≈ 165 fps dentro de uma cidade com ≈ 50 figuras;
   - todas as praças alcançáveis pelos portões em ≈ 0,2 s.
-- **Ficou de fora:**
-  - caçadores e lobos (só há cervos);
-  - os serviços dos seguidores são números (eles não trabalham de fato no acampamento);
-  - as patrulhas resolvem o encontro no abstrato, mesmo à vista, em vez de lutar quadro a quadro.
+- **Ficou de fora → resolvido no fechamento:**
+  - **Lobos** (`src/game/world/Wildlife.ts`): alcateias de 3 a 5 aparecem fora de vista no mato, na tundra e nas colinas, longe de povoados, perto de quem anda sozinho (mais de noite).
+    - **Ataque:** atacam batedores, mensageiros ou o Comandante sem escolta.
+    - **Fuga:** diante de 3 do bando, fogem e somem.
+    - **Peles:** cada lobo abatido rende 4 de ouro.
+  - **Caçadores:** ver "Mapa vivo".
+  - **Seguidores trabalham de verdade:** cada um tem a sua estação.
+    - **Cozinheiro:** caldeirão com trempe. Mexe a panela nas refeições, quando os soldados fazem fila, e busca lenha no resto do dia.
+    - **Mascate:** banca com toldo, onde os soldados vão olhar.
+    - **Curandeira:** enfermaria. Depois de um combate, os feridos ficam deitados nas esteiras e ela passa de um em um.
+    - **Capelão:** púlpito. Faz o sermão às 9h e às 17h, com a meia-lua de soldados.
+    - **Famílias:** varal com roupa estendida.
+  - **Patrulhas à vista lutam de verdade:** quando patrulha e bando estão os dois no mapa, a luta é soldado contra soldado; a resolução abstrata fica só para quando estão longe.
+- **Ficou de fora → resolvido depois do Marco 13** (itens da seção 8.7 do GDD que faltavam):
+  - **Fila do pagamento:** no dia do soldo, com o pagamento em dia, das 8h às 13h, os soldados fazem fila diante da tenda do Comandante, com o balão "soldo!".
+  - **Ferro para a Ferraria:** com ferro no depósito, soldados vão à Intendência, pegam barras de ferro (visíveis nas costas) e as levam até a Ferraria.
+  - **Ajudante de ferreiro** (seguidor novo): a Ferraria gasta 25% menos ouro e ferro.
+    - **No acampamento:** tem uma bigorna perto da Ferraria, martela nela e às vezes busca ferro na Intendência.
+  - **Seguidores crescem com o bando:** o limite sobe com o número de soldados e com a fama (inimigos abatidos pelos batalhões), até 12 seguidores. As famílias vão até 4, uma a cada 12 soldados.
+    - **Mais procura:** quanto mais vaga, mais seguidores aparecem no portão.
+    - **Na Tenda:** o painel de seguidores mostra o limite.
+  - **O mascate vende** na banca dele ("E — Banca do mascate"):
+    - barril de vinho: humor +8;
+    - ataduras: 3 feridos voltam na hora;
+    - cobertores de lã: por 20 dias o frio do inverno não adoece a tropa.
+  - **Guardas na muralha:** em metade dos portões, o 3º soldado da guarnição anda o caminho de ronda junto ao muro, de canto a canto, olhando para fora, com tocha à noite.
+  - **Rastros na lama e na neve:** na primavera, no inverno e na chuva, onde o chão é mole, as pegadas dos bandos duram o dobro.
+  - **Teste automatizado:** 10 verificações.
+  - **Para outros marcos:** caravanas (Marco 14) e exércitos de lordes (Marco 15), que o GDD lista entre os agentes do mundo vivo.
 
-## Marco 13 — Estações, clima e logística
+## Marco 13 — Estações, clima e logística ✅ OK
 **Objetivo:** o tempo e o abastecimento passam a pesar no plano de campanha. GDD 8.5 e 8.6.
 - **Calendário** de 4 estações (ex.: 20 dias cada): lama e cheias na primavera, temporada de campanha no verão, colheita e feiras no outono, neve, frio e rios congelados no inverno.
 - **Clima diário por região:** chuva (arqueiros −25% de alcance), nevoeiro (visão −50%) e neve.
@@ -250,6 +328,86 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 - **A IA obedece às estações:** os reinos vão para os quartéis de inverno; os mortos-vivos não.
 
 **Pronto quando:** o inverno muda o plano do jogador (parar, se preparar ou aproveitar a guerra parada), e perder as carroças numa emboscada vira uma crise de verdade.
+
+**Implementado:**
+- **Calendário** (`src/utils/season.ts`, `SEASONS` em `constants.ts`): 4 estações de 20 dias (o ano tem 80). A campanha começa no 11º dia da primavera, com a cheia já passada. O relógio mostra a estação e o dia dela (passar o mouse mostra o ano e quantos dias faltam).
+  - **Primavera:**
+    - fora das estradas, o chão vira lama (−20% de velocidade);
+    - **cheia** nos 6 primeiros dias: os vaus dos rios ficam fundos e o rio só se cruza por ponte (os riachos continuam rasos).
+  - **Verão:** temporada de campanha. Os reinos em guerra mandam exércitos com mais frequência (intervalo ×0,6) e a mesa da Tenda tem um contrato a mais.
+  - **Outono:**
+    - **colheita:** a comida custa 30% menos nos mercados;
+    - renda semanal dos povoados do bando com +50% de rações e +20% de ouro (impostos rurais);
+    - **feiras:** toda semana a prosperidade de todo povoado sobe.
+  - **Inverno:**
+    - **neve** onde é frio (norte e montanhas): −40% de velocidade fora da estrada, −15% nela;
+    - **rios e lagos do frio congelam** e viram gelo, que se atravessa em qualquer ponto;
+    - **gelo fino:** perto do limite do frio, cavaleiros e carroças às vezes afundam ("o gelo cedeu!", 60% da vida);
+    - um contrato a menos na mesa.
+  - **No chão:** o desenho muda com a estação: neve por cima do norte e das montanhas, rios e lagos congelados em azul-claro, vaus afogados na cheia, matas e campos amarelados no outono. A troca de estação redesenha o chão, refaz as rotas e tira de dentro da água quem estava no gelo no degelo.
+  - **Simetria:** lama e neve valem para todos, inimigos e bandos em marcha no mapa inclusive.
+- **Clima diário por região:** céu limpo, chuva, nevoeiro ou neve, sorteado por célula de 2×2 regiões a partir da semente e do dia.
+  - **Por lugar:** o mesmo lugar no mesmo dia tem sempre o mesmo tempo, então ele não vai no save. Lugares diferentes têm tempos diferentes.
+  - **Por estação e bioma:** a primavera e o outono são mais chuvosos; o deserto e a estepe quase não têm chuva; pântano e costa têm mais nevoeiro; no frio do inverno chove neve.
+  - **Chuva:** arcos e bestas alcançam −25% e o chão fora da estrada fica mais lento (−10%).
+  - **Nevoeiro:** a visão do bando cai pela metade e os inimigos também percebem o bando pela metade da distância (bom para emboscadas).
+  - **Neve:** visão −25%.
+  - **Na tela:** riscos de chuva, flocos de neve, véu de nevoeiro. O Mapa do Continente mostra o tempo de cada região já vista.
+  - **Previsão:** um tenente **Cauteloso** prevê o tempo de amanhã (ícone ao lado do de hoje).
+- **Fadiga por batalhão** (0–100, `FATIGUE`):
+  - **Marcha:** um dia inteiro cansa 28. A marcha noturna cansa o dobro; terreno ruim (lama, pântano, mata, vau, gelo, neve) cansa 1,5×.
+  - **Combate:** lutar cansa.
+  - **Recuperação:** parado ao relento, 60 por dia de relógio; nos alojamentos, depressa. Descansar até o amanhecer tira 45 ao relento e tudo no acampamento.
+  - **Efeitos:** a partir de 40 o batalhão fica mais lento (até −30% aos 100); causa até −25% de dano; a moral volta até 60% mais devagar. Acima de 80, "exausto" no HUD.
+  - **Viagem rápida:** a tropa cansada leva mais dias, e a marcha conta na fadiga.
+  - **Marcha forçada** (tecla V ou botão na barra de baixo):
+    - **Ganho:** o dia rende 35% mais caminho e a tropa anda 20% mais depressa fora de combate.
+    - **Custo:** cansa 2,5×.
+    - **Viagem rápida:** também vale nela.
+- **Trem de carroças** (`src/game/entities/Wagon.ts`):
+  - **Começo:** duas carroças. Compram-se mais na Intendência (60 de ouro; até 6).
+  - **Capacidade:** cada uma leva 60 rações, mais 20 nas mochilas da tropa.
+  - **Depósito × carga:** as rações do bando ficam no depósito do acampamento. Ao sair, as carroças carregam o que cabe, deixando 3 dias de reserva para quem fica (seguidores e quem treina). Ao voltar, descarregam e são consertadas.
+  - **Em campo:** o exército come só o que as carroças levam. Carroças vazias significam fome, mesmo com o depósito cheio. O HUD mostra a carga, a capacidade e quantos dias de comida restam.
+  - **Compras:** o que se compra num mercado em campo vai para as carroças, até onde couber.
+  - **Movimento:** são unidades de verdade no fim da coluna. Atolam na lama, no pântano, na mata, no vau e na neve. Esperam no portão com a tropa e ficam com ela se o Comandante sair sozinho.
+  - **Alvo:** goblins e saqueadores preferem atacá-las. Uma carroça destruída leva junto a parte da carga que cabia nela, e isso vai para o relatório e o diário.
+- **Forragear** (tecla G ou botão):
+  - **Tempo:** um quarto de dia ao relento; um bando que chegue perto interrompe.
+  - **Rendimento:** conforme o número de soldados, a estação (inverno ×0,2, outono ×1,3) e o bioma (deserto, tundra e montanha rendem pouco). Vai para as carroças.
+  - **Esgotamento:** cada forragem esgota a região (−40%), que se recupera 3% por dia.
+  - **Dono:** forragear perto dos povoados de um reino em paz irrita o reino (−4 de relação).
+- **Feridos em vez de só mortos** (`src/game/sim/logistics.ts`):
+  - **No combate:** dos que caem num batalhão que sobrevive, 40% ficam feridos (55% com a curandeira, que substitui o antigo "salva 1 em 3"). O relatório mostra mortos e feridos. Batalhão dizimado perde os feridos também (permadeath).
+  - **Recuperação:** feridos não lutam, mas comem. Por dia, na enfermaria do acampamento, 30% voltam e 2% morrem; em campo, 12% voltam e 8% morrem. A curandeira melhora as duas coisas.
+  - **Onde aparecem:** nas esteiras da enfermaria, no cartão do batalhão e na Tenda.
+- **Doenças:**
+  - **Causas de surto, por batalhão e por dia:**
+    - acampar no pântano;
+    - fome;
+    - frio do inverno ao relento;
+    - estar perto de um povoado com febre;
+    - acampamento lotado (mais de 60 soldados).
+  - **Doentes:** não lutam, saram ou morrem (mais devagar em campo) e passam a doença aos companheiros e aos outros batalhões no mesmo lugar. Há dois tipos, disenteria e febre.
+  - **Povoados:** a febre num povoado dura 10 dias. Ali o comércio para e a comida encarece. Toda semana ela pode passar ao vizinho pela estrada (mais no inverno), com notícia no diário.
+- **Acampamento móvel** (Tenda → Acampamento):
+  - **Levantar** leva 1,5 dia. As obras se perdem, o depósito inteiro vai nas carroças e a coluna marcha 15% mais devagar. Não há mais acampamento para ser saqueado.
+  - **Montar aqui** (botão no painel do Comandante) leva 1 dia. Precisa de terra firme longe de povoados e locais; o acampamento nasce a leste do Comandante, com o portão virado para ele. O lugar novo vai no save (`campAt`).
+- **Obras do acampamento fixo:**
+  - **Paliçada reforçada:** estacas grossas com escora de terra.
+  - **Torres de vigia:** três torres que enxergam longe em volta do acampamento.
+  - **Fosso:** lama funda em volta da paliçada; só o portão fica firme.
+
+  Cada obra segura parte do saque quando o acampamento é atacado sem guarda (35%, 25% e 25%).
+- **A IA obedece às estações:**
+  - **Reinos no inverno:** não põem exércitos em marcha. Os exércitos já na estrada voltam ao povoado mais próximo do reino e viram guarnição (**quartéis de inverno**), com notícia no diário.
+  - **Também no inverno:** patrulhas novas não saem e as escaramuças de fronteira entre os reinos param.
+  - **Goblins:** saem dos covis com metade da frequência.
+  - **Hordas:** a dos orcs se arrasta (intervalo ×1,5); os mortos-vivos não sentem frio.
+- **Save versão 6:** guarda carroças, carga, depósito, exposição, forragem, acampamento movido e obras. O campo guarda a posição e a vida das carroças, a fadiga e a marcha forçada.
+- **Teste automatizado:** 39 verificações do marco. Os testes dos Marcos 9 a 12 continuam passando. A expectativa da curandeira foi atualizada para a regra dos feridos, e a contagem de goblins mortos no teste do Marco 12 foi corrigida.
+- **Desempenho:** ≈ 125 fps no inverno com neve caindo e 140 fps no acampamento.
+- **Ficou de fora:** barcaças e portos em uso (Marcos 14 e 17); a carga comercial nas carroças (Marco 14); tempestade no mar (Marco 17).
 
 ## Marco 14 — Economia e comércio
 **Objetivo:** a economia vira um sistema vivo que o jogador lê, explora e perturba. GDD 8.8.

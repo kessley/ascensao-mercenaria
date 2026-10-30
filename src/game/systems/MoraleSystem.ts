@@ -58,7 +58,8 @@ export function updateMorale(
     delta -= SUPPORT.BANNER_FALTER_PER_SEC * dt;
   }
 
-  if (threats === 0) delta += M.RECOVERY_PER_SEC * (passive?.recovery ?? 1) * dt;
+  // Tropa exausta custa a se recompor
+  if (threats === 0) delta += M.RECOVERY_PER_SEC * (passive?.recovery ?? 1) * battalion.fatigueRecovery * dt;
   if (commander.isAlive && distance(commander, center) <= M.COMMANDER_AURA_RADIUS) {
     delta += M.COMMANDER_AURA_PER_SEC * dt;
   }

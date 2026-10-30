@@ -46,8 +46,9 @@ export function separateUnits(units: readonly Unit[]): void {
 }
 
 /**
- * Mantém todos dentro do mundo e fora da água funda e das montanhas: quem foi empurrado para
- * lá volta à última posição em terra firme (um salto grande — viagem, recuo — é aceito).
+ * Mantém todos dentro do mundo e fora da água funda e das montanhas (e dos povoados fechados
+ * para eles): quem foi empurrado para lá volta à última posição boa (um salto grande — viagem,
+ * recuo — é aceito).
  */
 export function clampToWorld(units: readonly Unit[]): void {
   for (const u of units) {
@@ -55,7 +56,7 @@ export function clampToWorld(units: readonly Unit[]): void {
     u.y = Math.min(WORLD_HEIGHT - u.radius, Math.max(u.radius, u.y));
     if (!Unit.terrain) continue;
     const near = Math.abs(u.x - u.safeX) + Math.abs(u.y - u.safeY) < 120;
-    if (TERRAIN[u.terrainType].blocked && near) {
+    if ((TERRAIN[u.terrainType].blocked || u.pushedThroughGate(u.safeX, u.safeY)) && near) {
       u.x = u.safeX;
       u.y = u.safeY;
     } else {

@@ -27,6 +27,7 @@ export class Soldier extends Unit {
     isLieutenant = false,
   ) {
     super(scene, x, y, "ALLY", stats);
+    this.townAccess = "ARMY";
     this.troopType = troopType;
     this.battalion = battalion;
     this.isLieutenant = isLieutenant;
@@ -69,7 +70,9 @@ export class Soldier extends Unit {
   override speedMultiplier(): number {
     const f = this.battalion.formation;
     const formationSpeed = f === "SHIELD_WALL" ? this.battalion.mods.shieldWallSpeed : FORMATIONS[f].speed;
-    return super.speedMultiplier() * formationSpeed * (this.battalion.leaderPassive?.speed ?? 1);
+    // Cansaço pesa nas pernas; a marcha forçada apressa quem não está lutando
+    const pace = this.target ? 1 : Unit.pace;
+    return super.speedMultiplier() * formationSpeed * (this.battalion.leaderPassive?.speed ?? 1) * this.battalion.fatigueSpeed * pace;
   }
 
   override attackRange(): number {
@@ -79,7 +82,7 @@ export class Soldier extends Unit {
   override outgoingDamage(target: Unit): number {
     // Na água a formação se desfaz: a Cunha não empurra
     const formation = this.inShallows ? 1 : FORMATIONS[this.battalion.formation].damageDealt;
-    return super.outgoingDamage(target) * formation * (this.battalion.leaderPassive?.damage ?? 1);
+    return super.outgoingDamage(target) * formation * (this.battalion.leaderPassive?.damage ?? 1) * this.battalion.fatigueDamage;
   }
 
   override incomingMultiplier(source: Unit, kind: AttackKind): number {

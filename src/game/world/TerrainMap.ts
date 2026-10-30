@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, type TerrainType } from "../../utils/constants";
 import type { Biome, WorldDef } from "../data/world";
-import type { GeoMap } from "../worldgen/geoMap";
+import type { GeoMap, GeoSeason } from "../worldgen/geoMap";
 import type { Point } from "../../utils/math";
 import { townSolids, type Rect, type TownLayout } from "./townLayout";
 
@@ -21,6 +21,10 @@ const ZONE_COLORS: Record<TerrainZone["type"], { base: string; detail: string }>
   FOREST: { base: "#22501c", detail: "#173d12" },
 };
 
+/** Matas e colinas no outono. */
+const AUTUMN_FOREST = { base: "#5a4a1c", detail: "#8a4a1a" };
+const AUTUMN_HILL = { base: "#8a8a3a", detail: "#9a8a4a" };
+
 /** Cor do chão de cada bioma (RGB). */
 export const BIOME_COLOR: Record<Biome, [number, number, number]> = {
   OCEAN: [30, 70, 110],
@@ -35,6 +39,23 @@ export const BIOME_COLOR: Record<Biome, [number, number, number]> = {
   DESERT: [204, 180, 122],
   TUNDRA: [138, 150, 138],
 };
+
+/** Estado da estação no terreno e no desenho do chão. */
+export interface SeasonState extends GeoSeason {
+  /** Neve no chão abaixo desta temperatura (só no inverno). */
+  snowBelow: number | null;
+  autumn: boolean;
+}
+
+/** Fosso elíptico em volta da paliçada, com a passagem do portão. */
+export interface Ditch {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  gateAngle: number;
+  gateHalf: number;
+}
 
 /** Grade do índice espacial das zonas: cada célula guarda as zonas que a tocam. */
 const BUCKET = 800;
@@ -85,10 +106,24 @@ export class TerrainMap {
 
   /** Povoados atuais (muralhas e casas viram obstáculo). Refeito quando um povoado nasce, cai ou é reconstruído. */
   setTowns(layouts: readonly TownLayout[]): void {
+    this.towns = layouts;
+    this.indexSolids();
+  }
+
+  /** Outros sólidos do mundo (paliçada, barracas e estruturas do acampamento do bando). */
+  setExtraSolids(solids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[]): void {
+    this.extraSolids = solids;
+    this.indexSolids();
+  }
+
+  private towns: readonly TownLayout[] = [];
+  private extraSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
+
+  private indexSolids(): void {
     const buckets = new Map<number, { rect: Rect; type: "WALL" | "BUILDING" }[]>();
     const stride = 100000;
-    for (const layout of layouts) {
-      for (const solid of townSolids(layout)) {
+    for (const group of [...this.towns.map((l) => townSolids(l)), this.extraSolids]) {
+      for (const solid of group) {
         const r = solid.rect;
         for (let by = Math.floor(r.y / TOWN_BUCKET); by <= Math.floor((r.y + r.h) / TOWN_BUCKET); by++) {
           for (let bx = Math.floor(r.x / TOWN_BUCKET); bx <= Math.floor((r.x + r.w) / TOWN_BUCKET); bx++) {
@@ -103,12 +138,43 @@ export class TerrainMap {
     this.townBuckets = buckets;
   }
 
+  /** Estação (Marco 13): gelo, cheia, neve e as cores do outono. */
+  season: SeasonState = { freezeBelow: null, flood: false, snowBelow: null, autumn: false };
+  /** Fosso do acampamento: anel de lama em volta da paliçada (o portão fica firme). */
+  private ditch: Ditch | null = null;
+
+  setSeason(season: SeasonState): void {
+    this.season = season;
+  }
+
+  setDitch(ditch: Ditch | null): void {
+    this.ditch = ditch;
+  }
+
+  /** Está no anel do fosso? */
+  get ditchShape(): Ditch | null {
+    return this.ditch;
+  }
+
+  inDitch(x: number, y: number): boolean {
+    const d = this.ditch;
+    if (!d) return false;
+    const nx = (x - d.cx) / d.rx;
+    const ny = (y - d.cy) / d.ry;
+    const r = Math.hypot(nx, ny);
+    if (r < 1.04 || r > 1.16) return false;
+    const a = Math.atan2(ny, nx);
+    const off = Math.abs(Math.atan2(Math.sin(a - d.gateAngle), Math.cos(a - d.gateAngle)));
+    return off > d.gateHalf + 0.06;
+  }
+
   typeAt(x: number, y: number): TerrainType {
     const solids = this.townBuckets.get(Math.floor(y / TOWN_BUCKET) * 100000 + Math.floor(x / TOWN_BUCKET));
     if (solids) {
       for (const { rect: r, type } of solids) if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return type;
     }
-    const g = this.geo?.geoType(x, y, this.burned);
+    if (this.ditch && this.inDitch(x, y)) return "MUD";
+    const g = this.geo?.geoType(x, y, this.burned, this.season);
     if (g) return g;
     const col = Math.floor(x / BUCKET);
     const row = Math.floor(y / BUCKET);
@@ -210,6 +276,11 @@ export class TerrainStreamer {
     for (const chunk of this.loaded.values()) chunk.image.setVisible(Phaser.Geom.Rectangle.Overlaps(this.view, chunk.bounds));
   }
 
+  /** Redesenha tudo (a estação mudou: neve, gelo, cheia, cores do outono). */
+  invalidateAll(): void {
+    for (const [index, chunk] of this.loaded) this.unload(index, chunk);
+  }
+
   /** Redesenha os pedaços em volta de um ponto (ponte queimada ou reconstruída). */
   invalidate(p: Point, radius = 400): void {
     for (const [index, chunk] of this.loaded) {
@@ -253,7 +324,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 /** Cor do chão num ponto: bioma (misturado com os vizinhos), mar, praia, rocha e neve, com sombra do relevo. */
-export function groundColor(geo: GeoMap, x: number, y: number, h: number, hx: number, hy: number, out: number[], step = SAMPLE): void {
+export function groundColor(geo: GeoMap, x: number, y: number, h: number, hx: number, hy: number, out: number[], step = SAMPLE, season?: SeasonState): void {
   const def = geo.def;
   if (h < def.seaLevel) {
     const depth = clamp01((def.seaLevel - h) * 9);
@@ -263,9 +334,10 @@ export function groundColor(geo: GeoMap, x: number, y: number, h: number, hx: nu
     return;
   }
   if (geo.isLake(x, y)) {
-    out[0] = 56;
-    out[1] = 118;
-    out[2] = 158;
+    const ice = season?.freezeBelow != null && geo.temperatureAt(x, y) < season.freezeBelow;
+    out[0] = ice ? 196 : 56;
+    out[1] = ice ? 220 : 118;
+    out[2] = ice ? 234 : 158;
     return;
   }
   // Bioma: mistura das 4 células em volta (transições suaves)
@@ -290,6 +362,12 @@ export function groundColor(geo: GeoMap, x: number, y: number, h: number, hx: nu
   if (rock > 0) for (let k = 0; k < 3; k++) out[k] = lerp(out[k], [118, 112, 104][k], rock);
   const snow = clamp01((h - (def.mountainLevel + 0.09)) / 0.05);
   if (snow > 0) for (let k = 0; k < 3; k++) out[k] = lerp(out[k], 236, snow);
+  // Outono: o verde amarela e avermelha
+  if (season?.autumn && out[1] > out[0]) {
+    out[0] = lerp(out[0], 168, 0.32);
+    out[1] = lerp(out[1], 128, 0.32);
+    out[2] = lerp(out[2], 52, 0.32);
+  }
   // Relevo sombreado: luz do noroeste
   const shade = 1 + Math.max(-0.35, Math.min(0.35, (-(hx - h) - (hy - h)) * 60 * (SAMPLE / step)));
   for (let k = 0; k < 3; k++) out[k] = Math.min(255, out[k] * shade);
@@ -319,7 +397,7 @@ function paintGround(
     for (let j = 0; j < m; j++) {
       for (let i = 0; i < m; i++) {
         const h = heights[j * (n + 2) + i];
-        groundColor(geo, x0 + i * SAMPLE, y0 + j * SAMPLE, h, heights[j * (n + 2) + i + 1], heights[(j + 1) * (n + 2) + i], color);
+        groundColor(geo, x0 + i * SAMPLE, y0 + j * SAMPLE, h, heights[j * (n + 2) + i + 1], heights[(j + 1) * (n + 2) + i], color, SAMPLE, terrain.season);
         const k = (j * m + i) * 4;
         img.data[k] = color[0];
         img.data[k + 1] = color[1];
@@ -360,7 +438,49 @@ function paintGround(
   ctx.stroke();
 
   // 3. Zonas de superfície (cada uma com a própria semente)
-  for (const i of zones) drawZone(ctx, terrain.zones[i], new Phaser.Math.RandomDataGenerator([`zona-${i}`]));
+  for (const i of zones) drawZone(ctx, terrain.zones[i], new Phaser.Math.RandomDataGenerator([`zona-${i}`]), terrain.season.autumn);
+
+  // 3b. Neve do inverno por cima do chão e das zonas (onde é frio: norte e montanhas)
+  const snowBelow = terrain.season.snowBelow;
+  if (geo && snowBelow !== null) {
+    const step = 50;
+    const m = Math.round(size / step) + 1;
+    const img = new ImageData(m, m);
+    let any = false;
+    for (let j = 0; j < m; j++) {
+      for (let i = 0; i < m; i++) {
+        const a = clamp01((snowBelow - geo.temperatureAt(x0 + i * step, y0 + j * step)) / 0.05) * 0.72;
+        if (a <= 0) continue;
+        any = true;
+        const k = (j * m + i) * 4;
+        img.data[k] = 238;
+        img.data[k + 1] = 242;
+        img.data[k + 2] = 248;
+        img.data[k + 3] = Math.round(a * 255);
+      }
+    }
+    if (any) {
+      const small = document.createElement("canvas");
+      small.width = m;
+      small.height = m;
+      small.getContext("2d")?.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(small, x0 - step / 2, y0 - step / 2, step * m, step * m);
+    }
+  }
+
+  // 3c. Fosso do acampamento
+  const ditch = terrain.ditchShape;
+  if (ditch && inChunk(ditch.cx - ditch.rx * 1.2, ditch.cy - ditch.ry * 1.2, ditch.cx + ditch.rx * 1.2, ditch.cy + ditch.ry * 1.2, 0)) {
+    ctx.strokeStyle = "rgba(74,52,28,0.9)";
+    ctx.lineWidth = Math.min(ditch.rx, ditch.ry) * 0.1;
+    ctx.beginPath();
+    ctx.ellipse(ditch.cx, ditch.cy, ditch.rx * 1.1, ditch.ry * 1.1, 0, ditch.gateAngle + ditch.gateHalf + 0.1, ditch.gateAngle - ditch.gateHalf - 0.1 + Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(40,70,80,0.5)";
+    ctx.lineWidth = Math.min(ditch.rx, ditch.ry) * 0.03;
+    ctx.stroke();
+  }
 
   // 4. Picos nas montanhas
   if (geo) {
@@ -412,7 +532,11 @@ function paintGround(
           const w = (river.widths[k - 1] + river.widths[k]) / 2;
           if (!inChunk(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y), w)) continue;
           const shallow = w <= 50;
-          ctx.strokeStyle = pass === 0 ? "rgba(48,60,40,0.55)" : shallow ? "#5f9cb8" : "#3a74a4";
+          const freeze = terrain.season.freezeBelow;
+          const frozen = freeze !== null && geo.temperatureAt((a.x + b.x) / 2, (a.y + b.y) / 2) < freeze;
+          const flood = terrain.season.flood && !shallow;
+          ctx.strokeStyle =
+            pass === 0 ? (frozen ? "rgba(150,170,180,0.6)" : "rgba(48,60,40,0.55)") : frozen ? "#cfe2ee" : flood ? "#4a6f86" : shallow ? "#5f9cb8" : "#3a74a4";
           ctx.lineWidth = pass === 0 ? w + 14 : w;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
@@ -429,7 +553,36 @@ function paintGround(
       ctx.translate(c.x, c.y);
       ctx.rotate(c.angle);
       const across = c.width + 80;
+      if (c.kind === "FERRY") {
+        // Cais nas duas margens, a corda de margem a margem e a balsa no meio do rio
+        ctx.fillStyle = "#6b4a2b";
+        ctx.fillRect(-40, -across / 2 - 30, 80, 60);
+        ctx.fillRect(-40, across / 2 - 30, 80, 60);
+        ctx.strokeStyle = "#3b2a17";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(-40, -across / 2 - 30, 80, 60);
+        ctx.strokeRect(-40, across / 2 - 30, 80, 60);
+        ctx.strokeStyle = "#d8c8a0";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, -across / 2);
+        ctx.lineTo(0, across / 2);
+        ctx.stroke();
+        ctx.fillStyle = "#8a6a3a";
+        ctx.fillRect(-55, -30, 110, 60);
+        ctx.strokeStyle = "#4e3820";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(-55, -30, 110, 60);
+        ctx.restore();
+        continue;
+      }
       if (c.kind === "FORD") {
+        // Cheia: o vau some debaixo da água (um rio de verdade); gelo: o vau é só gelo
+        const frozen = terrain.season.freezeBelow !== null && geo.temperatureAt(c.x, c.y) < terrain.season.freezeBelow;
+        if (frozen || (terrain.season.flood && c.width > 50)) {
+          ctx.restore();
+          continue;
+        }
         const len = GEO.FORD_LENGTH;
         ctx.fillStyle = "rgba(150,196,206,0.9)";
         ctx.fillRect(-len / 2, -across / 2, len, across);
@@ -477,8 +630,8 @@ function randomPointIn(z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator, sca
 }
 
 /** Desenho greybox de uma zona: elipse e detalhes do tipo (curvas de nível, poças, árvores). */
-function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator): void {
-  const c = ZONE_COLORS[z.type];
+function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator, autumn = false): void {
+  const c = autumn && z.type === "FOREST" ? AUTUMN_FOREST : autumn && z.type === "HILL" ? AUTUMN_HILL : ZONE_COLORS[z.type];
   const ellipse = (x: number, y: number, rx: number, ry: number) => {
     ctx.beginPath();
     ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);

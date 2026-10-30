@@ -1,5 +1,6 @@
 import type { Enemy } from "../entities/Enemy";
 import type { WarbandsSave } from "../systems/Warbands";
+import type { ShipSave } from "../world/TradeRoutes";
 import { SAVE, type EnemyKind, type WorldOptions } from "../../utils/constants";
 
 /**
@@ -32,6 +33,12 @@ export interface FieldSave {
   warbands: WarbandsSave;
   enemies: EnemySave[];
   torches: boolean;
+  /** Marco 13: carroças em campo, fadiga de cada batalhão e marcha forçada. */
+  wagons?: { id: string; x: number; y: number; hp: number }[];
+  fatigue?: Record<string, number>;
+  forced?: boolean;
+  /** Marco 14: barcaças e navios em viagem (as caravanas vão com os bandos). */
+  trade?: { seq: number; ships: ShipSave[] };
 }
 
 export interface SaveFile {

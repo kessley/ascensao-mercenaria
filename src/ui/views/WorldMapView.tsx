@@ -3,7 +3,8 @@ import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
 import { PALISADE } from "../../game/data/campLayout";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
-import { WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { SEASONS, WEATHER, WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { seasonDay, seasonOf, weatherAt } from "../../utils/season";
 import { geoOf } from "../../game/worldgen/geoMap";
 import { groundColor } from "../../game/world/TerrainMap";
 import { dailyRations } from "../../utils/economy";
@@ -74,11 +75,17 @@ export interface MapLayers {
   /** Névoa e exércitos (null = mapa inteiro revelado, como na criação do mundo). */
   snap: WorldSnapshot | null;
   contractSiteId: string | null;
+  /** Contratos da economia (Marco 14): os povoados envolvidos (entrega, escolta). */
+  contractTownIds?: readonly string[];
   dest: Destination | null;
   /** Mostrar a grade das regiões (prévia do mundo). */
   regions?: boolean;
   /** Pontes queimadas (desenhadas em preto). */
   burnedBridges?: readonly string[];
+  /** Dia de hoje: o tempo de cada região já vista (Marco 13). */
+  day?: number;
+  /** Acampamento levantado (não aparece no mapa). */
+  campPacked?: boolean;
 }
 
 interface Destination {
@@ -88,7 +95,7 @@ interface Destination {
 
 /** Desenha o mundo (terreno, estradas, povoados com a cor do dono, locais, névoa e exércitos). */
 export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): void {
-  const { world, settlements, calamities, snap, contractSiteId, dest } = layers;
+  const { world, settlements, calamities, snap, contractSiteId, dest, contractTownIds = [] } = layers;
   const s = scaleOf(world);
   const mapH = mapHeight(world);
   ctx.clearRect(0, 0, MAP_W, mapH);
@@ -129,7 +136,17 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
 
   // Pontes (quadradinho marrom; queimadas, preto) e vaus (pontos claros)
   for (const c of world.geo.crossings) {
-    if (c.kind === "BRIDGE") {
+    if (c.kind === "FERRY") {
+      // Balsa: barquinho
+      ctx.fillStyle = "#e0c27a";
+      ctx.beginPath();
+      ctx.moveTo(c.x * s - 4, c.y * s - 1);
+      ctx.lineTo(c.x * s + 4, c.y * s - 1);
+      ctx.lineTo(c.x * s + 2, c.y * s + 3);
+      ctx.lineTo(c.x * s - 2, c.y * s + 3);
+      ctx.closePath();
+      ctx.fill();
+    } else if (c.kind === "BRIDGE") {
       ctx.fillStyle = layers.burnedBridges?.includes(c.id) ? "#111" : "#8a6234";
       ctx.fillRect(c.x * s - 3, c.y * s - 3, 6, 6);
     } else {
@@ -176,13 +193,35 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.drawImage(small, 0, 0, snap.cols * snap.cell * s, snap.rows * snap.cell * s);
   }
 
+  // Tempo de hoje nas regiões já vistas (uma célula de clima = 2×2 regiões)
+  if (snap && layers.day !== undefined) {
+    const cw = WORLD.REGION_WIDTH * WEATHER.CELL_REGIONS;
+    const ch = WORLD.REGION_HEIGHT * WEATHER.CELL_REGIONS;
+    ctx.font = "16px sans-serif";
+    ctx.textAlign = "center";
+    for (let y = ch / 2; y < WORLD_HEIGHT; y += ch) {
+      for (let x = cw / 2; x < WORLD_WIDTH; x += cw) {
+        const p = { x, y };
+        if (!explored(snap, p)) continue;
+        const w = weatherAt(world.seed, layers.day, p, geoOf(world.geo));
+        if (w === "CLEAR") continue;
+        ctx.globalAlpha = 0.8;
+        ctx.fillText(WEATHER.ICON[w], x * s, y * s);
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.font = "11px monospace";
+  }
+
   // Acampamento, povoados (cor do dono) e locais de contrato
-  ctx.strokeStyle = "#e0b040";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(world.camp.center.x * s, world.camp.center.y * s, PALISADE.rx * s, PALISADE.ry * s, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  label("Acampamento", world.camp.center, -PALISADE.ry * s - 6, "#ffe9b0");
+  if (!layers.campPacked) {
+    ctx.strokeStyle = "#e0b040";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(world.camp.center.x * s, world.camp.center.y * s, PALISADE.rx * s, PALISADE.ry * s, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    label("Acampamento", world.camp.center, -PALISADE.ry * s - 6, "#ffe9b0");
+  }
   for (const t of settlements) {
     const size = t.kind === "CITY" ? 18 : t.kind === "FORT" ? 15 : 11;
     ctx.fillStyle = ownerFill(world, calamities, t.owner);
@@ -190,7 +229,12 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(t.x * s - size / 2, t.y * s - size / 2, size, size);
-    label(`${t.port ? "⚓ " : ""}${t.owner === "RUINED" ? `${t.name} (ruínas)` : t.name}`, t, -size / 2 - 4, t.owner === "PLAYER" ? "#9cc4ff" : "#ffe9b0");
+    label(`${t.port ? "⚓ " : ""}${contractTownIds.includes(t.id) ? "★ " : ""}${t.owner === "RUINED" ? `${t.name} (ruínas)` : t.name}`, t, -size / 2 - 4, contractTownIds.includes(t.id) ? "#fbbf24" : t.owner === "PLAYER" ? "#9cc4ff" : "#ffe9b0");
+    if (contractTownIds.includes(t.id)) {
+      ctx.strokeStyle = "#fbbf24";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(t.x * s - size / 2 - 4, t.y * s - size / 2 - 4, size + 8, size + 8);
+    }
   }
   for (const site of world.sites) {
     const active = site.id === contractSiteId;
@@ -230,6 +274,22 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    // Caravanas (Marco 14): losango dourado (as do bando, azul; atacadas, vermelho)
+    if (w.kind === "CARAVAN") {
+      ctx.fillStyle = w.own ? "#5aa8ff" : w.hostile ? "#c0392b" : "#e0b040";
+      ctx.beginPath();
+      ctx.moveTo(w.x * s, w.y * s - 6);
+      ctx.lineTo(w.x * s + 6, w.y * s);
+      ctx.lineTo(w.x * s, w.y * s + 6);
+      ctx.lineTo(w.x * s - 6, w.y * s);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     // Hostis em vermelho; patrulhas e mensageiros (em paz) em cinza-azulado; refugiados em bege
     ctx.fillStyle = w.hostile === false ? (w.kind === "REFUGEES" ? "#d8c39a" : "#7f9db3") : "#c0392b";
     ctx.fillRect(w.x * s - size / 2, w.y * s - size / 2, size, size);
@@ -238,6 +298,19 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.strokeRect(w.x * s - size / 2, w.y * s - size / 2, size, size);
     label(`${w.visible ? "" : "?"}${w.count}`, w, size + 8, w.hostile === false ? "#d8e4ee" : "#ffb4a8");
     ctx.globalAlpha = 1;
+  }
+
+  // Barcos à vista (Marco 14): casco e vela
+  for (const sh of snap.ships ?? []) {
+    ctx.fillStyle = "#5a3a1e";
+    ctx.fillRect(sh.x * s - 5, sh.y * s, 10, 3);
+    ctx.fillStyle = "#f0e8d8";
+    ctx.beginPath();
+    ctx.moveTo(sh.x * s, sh.y * s - (sh.kind === "SHIP" ? 8 : 6));
+    ctx.lineTo(sh.x * s + 4, sh.y * s);
+    ctx.lineTo(sh.x * s - 1, sh.y * s);
+    ctx.closePath();
+    ctx.fill();
   }
 
   ctx.fillStyle = "#2f6fdf";
@@ -291,14 +364,21 @@ export function WorldMapView() {
   const activeContract = useGameStore((s) => s.activeContract);
   const battalions = useGameStore((s) => s.battalions);
   const followers = useGameStore((s) => s.followers);
-  const rations = useGameStore((s) => s.rations);
+  const day = useGameStore((s) => s.day);
+  const campPacked = useGameStore((s) => s.campPacked);
+  // Em campo, o exército só come o que as carroças levam
+  const rations = useGameStore((s) => (s.exposure.away && !s.campPacked ? s.cargo : s.rations));
   const engaged = useGameStore((s) => s.battleHud?.engaged ?? false);
   const setWorldMapOpen = useGameStore((s) => s.setWorldMapOpen);
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dest, setDest] = useState<Destination | null>(null);
 
-  const contractSiteId = activeContract?.contract.siteId ?? null;
+  const contractSiteId = activeContract?.contract.siteId || null;
+  const contractTownIds = useMemo(() => {
+    const c = activeContract?.contract;
+    return c && c.kind && c.kind !== "SITE" ? [c.targetId, c.fromId].filter((x): x is string => !!x) : [];
+  }, [activeContract]);
 
   useEffect(() => {
     if (!open) setDest(null);
@@ -306,8 +386,8 @@ export function WorldMapView() {
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
-    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, dest, burnedBridges });
-  }, [world, settlements, calamities, snap, contractSiteId, dest, open, burnedBridges]);
+    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, contractTownIds, dest, burnedBridges, day, campPacked });
+  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, dest, open, burnedBridges, day, campPacked]);
 
   const plan = useMemo(() => {
     if (!dest || !snap) return null;
@@ -357,7 +437,12 @@ export function WorldMapView() {
     <div className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center gap-4 bg-black/80 p-4 text-white">
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-bold">Mapa do Continente · {world.name}</h2>
+          <h2 className="text-xl font-bold">
+            Mapa do Continente · {world.name}
+            <span className="ml-2 text-sm font-normal text-neutral-300">
+              {SEASONS.LABEL[seasonOf(day)]}, dia {seasonDay(day)}/{SEASONS.DAYS}
+            </span>
+          </h2>
           <span className="text-xs text-neutral-400">Clique num destino · Tab ou Esc fecha · o mundo está em pausa</span>
         </div>
         <canvas

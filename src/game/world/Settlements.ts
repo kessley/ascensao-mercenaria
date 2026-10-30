@@ -5,7 +5,7 @@ import { CAMP_COLORS, drawTentShape, worldLabel, type Interactable } from "./Cam
 import type { StaticCuller } from "./StaticCuller";
 import { COLORS } from "../../utils/constants";
 import type { Point } from "../../utils/math";
-import { townLayout, type TownLayout } from "./townLayout";
+import { specialHouses, templeDoor, townLayout, type GarrisonCamp, type TownLayout } from "./townLayout";
 
 const WALL_COLOR = 0x8a8478;
 const ROOF_COLORS = [0x8e4a2b, 0x7a3b22, 0x9c6b3c, 0x6b5a4a];
@@ -66,6 +66,7 @@ export function drawCalamityLair(scene: Phaser.Scene, c: Calamity): Phaser.GameO
 /** Até onde se interage com a praça e com a porta do paço de um povoado. */
 const MARKET_RADIUS = 190;
 const HALL_RADIUS = 120;
+const CAMP_RADIUS = 150;
 
 /** Luz de um povoado à noite (praça, portões, janelas). */
 export interface TownLight {
@@ -88,7 +89,8 @@ interface DrawnTown {
  * Povoados no mapa (Marco 12): a planta inteira — lavouras, ruas, praça com barracas, casas,
  * paço ou castelo, templo, muralha com torres e portões. A base é redesenhada quando o
  * povoado cai em ruínas ou é reconstruído; as bandeiras e o nome, quando o dono muda.
- * Cada povoado tem duas interações: a praça (mercado) e a porta do paço (administração).
+ * Interações: a praça (mercado), a porta do paço (administração) e, do lado de fora, os
+ * acampamentos da guarnição junto aos portões (de onde se ataca o povoado).
  */
 export class SettlementLayer {
   private drawn = new Map<string, DrawnTown>();
@@ -151,14 +153,42 @@ export class SettlementLayer {
   }
 
   private spotsFor(t: Settlement, layout: TownLayout): Interactable[] {
-    const panel = { kind: "TOWN" as const, settlementId: t.id };
+    const panel = (at: "MARKET" | "HALL" | "CAMP" | "GATE") => ({ kind: "TOWN" as const, settlementId: t.id, at });
     if (t.owner === "RUINED") {
-      return [{ label: `Ruínas de ${t.name}`, door: layout.market, panel, bounds: rectAround(layout.market, 160), radius: MARKET_RADIUS }];
+      return [{ label: `Ruínas de ${t.name}`, door: layout.market, panel: panel("MARKET"), bounds: rectAround(layout.market, 160), radius: MARKET_RADIUS }];
     }
     const hall = t.owner === "PLAYER" ? `Sala de Administração de ${t.name}` : t.kind === "VILLAGE" ? `Casa do Conselho de ${t.name}` : `Paço de ${t.name}`;
+    // Marco 14: paço, taverna, Casa dos Mercadores e templo têm lado de dentro
+    const special = specialHouses(layout);
+    const houseSpot = (i: number | null, label: string, enter: string): Interactable[] => {
+      if (i === null) return [];
+      const h = layout.houses[i];
+      return [{ label, door: h.door, panel: { kind: "TOWN", settlementId: t.id, at: "MARKET" }, bounds: new Phaser.Geom.Rectangle(h.rect.x, h.rect.y, h.rect.w, h.rect.h), radius: 70, enter }];
+    };
+    const temple = templeDoor(layout);
     return [
-      { label: `Mercado de ${t.name}`, door: layout.market, panel, bounds: rectAround(layout.market, 160), radius: MARKET_RADIUS },
-      { label: hall, door: layout.hall, panel, bounds: rectAround(layout.hall, 70), radius: HALL_RADIUS },
+      { label: `Mercado de ${t.name}`, door: layout.market, panel: panel("MARKET"), bounds: rectAround(layout.market, 160), radius: MARKET_RADIUS },
+      { label: hall, door: layout.hall, panel: panel("HALL"), bounds: rectAround(layout.hall, 70), radius: HALL_RADIUS, enter: `town:${t.id}:hall` },
+      ...houseSpot(special.tavern, `Taverna de ${t.name}`, `town:${t.id}:tavern`),
+      ...houseSpot(special.guild, `Casa dos Mercadores de ${t.name}`, `town:${t.id}:guild`),
+      ...(temple && layout.temple
+        ? [{ label: `Templo de ${t.name}`, door: temple, panel: panel("MARKET"), bounds: new Phaser.Geom.Rectangle(layout.temple.x, layout.temple.y, layout.temple.w, layout.temple.h), radius: 90, enter: `town:${t.id}:temple` }]
+        : []),
+      ...layout.camps.map((c) => ({
+        label: `Guarnição de ${t.name}`,
+        door: c.door,
+        panel: panel("CAMP"),
+        bounds: new Phaser.Geom.Rectangle(c.rect.x, c.rect.y, c.rect.w, c.rect.h),
+        radius: CAMP_RADIUS,
+      })),
+      // Do lado de fora de cada portão (onde o exército fica): é dali que se ataca
+      ...layout.gates.map((g) => ({
+        label: `Portão de ${t.name}`,
+        door: g.outside,
+        panel: panel("GATE"),
+        bounds: rectAround(g.outside, 90),
+        radius: CAMP_RADIUS,
+      })),
     ];
   }
 
@@ -169,11 +199,11 @@ export class SettlementLayer {
     let y0 = b.y - 260;
     let x1 = b.x + b.w + 200;
     let y1 = b.y + b.h + 200;
-    for (const f of layout.fields) {
-      x0 = Math.min(x0, f.x);
-      y0 = Math.min(y0, f.y);
-      x1 = Math.max(x1, f.x + f.w);
-      y1 = Math.max(y1, f.y + f.h);
+    for (const f of [...layout.fields, ...layout.camps.map((c) => c.rect)]) {
+      x0 = Math.min(x0, f.x - 60);
+      y0 = Math.min(y0, f.y - 120);
+      x1 = Math.max(x1, f.x + f.w + 60);
+      y1 = Math.max(y1, f.y + f.h + 60);
     }
     const bounds = new Phaser.Geom.Rectangle(x0, y0, x1 - x0, y1 - y0);
     for (const o of objects) this.culler.add(o as Phaser.GameObjects.Graphics, bounds);
@@ -245,6 +275,24 @@ export class SettlementLayer {
       g.fillStyle(0x2a1c10, 1);
       g.fillRect(hs.door.x - 8, hs.door.y < r.y ? r.y - 2 : r.y + r.h - 4, 16, 6);
     }
+    // Placas da taverna (caneca dourada) e da Casa dos Mercadores (balança azul), Marco 14
+    if (!ruined) {
+      const special = specialHouses(layout);
+      const sign = (i: number | null, color: number) => {
+        if (i === null) return;
+        const hs = layout.houses[i];
+        const above = hs.door.y < hs.rect.y;
+        const sy = above ? hs.rect.y + 14 : hs.rect.y + hs.rect.h - 14;
+        g.fillStyle(0x2a1c10, 1);
+        g.fillRect(hs.door.x + 14, sy - 10, 26, 20);
+        g.fillStyle(color, 1);
+        g.fillRect(hs.door.x + 17, sy - 7, 20, 14);
+        g.fillStyle(0x2a1c10, 1);
+        g.fillCircle(hs.door.x + 27, sy, 4);
+      };
+      sign(special.tavern, 0xe0b040);
+      sign(special.guild, 0x3a6ab8);
+    }
     for (const r of layout.rubble) {
       g.fillStyle(0x3b3730, 0.9);
       g.fillRect(r.x + 6, r.y + 6, r.w - 12, r.h - 12);
@@ -282,6 +330,7 @@ export class SettlementLayer {
       g.fillRect(tp.x + tp.w / 2 - 10, tp.y + 20, 20, tp.h - 40);
       g.fillRect(tp.x + 30, tp.y + tp.h * 0.35, tp.w - 60, 20);
     }
+    for (const camp of layout.camps) drawGarrisonCamp(ground, g, camp);
 
     // Muralha, torres e portões
     const walls = scene.add.graphics().setDepth(-6);
@@ -351,6 +400,7 @@ export class SettlementLayer {
     if (t.owner !== "RUINED") {
       flag(layout.keep.x + layout.keep.w - 20, layout.keep.y + 10, 28);
       for (const gt of layout.gates) flag(gt.x + gt.width / 2 + 30, gt.y, 18);
+      for (const c of layout.camps) flag(c.flag.x, c.flag.y, 16);
     }
     const owner = ownerLabel(this.world, calamities, t.owner);
     const tone = t.owner === "PLAYER" ? "#9cc4ff" : t.owner === "RUINED" ? "#aaaaaa" : "#ffe9b0";
@@ -363,6 +413,115 @@ export class SettlementLayer {
 
 const rectAround = (p: Point, r: number) => new Phaser.Geom.Rectangle(p.x - r, p.y - r, r * 2, r * 2);
 
+/**
+ * Acampamento da guarnição (dentro dos muros): pátio de terra batida com cerca de estacas
+ * (aberta para a rua do portão), barracas listradas com espeques e cordas, fogueira com
+ * lenha empilhada, armeiro com lanças e escudos, bonecos de treino, barris e caixotes.
+ */
+function drawGarrisonCamp(ground: Phaser.GameObjects.Graphics, g: Phaser.GameObjects.Graphics, camp: GarrisonCamp): void {
+  const r = camp.rect;
+  const rnd = new Phaser.Math.RandomDataGenerator([`guarnicao-${Math.round(r.x)}-${Math.round(r.y)}`]);
+  ground.fillStyle(0x86744a, 1);
+  ground.fillRect(r.x, r.y, r.w, r.h);
+  // Manchas de chão pisado e tufos de capim
+  for (let k = 0; k < 10; k++) {
+    ground.fillStyle(rnd.pick([0x7a6942, 0x917f55, 0x6f6040]), 0.8);
+    ground.fillEllipse(r.x + rnd.between(20, r.w - 20), r.y + rnd.between(20, r.h - 20), rnd.between(30, 70), rnd.between(16, 36));
+  }
+  // Cerca de estacas, com a entrada voltada para a rua do portão (o lado da porta)
+  const sides = [
+    { a: { x: r.x, y: r.y }, b: { x: r.x + r.w, y: r.y } },
+    { a: { x: r.x, y: r.y + r.h }, b: { x: r.x + r.w, y: r.y + r.h } },
+    { a: { x: r.x, y: r.y }, b: { x: r.x, y: r.y + r.h } },
+    { a: { x: r.x + r.w, y: r.y }, b: { x: r.x + r.w, y: r.y + r.h } },
+  ];
+  const doorSide = sides.reduce((best, sd) => {
+    const d = (s: typeof sd) => Math.hypot((s.a.x + s.b.x) / 2 - camp.door.x, (s.a.y + s.b.y) / 2 - camp.door.y);
+    return d(sd) < d(best) ? sd : best;
+  }, sides[0]);
+  for (const sd of sides) {
+    const len = Math.hypot(sd.b.x - sd.a.x, sd.b.y - sd.a.y);
+    ground.lineStyle(3, CAMP_COLORS.WOOD, 1);
+    for (let d = 0; d <= len; d += 22) {
+      const f = d / len;
+      if (sd === doorSide && Math.abs(f - 0.5) < 0.22) continue;
+      const x = sd.a.x + (sd.b.x - sd.a.x) * f;
+      const y = sd.a.y + (sd.b.y - sd.a.y) * f;
+      ground.fillStyle(CAMP_COLORS.POST, 1);
+      ground.fillRect(x - 4, y - 4, 8, 8);
+      // Travessa entre as estacas
+      const nf = Math.min(1, (d + 22) / len);
+      if (!(sd === doorSide && Math.abs(nf - 0.5) < 0.22) && d + 22 <= len) {
+        ground.lineBetween(x, y, sd.a.x + (sd.b.x - sd.a.x) * nf, sd.a.y + (sd.b.y - sd.a.y) * nf);
+      }
+    }
+  }
+  // Barracas: lona listrada, cordas e espeques
+  for (const t of camp.tents) {
+    const cx = t.x + t.w / 2;
+    const cy = t.y + t.h / 2;
+    g.lineStyle(1.5, 0x4d3b20, 0.8);
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      g.lineBetween(cx + (dx * t.w) / 2, cy + (dy * t.h) / 2, cx + (dx * (t.w / 2 + 14)), cy + (dy * (t.h / 2 + 12)));
+      g.fillStyle(CAMP_COLORS.POST, 1);
+      g.fillRect(cx + dx * (t.w / 2 + 14) - 2, cy + dy * (t.h / 2 + 12) - 2, 4, 4);
+    }
+    drawTentShape(g, cx, cy, t.w, t.h, CAMP_COLORS.CANVAS);
+    g.fillStyle(0x9a3b2b, 0.55);
+    if (t.w > t.h) for (let k = 1; k < 4; k++) g.fillRect(t.x + (k * t.w) / 4 - 3, t.y + 2, 6, t.h - 4);
+    else for (let k = 1; k < 4; k++) g.fillRect(t.x + 2, t.y + (k * t.h) / 4 - 3, t.w - 4, 6);
+  }
+  // Fogueira: anel de pedras, brasas e lenha empilhada ao lado
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    g.fillStyle(CAMP_COLORS.STONE, 1);
+    g.fillCircle(camp.fire.x + Math.cos(a) * 15, camp.fire.y + Math.sin(a) * 15, 5);
+  }
+  g.fillStyle(0x3a2412, 1);
+  g.fillCircle(camp.fire.x, camp.fire.y, 10);
+  g.fillStyle(0xe67e22, 0.95);
+  g.fillCircle(camp.fire.x, camp.fire.y, 6);
+  g.fillStyle(0xf9d56e, 1);
+  g.fillCircle(camp.fire.x, camp.fire.y, 3);
+  g.fillStyle(CAMP_COLORS.WOOD, 1);
+  for (let k = 0; k < 3; k++) g.fillRect(camp.fire.x + 26, camp.fire.y - 10 + k * 7, 26, 5);
+  // Armeiro: cavalete com lanças em pé e dois escudos encostados
+  const k = camp.rack;
+  g.fillStyle(CAMP_COLORS.WOOD, 1);
+  g.fillRect(k.x, k.y, k.w, k.h);
+  g.lineStyle(2, 0xd8d8d8, 1);
+  const vertical = k.h > k.w;
+  for (let d = 6; d < (vertical ? k.h : k.w); d += 9) {
+    if (vertical) g.lineBetween(k.x - 8, k.y + d, k.x + k.w + 8, k.y + d);
+    else g.lineBetween(k.x + d, k.y - 8, k.x + d, k.y + k.h + 8);
+  }
+  for (const [sx, sy] of [[k.x - 10, k.y + k.h / 2], [k.x + k.w + 10, k.y + k.h / 2]]) {
+    g.fillStyle(0x8a2f2f, 1);
+    g.fillCircle(sx, sy, 8);
+    g.fillStyle(0xc9a23a, 1);
+    g.fillCircle(sx, sy, 3);
+  }
+  // Bonecos de treino: poste, travessa e cabeça de palha
+  for (const d of camp.dummies) {
+    g.lineStyle(4, CAMP_COLORS.WOOD, 1);
+    g.lineBetween(d.x - 12, d.y, d.x + 12, d.y);
+    g.lineBetween(d.x, d.y - 12, d.x, d.y + 12);
+    g.fillStyle(0xd8c39a, 1);
+    g.fillCircle(d.x, d.y - 12, 6);
+  }
+  // Barris e caixotes perto da fogueira (o lado oposto à lenha)
+  const corner = { x: camp.fire.x - 52, y: camp.fire.y - 10 };
+  g.fillStyle(0x6b4a2b, 1);
+  g.fillCircle(corner.x, corner.y, 9);
+  g.fillCircle(corner.x + 18, corner.y + 4, 9);
+  g.lineStyle(1.5, COLORS.OUTLINE, 0.8);
+  g.strokeCircle(corner.x, corner.y, 9);
+  g.strokeCircle(corner.x + 18, corner.y + 4, 9);
+  g.fillStyle(0xb08850, 1);
+  g.fillRect(corner.x - 6, corner.y + 16, 18, 16);
+  g.strokeRect(corner.x - 6, corner.y + 16, 18, 16);
+}
+
 /** Luzes de um povoado: a praça, os portões e algumas janelas (sempre as mesmas). */
 function townLights(id: string, layout: TownLayout): TownLight[] {
   const rnd = new Phaser.Math.RandomDataGenerator([`janelas-${id}`]);
@@ -370,5 +529,6 @@ function townLights(id: string, layout: TownLayout): TownLight[] {
   for (const g of layout.gates) lights.push({ x: g.outside.x, y: g.outside.y, radius: 230 }, { x: g.inside.x, y: g.inside.y, radius: 200 });
   for (const hs of layout.houses) if (rnd.frac() < 0.35) lights.push({ x: hs.door.x, y: hs.door.y, radius: 150 });
   lights.push({ x: layout.hall.x, y: layout.hall.y, radius: 220 });
+  for (const c of layout.camps) lights.push({ x: c.fire.x, y: c.fire.y, radius: 240 });
   return lights;
 }

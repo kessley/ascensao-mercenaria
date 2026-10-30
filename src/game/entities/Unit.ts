@@ -1,11 +1,13 @@
 import Phaser from "phaser";
-import { BALANCE, COLORS, GEO, TERRAIN, TIME, type AttackKind, type TerrainType, type UnitStats } from "../../utils/constants";
+import { BALANCE, COLORS, GEO, TERRAIN, TIME, WEATHER, type AttackKind, type TerrainType, type UnitStats, type Weather } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
 
 export type Team = "ALLY" | "ENEMY";
+/** Quem passa pelos portões: todos (inimigos, gente do mundo), tropa do bando ou gente avulsa do bando. */
+export type TownAccess = "ANY" | "ARMY" | "VISITOR";
 export type UnitState = "IDLE" | "MOVING" | "ATTACKING" | "FLEEING" | "DEAD";
 
 /**
@@ -22,6 +24,21 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   static darkness = 0;
   /** Grade de navegação do mundo (rotas em volta de rios, mar e montanhas). */
   static nav: NavGrid | null = null;
+  /** A mesma grade para as tropas do bando: povoados que não deixam o exército entrar contam como muro. */
+  static armyNav: NavGrid | null = null;
+  /**
+   * Povoado fechado para quem tem esse acesso neste ponto? (Marco 12: os portões barram o
+   * exército do bando nos povoados alheios, e todo o bando nos povoados em guerra com ele.)
+   */
+  static closedTown: ((access: TownAccess, x: number, y: number) => boolean) | null = null;
+  /** Tempo de agora onde a ação acontece (Marco 13): chuva encurta o alcance dos arqueiros. */
+  static weather: Weather = "CLEAR";
+  /** Chão da estação num ponto (lama da primavera e da chuva, neve): multiplicador de velocidade. */
+  static ground: ((x: number, y: number, t: TerrainType) => number) | null = null;
+  /** Muda quando a estação ou o tempo mudam (o chão guardado de cada unidade é refeito). */
+  static groundStamp = 0;
+  /** Marcha forçada (a cena liga): o Comandante e os soldados fora de combate andam mais depressa. */
+  static pace = 1;
 
   readonly team: Team;
   readonly radius: number;
@@ -55,6 +72,10 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   evasion = 0;
   /** Herói (Comandante): aliados não o empurram — eles é que abrem passagem. */
   isHero = false;
+  /** Por quais portões passa (ver `Unit.closedTown`). */
+  townAccess: TownAccess = "ANY";
+  /** Quão apetitoso é como alvo: < 1 = os saqueadores preferem (carroças). */
+  lure = 1;
 
   /** Última posição em terra firme (empurrões não jogam ninguém no rio). */
   safeX = NaN;
@@ -62,6 +83,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** Rota atual quando a linha reta até o destino está bloqueada. */
   private route: { goal: Point; at: number; path: Point[] | null } | null = null;
   private terrainCache = { x: NaN, y: NaN, type: "GRASS" as TerrainType };
+  private groundCache = { x: NaN, y: NaN, value: 1, stamp: -1 };
   /** De pé, sentado ou dormindo (vida no acampamento). */
   private pose: "STAND" | "SIT" | "SLEEP" = "STAND";
 
@@ -71,6 +93,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   constructor(scene: Phaser.Scene, x: number, y: number, team: Team, stats: UnitStats) {
     super(scene, x, y);
     this.team = team;
+    // Gente do bando entra nos povoados como visitante; a tropa dos batalhões (Soldier) fica no portão
+    if (team === "ALLY") this.townAccess = "VISITOR";
     this.radius = stats.radius;
     this.maxHp = stats.hp;
     this.hp = stats.hp;
@@ -129,13 +153,29 @@ export abstract class Unit extends Phaser.GameObjects.Container {
 
   // --- Modificadores (subclasses estendem com formação etc.) ---
 
+  /** Lama da primavera e da chuva, neve do inverno (vale para todos: bando, inimigos, bandos). */
+  groundFactor(): number {
+    const ground = Unit.ground;
+    if (!ground) return 1;
+    const c = this.groundCache;
+    if (c.x !== this.x || c.y !== this.y || c.stamp !== Unit.groundStamp) {
+      c.x = this.x;
+      c.y = this.y;
+      c.stamp = Unit.groundStamp;
+      c.value = ground(this.x, this.y, this.terrainType);
+    }
+    return c.value;
+  }
+
   speedMultiplier(): number {
     const t = TERRAIN[this.terrainType];
-    return (this.canCharge ? t.cavalrySpeed : t.speed) * this.nightSpeed();
+    return (this.canCharge ? t.cavalrySpeed : t.speed) * this.nightSpeed() * this.groundFactor();
   }
 
   attackRange(): number {
-    return this.ranged && this.terrainType === "HILL" ? this.range * BALANCE.HILL_RANGE_BONUS : this.range;
+    const range = this.ranged && this.terrainType === "HILL" ? this.range * BALANCE.HILL_RANGE_BONUS : this.range;
+    if (!this.ranged) return range;
+    return Unit.weather === "RAIN" ? range * WEATHER.RAIN_RANGE : Unit.weather === "STORM" ? range * WEATHER.STORM_RANGE : range;
   }
 
   get isCharging(): boolean {
@@ -197,22 +237,35 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return false;
   }
 
-  /** Anda sem entrar em água funda nem em montanha: na margem, desliza ao longo dela. */
+  /**
+   * Anda sem entrar em água funda nem em montanha (na margem, desliza ao longo dela) e sem
+   * passar por um portão fechado para ele. Quem já está dentro sempre pode sair.
+   */
   protected stepBy(dx: number, dy: number): void {
     const t = Unit.terrain;
-    if (!t || !t.isBlocked(this.x + dx, this.y + dy)) {
+    const gate = this.townAccess !== "ANY" ? Unit.closedTown : null;
+    const shut = !!gate && !gate(this.townAccess, this.x, this.y);
+    const blocked = (x: number, y: number) => !!t?.isBlocked(x, y) || (shut && !!gate?.(this.townAccess, x, y));
+    if (!blocked(this.x + dx, this.y + dy)) {
       this.x += dx;
       this.y += dy;
-    } else if (dx && !t.isBlocked(this.x + dx, this.y)) {
+    } else if (dx && !blocked(this.x + dx, this.y)) {
       this.x += dx;
-    } else if (dy && !t.isBlocked(this.x, this.y + dy)) {
+    } else if (dy && !blocked(this.x, this.y + dy)) {
       this.y += dy;
     }
   }
 
+  /** Foi empurrado para dentro de um povoado fechado para ele (estava fora antes)? */
+  pushedThroughGate(fromX: number, fromY: number): boolean {
+    const gate = Unit.closedTown;
+    if (!gate || this.townAccess === "ANY") return false;
+    return gate(this.townAccess, this.x, this.y) && !gate(this.townAccess, fromX, fromY);
+  }
+
   /** Próximo ponto da rota até (tx, ty), ou null se a linha reta serve. Refeita a cada 1,5 s. */
   private waypoint(tx: number, ty: number): (Point & { final: boolean }) | null {
-    const nav = Unit.nav;
+    const nav = this.townAccess === "ARMY" ? (Unit.armyNav ?? Unit.nav) : Unit.nav;
     if (!nav) return null;
     const now = this.scene.time.now;
     let r = this.route;

@@ -1,5 +1,5 @@
-import { useGameStore, type BattalionData } from "../../../store/useGameStore";
-import { FORMATIONS, PROGRESSION, TROOPS, type TroopType } from "../../../utils/constants";
+import { horseDeal, useGameStore, type BattalionData } from "../../../store/useGameStore";
+import { BALANCE, FORMATIONS, PROGRESSION, TRADE, TROOPS, type TroopType } from "../../../utils/constants";
 import { battalionWage, reinforceCostPerSoldier } from "../../../utils/economy";
 import { xpToNextLevel } from "../../../utils/progression";
 
@@ -87,26 +87,44 @@ export function BattalionList() {
 export function RecruitPanel() {
   const gold = useGameStore((s) => s.gold);
   const recruitBattalion = useGameStore((s) => s.recruitBattalion);
+  // Cavalaria (Marco 14): um cavalo por cavaleiro; os que faltam no estábulo, o negociante traz
+  const depot = useGameStore((s) => s.depot);
+  const settlements = useGameStore((s) => s.settlements);
+  const factions = useGameStore((s) => s.factions);
+  const world = useGameStore((s) => s.world);
+  const horses = horseDeal({ depot, settlements, factions, world }, BALANCE.BATTALION_SIZE * TRADE.HORSES_PER_RIDER);
+  const stable = depot.HORSES ?? 0;
 
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400">Recrutar tropas cruas</h2>
       <div className="grid grid-cols-1 gap-2">
-        {(Object.keys(TROOPS) as TroopType[]).map((type) => (
-          <button
-            key={type}
-            type="button"
-            disabled={gold < TROOPS[type].cost}
-            onClick={() => recruitBattalion(type)}
-            className="flex flex-col gap-1 rounded border border-neutral-700 bg-neutral-800 p-3 text-left hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-700"
-          >
-            <span className="font-semibold">{TROOPS[type].label}</span>
-            <span className="font-mono text-xs text-yellow-400">
-              {TROOPS[type].cost} ouro · +{Math.ceil(TROOPS[type].wagePerSoldier * 8)}/sem.
-            </span>
-            <span className="text-xs text-neutral-400">{TROOP_HINT[type]}</span>
-          </button>
-        ))}
+        {(Object.keys(TROOPS) as TroopType[]).map((type) => {
+          const cavalry = type === "CAVALRY";
+          const cost = TROOPS[type].cost + (cavalry ? horses.cost : 0);
+          return (
+            <button
+              key={type}
+              type="button"
+              disabled={gold < cost || (cavalry && !horses.ok)}
+              onClick={() => recruitBattalion(type)}
+              className="flex flex-col gap-1 rounded border border-neutral-700 bg-neutral-800 p-3 text-left hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-700"
+            >
+              <span className="font-semibold">{TROOPS[type].label}</span>
+              <span className="font-mono text-xs text-yellow-400">
+                {cost} ouro · +{Math.ceil(TROOPS[type].wagePerSoldier * 8)}/sem.
+              </span>
+              {cavalry && (
+                <span className="text-xs text-amber-200">
+                  {horses.ok
+                    ? `${BALANCE.BATTALION_SIZE} cavalos: ${horses.fromStable} do estábulo${horses.cost > 0 ? `, o resto do negociante (${horses.cost} de ouro já somados)` : ""}.`
+                    : `Faltam cavalos: há ${stable} no estábulo e o mercado mais perto não tem os outros. Compre cavalos nas estepes.`}
+                </span>
+              )}
+              <span className="text-xs text-neutral-400">{TROOP_HINT[type]}</span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

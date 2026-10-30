@@ -88,22 +88,63 @@ export function TrainingPanel() {
   const battalions = useGameStore((s) => s.battalions);
   const gold = useGameStore((s) => s.gold);
   const pendingMutiny = useGameStore((s) => s.pendingMutiny);
+  const training = useGameStore((s) => s.training);
+  const now = useGameStore((s) => s.day + s.dayProgress);
   const trainBattalions = useGameStore((s) => s.trainBattalions);
-  const eligible = battalions.filter((b) => b.level < PROGRESSION.MAX_LEVEL);
+  const cancelTraining = useGameStore((s) => s.cancelTraining);
+  const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  const busy = new Set(training.map((t) => t.battalionId));
+  const eligible = battalions.filter((b) => b.level < PROGRESSION.MAX_LEVEL && !busy.has(b.id));
   const [chosen, setChosen] = useState<string[]>([]);
   const picked = chosen.filter((id) => eligible.some((b) => b.id === id));
   const cost = picked.length * PROGRESSION.TRAINING_COST;
+  const left = Math.max(0, ...training.map((t) => t.until - now));
 
   const toggle = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  const days = (d: number) => d.toFixed(1).replace(".", ",");
 
   return (
     <section className="flex flex-col gap-3">
       <p className="text-sm text-neutral-300">
-        Cada batalhão treinado ganha <b>{PROGRESSION.TRAINING_XP} XP</b>. O treino dura{" "}
-        <b>{PROGRESSION.TRAINING_DAYS} dias</b> (o acampamento consome rações e pode cair um dia de pagamento) e custa{" "}
-        <b>{PROGRESSION.TRAINING_COST} de ouro</b> por batalhão.
+        Os batalhões vão ao Campo de Treino e treinam de verdade por <b>{PROGRESSION.TRAINING_DAYS} dias</b>: fileiras diante dos bonecos e
+        duelos de pares. No fim, cada um ganha <b>{PROGRESSION.TRAINING_XP} XP</b>. Custa <b>{PROGRESSION.TRAINING_COST} de ouro</b> por
+        batalhão; os dias correm (rações e pagamento). Enquanto alguém treina, o tempo passa no acampamento (um dia a cada{" "}
+        {PROGRESSION.TRAINING_CAMP_DAY_SECONDS} s). Quem treina não sai com o Comandante.
       </p>
-      {eligible.length === 0 && <p className="text-sm text-neutral-500">Nenhum batalhão pode treinar.</p>}
+
+      {training.length > 0 && (
+        <div className="flex flex-col gap-2 rounded border border-amber-700/60 bg-amber-950/20 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-amber-300">Treinando agora</h3>
+          {training.map((t) => {
+            const b = battalions.find((x) => x.id === t.battalionId);
+            if (!b) return null;
+            return (
+              <div key={t.battalionId} className="flex items-center gap-3 text-sm">
+                <span className="flex-1">
+                  <span className="font-semibold">{b.name}</span>{" "}
+                  <span className="text-xs text-neutral-400">
+                    Nv {b.level} · faltam {days(Math.max(0, t.until - now))} dia(s)
+                  </span>
+                </span>
+                <button className="text-xs text-neutral-400 underline hover:text-red-300" onClick={() => cancelTraining(t.battalionId)}>
+                  interromper
+                </button>
+              </div>
+            );
+          })}
+          <Button
+            onClick={() => {
+              sendBattleCommand({ type: "WAIT_TRAINING", ids: [] });
+              setCampPanel(null);
+            }}
+          >
+            Esperar o treino terminar ({days(left)} dia(s))
+          </Button>
+        </div>
+      )}
+
+      {eligible.length === 0 && <p className="text-sm text-neutral-500">Nenhum batalhão pode começar um treino agora.</p>}
       <div className="flex flex-col gap-2">
         {eligible.map((b) => (
           <label key={b.id} className="flex cursor-pointer items-center gap-3 rounded bg-neutral-800 px-3 py-2 text-sm">
@@ -123,7 +164,7 @@ export function TrainingPanel() {
           if (trainBattalions(picked)) setChosen([]);
         }}
       >
-        Treinar {picked.length} batalhão(ões) por {PROGRESSION.TRAINING_DAYS} dias ({cost} ouro)
+        Mandar {picked.length} batalhão(ões) treinar por {PROGRESSION.TRAINING_DAYS} dias ({cost} ouro)
       </Button>
       {pendingMutiny && <p className="text-xs text-red-400">Ninguém treina durante um motim.</p>}
     </section>
@@ -141,12 +182,14 @@ export function ForgePanel() {
   const gold = useGameStore((s) => s.gold);
   const iron = useGameStore((s) => s.iron);
   const forgeEquipment = useGameStore((s) => s.forgeEquipment);
+  const smith = useGameStore((s) => s.followers.some((f) => f.role === "SMITH"));
 
   return (
     <section className="flex flex-col gap-3">
       <p className="text-sm text-neutral-300">
         Ferro em estoque: <b className="text-sky-300">{iron}</b>. Ferro vem do saque de batalhas vencidas e do mercador da
         Intendência.
+        {smith && <span className="text-emerald-300"> O ajudante de ferreiro poupa 25% do ouro e do ferro.</span>}
       </p>
       {battalions.length === 0 && <p className="text-sm text-neutral-500">Nenhum batalhão para equipar.</p>}
       {battalions.map((b) => (
@@ -157,7 +200,7 @@ export function ForgePanel() {
           {(Object.keys(SLOT_LABEL) as EquipmentSlot[]).map((slot) => {
             const tier = b.equipment[slot];
             const maxed = tier >= PROGRESSION.MAX_EQUIPMENT_TIER;
-            const cost = forgeCost(tier);
+            const cost = forgeCost(tier, smith);
             return (
               <div key={slot} className="flex items-center justify-between gap-2 text-xs">
                 <span>

@@ -5,7 +5,9 @@ import { createRng, seedFromText } from "../worldgen/rng";
 /**
  * Planta de um povoado (Marco 12): muralha de verdade (paliçada nas aldeias, pedra nas
  * cidades e fortalezas) com torres e portões, ruas em grade, quarteirões de casas, praça do
- * mercado, paço ou castelo, templo e lavouras fora dos muros. Função pura e determinística
+ * mercado, paço ou castelo, templo, lavouras fora dos muros e, por dentro de cada portão, o
+ * acampamento da guarnição (os soldados do povoado vivem ali e patrulham as ruas). Função pura
+ * e determinística
  * (a mesma semente dá a mesma planta): a colisão, a navegação, o desenho, os moradores e as
  * estradas do gerador usam a mesma planta. Povoados em ruínas têm brechas nos muros e casas
  * destruídas.
@@ -29,6 +31,34 @@ export interface Gate {
   outside: Point;
   inside: Point;
   width: number;
+  /** Onde um exército barrado no portão espera: na estrada, do lado de fora. */
+  wait: Point;
+}
+
+/**
+ * Acampamento da guarnição por dentro de um portão, no quarteirão ao lado da rua que chega
+ * nele (os soldados do povoado vivem ali, guardam a entrada e saem para patrulhar as ruas).
+ */
+export interface GarrisonCamp {
+  /** Índice do portão que o acampamento guarda. */
+  gate: number;
+  rect: Rect;
+  /** Barracas (sólidas). */
+  tents: Rect[];
+  fire: Point;
+  /** Armeiro com as lanças em pé (só desenho). */
+  rack: Rect;
+  flag: Point;
+  /** Postos das duas sentinelas, um de cada lado do vão do portão. */
+  posts: [Point, Point];
+  /** Lugares da tropa: em volta da fogueira e no pátio. */
+  spots: Point[];
+  /** Linha logo atrás do portão onde a tropa forma quando há perigo perto. */
+  muster: Point[];
+  /** Interação "Guarnição de X", na beira voltada para a rua do portão. */
+  door: Point;
+  /** Bonecos de treino no pátio (só desenho). */
+  dummies: Point[];
 }
 
 export interface House {
@@ -67,6 +97,8 @@ export interface TownLayout {
   edges: [number, number][];
   /** Lavouras fora dos muros (onde os camponeses trabalham). */
   fields: Rect[];
+  /** Acampamentos da guarnição por dentro dos portões (nenhum em ruínas). */
+  camps: GarrisonCamp[];
   /** Interações: a praça (mercado) e a porta do paço/castelo (administração). */
   market: Point;
   hall: Point;
@@ -145,6 +177,15 @@ const SPEC: Record<SettlementKind, KindSpec> = {
 };
 
 const GATE_WIDTH = 230;
+
+/** Acampamento da guarnição: largura (ao longo do muro), fundura (para dentro) e barracas. */
+const CAMP_SIZE: Record<SettlementKind, { w: number; d: number; tents: number }> = {
+  VILLAGE: { w: 400, d: 250, tents: 2 },
+  CITY: { w: 400, d: 260, tents: 3 },
+  FORT: { w: 540, d: 380, tents: 4 },
+};
+/** O exército barrado no portão espera a esta distância do muro, do lado de fora. */
+const WAIT_OUT = 420;
 
 const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const inset = (r: Rect, d: number): Rect => ({ x: r.x + d, y: r.y + d, w: r.w - d * 2, h: r.h - d * 2 });
@@ -258,6 +299,15 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
     temple = { x: tb.rect.x + tb.rect.w / 2 - 120, y: tb.rect.y + 20, w: 240, h: tb.rect.h - 40 };
   }
   const solidsTaken = [keep, ...(temple ? [temple] : []), inset(square, -30)];
+  // Acampamentos da guarnição no quarteirão ao lado de cada portão (em ruínas o terreno fica vazio)
+  const allCamps: GarrisonCamp[] = [];
+  gates.forEach((g, i) => {
+    const horizontal = g.side === "N" || g.side === "S";
+    const c = gateCamp(g, i, kind, t, S, spec.ring, horizontal ? bw : bh, horizontal ? bh : bw, solidsTaken);
+    if (c) allCamps.push(c);
+  });
+  const camps = ruined ? [] : allCamps;
+  const lots = [...solidsTaken, ...allCamps.map((c) => inset(c.rect, -14))];
 
   // --- Casas: duas fileiras por quarteirão (portas para as ruas de cima e de baixo) ---
   const houses: House[] = [];
@@ -270,7 +320,7 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
         if (hw < 80) break;
         const rect: Rect = { x: x + 6, y: b.rect.y + row * (rowH + 14) + 6, w: hw - 12, h: rowH - 12 };
         x += hw;
-        if (solidsTaken.some((s) => overlaps(s, rect))) continue;
+        if (lots.some((s) => overlaps(s, rect))) continue;
         if (rng.chance(spec.empty)) continue;
         const doorY = row === 0 ? rect.y - 8 : rect.y + rect.h + 8;
         const streetY = row === 0 ? b.rect.y - (b.r === 0 ? spec.ring : S) / 2 : b.rect.y + b.rect.h + (b.r === spec.rows - 1 ? spec.ring : S) / 2;
@@ -353,25 +403,192 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
     nodes,
     edges,
     fields,
+    camps,
     market: { x: cx, y: cy },
     hall: keepDoor,
     rubble,
   };
 }
 
+/** Direção "para fora" de cada lado da muralha. */
+const OUTWARD: Record<Side, Point> = { N: { x: 0, y: -1 }, S: { x: 0, y: 1 }, W: { x: -1, y: 0 }, E: { x: 1, y: 0 } };
+
 function gateAt(side: Side, b: Rect, t: number): Gate {
   const cx = b.x + b.w / 2;
   const cy = b.y + b.h / 2;
-  switch (side) {
-    case "N":
-      return { side, x: cx, y: b.y + t / 2, outside: { x: cx, y: b.y - 160 }, inside: { x: cx, y: b.y + t + 90 }, width: GATE_WIDTH };
-    case "S":
-      return { side, x: cx, y: b.y + b.h - t / 2, outside: { x: cx, y: b.y + b.h + 160 }, inside: { x: cx, y: b.y + b.h - t - 90 }, width: GATE_WIDTH };
-    case "W":
-      return { side, x: b.x + t / 2, y: cy, outside: { x: b.x - 160, y: cy }, inside: { x: b.x + t + 90, y: cy }, width: GATE_WIDTH };
-    case "E":
-      return { side, x: b.x + b.w - t / 2, y: cy, outside: { x: b.x + b.w + 160, y: cy }, inside: { x: b.x + b.w - t - 90, y: cy }, width: GATE_WIDTH };
+  const n = OUTWARD[side];
+  const x = side === "W" ? b.x + t / 2 : side === "E" ? b.x + b.w - t / 2 : cx;
+  const y = side === "N" ? b.y + t / 2 : side === "S" ? b.y + b.h - t / 2 : cy;
+  const at = (d: number) => ({ x: x + n.x * (t / 2 + d), y: y + n.y * (t / 2 + d) });
+  return {
+    side,
+    x,
+    y,
+    outside: at(160),
+    inside: at(-t - 90),
+    width: GATE_WIDTH,
+    wait: at(WAIT_OUT),
+  };
+}
+
+/**
+ * Acampamento da guarnição do portão `g`, por dentro dos muros: no canto do quarteirão ao
+ * lado da rua que chega ao portão (o lado que não tiver paço, templo ou praça). Barracas no
+ * fundo; pátio com fogueira, armeiro e bonecos de treino virado para a rua. As sentinelas
+ * ficam do lado de fora do portão.
+ */
+function gateCamp(
+  g: Gate,
+  index: number,
+  kind: SettlementKind,
+  t: number,
+  street: number,
+  ring: number,
+  blockAlong: number,
+  blockDepth: number,
+  taken: readonly Rect[],
+): GarrisonCamp | null {
+  const out = OUTWARD[g.side];
+  const m = { x: -out.x, y: -out.y };
+  const size = CAMP_SIZE[kind];
+  const w = Math.min(size.w, blockAlong - 30);
+  const fullD = Math.min(size.d, blockDepth - 30);
+  // Coordenadas locais: u ao longo do muro (a partir do eixo do portão), v para dentro (a partir da face de dentro)
+  const fx = g.x + (m.x * t) / 2;
+  const fy = g.y + (m.y * t) / 2;
+  // Tenta os dois lados da rua; se o paço, o templo ou a praça ocupam o canto, um acampamento mais raso
+  for (const [sign, depth] of [[1, 1], [-1, 1], [1, 0.72], [-1, 0.72], [1, 0.55], [-1, 0.55]]) {
+    const d = Math.max(150, fullD * depth);
+    const side = { x: -out.y * sign, y: out.x * sign };
+    const at = (u: number, v: number): Point => ({ x: fx + side.x * u + m.x * v, y: fy + side.y * u + m.y * v });
+    const box = (a0: number, b0: number, a1: number, b1: number): Rect => {
+      const a = at(a0, b0);
+      const b = at(a1, b1);
+      return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
+    };
+    const u0 = street / 2 + 14;
+    const u1 = u0 + w;
+    const v0 = ring + 14;
+    const v1 = v0 + d;
+    const rect = box(u0, v0, u1, v1);
+    if (taken.some((r) => overlaps(inset(rect, -10), r))) continue;
+    const tentW = 90;
+    const tentD = 66;
+    const tents: Rect[] = [];
+    for (let k = 0; k < size.tents; k++) {
+      const uc = u0 + 30 + (k + 0.5) * ((w - 60) / size.tents);
+      tents.push(box(uc - tentW / 2, v1 - 14 - tentD, uc + tentW / 2, v1 - 14));
+    }
+    const yardEnd = v1 - 24 - tentD;
+    const fu = u0 + w * 0.6;
+    const fv = (v0 + yardEnd) / 2;
+    const spots: Point[] = [];
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      spots.push(at(fu + Math.cos(a) * 56, fv + Math.sin(a) * Math.min(46, (yardEnd - v0) / 2 - 8)));
+    }
+    // Pátio de treino: fileiras entre a rua e a fogueira, de frente para os bonecos
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 3; col++) spots.push(at(u0 + 34 + col * 32, v0 + 30 + row * 40));
+    }
+    const muster: Point[] = [];
+    for (let row = 0; row < 2; row++) {
+      for (let col = -4; col <= 4; col++) muster.push(at(col * 30, 70 + row * 34));
+    }
+    return {
+      gate: index,
+      rect,
+      tents,
+      fire: at(fu, fv),
+      rack: box(u1 - 70, v0 + 14, u1 - 18, v0 + 34),
+      flag: at(u0 + 14, v0 + 18),
+      posts: [at(-(GATE_WIDTH / 2 - 22), -(t + 36)), at(GATE_WIDTH / 2 - 22, -(t + 36))],
+      spots,
+      muster,
+      door: at(u0 + 8, (v0 + yardEnd) / 2),
+      dummies: yardEnd - v0 > 120 ? [at(u0 + 50, v0 + 112), at(u0 + 98, v0 + 112)] : [],
+    };
   }
+  return null;
+}
+
+/**
+ * O que cada soldado da guarnição faz: sentinela no portão, vigia da fogueira, acampamento,
+ * ronda pelas ruas ou guarda na muralha (anda o caminho de ronda junto ao muro).
+ */
+export type GarrisonRole = "SENTRY" | "WATCH" | "CAMP" | "PATROL" | "WALL";
+
+/** Posto de um soldado da guarnição. */
+export interface GarrisonPost {
+  at: Point;
+  role: GarrisonRole;
+  camp: number;
+  /** Lugar dele entre os do acampamento. */
+  rank: number;
+}
+
+/**
+ * Onde fica cada um dos `n` soldados da guarnição. Os soldados se revezam entre os portões;
+ * em cada um: o 1º é sentinela, o 2º vigia a fogueira, o 3º patrulha as ruas, o 4º é a
+ * segunda sentinela; daí em diante, metade fica no acampamento e metade patrulha. O posto do
+ * soldado k não muda quando a guarnição cresce ou diminui.
+ */
+export function garrisonPosts(layout: TownLayout, n: number): GarrisonPost[] {
+  const camps = layout.camps;
+  const out: GarrisonPost[] = [];
+  if (camps.length === 0) return out;
+  const count = camps.map(() => 0);
+  for (let k = 0; k < n; k++) {
+    const c = k % camps.length;
+    const rank = count[c]++;
+    const camp = camps[c];
+    if (rank === 0 || rank === 3) out.push({ at: camp.posts[rank === 0 ? 0 : 1], role: "SENTRY", camp: c, rank });
+    else if (rank === 1) out.push({ at: camp.spots[0], role: "WATCH", camp: c, rank });
+    // O 3º de metade dos portões guarda a muralha; o dos outros faz a ronda pelas ruas
+    else if (rank === 2 && c % 2 === 0) out.push({ at: wallWalk(layout)[0], role: "WALL", camp: c, rank });
+    else if (rank === 2 || rank % 2 === 1) out.push({ at: camp.door, role: "PATROL", camp: c, rank });
+    else {
+      const i = (rank - 3) % camp.spots.length;
+      out.push({ at: camp.spots[i], role: "CAMP", camp: c, rank });
+    }
+  }
+  return out;
+}
+
+/** Cantos do caminho de ronda junto à muralha, por dentro (sentido horário a partir do noroeste). */
+export function wallWalk(layout: TownLayout): Point[] {
+  const b = layout.bounds;
+  // Folga para passar por dentro das torres (que avançam muro adentro)
+  const d = layout.wallThickness + 62;
+  return [
+    { x: b.x + d, y: b.y + d },
+    { x: b.x + b.w - d, y: b.y + d },
+    { x: b.x + b.w - d, y: b.y + b.h - d },
+    { x: b.x + d, y: b.y + b.h - d },
+  ];
+}
+
+/** Caminho de `from` até `to` pelas ruas (busca em largura na grade de cruzamentos da planta). */
+export function streetPath(layout: TownLayout, from: Point, to: Point): Point[] {
+  const d2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+  const nearestNode = (p: Point) => layout.nodes.reduce((best, n, k) => (d2(n, p) < d2(layout.nodes[best], p) ? k : best), 0);
+  const a = nearestNode(from);
+  const b = nearestNode(to);
+  const prev = new Map<number, number>([[a, -1]]);
+  const queue = [a];
+  while (queue.length) {
+    const u = queue.shift() as number;
+    if (u === b) break;
+    for (const [x, y] of layout.edges) {
+      const v = x === u ? y : y === u ? x : -1;
+      if (v < 0 || prev.has(v)) continue;
+      prev.set(v, u);
+      queue.push(v);
+    }
+  }
+  const path: Point[] = [];
+  for (let v = b; v !== -1 && prev.has(v); v = prev.get(v) as number) path.unshift(layout.nodes[v]);
+  return path;
 }
 
 /** Portão (lado de fora) mais perto de um ponto: onde as estradas chegam. */
@@ -387,6 +604,7 @@ export function townSolids(layout: TownLayout): { rect: Rect; type: "WALL" | "BU
     ...layout.houses.map((hs) => ({ rect: hs.rect, type: "BUILDING" as const })),
     { rect: layout.keep, type: "BUILDING" as const },
     ...(layout.temple ? [{ rect: layout.temple, type: "BUILDING" as const }] : []),
+    ...layout.camps.flatMap((c) => c.tents.map((rect) => ({ rect, type: "BUILDING" as const }))),
   ];
 }
 
@@ -396,3 +614,22 @@ export function insideTown(layout: TownLayout, p: Point, pad = 0): boolean {
   return p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad;
 }
 
+
+/**
+ * Casas com função (Marco 14): a taverna é a casa mais perto da praça; a Casa dos Mercadores,
+ * a segunda (nas aldeias pequenas, só a taverna). O resto são casas de moradores.
+ */
+export function specialHouses(layout: TownLayout): { tavern: number | null; guild: number | null } {
+  const order = layout.houses
+    .map((h, i) => ({ i, d: Math.hypot(h.door.x - layout.market.x, h.door.y - layout.market.y) }))
+    .sort((a, b) => a.d - b.d)
+    .map((x) => x.i);
+  const guild = layout.kind !== "VILLAGE" || layout.houses.length >= 6 ? (order[1] ?? null) : null;
+  return { tavern: order[0] ?? null, guild };
+}
+
+/** Porta do templo: no meio do lado de baixo. */
+export function templeDoor(layout: TownLayout): Point | null {
+  const t = layout.temple;
+  return t ? { x: t.x + t.w / 2, y: t.y + t.h + 10 } : null;
+}

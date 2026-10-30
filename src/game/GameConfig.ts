@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
 import { WorldScene } from "./scenes/WorldScene";
+import { InteriorScene } from "./scenes/InteriorScene";
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from "../utils/constants";
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
@@ -14,6 +15,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    scene: [BootScene, WorldScene],
+    // O interior de um prédio (Marco 14) é uma cena à parte: o mundo dorme enquanto isso
+    scene: [BootScene, WorldScene, InteriorScene],
   };
 }

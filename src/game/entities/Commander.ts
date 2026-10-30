@@ -38,6 +38,11 @@ export class Commander extends Unit {
     g.fillTriangle(-r - 8, -r - 14, -r - 24, -r - 10, -r - 8, -r - 4);
   }
 
+  /** Marcha forçada: o Comandante puxa o passo (a tropa acompanha). */
+  override speedMultiplier(): number {
+    return super.speedMultiplier() * Unit.pace;
+  }
+
   handleMovement(keys: CommanderKeys, dt: number): boolean {
     if (!this.isAlive) return false; // não "ressuscita" quem caiu entre um quadro e outro
     let vx = 0;

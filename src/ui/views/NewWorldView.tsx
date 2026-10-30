@@ -74,6 +74,8 @@ export function NewWorldView() {
       great: world.geo.rivers.filter((r) => r.kind === "GREAT").map((r) => r.name),
       bridges: world.geo.crossings.filter((c) => c.kind === "BRIDGE").length,
       fords: world.geo.crossings.filter((c) => c.kind === "FORD").length,
+      ferries: world.geo.crossings.filter((c) => c.kind === "FERRY").length,
+      iron: world.settlements.filter((s) => s.resources.includes("IRON")).length,
       ruins: world.settlements.filter((s) => s.owner === "RUINED").length,
       ports: world.settlements.filter((s) => s.port).length,
     };
@@ -140,7 +142,7 @@ export function NewWorldView() {
           </p>
           <p className="text-xs text-neutral-300">
             Terra de {facts.biomes.join(", ")} · {facts.rivers} rios{facts.great.length > 0 ? ` (o maior: ${facts.great[0]})` : ""} ·{" "}
-            {facts.bridges} pontes e {facts.fords} vaus · {facts.ports} portos · {facts.ruins} povoado(s) em ruínas ·{" "}
+            {facts.bridges} pontes, {facts.fords} vaus e {facts.ferries} balsas · {facts.ports} portos · {facts.iron} povoado(s) com ferro · {facts.ruins} povoado(s) em ruínas ·{" "}
             {WORLD_AGES[options.age].years} anos de história simulada.
           </p>
         </div>

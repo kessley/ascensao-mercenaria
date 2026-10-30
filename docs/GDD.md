@@ -30,6 +30,13 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
   - **História do mundo:** antes do jogo começar, o mundo já tem séculos de crônica gerada: quem fundou cada povoado, quando os reinos foram proclamados, guerras que trocaram povoados de mãos, uma calamidade antiga que deixou ruínas, os saques recentes e a fundação do bando do jogador. A crônica fica na tela de criação e na Tenda do Comandante.
   - **Sem telas de batalha:** o combate começa quando tropas e inimigos se encontram, em qualquer ponto do mapa, e termina sozinho quando ninguém mais está lutando, com um relatório (baixas, XP de quem lutou, saque, contrato). Recuar é simplesmente sair dali.
   - **O tempo é a marcha:** o dia avança com a distância percorrida pelo exército — 3 regiões por dia (≈ 1,5 min de marcha; a noite dura ≈ 30 s) — e devagar com o tempo parado (6 min por dia). Dentro das muralhas de um povoado só corre o relógio de quem está parado: andar pelas ruas não é marcha. Dentro do acampamento e durante um combate o relógio para. Rações, salários, prazos e o surgimento de ameaças correm nesse relógio.
+  - **Estações e clima:** o ano tem 4 estações de 20 dias.
+    - **Primavera:** lama e cheia que fecha os vaus.
+    - **Verão:** campanha.
+    - **Outono:** colheita e feiras.
+    - **Inverno:** neve no norte e nas montanhas, rios congelados e reinos nos quartéis de inverno.
+
+    Cada região tem o seu tempo do dia: chuva encurta os arcos, nevoeiro esconde todos e neve pesa no passo.
   - **Dia e noite:** o dia tem horas e vira na aurora. À noite o mundo escurece e só tochas, fogueiras e janelas iluminam.
     - O bando escolhe entre marchar com tochas acesas (enxerga mais, mas é visto de longe) ou no escuro (se esconde dos homens, mas não de goblins e mortos-vivos, que enxergam e lutam melhor à noite).
     - Quem surge do escuro e ataca de imediato pega o inimigo de surpresa: é a emboscada noturna, que tira moral.
@@ -96,10 +103,29 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
   - **Povoados de verdade:** cada povoado tem planta própria.
     - **Muralha:** paliçada nas aldeias, pedra com torres nas cidades e fortalezas; só se entra pelos portões.
     - **Dentro:** ruas em grade com quarteirões de casas, a praça do mercado com barracas e poço, o paço ou castelo onde fica a Sala de Administração, o templo nas cidades.
-    - **Fora:** lavouras em volta dos muros.
-  - **Gente:** moradores, guardas e camponeses dão vida às ruas e aos campos; mais gente quanto maior e mais próspero o povoado. À noite as janelas se acendem. Em ruínas, os muros têm brechas e as casas viram entulho.
+    - **Fora:** lavouras em volta dos muros. Por dentro de cada portão fica o acampamento da guarnição.
+  - **Guarnição:** os soldados do povoado existem de verdade no mapa.
+    - **Onde ficam:** sentinelas do lado de fora dos portões; rondas pelas ruas; o resto nos acampamentos, onde treina, dorme e forma atrás do portão quando há perigo.
+    - **Lutam de verdade:** contra goblins e hordas que chegam (as patrulhas dos reinos também).
+    - **Força:** quantos são se vê pelo acampamento cheio ou vazio. Os reinos repõem a guarnição devagar.
+  - **Recursos da terra:** madeira, pedra, ferro, grão, peixe, sal, peles, cavalos e ervas, conforme os biomas em volta. Barateiam o mercado local e rendem para o dono.
+  - **Portões:** um povoado não deixa um exército estrangeiro entrar.
+    - **Exército do bando:** só entra nos povoados do bando e nas ruínas; nos outros, espera diante do portão.
+    - **Comandante:** entra sozinho para negociar e comerciar.
+    - **Guerra, calamidade ou cerco:** os portões fecham para todo o bando.
+  - **Atacar:** um povoado é atacado pelo portão, do lado de fora.
+    - **Defesa:** os próprios soldados saem dali para lutar.
+    - **Em guerra:** chegar perto dos muros já faz a guarnição sair.
+    - **Baixas:** os mortos de um ataque que fracassa ficam fazendo falta.
+  - **Gente:** moradores e camponeses dão vida às ruas e aos campos; mais gente quanto maior e mais próspero o povoado. À noite as janelas se acendem. Em ruínas, os muros têm brechas e as casas viram entulho.
 - **Economia de Suprimentos:** O exército exige gestão constante de estoque.
   - **Rações (Comida):** Consumida diariamente. A falta de comida diminui drasticamente o Moral inicial das tropas antes mesmo da batalha começar.
+    - **Onde fica:** o estoque fica no depósito do acampamento; em campo, o exército come só o que o **trem de carroças** leva.
+    - **Alcance:** a capacidade das carroças limita o alcance da campanha.
+    - **Risco:** as carroças são o alvo preferido dos saqueadores.
+    - **Forragem:** forragear completa a comida, mas esgota a região.
+  - **Fadiga, feridos e doenças:** marchar e lutar cansam cada batalhão; marcha forçada troca cansaço por caminho. Parte dos que caem fica ferida e volta da enfermaria. Pântano, fome, frio e acampamento lotado espalham doenças.
+  - **Acampamento móvel:** pode ser levantado e montado em outro lugar. Paliçada reforçada, torres e fosso protegem o acampamento fixo e se perdem na mudança.
   - **Salários (Ouro):** Tropas exigem pagamento regular. Atrasar salários leva à perda de tropas por deserção e pode culminar em um Motim, forçando o Comandante a combater seus próprios soldados rebelados.
   - **Contratos:** São a principal fonte de injeção de recursos, pagando um adiantamento logístico e um bônus gordo na conclusão. Aceito na tenda, o contrato marca um local no mapa e um prazo; o bônus sai quando todos os inimigos do local caem. Vencido o prazo, o cliente contrata outro bando.
   - **Motim:** acontece dentro do acampamento: o batalhão rebelado pega em armas ali mesmo, diante dos alojamentos.
@@ -142,7 +168,7 @@ Toda mecânica nova passa por estes filtros:
 - **Névoa nas três escalas:** um continente nunca visitado aparece só pelo contorno das cartas náuticas compradas ou pelo relato de marinheiros.
 
 ### 8.3 Geração do mundo v2: relevo, rios, mares e história simulada
-> Implementado no Marco 11 (detalhes no Roadmap). Ainda não: os recursos por bioma (Marco 14).
+> Implementado no Marco 11 (detalhes no Roadmap); os recursos por bioma chegaram no fechamento do Marco 12. Ainda não: os bens e as cadeias de produção (Marco 14).
 Todas as etapas usam a semente:
 1. **Relevo:** um mapa de altitude do planeta (ruído + máscaras de continentes) e o nível do mar definem oceanos, mares interiores, continentes e ilhas.
 2. **Clima:** a temperatura vem da latitude e da altitude; a chuva vem dos ventos dominantes, com sombra de chuva atrás das montanhas.
@@ -154,7 +180,7 @@ Todas as etapas usam a semente:
 8. **História simulada:** em vez de sortear a crônica, o gerador **roda a própria simulação de reinos** (seção 8.9) em passos grossos por 100 a 400 anos. Povoados crescem e caem, reinos se unem e se partem, dinastias mudam e calamidades antigas deixam ruínas e lendas. O mundo que o jogador recebe é o resultado. Na tela de criação ele escolhe o tamanho do mundo, o número de continentes, a idade do mundo (jovem, média ou antiga) e a frequência das calamidades.
 
 ### 8.4 Rios e oceano no Campo
-> Implementado no Marco 11: riachos rasos, vaus, rios fundos, pontes queimáveis com pedágio, passos nas montanhas e as regras da água (+25% de dano recebido, −20% causado, sem formação nem investida). Ainda não: a balsa, as cheias e o gelo das estações (Marco 13), as barcaças (Marco 14) e os portos em uso (Marco 17).
+> Implementado no Marco 11: riachos rasos, vaus, rios fundos, pontes queimáveis com pedágio, passos nas montanhas e as regras da água (+25% de dano recebido, −20% causado, sem formação nem investida). A balsa chegou no fechamento do Marco 12; a cheia da primavera e os rios congelados do inverno (com gelo fino), no Marco 13. Ainda não: as barcaças (Marco 14) e os portos em uso (Marco 17).
 - **Riacho:** dá para atravessar a vau em qualquer ponto, com −40% de velocidade e a formação desfeita.
 - **Rio:** só se atravessa nos **vaus** (marcados no mapa) ou nas **pontes**. Dentro do vau o movimento fica muito lento, quem está na água recebe +25% de dano, não dá para usar a Parede de Escudos e a cavalaria perde a investida. Defender a saída de um vau é a manobra clássica.
 - **Rio grande:** só por ponte, balsa (paga e demorada) ou barco.
@@ -164,7 +190,7 @@ Todas as etapas usam a semente:
 - **Costa e mar:** praias permitem desembarque; portos têm cais, estaleiro e farol. Piratas e saqueadores vindos do mar atacam aldeias costeiras.
 
 ### 8.5 Tempo: horas, dia e noite, estações e clima
-> Horas, dia e noite, tochas, criaturas da noite, emboscada noturna e descanso: implementados no Marco 10 (seção 2). Estações e clima ficam para o Marco 13.
+> Horas, dia e noite, tochas, criaturas da noite, emboscada noturna e descanso: implementados no Marco 10 (seção 2). Estações, clima diário por região e a previsão do tenente Cauteloso: Marco 13 (detalhes e números no Roadmap). A noite cansa o dobro pela fadiga. Ainda não: a tempestade no mar (Marco 17).
 - **Horas do dia:** o dia ganha fases (aurora, dia, crepúsculo e noite) e continua avançando com a marcha. **À noite:**
   - a visão cai 40% (tochas ajudam, mas denunciam a posição);
   - goblins e mortos-vivos ganham bônus;
@@ -185,6 +211,7 @@ Todas as etapas usam a semente:
   Um tenente com o traço certo prevê o tempo do dia seguinte.
 
 ### 8.6 Logística, fadiga e saúde
+> Implementado no Marco 13: fadiga e marcha forçada, trem de carroças com depósito no acampamento e carga em campo, forragem com esgotamento, feridos e enfermaria, doenças (também nos povoados), acampamento móvel e obras do acampamento fixo. Ainda não: ferro, saque e carga comercial nas carroças (Marco 14).
 - **Fadiga** por batalhão (0–100): sobe com marcha forçada, marcha noturna, terreno ruim e combate; desce com descanso. Com fadiga alta o batalhão fica mais lento, causa menos dano e recupera a moral mais devagar. É a escolha clássica entre chegar antes e chegar inteiro.
 - **Trem de carroças:** rações, ferro, saque e carga comercial viajam em **carroças** de verdade que seguem o exército. Elas são lentas na lama e, em terreno difícil, ficam presas às estradas. A capacidade das carroças limita o alcance da campanha. São o alvo preferido dos bandos: perdê-las é perder a comida.
 - **Forragear:** no campo, o exército pode coletar comida da região. Rende pouco no inverno e no deserto, esgota a região por semanas e irrita o dono das terras.
@@ -193,7 +220,15 @@ Todas as etapas usam a semente:
 - **Acampamento móvel:** o bando pode **levantar o acampamento** (1 a 2 dias de desmontagem, tudo nas carroças) e montá-lo em outro lugar: perto da frente de guerra, de uma rota rica ou em outro continente. Paliçada, torres e fosso são melhorias de um acampamento fixo.
 
 ### 8.7 Mundo vivo: gente andando
-> Implementado no Marco 12: a rotina e os sinais do acampamento, os seguidores, as relações e os eventos com escolha, os moradores, guardas, camponeses, viajantes, peregrinos e cervos, as patrulhas, mensageiros e refugiados, a fumaça, os corvos e os rastros. Ainda não: caçadores e lobos.
+> Implementado no Marco 12:
+> - **Acampamento:** a rotina e os sinais do acampamento, com a fila do pagamento no dia do soldo e o ferro levado à Ferraria.
+> - **Seguidores:** com o ajudante de ferreiro; o número de seguidores cresce com o tamanho e a fama do bando; o mascate tem banca.
+> - **Relações e eventos:** as relações entre tenentes e os eventos com escolha.
+> - **Gente e bichos:** moradores, guardas nas portas, nas ruas e na muralha, camponeses, viajantes, peregrinos, caçadores, cervos e lobos.
+> - **Agentes:** as patrulhas, os mensageiros e os refugiados.
+> - **Sinais:** a fumaça, os corvos e os rastros (mais fundos e duradouros na lama e na neve).
+>
+> Ficam para depois: as caravanas (Marco 14) e os exércitos de lordes (Marco 15).
 **No acampamento** (o estado do bando aparece no próprio acampamento):
 - Cada soldado é um bonequinho com rotina: dorme na barraca à noite, come na fogueira, treina, joga dados, faz fila no pagamento, cuida dos cavalos e leva ferro para a ferraria.
 - **O comportamento mostra o estado do bando:**

@@ -1,11 +1,11 @@
 import Phaser from "phaser";
 import type { Settlement } from "../sim/realm";
-import type { TownLayout, Rect } from "./townLayout";
+import { streetPath, type TownLayout, type Rect } from "./townLayout";
 import type { TerrainMap } from "./TerrainMap";
 import { COLORS } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
-type WalkerKind = "TOWNSFOLK" | "GUARD" | "PEASANT" | "TRAVELER" | "PILGRIM" | "DEER";
+type WalkerKind = "TOWNSFOLK" | "PEASANT" | "TRAVELER" | "PILGRIM" | "DEER" | "HUNTER";
 
 interface Walker {
   kind: WalkerKind;
@@ -26,8 +26,11 @@ interface Walker {
   road: Point[] | null;
   roadIndex: number;
   roadDir: 1 | -1;
-  /** Bichos: centro do pasto. */
+  /** Bichos: centro do pasto. Caçador: o portão por onde volta. */
   home: Point;
+  /** Caçador: a caça que persegue e se já abateu uma. */
+  prey: Walker | null;
+  carrying: boolean;
 }
 
 /** O que o mapa vivo precisa saber do mundo a cada quadro. */
@@ -61,12 +64,13 @@ const MAX_WALKERS = 140;
 /**
  * Mapa vivo (Marco 12): gente e bichos que só existem perto da câmera (baratos, um desenho só
  * por quadro) e os sinais que contam o que está acontecendo antes de o inimigo aparecer.
- * - Moradores andam pelas ruas e entram nas casas; à noite somem quase todos. Guardas ficam
- *   nos portões (nas cidades, também rondam por dentro da muralha). Mais gente quanto maior e
- *   mais próspero o povoado; uma cidade saqueada fica vazia.
+ * - Moradores andam pelas ruas e entram nas casas; à noite somem quase todos. Mais gente quanto
+ *   maior e mais próspero o povoado; uma cidade saqueada fica vazia.
+ * - (A guarnição são soldados de verdade: ver Garrisons.ts.)
  * - Camponeses trabalham nas lavouras e **correm para dentro dos muros quando há perigo perto**.
  * - Viajantes e peregrinos andam pelas estradas (com lanterna à noite) e dão meia-volta diante
- *   de um bando; cervos pastam e fogem de quem chega perto.
+ *   de um bando; cervos pastam e fogem de quem chega perto; caçadores saem dos povoados atrás
+ *   dos cervos e voltam com a caça nas costas.
  * - Sinais: **fumaça** sobre povoados saqueados ou em ruínas (acima da névoa, visível de longe),
  *   **corvos** sobre campos de batalha recentes e **rastros** de marcha no chão.
  */
@@ -100,9 +104,16 @@ export class MapLife {
     this.walkers = [];
   }
 
-  /** Lanternas à noite (viajantes, guardas, camponeses voltando). */
+  /** Lanternas à noite (viajantes e peregrinos). */
   lanterns(): Point[] {
-    return this.walkers.filter((w) => w.kind === "GUARD" || w.kind === "TRAVELER" || w.kind === "PILGRIM").map((w) => ({ x: w.x, y: w.y }));
+    return this.walkers.filter((w) => w.kind === "TRAVELER" || w.kind === "PILGRIM").map((w) => ({ x: w.x, y: w.y }));
+  }
+
+  /** Caçadores e cervos perto da câmera (para os testes). */
+  census(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const w of this.walkers) out[w.kind] = (out[w.kind] ?? 0) + 1;
+    return out;
   }
 
   update(time: number, dt: number, ctx: MapLifeContext): void {
@@ -145,9 +156,6 @@ export class MapLife {
       const haveFolk = mine.filter((w) => w.kind === "TOWNSFOLK" && !w.leaving).length;
       for (let k = haveFolk; k < folk; k++) this.walkers.push(this.townsfolk(t, layout, time));
       for (const w of mine.filter((x) => x.kind === "TOWNSFOLK" && !x.leaving).slice(folk)) this.sendHome(w, layout, false);
-      // Guardas: dois por portão, e dois rondando a muralha nas cidades de pedra
-      const guards = layout.gates.length * 2 + (layout.wallKind === "STONE" ? 2 : 0);
-      for (let k = mine.filter((w) => w.kind === "GUARD").length; k < guards; k++) this.walkers.push(this.guard(t, layout, k, ctx));
       // Camponeses nas lavouras (de dia, sem perigo)
       const peasants = night || danger ? 0 : layout.fields.length * 2;
       const havePeasants = mine.filter((w) => w.kind === "PEASANT" && !w.leaving).length;
@@ -169,6 +177,20 @@ export class MapLife {
     // Cervos (de dia), longe do exército e dos povoados
     const deer = this.walkers.filter((w) => w.kind === "DEER").length;
     if (!night && deer < 6 && this.walkers.length < MAX_WALKERS) this.walkers.push(...this.herd(near, ctx));
+    // Caçadores: saem do povoado mais perto atrás de um cervo (um por vez por manada)
+    if (!night && this.walkers.filter((w) => w.kind === "HUNTER").length < 2) {
+      const hunted = new Set(this.walkers.filter((w) => w.kind === "HUNTER").map((w) => w.prey));
+      const prey = this.walkers.find((w) => w.kind === "DEER" && !hunted.has(w));
+      const home = prey ? ctx.towns.filter((x) => x.settlement.owner !== "RUINED").sort((a, b) => distance(a.settlement, prey) - distance(b.settlement, prey))[0] : null;
+      if (prey && home && distance(home.settlement, prey) < 5000) {
+        const gate = home.layout.gates.reduce((best, g) => (distance(g.outside, prey) < distance(best.outside, prey) ? g : best), home.layout.gates[0]);
+        const w = this.walker("HUNTER", gate.outside, 48, 0x5b4a2a);
+        w.home = { ...gate.outside };
+        w.prey = prey;
+        w.townId = home.settlement.id;
+        this.walkers.push(w);
+      }
+    }
   }
 
   private townsfolk(t: Settlement, layout: TownLayout, time: number): Walker {
@@ -177,18 +199,6 @@ export class MapLife {
     w.townId = t.id;
     w.path = this.streetPath(layout, start, this.randomNode(layout));
     w.waitUntil = time + Math.random() * 1500;
-    return w;
-  }
-
-  private guard(t: Settlement, layout: TownLayout, k: number, ctx: MapLifeContext): Walker {
-    const gates = layout.gates;
-    const g = gates[Math.floor(k / 2) % gates.length];
-    const post = k < gates.length * 2 ? (k % 2 === 0 ? g.outside : g.inside) : layout.nodes[Math.floor(Math.random() * layout.nodes.length)];
-    const w = this.walker("GUARD", { x: post.x + (k % 2 ? 40 : -40), y: post.y }, 30, ctx.factionColor(t.owner));
-    w.townId = t.id;
-    w.home = { x: w.x, y: w.y };
-    // Os da muralha fazem a ronda pela rua de dentro
-    if (k >= gates.length * 2) w.path = this.streetPath(layout, w, this.randomNode(layout));
     return w;
   }
 
@@ -250,6 +260,8 @@ export class MapLife {
       roadIndex: 0,
       roadDir: 1,
       home: { x: p.x, y: p.y },
+      prey: null,
+      carrying: false,
     };
   }
 
@@ -276,26 +288,8 @@ export class MapLife {
     return layout.nodes[Math.floor(Math.random() * layout.nodes.length)];
   }
 
-  /** Caminho de `from` até `to` pelas ruas (BFS na grade de cruzamentos da planta). */
   private streetPath(layout: TownLayout, from: Point, to: Point): Point[] {
-    const nearestNode = (p: Point) => layout.nodes.reduce((best, n, k) => (distance(n, p) < distance(layout.nodes[best], p) ? k : best), 0);
-    const a = nearestNode(from);
-    const b = nearestNode(to);
-    const prev = new Map<number, number>([[a, -1]]);
-    const queue = [a];
-    while (queue.length) {
-      const u = queue.shift() as number;
-      if (u === b) break;
-      for (const [x, y] of layout.edges) {
-        const v = x === u ? y : y === u ? x : -1;
-        if (v < 0 || prev.has(v)) continue;
-        prev.set(v, u);
-        queue.push(v);
-      }
-    }
-    const path: Point[] = [];
-    for (let v = b; v !== -1 && prev.has(v); v = prev.get(v) as number) path.unshift(layout.nodes[v]);
-    return path;
+    return streetPath(layout, from, to);
   }
 
   // --- Movimento ---
@@ -341,13 +335,8 @@ export class MapLife {
           if (to === t.layout.market) w.path.push({ x: to.x + (Math.random() - 0.5) * 200, y: to.y + (Math.random() - 0.5) * 160 });
           w.waitUntil = time + 1500 + Math.random() * 4000;
         }
-      } else if (w.kind === "GUARD" && w.path.length === 0 && time > w.waitUntil) {
-        const t = ctx.towns.find((x) => x.settlement.id === w.townId);
-        if (t && distance(w, w.home) > 200) {
-          // Ronda: de cruzamento em cruzamento
-          w.path = this.streetPath(t.layout, w, this.randomNode(t.layout));
-        }
-        w.waitUntil = time + 4000 + Math.random() * 4000;
+      } else if (w.kind === "HUNTER") {
+        keep = this.moveHunter(w, time);
       }
       // Anda até o próximo ponto
       const target = w.path[0];
@@ -369,6 +358,40 @@ export class MapLife {
     this.walkers = out;
   }
 
+  /**
+   * Caçador: segue a caça até perto, espera, abate um cervo (a manada foge) e volta para o
+   * portão com ele nas costas.
+   */
+  private moveHunter(w: Walker, time: number): boolean {
+    if (w.carrying) {
+      if (w.path.length === 0) w.path = [{ ...w.home }];
+      return distance(w, w.home) > 6;
+    }
+    const prey = w.prey;
+    if (!prey || !this.walkers.includes(prey)) {
+      w.carrying = false;
+      w.path = [{ ...w.home }];
+      w.leaving = true;
+      return true;
+    }
+    const d = distance(w, prey);
+    if (d > 150) {
+      w.path = [{ x: prey.x + ((w.x - prey.x) / d) * 120, y: prey.y + ((w.y - prey.y) / d) * 120 }];
+      w.waitUntil = time + 2500;
+      return true;
+    }
+    w.path = [];
+    if (time > w.waitUntil) {
+      // Flechada: um cervo a menos; os outros disparam
+      this.walkers = this.walkers.filter((x) => x !== prey);
+      for (const o of this.walkers) if (o.kind === "DEER" && distance(o, prey) < 400) o.path = [{ x: o.x + (o.x - w.x) * 2, y: o.y + (o.y - w.y) * 2 }];
+      w.carrying = true;
+      w.prey = null;
+      w.speed = 36;
+    }
+    return true;
+  }
+
   // --- Desenho ---
 
   private draw(time: number, ctx: MapLifeContext): void {
@@ -377,13 +400,19 @@ export class MapLife {
     for (const w of this.walkers) {
       if (!ctx.canSee(w)) continue;
       switch (w.kind) {
-        case "GUARD":
+        case "HUNTER":
           g.fillStyle(w.color, 1);
-          g.fillRect(w.x - 5, w.y - 5, 10, 10);
-          g.lineStyle(2, COLORS.OUTLINE, 1);
-          g.strokeRect(w.x - 5, w.y - 5, 10, 10);
-          g.lineStyle(2, 0xd8d8d8, 1);
-          g.lineBetween(w.x + 6, w.y - 9, w.x + 6, w.y + 7); // lança
+          g.fillCircle(w.x, w.y, 6);
+          g.lineStyle(1.5, COLORS.OUTLINE, 0.9);
+          g.strokeCircle(w.x, w.y, 6);
+          g.lineStyle(2, 0x8b5a2b, 1);
+          g.beginPath();
+          g.arc(w.x - 6, w.y, 8, -1.1, 1.1); // arco
+          g.strokePath();
+          if (w.carrying) {
+            g.fillStyle(0x8b5a2b, 1);
+            g.fillEllipse(w.x + 4, w.y - 6, 14, 7); // cervo nas costas
+          }
           break;
         case "DEER":
           g.fillStyle(w.color, 1);

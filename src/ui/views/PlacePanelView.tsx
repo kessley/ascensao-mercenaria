@@ -10,10 +10,16 @@ import { MarketPanel } from "../components/tent/MarketPanel";
 import { MutinyBanner } from "../components/tent/MutinyBanner";
 import { StablePanel } from "../components/tent/StablePanel";
 import { SettlementPanel } from "../components/SettlementPanel";
+import { FerryPanel } from "../components/FerryPanel";
 import { DiplomacyPanel, WorldChronicle } from "../components/tent/RealmPanels";
 import { FollowersPanel } from "../components/tent/FollowersPanel";
 import { GamePanel } from "../components/SavePanel";
 import { BridgePanel } from "../components/BridgePanel";
+import { CampWorksPanel, InfirmaryPanel, PeddlerPanel, WagonPanel } from "../components/tent/LogisticsPanels";
+import { PriceBook } from "../components/trade/PriceBook";
+import { GuildPanel } from "../components/trade/GuildPanel";
+import { DepotPanel } from "../components/trade/DepotPanel";
+import { DeparturePanel } from "../components/DeparturePanel";
 
 const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TENT: "Tenda do Comandante",
@@ -27,7 +33,32 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TOWN: "Povoado",
   GAME: "Jogo",
   BRIDGE: "Ponte",
+  FERRY: "Balsa",
+  PEDDLER: "Banca do mascate",
+  GUILD: "Casa dos Mercadores",
+  TAVERN: "Taverna",
+  TEMPLE: "Templo",
+  PRICE_BOOK: "Livro de Preços",
+  DEPARTURE: "Portão do acampamento",
 };
+
+/** Painéis fora do acampamento (ou sobre um assunto só): sem o resumo do acampamento em cima. */
+const NO_STATUS = new Set<CampPanel["kind"]>(["TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE"]);
+
+/** Atalho da mesa da Tenda para o Livro de Preços (Marco 14). */
+function BookButton() {
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  const known = useGameStore((s) => Object.keys(s.priceBook).length);
+  return (
+    <button
+      type="button"
+      onClick={() => setCampPanel({ kind: "PRICE_BOOK" })}
+      className="rounded border border-violet-400/70 bg-violet-900/40 px-3 py-2 text-left text-sm hover:bg-violet-800/50"
+    >
+      📖 <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
+    </button>
+  );
+}
 
 /** Quem comanda o batalhão (atalho para a ficha do tenente). */
 function BattalionCommander({ battalionId }: { battalionId: string }) {
@@ -65,10 +96,13 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return (
         <>
           <ContractBoard />
+          <BookButton />
           <DiplomacyPanel />
           <LieutenantRoster />
           <FollowersPanel />
+          <InfirmaryPanel />
           <BattalionList />
+          <CampWorksPanel />
           <CampLog />
           <WorldChronicle />
         </>
@@ -77,6 +111,8 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return (
         <>
           <MarketPanel />
+          <DepotPanel />
+          <WagonPanel />
           <IronTrader />
         </>
       );
@@ -109,11 +145,23 @@ function PanelContent({ panel }: { panel: CampPanel }) {
         <p className="text-sm text-neutral-400">Este tenente não está mais no bando.</p>
       );
     case "TOWN":
-      return <SettlementPanel settlementId={panel.settlementId} />;
+      return <SettlementPanel settlementId={panel.settlementId} at={panel.at} />;
     case "GAME":
       return <GamePanel />;
     case "BRIDGE":
       return <BridgePanel bridgeId={panel.bridgeId} />;
+    case "FERRY":
+      return <FerryPanel ferryId={panel.ferryId} />;
+    case "PEDDLER":
+      return <PeddlerPanel />;
+    case "GUILD":
+    case "TAVERN":
+    case "TEMPLE":
+      return <GuildPanel settlementId={panel.settlementId} />;
+    case "PRICE_BOOK":
+      return <PriceBook />;
+    case "DEPARTURE":
+      return <DeparturePanel />;
   }
 }
 
@@ -132,10 +180,11 @@ export function PlacePanelView() {
       const l = s.lieutenants.find((x) => x.id === panel.lieutenantId);
       return l ? fullName(l) : undefined;
     }
-    if (panel?.kind === "TOWN") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
+    if (panel?.kind === "TOWN" || panel?.kind === "GUILD" || panel?.kind === "TAVERN" || panel?.kind === "TEMPLE") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
     return undefined;
   });
   const pendingMutiny = useGameStore((s) => s.pendingMutiny);
+  const dialog = useGameStore((s) => s.dialog);
 
   return (
     <div className="pointer-events-none absolute inset-0 text-white">
@@ -145,7 +194,7 @@ export function PlacePanelView() {
         </div>
       )}
 
-      {prompt && !panel && (
+      {prompt && !panel && !dialog && (
         <div className="absolute bottom-40 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/60 bg-black/75 px-5 py-2 font-mono text-sm text-amber-200">
           {prompt}
         </div>
@@ -168,7 +217,7 @@ export function PlacePanelView() {
             </button>
           </header>
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
-            {panel.kind !== "TOWN" && panel.kind !== "GAME" && panel.kind !== "BRIDGE" && <CampStatus />}
+            {!NO_STATUS.has(panel.kind) && <CampStatus />}
             <PanelContent panel={panel} />
           </div>
         </aside>

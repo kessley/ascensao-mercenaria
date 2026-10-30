@@ -5,9 +5,11 @@ import {
   type CommandReach,
   type TrumpetCall,
 } from "../../store/useGameStore";
-import { FORMATIONS, REALM, TERRAIN, TROOPS } from "../../utils/constants";
+import { FATIGUE, FORMATIONS, REALM, SEASONS, TERRAIN, TROOPS, WEATHER } from "../../utils/constants";
 import { titleFor } from "../../game/sim/realm";
+import { SICKNESS_LABEL } from "../../game/sim/logistics";
 import { PHASE_LABEL, darknessAt, formatHour, phaseOf } from "../../utils/time";
+import { campaignYear, daysToNextSeason, isFlood, seasonDay, seasonOf } from "../../utils/season";
 import { BattalionContextMenu } from "../components/BattalionContextMenu";
 import { Button } from "../components/Button";
 import { ResourceBar } from "../components/ResourceBar";
@@ -61,6 +63,8 @@ function WorldClock() {
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
   const paused = hud?.inCamp || hud?.engaged;
   const phase = phaseOf(progress);
+  const season = seasonOf(day);
+  const flood = isFlood(day);
   const night = darknessAt(progress) > 0;
   return (
     <div className="flex flex-col gap-1">
@@ -78,6 +82,26 @@ function WorldClock() {
           <div className="h-1 rounded bg-amber-300" style={{ width: `${Math.round(progress * 100)}%` }} />
         </div>
         <span className="text-[10px] uppercase tracking-wider text-neutral-400">{PHASE_LABEL[phase]}</span>
+        <div className="flex justify-between gap-1 text-[11px]">
+          <span
+            className={flood ? "text-sky-300" : season === "WINTER" ? "text-slate-200" : season === "AUTUMN" ? "text-amber-300" : "text-lime-300"}
+            title={`Ano ${campaignYear(day)} · faltam ${daysToNextSeason(day)} dia(s) para a próxima estação${flood ? " · cheia: os vaus dos rios estão fundos" : ""}`}
+          >
+            {SEASONS.LABEL[season]} {seasonDay(day)}/{SEASONS.DAYS}
+            {flood ? " ≋" : ""}
+          </span>
+          {hud && (
+            <span
+              className="text-neutral-200"
+              title={`${WEATHER.LABEL[hud.weather]}. Chuva: arcos alcançam menos e o chão vira lama · Nevoeiro: visão pela metade · Neve: visão e passo menores${
+                hud.forecast ? ` · Amanhã (previsão do tenente Cauteloso): ${WEATHER.LABEL[hud.forecast]}` : ""
+              }`}
+            >
+              {WEATHER.ICON[hud.weather]}
+              {hud.forecast && <span className="text-neutral-400"> → {WEATHER.ICON[hud.forecast]}</span>}
+            </span>
+          )}
+        </div>
       </div>
       {hud && (
         <div className="pointer-events-auto flex gap-1 text-xs">
@@ -102,6 +126,19 @@ function WorldClock() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Feridos e doentes do batalhão (fora das fileiras). */
+function OutOfRanks({ id }: { id: string }) {
+  const b = useGameStore((s) => s.battalions.find((x) => x.id === id));
+  if (!b || ((b.wounded ?? 0) === 0 && (b.sick ?? 0) === 0)) return null;
+  return (
+    <div className="-mt-1 text-xs text-rose-300">
+      {(b.wounded ?? 0) > 0 && `${b.wounded} ferido(s)`}
+      {(b.wounded ?? 0) > 0 && (b.sick ?? 0) > 0 && " · "}
+      {(b.sick ?? 0) > 0 && `${b.sick} doente(s)${b.sickness ? ` (${SICKNESS_LABEL[b.sickness]})` : ""}`}
     </div>
   );
 }
@@ -137,6 +174,7 @@ export function FieldHudView() {
   const setWorldMapOpen = useGameStore((s) => s.setWorldMapOpen);
   const setCampPanel = useGameStore((s) => s.setCampPanel);
   const settlements = useGameStore((s) => s.settlements);
+  const campPacked = useGameStore((s) => s.campPacked);
   const seats = settlements.filter((t) => t.owner === "PLAYER");
   const title = titleFor(seats.length) + (seats[0] ? ` de ${seats[0].name}` : "");
 
@@ -166,6 +204,18 @@ export function FieldHudView() {
             >
               ⚑ Fundar vila aqui ({REALM.FOUND_COST.gold} ouro · {REALM.FOUND_COST.iron} ferro)
               {hud.foundBlocked && <span className="block text-[10px]">{hud.foundBlocked}</span>}
+            </button>
+          )}
+          {hud && campPacked && (
+            <button
+              type="button"
+              disabled={!!hud.pitchBlocked}
+              onClick={() => sendBattleCommand({ type: "PITCH_CAMP", ids: [] })}
+              title={hud.pitchBlocked ?? "Um dia de trabalho: o acampamento nasce logo a leste, com o portão virado para o Comandante"}
+              className="pointer-events-auto rounded border border-amber-600 bg-amber-900/40 px-2 py-1 text-left text-xs text-amber-100 hover:bg-amber-800/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:bg-transparent disabled:text-neutral-500"
+            >
+              ⛺ Montar acampamento aqui (acampamento levantado)
+              {hud.pitchBlocked && <span className="block text-[10px]">{hud.pitchBlocked}</span>}
             </button>
           )}
           {hud && hud.messengers.length > 0 && (
@@ -379,6 +429,13 @@ export function FieldHudView() {
                 )}
                 <StatBar label="Soldados" value={b.alive} max={b.max} colorClass="bg-blue-500" />
                 <StatBar label="Moral" value={b.morale} max={100} colorClass={panic ? "bg-red-500" : "bg-yellow-400"} />
+                <StatBar
+                  label={(hud?.fatigue[b.id] ?? 0) >= FATIGUE.EXHAUSTED ? "Fadiga — exausto!" : "Fadiga"}
+                  value={hud?.fatigue[b.id] ?? 0}
+                  max={100}
+                  colorClass={(hud?.fatigue[b.id] ?? 0) >= FATIGUE.EXHAUSTED ? "bg-red-400" : "bg-slate-400"}
+                />
+                <OutOfRanks id={b.id} />
               </button>
             );
           })}
@@ -391,6 +448,7 @@ export function FieldHudView() {
           <div className="text-amber-200">Anel forte: voz · fraco: trombeta · além: bandeira/mensageiro</div>
           <div>C câmera presa/solta · setas/borda/botão do meio · H centralizar · roda zoom</div>
           <div className="text-sky-200">E interagir · Tab Mapa do Continente (viagem rápida) · T tochas · M som</div>
+          <div className="text-lime-200">V marcha forçada · G forragear</div>
         </div>
       </div>
 
@@ -427,6 +485,28 @@ export function FieldHudView() {
               {hud.warCryIn > 0 ? `Grito (${hud.warCryIn}s)` : "Grito de guerra!"}
             </button>
           </div>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => sendBattleCommand({ type: "FORCED_MARCH", ids: [] })}
+              title="V: o dia rende mais caminho e a tropa anda mais depressa, mas cansa muito mais"
+              className={`rounded border px-1.5 py-0.5 text-xs ${hud.forced ? "border-red-500 bg-red-900/50 text-red-100" : "border-neutral-600 text-neutral-300 hover:bg-neutral-800"}`}
+            >
+              {hud.forced ? "» Marcha forçada" : "Passo normal"}
+            </button>
+            <button
+              type="button"
+              disabled={!!hud.forageBlocked}
+              onClick={() => sendBattleCommand({ type: "FORAGE", ids: [] })}
+              title={hud.forageBlocked ?? "G: um quarto de dia coletando comida da região (rende pouco no inverno e no deserto; esgota a região e irrita o dono)"}
+              className="rounded border border-lime-700 px-1.5 py-0.5 text-xs text-lime-200 hover:bg-lime-900/50 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+            >
+              Forragear
+            </button>
+            <span className="self-center text-[10px] text-neutral-400" title="Carroças do trem de suprimentos em campo">
+              🛒 {hud.wagonsAlive}
+            </span>
+          </div>
         </div>
       )}
 
@@ -454,7 +534,10 @@ export function FieldHudView() {
                   {g.kills === 1 ? "" : "s"}){g.newLevel ? ` — subiu para o nível ${g.newLevel}!` : ""}
                 </li>
               ))}
-              <li>Baixas: {report.casualties}</li>
+              <li>
+                Mortos: {report.casualties}
+                {report.wounded > 0 && <span className="text-rose-300"> · feridos: {report.wounded} (enfermaria)</span>}
+              </li>
               {report.lostBattalions.map((name) => (
                 <li key={name} className="text-red-400">
                   {name} foi dizimado e está perdido para sempre.

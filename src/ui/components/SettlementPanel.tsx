@@ -1,17 +1,23 @@
 import { useGameStore } from "../../store/useGameStore";
-import { SETTLEMENT_KIND_LABEL } from "../../game/data/world";
+import { RESOURCE_LABEL, SETTLEMENT_KIND_LABEL } from "../../game/data/world";
 import {
   garrisonCap,
   isCalamityOwner,
   isFactionOwner,
+  isSick,
   ownerLabel,
   settlementDefense,
   townPrices,
   weeklyYield,
   type Settlement,
 } from "../../game/sim/realm";
-import { BUILDINGS, ECONOMY, REALM, type BuildingId } from "../../utils/constants";
+import { BUILDINGS, ECONOMY, GOODS, REALM, TRADE, type BuildingId } from "../../utils/constants";
 import { Button } from "./Button";
+import { cargoCapacity } from "../../utils/economy";
+import { seasonOf } from "../../utils/season";
+import { foodGood } from "../../game/sim/market";
+import { canHost, freightWeight } from "../../game/sim/trade";
+import { ContractDelivery, GoodsMarket } from "./trade/GoodsMarket";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -21,42 +27,42 @@ function prosperityLabel(p: number): { text: string; tone: string } {
   return { text: "Em crise", tone: "text-red-400" };
 }
 
-/** Rações e ferro a preços locais (a prosperidade mexe nos preços). */
+/**
+ * Rações (pacotes de comida da praça: tiram grão ou carne do estoque) e o mercado de bens
+ * (Marco 14). A colheita, a guerra, os saques e as caravanas mexem nos preços sozinhos.
+ */
 function Market({ t }: { t: Settlement }) {
   const gold = useGameStore((s) => s.gold);
-  const iron = useGameStore((s) => s.iron);
   const buyRationsAt = useGameStore((s) => s.buyRationsAt);
-  const tradeIronAt = useGameStore((s) => s.tradeIronAt);
-  const prices = townPrices(t);
+  const day = useGameStore((s) => s.day);
+  const away = useGameStore((s) => s.exposure.away && !s.campPacked);
+  const cargo = useGameStore((s) => s.cargo);
+  const wagons = useGameStore((s) => s.wagons.length);
+  const goods = useGameStore((s) => freightWeight(s.freight));
+  const prices = townPrices(t, day);
+  const room = away ? cargoCapacity(wagons) - cargo - goods : Infinity;
+  const food = foodGood(t.econ);
+  const packs = Math.floor(t.econ.stock[food]);
   return (
     <>
+      <ContractDelivery t={t} />
       <section className="flex flex-col gap-2">
-        <h3 className={sectionTitle}>Mercado: rações</h3>
+        <h3 className={sectionTitle}>Rações</h3>
         <p className="text-xs text-neutral-400">
-          {ECONOMY.RATION_PACK_SIZE} rações por {prices.rationPack} de ouro (Intendência do acampamento: {ECONOMY.RATION_PACK_PRICE}).
+          {ECONOMY.RATION_PACK_SIZE} rações por {prices.rationPack} de ouro: {GOODS[food].label.toLowerCase()} da praça, moído e ensacado ({packs} pacote(s) à venda)
+          {seasonOf(day) === "AUTUMN" ? " — colheita: os celeiros enchem" : ""}
+          {isSick(t, day) ? " — febre na cidade: comida cara" : ""}.
+          {away && ` Vai nas carroças: cabem mais ${room}.`}
         </p>
         <div className="flex flex-wrap gap-2">
           {[1, 3].map((n) => (
-            <Button key={n} disabled={gold < n * prices.rationPack} onClick={() => buyRationsAt(t.id, n)}>
+            <Button key={n} disabled={gold < n * prices.rationPack || n * ECONOMY.RATION_PACK_SIZE > room || packs < n} onClick={() => buyRationsAt(t.id, n)}>
               +{n * ECONOMY.RATION_PACK_SIZE} rações ({n * prices.rationPack} ouro)
             </Button>
           ))}
         </div>
       </section>
-      <section className="flex flex-col gap-2">
-        <h3 className={sectionTitle}>Mercado: ferro</h3>
-        <p className="text-xs text-neutral-400">
-          Compra a {prices.ironBuy} de ouro, vende a {prices.ironSell}.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={gold < prices.ironBuy * 3} onClick={() => tradeIronAt(t.id, 3)}>
-            Comprar 3 ferro ({prices.ironBuy * 3} ouro)
-          </Button>
-          <Button variant="danger" disabled={iron < 3} onClick={() => tradeIronAt(t.id, -3)}>
-            Vender 3 ferro (+{prices.ironSell * 3} ouro)
-          </Button>
-        </div>
-      </section>
+      <GoodsMarket t={t} />
     </>
   );
 }
@@ -67,9 +73,12 @@ function Administration({ t }: { t: Settlement }) {
   const iron = useGameStore((s) => s.iron);
   const build = useGameStore((s) => s.build);
   const setTax = useGameStore((s) => s.setTax);
+  const setMarketTax = useGameStore((s) => s.setMarketTax);
   const armMilitia = useGameStore((s) => s.armMilitia);
-  const y = weeklyYield(t);
+  const day = useGameStore((s) => s.day);
+  const y = weeklyYield(t, day);
   const cap = garrisonCap(t);
+  const revolt = t.econ.revoltUntil > day;
   return (
     <>
       <section className="flex flex-col gap-2">
@@ -77,6 +86,11 @@ function Administration({ t }: { t: Settlement }) {
         <p className="font-mono text-xs text-neutral-300">
           Renda semanal: <b className="text-yellow-400">{y.gold} ouro</b> · <b className="text-orange-300">{y.rations} rações</b> ·{" "}
           <b className="text-sky-300">{y.iron} ferro</b>
+        </p>
+        <p className="text-xs text-neutral-400">
+          As rações e o ferro saem do que sobra no mercado do povoado; com fome na cidade, não sobra nada. Agitação:{" "}
+          <b className={t.econ.unrest >= 60 ? "text-red-400" : t.econ.unrest >= 30 ? "text-yellow-300" : "text-green-400"}>{Math.round(t.econ.unrest)}/100</b>
+          {revolt && <b className="text-red-400"> · EM REVOLTA até o dia {t.econ.revoltUntil}: nada de impostos</b>}. Nível de vida abaixo de 40 agita a gente; em 100, revolta.
         </p>
         <div className="flex items-center gap-2 text-xs">
           <span className="text-neutral-400">Impostos:</span>
@@ -92,11 +106,25 @@ function Administration({ t }: { t: Settlement }) {
           ))}
         </div>
         <p className="text-xs text-neutral-500">Baixos: a prosperidade sobe. Altos: mais ouro, mas a cidade empobrece dia a dia.</p>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-neutral-400">Taxa de mercado:</span>
+          {TRADE.MARKET_TAX.map((rate, i) => (
+            <button
+              key={rate}
+              type="button"
+              onClick={() => setMarketTax(t.id, i as 0 | 1 | 2)}
+              className={`rounded border px-2 py-0.5 ${(t.marketTax ?? 1) === i ? "border-amber-400 bg-amber-700/60" : "border-neutral-600 hover:border-amber-400"}`}
+            >
+              {Math.round(rate * 100)}%
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-neutral-500">Cada caravana que compra ou vende aqui paga a taxa (somada toda semana).</p>
       </section>
 
       <section className="flex flex-col gap-2">
         <h3 className={sectionTitle}>Construções</h3>
-        {(Object.keys(BUILDINGS) as BuildingId[]).map((id) => {
+        {(Object.keys(BUILDINGS) as BuildingId[]).filter((id) => canHost(t, id)).map((id) => {
           const b = BUILDINGS[id];
           const built = t.buildings.includes(id);
           return (
@@ -137,9 +165,10 @@ function Administration({ t }: { t: Settlement }) {
 
 /**
  * Painel de um povoado: mercado; Sala de Administração se ele for do bando; reconstruir se
- * estiver em ruínas; e atacar (conquista) ou libertar (ocupado por uma calamidade).
+ * estiver em ruínas; e atacar (conquista) ou libertar (ocupado por uma calamidade) — só pelo
+ * portão, do lado de fora, onde o exército está.
  */
-export function SettlementPanel({ settlementId }: { settlementId: string }) {
+export function SettlementPanel({ settlementId, at }: { settlementId: string; at?: "MARKET" | "HALL" | "CAMP" | "GATE" }) {
   const t = useGameStore((s) => s.settlements.find((x) => x.id === settlementId));
   const world = useGameStore((s) => s.world);
   const calamities = useGameStore((s) => s.calamities);
@@ -165,6 +194,22 @@ export function SettlementPanel({ settlementId }: { settlementId: string }) {
         <p className="text-xs text-neutral-400">
           {SETTLEMENT_KIND_LABEL[t.kind]} · <b>{ownerLabel(world, calamities, t.owner)}</b> · {t.population} habitantes · guarnição {t.garrison}
         </p>
+        {(at === "CAMP" || at === "GATE") && t.owner !== "RUINED" && (
+          <p className="text-xs text-neutral-400">
+            {t.garrison > 0
+              ? `${t.garrison} soldados vivem nos acampamentos por dentro dos portões: sentinelas nos portões, rondas pelas ruas e o resto nas barracas.`
+              : "Os acampamentos estão vazios: ninguém guarda os portões."}
+            {t.owner !== "PLAYER" && " Os guardas não deixam o exército do bando entrar; o Comandante entra sozinho (menos em guerra)."}
+          </p>
+        )}
+        {(t.resources ?? []).length > 0 && (
+          <p className="text-xs text-neutral-400">
+            Recursos da terra: <b className="text-amber-200">{(t.resources ?? []).map((r) => RESOURCE_LABEL[r]).join(", ")}</b>
+            {t.owner === "PLAYER" ? " (renda semanal extra)" : ""}
+            {(t.resources ?? []).includes("IRON") ? " · ferro barato no mercado" : ""}
+            {(t.resources ?? []).some((r) => r === "GRAIN" || r === "FISH") ? " · comida barata" : ""}
+          </p>
+        )}
         {t.owner !== "RUINED" && (
           <p className="text-xs text-neutral-400">
             Prosperidade: <b className={prosperity.tone}>{prosperity.text}</b> ({Math.round(t.prosperity)}/100)
@@ -194,7 +239,13 @@ export function SettlementPanel({ settlementId }: { settlementId: string }) {
         </section>
       )}
 
-      {t.owner !== "PLAYER" && t.owner !== "RUINED" && (
+      {t.owner !== "PLAYER" && t.owner !== "RUINED" && at !== "GATE" && (
+        <p className="text-xs text-neutral-500">
+          {occupied ? "Para libertar" : "Para atacar"} {t.name}, saia dos muros e fale do portão: o exército espera do lado de fora.
+        </p>
+      )}
+
+      {t.owner !== "PLAYER" && t.owner !== "RUINED" && at === "GATE" && (
         <section className="flex flex-col gap-2 rounded border border-red-800/70 bg-red-950/30 p-3">
           <h3 className={sectionTitle}>{occupied ? "Libertar" : "Conquistar"}</h3>
           <p className="text-xs text-neutral-300">
@@ -205,7 +256,11 @@ export function SettlementPanel({ settlementId }: { settlementId: string }) {
                 : `${t.name} é livre. Tomá-la pela espada assusta todos os reinos.`}
           </p>
           <Button variant="danger" disabled={!!siege || !!mutiny} onClick={() => besiege(t.id)}>
-            {siege ? "Já há um cerco em andamento" : occupied ? `Libertar ${t.name}` : `Atacar ${t.name} (${Math.min(REALM.SIEGE_MAX_DEFENDERS, Math.max(5, t.garrison))} defensores)`}
+            {siege
+              ? "Já há um cerco em andamento"
+              : occupied
+                ? `Libertar ${t.name}`
+                : `Atacar ${t.name} (${Math.min(REALM.SIEGE_MAX_DEFENDERS, Math.max(REALM.SIEGE_MIN_DEFENDERS, t.garrison))} defensores)`}
           </Button>
         </section>
       )}

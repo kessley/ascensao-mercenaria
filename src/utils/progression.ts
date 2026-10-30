@@ -34,8 +34,10 @@ export function canLearn(b: BattalionData, id: SkillId): string | null {
   return null;
 }
 
-export function forgeCost(currentTier: number): { gold: number; iron: number } {
-  return { gold: PROGRESSION.FORGE_GOLD * (currentTier + 1), iron: PROGRESSION.FORGE_IRON * (currentTier + 1) };
+export function forgeCost(currentTier: number, smith = false): { gold: number; iron: number } {
+  // Com um ajudante de ferreiro entre os seguidores, a Ferraria gasta 25% menos
+  const k = smith ? 0.75 : 1;
+  return { gold: Math.round(PROGRESSION.FORGE_GOLD * (currentTier + 1) * k), iron: Math.round(PROGRESSION.FORGE_IRON * (currentTier + 1) * k) };
 }
 
 /** Modificadores finais do batalhão: nível × habilidades × equipamento. */

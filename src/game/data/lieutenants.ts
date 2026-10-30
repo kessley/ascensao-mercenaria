@@ -6,7 +6,7 @@ export type PassiveId = "INSPIRING" | "STALWART" | "DRILLMASTER" | "TACTICIAN" |
 export const TRAITS: Record<TraitId, { label: string; description: string }> = {
   GREEDY: { label: "Ganancioso", description: "Gosta de contratos que pagam bem; salário atrasado irrita em dobro." },
   BRAVE: { label: "Corajoso", description: "Quer as lutas difíceis; vitórias animam mais." },
-  CAUTIOUS: { label: "Cauteloso", description: "Prefere trabalhos seguros; aprova um recuo sensato." },
+  CAUTIOUS: { label: "Cauteloso", description: "Prefere trabalhos seguros; aprova um recuo sensato. Lê o céu: prevê o tempo de amanhã." },
   BLOODTHIRSTY: { label: "Sanguinário", description: "Vive para a batalha; fica feliz com qualquer luta que não seja fácil." },
   HONORABLE: { label: "Honrado", description: "Gosta de proteger os fracos; despreza recuos e nobres gananciosos." },
   AMBITIOUS: { label: "Ambicioso", description: "Quer comandar e brilhar; ficar sem batalhão corrói a lealdade." },

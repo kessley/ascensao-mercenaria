@@ -13,7 +13,18 @@ import {
   REALM,
   SAVE,
   WORLD,
+  SUPPLY,
+  CAMP_WORKS,
+  CAMP_WORK_RAID,
+  HEALTH,
+  GOODS,
+  GOOD_LIST,
+  CARAVAN,
+  TRADE,
   setWorldSize,
+  type Good,
+  type CampWork,
+  type Weather,
   type BuildingId,
   type EnemyKind,
   type Formation,
@@ -22,7 +33,7 @@ import {
   type TroopType,
 } from "../utils/constants";
 import { generateContract, type Contract } from "../game/data/contracts";
-import type { WorldDef } from "../game/data/world";
+import { regionName, type WorldDef } from "../game/data/world";
 import {
   bandStrength,
   bridgeController,
@@ -32,8 +43,10 @@ import {
   garrisonCap,
   isCalamityOwner,
   isFactionOwner,
+  isSick,
   realmDay,
   resolveRaid,
+  restock,
   settlementFromSeed,
   titleFor,
   townPrices,
@@ -41,9 +54,29 @@ import {
   type Calamity,
   type CalamityKind,
   type FactionState,
+  type KingdomWar,
   type RaidOutcome,
   type Settlement,
 } from "../game/sim/realm";
+import { applyTrade, foodGood, initEconomy, quote, rationPackPrice } from "../game/sim/market";
+import {
+  GUILD_BUILDINGS,
+  addLot,
+  addNote,
+  canHost,
+  freightOf,
+  freightWeight,
+  isContraband,
+  noteOf,
+  stakeDividend,
+  takeLots,
+  type GuildStake,
+  type Loan,
+  type NoteSource,
+  type OwnCaravan,
+  type PriceNote,
+  type TradeLot,
+} from "../game/sim/trade";
 import { ofRealm, settlementName } from "../game/worldgen/names";
 import { generateWorld } from "../game/worldgen/generateWorld";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
@@ -59,8 +92,13 @@ import {
   type Follower,
 } from "../game/sim/campEvents";
 import { createRng, randomSeed } from "../game/worldgen/rng";
-import type { Point } from "../utils/math";
-import { battalionWage, dailyRations, reinforceCostPerSoldier, weeklyWages } from "../utils/economy";
+import { resourcesAround } from "../game/worldgen/resources";
+import { geoOf } from "../game/worldgen/geoMap";
+import { distance, type Point } from "../utils/math";
+import { battalionWage, cargoCapacity, dailyRations, reinforceCostPerSoldier, weeklyWages } from "../utils/economy";
+import { NO_EXPOSURE, eatDay, healthDay, loadAmount, woundedOf, type Exposure, type Sickness } from "../game/sim/logistics";
+import { campDefAt } from "../game/data/campLayout";
+import { seasonOf } from "../utils/season";
 import { canLearn, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
 import { SKILLS, type SkillId } from "../game/data/skills";
 import { fullName, generateLieutenant, opinionOn, PASSIVES, type LieutenantData } from "../game/data/lieutenants";
@@ -73,15 +111,30 @@ import {
   type ScoutData,
 } from "../game/data/riders";
 
+/** Um batalhão no Campo de Treino: treina de verdade até `until` (dia + fração do dia). */
+export interface TrainingOrder {
+  battalionId: string;
+  until: number;
+}
+
 /** Painel aberto ao interagir com um local (do acampamento ou de uma cidade). */
 export type CampPanel =
   | { kind: "TENT" | "QUARTERMASTER" | "RECRUIT" | "TRAINING" | "FORGE" }
+  /** Banca do mascate (seguidor): vinho, ataduras, cobertores. */
+  | { kind: "PEDDLER" }
   | { kind: "BATTALION"; battalionId: string }
   | { kind: "LIEUTENANT"; lieutenantId: string }
   | { kind: "STABLE" }
-  | { kind: "TOWN"; settlementId: string }
+  /** Povoado: aberto pela praça, pelo paço, pelo acampamento da guarnição ou pelo portão (só ali se ataca). */
+  | { kind: "TOWN"; settlementId: string; at?: "MARKET" | "HALL" | "CAMP" | "GATE" }
+  /** Marco 14: Casa dos Mercadores (feitoria, guildas, câmbio, caravanas próprias), taverna e templo. */
+  | { kind: "GUILD" | "TAVERN" | "TEMPLE"; settlementId: string }
+  /** Livro de Preços (na mesa da Tenda) e a saída do acampamento (quem vai, quem fica). */
+  | { kind: "PRICE_BOOK" | "DEPARTURE" }
   /** Ponte sobre um rio: queimar, reconstruir. */
   | { kind: "BRIDGE"; bridgeId: string }
+  /** Cais de uma balsa num rio grande: atravessar o exército. */
+  | { kind: "FERRY"; ferryId: string }
   /** Salvar, carregar e novo mundo (aberto pelo HUD, em qualquer lugar). */
   | { kind: "GAME" };
 
@@ -101,8 +154,27 @@ export interface BattalionData {
   equipment: Record<EquipmentSlot, number>;
   /** Inimigos abatidos em toda a carreira (história do batalhão). */
   totalKills: number;
+  /** Soldados em condição de lutar. */
   soldiers: number;
   maxSoldiers: number;
+  /** Fora das fileiras (Marco 13): feridos na enfermaria e doentes (não lutam, mas comem e voltam). */
+  wounded?: number;
+  sick?: number;
+  sickness?: Sickness;
+}
+
+/** O que o mascate vende na banca dele (Marco 12). */
+export type PeddlerItem = "WINE" | "BANDAGES" | "BLANKETS";
+export const PEDDLER_ITEMS: Record<PeddlerItem, { label: string; gold: number; effect: string }> = {
+  WINE: { label: "Barril de vinho para a tropa", gold: 40, effect: "humor do acampamento +8" },
+  BANDAGES: { label: "Ataduras e unguento", gold: 30, effect: "3 feridos voltam às fileiras na hora" },
+  BLANKETS: { label: "Cobertores de lã", gold: 50, effect: "por 20 dias, o frio do inverno não adoece a tropa" },
+};
+
+/** Carroça do trem de suprimentos (a carga é de todas juntas: `cargo`). */
+export interface WagonData {
+  id: string;
+  hp: number;
 }
 
 export type BattalionStatus = "READY" | "MOVING" | "ENGAGED" | "FLEEING" | "DESTROYED";
@@ -171,6 +243,36 @@ export interface BattleHud {
   torches: boolean;
   /** Pode descansar até o amanhecer? (null = sim; senão, o motivo) */
   restBlocked: string | null;
+  /** Tempo onde o Comandante está e a previsão de amanhã (só com um tenente Cauteloso). */
+  weather: Weather;
+  forecast: Weather | null;
+  /** Marcha forçada ligada. */
+  forced: boolean;
+  /** Pode forragear aqui? (null = sim; senão, o motivo) */
+  forageBlocked: string | null;
+  /** Fadiga de cada batalhão (0–100), na ordem de `battalions`. */
+  fatigue: Record<string, number>;
+  /** Carroças em campo: vivas e a vida somada. */
+  wagonsAlive: number;
+  /** Pode montar o acampamento aqui (com ele levantado)? null = sim. */
+  pitchBlocked: string | null;
+  /** Carroças perto do Comandante (Marco 14): dá para comprar e vender carga pesada. */
+  wagonsNear: boolean;
+}
+
+/** Diálogo num interior (Marco 14): quem fala, o texto e as respostas (a cena trata a escolha). */
+export interface Dialog {
+  speaker: string;
+  text: string;
+  options: { id: string; label: string }[];
+}
+
+/** Prédio onde o Comandante entrou (Marco 14). */
+export interface InteriorRef {
+  /** Chave do prédio (ex.: "camp:TENT", "S3:tavern", "S3:house:12"). */
+  key: string;
+  title: string;
+  settlementId?: string;
 }
 
 export type BattleResult = "VICTORY" | "DEFEAT" | "RETREAT";
@@ -182,6 +284,8 @@ export interface BattleReport {
   /** Saque dos inimigos (só em contrato vencido). */
   loot: { gold: number; iron: number };
   casualties: number;
+  /** Dos que caíram, quantos foram para a enfermaria (Marco 13). */
+  wounded: number;
   /** Experiência ganha por batalhão sobrevivente (e novo nível, se subiu). */
   xpGains: { name: string; xp: number; kills: number; newLevel?: number }[];
   /** Batalhões dizimados: perdidos para sempre (permadeath). */
@@ -214,6 +318,9 @@ export interface ActiveContract {
   acceptedDay: number;
   /** Último dia para cumprir; depois disso o cliente desiste. */
   deadline: number;
+  /** Contratos do Marco 14: caravanas abatidas (sabotagem) e carga recuperada (já nas carroças). */
+  progress?: number;
+  recovered?: boolean;
 }
 
 /** Motim em curso: os rebeldes pegaram em armas dentro do acampamento. */
@@ -265,6 +372,8 @@ export interface WarbandSighting {
   /** Tipo do bando (patrulha, mensageiro, refugiados não são ameaça) e se ataca o bando. */
   kind?: string;
   hostile?: boolean;
+  /** Caravana do próprio bando (Marco 14). */
+  own?: boolean;
 }
 
 /** Retrato do mundo publicado pela cena quando o Mapa do Continente está aberto. */
@@ -281,6 +390,8 @@ export interface WorldSnapshot {
   messengersOut: number;
   /** Covis de calamidade já vistos. */
   calamityLairs: { id: string; x: number; y: number; name: string }[];
+  /** Barcaças e navios à vista (Marco 14). */
+  ships?: { x: number; y: number; kind: "BARGE" | "SHIP" }[];
 }
 
 export type LogTone = "info" | "good" | "bad";
@@ -316,7 +427,13 @@ export type BattleCommand =
   /** Acender ou apagar as tochas do bando. */
   | { type: "TORCHES"; ids: string[] }
   /** Descansar até o amanhecer (no acampamento ou ao relento). */
-  | { type: "REST"; ids: string[] };
+  | { type: "REST"; ids: string[] }
+  /** Esperar o treino em andamento terminar (o tempo passa de uma vez). */
+  | { type: "WAIT_TRAINING"; ids: string[] }
+  /** Atravessar o rio de balsa (o exército inteiro passa para o outro cais). */
+  | { type: "FERRY"; ids: string[]; ferryId: string }
+  /** Marcha forçada liga/desliga; forragear aqui; levantar e montar o acampamento (Marco 13). */
+  | { type: "FORCED_MARCH" | "FORAGE" | "PACK_CAMP" | "PITCH_CAMP"; ids: string[] };
 
 /** Toques de trombeta combinados de antemão (só ordens básicas viajam pelo som). */
 export type TrumpetCall = "ADVANCE" | "HALT" | "CHARGE" | "RETREAT" | "RALLY";
@@ -395,8 +512,56 @@ export interface GameState {
   nextEventDay: number;
   /** Dia da última vitória (a festa no acampamento). */
   lastVictoryDay: number | null;
+  /** Batalhões treinando no Campo de Treino e quando o treino termina (dia + fração). */
+  training: TrainingOrder[];
   /** Campos de batalha recentes (corvos voando em cima por uns dias). */
   battlefields: { x: number; y: number; day: number }[];
+
+  // --- Estações e logística (Marco 13) ---
+  /** Trem de carroças e as rações que ele leva (o resto, `rations`, fica no depósito do acampamento). */
+  wagons: WagonData[];
+  cargo: number;
+  /** Onde o exército está e o que o expõe (fome, pântano, frio, febre): a cena informa. */
+  exposure: Exposure;
+  /** Esgotamento da forragem por região ("col,row" → 0..1). */
+  forage: Record<string, number>;
+  /** Acampamento montado em outro lugar (fogueira); null = onde o mundo o pôs. */
+  campAt: Point | null;
+  /** Acampamento levantado: tudo nas carroças, à procura de um lugar novo. */
+  campPacked: boolean;
+  /** Obras do acampamento fixo. */
+  campWorks: CampWork[];
+  /** Cobertores de lã do mascate: até este dia o frio do inverno não adoece a tropa. */
+  blanketsUntil: number;
+
+  // --- Economia e comércio (Marco 14) ---
+  /** Guerras entre os reinos (embargo, armas caras). */
+  wars: KingdomWar[];
+  /** Depósito de mercadorias do acampamento (o ferro continua em `iron`). */
+  depot: Partial<Record<Good, number>>;
+  /** Mercadorias que o bando leva (carroças ou, sem elas, a bolsa do Comandante). */
+  freight: TradeLot[];
+  /** Livro de Preços: o que o bando sabe de cada mercado e de quando é a notícia. */
+  priceBook: Record<string, PriceNote[]>;
+  /** Feitorias do bando (povoados). */
+  posts: string[];
+  /** Participações em guildas. */
+  stakes: GuildStake[];
+  loans: Loan[];
+  ownCaravans: OwnCaravan[];
+  /** Ração de cerveja: toda semana a tropa bebe do depósito (humor). */
+  aleRation: boolean;
+  /** Taxa de mercado ganha na semana (caravanas nos povoados do bando). */
+  marketTaxIncome: number;
+  /** Carga roubada por goblins (vira contrato de recuperação). */
+  stolenCargo: { bandId: string; bandName: string; good: Good; qty: number; townId: string; day: number }[];
+  /** Batalhões que ficam no acampamento quando o Comandante sai (os outros vão com ele). */
+  campStay: string[];
+  /** Quanto das carroças vai cheio de comida ao sair (o resto fica livre para mercadoria). */
+  rationLoad: number;
+  /** Prédio onde o Comandante está e o diálogo aberto (Marco 14). */
+  interior: InteriorRef | null;
+  dialog: Dialog | null;
   worldMapOpen: boolean;
   worldSnapshot: WorldSnapshot | null;
 
@@ -442,9 +607,15 @@ export interface GameState {
 
   // --- Reino (Marco 9) ---
   foundSettlement: (x: number, y: number) => boolean;
+  /** Paga a balsa (false = sem ouro). */
+  payFerry: (gold: number, river: string) => boolean;
   rebuildSettlement: (id: string) => boolean;
   /** Ataca um povoado: guerra com o dono (se for um reino) e a guarnição sai para lutar. */
   besiege: (id: string) => boolean;
+  /** Em guerra, o exército chegou perto dos muros: a guarnição sai dos acampamentos para lutar. */
+  garrisonSally: (id: string) => boolean;
+  /** Soldados da guarnição mortos num cerco que não tomou o povoado. */
+  garrisonLosses: (id: string, dead: number) => void;
   liftSiege: () => void;
   conquerSettlement: (id: string) => void;
   build: (id: string, building: BuildingId) => boolean;
@@ -480,9 +651,77 @@ export interface GameState {
   chronicle: (text: string, tone?: LogTone) => void;
   setWorldSnapshot: (snapshot: WorldSnapshot | null) => void;
 
+  // --- Logística (Marco 13) ---
+  buyWagon: () => boolean;
+  /** Saindo do acampamento: as carroças carregam (deixando a reserva de quem fica). */
+  loadWagons: () => void;
+  /** Chegando ao acampamento: tudo vai para o depósito e as carroças são consertadas. */
+  unloadWagons: () => void;
+  /** Uma carroça destruída: a parte da carga dela se perde. */
+  loseWagon: (id: string, by: string) => void;
+  setWagonHp: (hp: Record<string, number>) => void;
+  setExposure: (e: Exposure) => void;
+  /** Forrageia aqui: devolve o texto do resultado. */
+  forageAt: (region: string, biome: string, owner: { id: string; name: string } | null) => string;
+  buildCampWork: (work: CampWork) => boolean;
+  /** Compra na banca do mascate. */
+  buyFromPeddler: (item: PeddlerItem) => boolean;
+  /** Levanta o acampamento (obras perdidas; tudo nas carroças). Devolve o motivo se não der. */
+  packCamp: () => string | null;
+  /** Monta o acampamento com a fogueira em `center`; o campo (posições) é recriado a partir de `field`. */
+  pitchCamp: (center: Point, field: FieldSave) => void;
+
+  // --- Economia e comércio (Marco 14) ---
+  /** Compra (qty > 0) ou vende (qty < 0) um bem no mercado de um povoado. Devolve o motivo se não der. */
+  tradeGood: (settlementId: string, good: Good, qty: number) => string | null;
+  /** Entrega a carga de um contrato (entrega ou carga recuperada) no povoado do cliente. */
+  deliverContract: () => string | null;
+  /** Fim de um contrato da economia (escolta que chegou ou se perdeu, sabotagem feita). */
+  finishContract: (success: boolean, why: string) => void;
+  /** Leva mercadorias do depósito para as carroças (no acampamento) ou o contrário. */
+  moveGoods: (good: Good, qty: number) => boolean;
+  /** Intendência: grão e carne do depósito viram rações. */
+  millFood: (good: Good, qty: number) => boolean;
+  setAleRation: (on: boolean) => void;
+  /** Anota o que se sabe de um mercado (visita, viajantes, taverna, feitoria...), com o atraso da notícia. */
+  notePrices: (settlementId: string, source: NoteSource, ageDays?: number) => void;
+  /** Caravanas da cena: sai (compra na origem), chega (vende no destino), é roubada pelo bando ou perdida. */
+  /** Devolve o valor da compra (0 = não partiu com carga: estoque vazio ou, se própria, sem ouro). */
+  caravanDeparts: (from: string, good: Good, qty: number, ownId?: string) => number;
+  caravanArrives: (to: string, cargo: { good: Good; qty: number; from: string; cost: number; own?: string }) => void;
+  robCaravan: (band: { name: string; ownerId: string | null; good: Good; qty: number; from: string }) => string;
+  caravanStolen: (band: { bandId: string; bandName: string; good: Good; qty: number; townId: string }) => void;
+  ownCaravanLost: (id: string, by: string) => void;
+  /** Recupera a carga roubada (bando goblin destruído pelo bando). */
+  recoverCargo: (bandId: string) => string | null;
+  buyPost: (settlementId: string) => boolean;
+  investGuild: (settlementId: string, building: BuildingId) => boolean;
+  takeLoan: (settlementId: string, amount: number) => boolean;
+  repayLoan: (id: string) => boolean;
+  hireOwnCaravan: (a: string, b: string) => boolean;
+  dismissOwnCaravan: (id: string) => void;
+  setMarketTax: (settlementId: string, rate: 0 | 1 | 2) => void;
+  /** Rodada na taverna: notícias e preços de mercados distantes. Devolve o que se ouviu. */
+  buyRound: (settlementId: string) => string;
+  /** Esmola no templo (honra; a febre da cidade passa mais depressa). */
+  donateTemple: (settlementId: string, gold: number) => boolean;
+  /** Dá uma unidade de grão ou carne da carga a uma família com fome (honra). */
+  giveFood: (settlementId: string) => boolean;
+
+  // --- Saída do acampamento e interiores (Marco 14) ---
+  setCampStay: (ids: string[]) => void;
+  setRationLoad: (share: number) => void;
+  enterInterior: (ref: InteriorRef) => void;
+  leaveInterior: () => void;
+  setDialog: (dialog: Dialog | null) => void;
+
   // --- Progressão (Marco 4) ---
   /** Treina os batalhões no Campo de Treino: passam os dias de treino e cada um ganha XP. */
+  /** Manda batalhões ao Campo de Treino: treinam de verdade por alguns dias, e o XP vem no fim. */
   trainBattalions: (ids: string[]) => boolean;
+  /** Treinos cujo prazo chegou: o XP é aplicado. Devolve os batalhões que terminaram. */
+  finishTraining: () => string[];
+  cancelTraining: (battalionId: string) => void;
   learnSkill: (battalionId: string, skill: SkillId) => boolean;
   /** Forja o próximo tier de arma ou armadura (ouro + ferro). */
   forgeEquipment: (battalionId: string, slot: EquipmentSlot) => boolean;
@@ -601,6 +840,8 @@ const TRANSIENT_KEYS = new Set<string>([
   "battleCommands",
   "campPanel",
   "campPrompt",
+  "interior",
+  "dialog",
 ]);
 function entry(day: number, text: string, tone: LogTone = "info"): LogEntry {
   return { id: ++logSeq, day, text, tone };
@@ -623,6 +864,14 @@ type DayState = Pick<
   | "followers"
   | "campMood"
   | "bonds"
+  | "cargo"
+  | "exposure"
+  | "training"
+  | "campPacked"
+  | "depot"
+  | "freight"
+  | "aleRation"
+  | "campStay"
 >;
 
 const addHistory = (history: string[], line: string) => [...history, line].slice(-LIEUTENANTS.HISTORY_SIZE);
@@ -671,16 +920,50 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     s.campMood = s.campMood > 0 ? Math.max(0, s.campMood - 2) : Math.min(0, s.campMood + 2);
     s.bonds = driftBonds(s.bonds, s.lieutenants);
 
-    // Comida (soldados, Comandante e seguidores; o cozinheiro aproveita melhor)
-    const need = dailyRations(s.battalions, s.followers);
-    if (s.rations >= need) {
-      s.rations -= need;
+    // Comida (soldados, Comandante e seguidores; o cozinheiro aproveita melhor). Em campo, o
+    // exército come o que as carroças levam; o depósito fica no acampamento (Marco 13). Quem
+    // treina ou ficou guardando o acampamento (Marco 14) come do depósito
+    const training = new Set([...s.training.map((t) => t.battalionId), ...(s.exposure.away ? s.campStay : [])]);
+    // Grão e carne viram rações quando elas acabam: nas carroças, em campo; no depósito, no acampamento
+    const fieldNeed = s.exposure.away && !s.campPacked ? dailyRations(s.battalions.filter((b) => !training.has(b.id)), []) : 0;
+    let milled = 0;
+    while (s.cargo < fieldNeed) {
+      const food = (["GRAIN", "MEAT"] as Good[]).find((g) => freightOf(s.freight, g) > 0);
+      if (!food) break;
+      s.freight = takeLots(s.freight, food, 1).lots;
+      s.cargo += TRADE.RATIONS_PER_FOOD;
+      milled++;
+    }
+    const campNeed = dailyRations(s.exposure.away ? s.battalions.filter((b) => training.has(b.id)) : s.battalions, s.followers);
+    while (s.rations < campNeed) {
+      const food = (["GRAIN", "MEAT"] as Good[]).find((g) => (s.depot[g] ?? 0) > 0);
+      if (!food) break;
+      s.depot = { ...s.depot, [food]: (s.depot[food] ?? 0) - 1 };
+      s.rations += TRADE.RATIONS_PER_FOOD;
+      milled++;
+    }
+    if (milled > 0) log.push(entry(s.day, `As rações acabaram: ${milled} de grão e carne da carga viraram comida.`, "info"));
+    const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked);
+    s.rations = meal.rations;
+    s.cargo = meal.cargo;
+    // Enfermaria e doenças
+    const health = healthDay(s.battalions, training, s.exposure, hasFollower(s.followers, "HEALER"), meal.hungry);
+    s.battalions = health.battalions;
+    for (const l of health.log) log.push(entry(s.day, l.text, l.tone));
+    if (!meal.hungry) {
       if (s.hungryDays > 0) log.push(entry(s.day, "O exército voltou a comer. A fome acabou.", "good"));
       s.hungryDays = 0;
     } else {
-      s.rations = 0;
       s.hungryDays++;
-      log.push(entry(s.day, `Sem rações! ${s.hungryDays} dia(s) de fome: a moral vai despencar.`, "bad"));
+      log.push(
+        entry(
+          s.day,
+          s.exposure.away && !s.campPacked
+            ? `As carroças estão vazias! ${s.hungryDays} dia(s) de fome em campo: a moral vai despencar.`
+            : `Sem rações! ${s.hungryDays} dia(s) de fome: a moral vai despencar.`,
+          "bad",
+        ),
+      );
       // Seguidores não ficam para passar fome
       const leaving = s.hungryDays >= 2 ? s.followers[s.followers.length - 1] : undefined;
       if (leaving) {
@@ -691,6 +974,23 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
 
     // Pagamento
     if (s.day % ECONOMY.PAYDAY_INTERVAL !== 0) continue;
+
+    // Ração de cerveja (Marco 14): a tropa bebe do depósito (ou do que vai nas carroças)
+    if (s.aleRation) {
+      const soldiers = s.battalions.reduce((sum, b) => sum + b.soldiers, 0);
+      const need = Math.max(1, Math.ceil((soldiers / 20) * TRADE.ALE_PER_20));
+      const fromDepot = Math.min(need, s.depot.ALE ?? 0);
+      s.depot = { ...s.depot, ALE: (s.depot.ALE ?? 0) - fromDepot };
+      const fromFreight = Math.min(need - fromDepot, freightOf(s.freight, "ALE"));
+      s.freight = takeLots(s.freight, "ALE", fromFreight).lots;
+      if (fromDepot + fromFreight >= need) {
+        s.campMood = Math.min(30, s.campMood + TRADE.ALE_MOOD);
+        log.push(entry(s.day, `Ração de cerveja: ${need} barril(is) para a tropa. O humor melhora.`, "good"));
+      } else {
+        s.campMood = Math.max(-30, s.campMood - 3);
+        log.push(entry(s.day, "A cerveja acabou! A tropa esperava a ração da semana e reclama.", "bad"));
+      }
+    }
 
     // Ambiciosos sem batalhão se ressentem a cada semana
     const idle = applyLoyalty(
@@ -767,6 +1067,14 @@ function dayState(s: GameState): DayState {
     followers: s.followers,
     campMood: s.campMood,
     bonds: s.bonds,
+    cargo: s.cargo,
+    exposure: s.exposure,
+    training: s.training,
+    campPacked: s.campPacked,
+    depot: s.depot,
+    freight: s.freight,
+    aleRation: s.aleRation,
+    campStay: s.campStay,
   };
 }
 
@@ -778,6 +1086,57 @@ function unassignMissing(lieutenants: LieutenantData[], battalions: readonly Bat
 }
 
 const appendLog = (log: LogEntry[], entries: LogEntry[]) => [...log, ...entries].slice(-ECONOMY.LOG_SIZE);
+
+const townName = (settlements: readonly Settlement[], id: string) => settlements.find((t) => t.id === id)?.name ?? "?";
+
+/** O mercado aberto ao bando mais perto do acampamento (onde o vivandeiro e o negociante compram). */
+export function nearestMarket(s: Pick<GameState, "world" | "settlements" | "factions">): Settlement | null {
+  const camp = s.world?.camp.center;
+  if (!camp) return null;
+  let best: Settlement | null = null;
+  for (const t of s.settlements) {
+    if (t.owner === "RUINED" || isCalamityOwner(t.owner) || s.factions.some((f) => f.id === t.owner && f.atWar)) continue;
+    if (!best || distance(t, camp) < distance(best, camp)) best = t;
+  }
+  return best;
+}
+
+/** Pacote de rações do vivandeiro: o preço da comida no mercado mais perto, mais o transporte. */
+export function sutlerPackPrice(s: Pick<GameState, "world" | "settlements" | "factions">): number {
+  const t = nearestMarket(s);
+  return t ? Math.round(rationPackPrice(t.econ) * TRADE.SUTLER_MARKUP) : ECONOMY.RATION_PACK_PRICE * 2;
+}
+
+/**
+ * Cavalos para a cavalaria: os do estábulo primeiro; os que faltam, o negociante traz do
+ * mercado mais perto (ao preço de lá, mais o transporte). `ok` = há cavalos no mercado.
+ */
+export function horseDeal(
+  s: Pick<GameState, "depot" | "settlements" | "factions" | "world">,
+  need: number,
+): { ok: boolean; cost: number; fromStable: number; apply: Partial<GameState> } {
+  const fromStable = Math.min(need, s.depot.HORSES ?? 0);
+  const missing = need - fromStable;
+  const t = missing > 0 ? nearestMarket(s) : null;
+  if (missing > 0 && (!t || t.econ.stock.HORSES < missing)) return { ok: false, cost: 0, fromStable, apply: {} };
+  const cost = t ? Math.round(quote(t.econ, "HORSES", missing, "BUY").total * TRADE.SUTLER_MARKUP) : 0;
+  const apply: Partial<GameState> = {
+    depot: { ...s.depot, HORSES: (s.depot.HORSES ?? 0) - fromStable },
+    ...(t ? { settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: applyTrade(x.econ, "HORSES", missing, "BUY") } : x)) } : {}),
+  };
+  return { ok: true, cost, fromStable, apply };
+}
+
+/** O bando leva a carga nas carroças (perto do Comandante) ou só na bolsa dele. */
+function carryCapacity(s: GameState): number {
+  const wagonsNear = s.battleHud?.wagonsNear ?? true;
+  return wagonsNear ? cargoCapacity(s.wagons.length) : TRADE.PURSE_CAPACITY;
+}
+
+/** Peso que o bando leva agora: rações nas carroças (em campo) e mercadorias. */
+function carriedWeight(s: GameState): number {
+  return (s.exposure.away && !s.campPacked ? s.cargo : 0) + freightWeight(s.freight);
+}
 
 /** Batalhão que lidera o motim: o maior (mais soldados insatisfeitos). */
 export function mutinyLeader(battalions: readonly BattalionData[]): BattalionData | null {
@@ -799,9 +1158,15 @@ function contractClients(settlements: readonly Settlement[], factions: readonly 
   );
 }
 
-function freshContract(s: Pick<GameState, "world" | "settlements" | "factions">): Contract | null {
-  if (!s.world) return null;
-  return generateContract(s.world, contractClients(s.settlements, s.factions), s.world.camp.center);
+function freshContract(s: Pick<GameState, "world" | "settlements" | "factions" | "wars" | "stolenCargo">): Contract | null {
+  const world = s.world;
+  if (!world) return null;
+  return generateContract(world, contractClients(s.settlements, s.factions), world.camp.center, {
+    settlements: s.settlements,
+    wars: s.wars,
+    stolenCargo: s.stolenCargo,
+    factionName: (id) => world.factions.find((f) => f.id === id)?.name ?? "reino",
+  });
 }
 
 function playerSettlements(settlements: readonly Settlement[]): Settlement[] {
@@ -833,11 +1198,17 @@ function campaignState(world: WorldDef | null): CampaignState {
   const factions: FactionState[] = world
     ? world.factions.map((f) => ({ id: f.id, ruler: f.ruler, relation: 0, atWar: false, lastArmyDay: 0 }))
     : [];
-  const base = { world, settlements, factions };
+  const base = { world, settlements, factions, wars: [] as KingdomWar[], stolenCargo: [], day: 1 };
   const contracts = Array.from({ length: ECONOMY.CONTRACTS_OFFERED }, () => freshContract(base)).filter(
     (c): c is Contract => c !== null,
   );
   const r = createRng(randomSeed());
+  // O bando chega sabendo os preços dos mercados mais perto (o que os mercadores contaram na estrada)
+  let priceBook: Record<string, PriceNote[]> = {};
+  if (world) {
+    const near = [...settlements].filter((t) => t.owner !== "RUINED").sort((a, b) => distance(a, world.camp.center) - distance(b, world.camp.center)).slice(0, 3);
+    for (const t of near) priceBook = addNote(priceBook, t.id, { ...noteOf(t.econ, 1, "TRAVELER"), day: -2 });
+  }
   return {
     phase: world ? "PLAYING" : "NEW_GAME",
     pendingField: null,
@@ -880,7 +1251,31 @@ function campaignState(world: WorldDef | null): CampaignState {
     campEvent: null,
     nextEventDay: 2,
     lastVictoryDay: null,
+    training: [],
     battlefields: [],
+    wagons: Array.from({ length: SUPPLY.START_WAGONS }, () => ({ id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp })),
+    cargo: 0,
+    exposure: NO_EXPOSURE,
+    forage: {},
+    campAt: null,
+    campPacked: false,
+    campWorks: [],
+    blanketsUntil: 0,
+    wars: [],
+    depot: {},
+    freight: [],
+    priceBook,
+    posts: [],
+    stakes: [],
+    loans: [],
+    ownCaravans: [],
+    aleRation: false,
+    marketTaxIncome: 0,
+    stolenCargo: [],
+    campStay: [],
+    rationLoad: 1,
+    interior: null,
+    dialog: null,
     worldMapOpen: false,
     worldSnapshot: null,
     battleHud: null,
@@ -938,6 +1333,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (world.name !== file.worldName) return "Este mundo não pôde ser recriado (o gerador mudou desde o save).";
     const loaded = file.store as Partial<CampaignState>;
     logSeq = Math.max(0, ...(loaded.log ?? []).map((e) => e.id));
+    // Acampamento montado em outro lugar (Marco 13)
+    if (loaded.campAt) world.camp = campDefAt(loaded.campAt);
     set({
       ...campaignState(world),
       ...loaded,
@@ -956,42 +1353,63 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   recruitBattalion: (troopType) => {
-    const { gold, battalions, day, log } = get();
-    const cost = TROOPS[troopType].cost;
-    if (gold < cost) return false;
-    const b = newBattalion(battalions, troopType);
+    const s = get();
+    // Cavalaria (Marco 14): um cavalo por cavaleiro; os que faltam no estábulo vêm do negociante
+    const horses = troopType === "CAVALRY" ? horseDeal(s, BALANCE.BATTALION_SIZE * TRADE.HORSES_PER_RIDER) : null;
+    const cost = TROOPS[troopType].cost + (horses?.cost ?? 0);
+    if (s.gold < cost || (horses && !horses.ok)) return false;
+    const b = newBattalion(s.battalions, troopType);
     set({
-      gold: gold - cost,
-      battalions: [...battalions, b],
-      log: appendLog(log, [entry(day, `Recrutado: ${b.name} (${TROOPS[troopType].label}) por ${cost} de ouro.`)]),
+      gold: s.gold - cost,
+      battalions: [...s.battalions, b],
+      ...(horses ? horses.apply : {}),
+      log: appendLog(s.log, [entry(s.day, `Recrutado: ${b.name} (${TROOPS[troopType].label}) por ${cost} de ouro${horses && horses.cost > 0 ? " (com cavalos do negociante)" : ""}.`)]),
     });
     return true;
   },
 
   reinforceBattalion: (id) => {
-    const { gold, battalions, day, log } = get();
-    const b = battalions.find((x) => x.id === id);
+    const s = get();
+    const b = s.battalions.find((x) => x.id === id);
     if (!b) return false;
     const per = reinforceCostPerSoldier(b);
-    const count = Math.min(b.maxSoldiers - b.soldiers, Math.floor(gold / per));
+    let count = Math.min(b.maxSoldiers - b.soldiers, Math.floor(s.gold / per));
     if (count <= 0) return false;
+    let horses: ReturnType<typeof horseDeal> | null = null;
+    if (b.troopType === "CAVALRY") {
+      // Cada cavaleiro novo precisa de um cavalo
+      while (count > 0) {
+        horses = horseDeal(s, count * TRADE.HORSES_PER_RIDER);
+        if (horses.ok && count * per + horses.cost <= s.gold) break;
+        count--;
+      }
+      if (count <= 0 || !horses) return false;
+    }
+    const total = count * per + (horses?.cost ?? 0);
     set({
-      gold: gold - count * per,
-      battalions: battalions.map((x) => (x.id === id ? { ...x, soldiers: x.soldiers + count } : x)),
-      log: appendLog(log, [entry(day, `${b.name} recebeu ${count} recruta(s) por ${count * per} de ouro.`)]),
+      gold: s.gold - total,
+      battalions: s.battalions.map((x) => (x.id === id ? { ...x, soldiers: x.soldiers + count } : x)),
+      ...(horses ? horses.apply : {}),
+      log: appendLog(s.log, [entry(s.day, `${b.name} recebeu ${count} recruta(s) por ${total} de ouro.`)]),
     });
     return true;
   },
 
   buyRations: (packs) => {
-    const { gold, rations, day, log } = get();
-    const cost = packs * ECONOMY.RATION_PACK_PRICE;
-    if (packs <= 0 || gold < cost) return false;
+    const s = get();
+    // O vivandeiro compra no mercado mais perto do acampamento e cobra o transporte (Marco 14)
+    const t = nearestMarket(s);
+    if (!t || packs <= 0) return false;
+    const g = foodGood(t.econ);
+    if (t.econ.stock[g] < packs) return false;
+    const cost = packs * sutlerPackPrice(s);
+    if (s.gold < cost) return false;
     const amount = packs * ECONOMY.RATION_PACK_SIZE;
     set({
-      gold: gold - cost,
-      rations: rations + amount,
-      log: appendLog(log, [entry(day, `Compradas ${amount} rações por ${cost} de ouro.`)]),
+      gold: s.gold - cost,
+      rations: s.rations + amount,
+      settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: applyTrade(x.econ, g, packs, "BUY") } : x)),
+      log: appendLog(s.log, [entry(s.day, `Compradas ${amount} rações por ${cost} de ouro (o vivandeiro buscou em ${t.name}).`)]),
     });
     return true;
   },
@@ -1117,18 +1535,92 @@ export const useGameStore = create<GameState>()((set, get) => ({
       gold: s.gold,
       rations: s.rations,
       iron: s.iron,
+      wars: s.wars,
     };
     const entries: LogEntry[] = [];
+    // Finanças do comércio (Marco 14)
+    let honor = s.honor;
+    let posts = s.posts;
+    let stakes = s.stakes;
+    let loans = s.loans;
+    let ownCaravans = s.ownCaravans;
+    let marketTaxIncome = s.marketTaxIncome;
+    let priceBook = s.priceBook;
+    const world = s.world;
+    const factionOf = (id: string) => realm.settlements.find((t) => t.id === id)?.owner ?? "";
+    const hostileTo = (owner: string) => owner === "RUINED" || isCalamityOwner(owner) || realm.factions.some((f) => f.id === owner && f.atWar);
+    const hitRelation = (owner: string, delta: number) => {
+      realm = { ...realm, factions: realm.factions.map((f) => (f.id === owner ? { ...f, relation: Math.max(-100, f.relation + delta) } : f)) };
+    };
     for (let i = 0; i < whole; i++) {
       const day = state.day + 1;
-      const r = realmDay({ ...realm, gold: state.gold, rations: state.rations }, s.world, day, s.world.camp.center);
+      const r = realmDay({ ...realm, gold: state.gold, rations: state.rations }, world, day, world.camp.center);
       realm = r.state;
+      // Feitorias mandam os preços de cada dia
+      for (const id of posts) {
+        const t = realm.settlements.find((x) => x.id === id);
+        if (t && t.owner !== "RUINED") priceBook = addNote(priceBook, id, noteOf(t.econ, day, "POST"));
+      }
       if (day % 7 === 0) {
-        const tolls = playerBridges(s.world, realm.settlements, s.burnedBridges) * GEO.BRIDGE_TOLL;
+        const tolls = playerBridges(world, realm.settlements, s.burnedBridges) * GEO.BRIDGE_TOLL;
         if (tolls > 0) {
           realm = { ...realm, gold: realm.gold + tolls };
           entries.push(entry(day, `Pedágio das pontes do bando: +${tolls} de ouro.`, "good"));
         }
+        // Taxa de mercado dos povoados do bando (caravanas que chegaram na semana)
+        if (marketTaxIncome > 0) {
+          realm = { ...realm, gold: realm.gold + marketTaxIncome };
+          entries.push(entry(day, `Taxa de mercado dos povoados do bando: +${marketTaxIncome} de ouro.`, "good"));
+          marketTaxIncome = 0;
+        }
+        // Feitorias: manutenção; em povoado inimigo ou arruinado, confiscadas
+        const lostPosts = posts.filter((id) => hostileTo(factionOf(id)));
+        for (const id of lostPosts) entries.push(entry(day, `A feitoria de ${townName(realm.settlements, id)} foi confiscada.`, "bad"));
+        posts = posts.filter((id) => !lostPosts.includes(id));
+        // Guildas: dividendos (ou confisco, se o povoado virou inimigo)
+        let dividends = 0;
+        const kept: GuildStake[] = [];
+        for (const st of stakes) {
+          const t = realm.settlements.find((x) => x.id === st.settlementId);
+          if (!t || hostileTo(t.owner)) {
+            entries.push(entry(day, `A parte do bando na guilda de ${t?.name ?? "?"} foi perdida.`, "bad"));
+            continue;
+          }
+          const d = stakeDividend(t, st);
+          dividends += d;
+          kept.push({ ...st, paid: st.paid + d });
+        }
+        stakes = kept;
+        const upkeep = posts.length * TRADE.POST_UPKEEP + ownCaravans.filter((c) => !c.lost).length * TRADE.OWN_CARAVAN_WAGE;
+        if (dividends > 0 || upkeep > 0) {
+          realm = { ...realm, gold: Math.max(0, realm.gold + dividends - upkeep) };
+          entries.push(entry(day, `Comércio: +${dividends} de dividendos das guildas, −${upkeep} de feitorias e caravaneiros.`, dividends >= upkeep ? "good" : "info"));
+        }
+        ownCaravans = ownCaravans.filter((c) => !c.lost || day - c.lost < 7);
+        // Empréstimos: juros toda semana; no vencimento, o principal (sem ouro, calote)
+        const nextLoans: Loan[] = [];
+        for (const loan of loans) {
+          const lender = factionOf(loan.from);
+          const due = day >= loan.dueDay;
+          const owed = loan.interest + (due ? loan.principal : 0);
+          if (realm.gold >= owed) {
+            realm = { ...realm, gold: realm.gold - owed };
+            entries.push(entry(day, due ? `Empréstimo de ${townName(realm.settlements, loan.from)} quitado (${owed} de ouro com os juros).` : `Juros do empréstimo: −${loan.interest} de ouro.`, due ? "good" : "info"));
+            if (!due) nextLoans.push(loan);
+            continue;
+          }
+          if (due) {
+            honor = Math.max(0, honor + TRADE.LOAN_DEFAULT_HONOR);
+            if (isFactionOwner(lender)) hitRelation(lender, TRADE.LOAN_DEFAULT_RELATION);
+            entries.push(entry(day, `Calote! O bando não pagou o empréstimo de ${townName(realm.settlements, loan.from)}. A casa de câmbio espalha o nome do Comandante.`, "bad"));
+            continue;
+          }
+          honor = Math.max(0, honor - 2);
+          if (isFactionOwner(lender)) hitRelation(lender, -5);
+          entries.push(entry(day, `Os juros do empréstimo de ${townName(realm.settlements, loan.from)} não foram pagos (${loan.missed + 1}ª semana).`, "bad"));
+          nextLoans.push({ ...loan, missed: loan.missed + 1, principal: loan.principal + loan.interest });
+        }
+        loans = nextLoans;
       }
       for (const l of r.log) entries.push(entry(day, l.text, l.tone));
       const passed = passDays({ ...state, gold: realm.gold, rations: realm.rations }, 1);
@@ -1146,22 +1638,43 @@ export const useGameStore = create<GameState>()((set, get) => ({
     // Ofertas de reinos que entraram em guerra conosco somem da mesa
     const clients = new Set(contractClients(realm.settlements, realm.factions).map((t) => t.id));
     let contracts = s.contracts.filter((c) => clients.has(c.clientId));
-    while (contracts.length < ECONOMY.CONTRACTS_OFFERED) {
-      const c = freshContract({ world: s.world, settlements: realm.settlements, factions: realm.factions });
+    // Verão é temporada de campanha (mais trabalho); no inverno, menos
+    const season = seasonOf(state.day);
+    const offered = ECONOMY.CONTRACTS_OFFERED + (season === "SUMMER" ? 1 : season === "WINTER" ? -1 : 0);
+    if (contracts.length > offered) contracts = contracts.slice(0, offered);
+    const stolenCargo = s.stolenCargo.filter((c) => state.day - c.day <= 20);
+    while (contracts.length < offered) {
+      const c = freshContract({ world: s.world, settlements: realm.settlements, factions: realm.factions, wars: realm.wars, stolenCargo });
       if (!c) break;
       contracts = [...contracts, c];
     }
+    // A forragem volta devagar
+    const forage: Record<string, number> = {};
+    for (const [k, v] of Object.entries(s.forage)) {
+      const left = v - whole * SUPPLY.FORAGE_REGROW_PER_DAY;
+      if (left > 0) forage[k] = left;
+    }
     set({
       ...state,
+      forage,
       iron: realm.iron,
       settlements: realm.settlements,
       factions: realm.factions,
       calamities: realm.calamities,
       nextCalamityDay: realm.nextCalamityDay,
+      wars: realm.wars,
       dayProgress: total - whole,
       activeContract,
       lieutenantCandidates,
       contracts,
+      honor,
+      posts,
+      stakes,
+      loans,
+      ownCaravans,
+      marketTaxIncome,
+      priceBook,
+      stolenCargo,
       log: appendLog(s.log, entries),
     });
   },
@@ -1200,9 +1713,25 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   raidCamp: (band) => {
     const s = get();
-    const rations = Math.floor(s.rations * WORLD.WARBAND.CAMP_RAID_RATIONS);
-    const gold = Math.floor(s.gold * WORLD.WARBAND.CAMP_RAID_GOLD);
-    const lines = [entry(s.day, `${band} atacou o acampamento desguarnecido: levou ${rations} rações e ${gold} de ouro.`, "bad")];
+    // Paliçada reforçada, torres e fosso seguram parte do saque (Marco 13)
+    const kept = Math.min(0.85, s.campWorks.reduce((n, w) => n + CAMP_WORK_RAID[w], 0));
+    const rations = Math.floor(s.rations * WORLD.WARBAND.CAMP_RAID_RATIONS * (1 - kept));
+    const gold = Math.floor(s.gold * WORLD.WARBAND.CAMP_RAID_GOLD * (1 - kept));
+    // As mercadorias do depósito também vão (Marco 14)
+    const depot: Partial<Record<Good, number>> = {};
+    let goods = 0;
+    for (const [g, v] of Object.entries(s.depot) as [Good, number][]) {
+      const lost = Math.floor(v * WORLD.WARBAND.CAMP_RAID_RATIONS * (1 - kept));
+      depot[g] = v - lost;
+      goods += lost;
+    }
+    const lines = [
+      entry(
+        s.day,
+        `${band} atacou o acampamento desguarnecido: levou ${rations} rações${goods > 0 ? `, ${goods} de mercadorias do depósito` : ""} e ${gold} de ouro${kept > 0 ? " (as obras do acampamento seguraram parte do saque)" : ""}.`,
+        "bad",
+      ),
+    ];
     // Os seguidores não têm quem os defenda
     let followers = s.followers;
     if (followers.length > 0 && Math.random() < 0.5) {
@@ -1210,7 +1739,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       followers = followers.filter((f) => f.id !== victim.id);
       lines.push(entry(s.day, `${victim.name} (${FOLLOWERS[victim.role].label.toLowerCase()}) foi morto no ataque ao acampamento.`, "bad"));
     }
-    set({ rations: s.rations - rations, gold: s.gold - gold, followers, log: appendLog(s.log, lines) });
+    set({ rations: s.rations - rations, gold: s.gold - gold, depot, followers, log: appendLog(s.log, lines) });
   },
 
   campTick: (reason) => {
@@ -1315,35 +1844,44 @@ export const useGameStore = create<GameState>()((set, get) => ({
   buyRationsAt: (settlementId, packs) => {
     const s = get();
     const t = s.settlements.find((x) => x.id === settlementId);
-    if (!t) return false;
-    const cost = packs * townPrices(t).rationPack;
-    if (packs <= 0 || s.gold < cost) return false;
+    if (!t || packs <= 0) return false;
+    // Rações são comida do mercado (Marco 14): cada pacote tira uma unidade de grão ou de carne
+    const g = foodGood(t.econ);
+    if (t.econ.stock[g] < packs) return false;
+    const cost = packs * townPrices(t, s.day).rationPack;
+    if (s.gold < cost) return false;
     const amount = packs * ECONOMY.RATION_PACK_SIZE;
+    const settlements = s.settlements.map((x) => (x.id === t.id ? { ...x, econ: applyTrade(x.econ, g, packs, "BUY") } : x));
+    // Em campo, o que se compra vai nas carroças (até onde couber); com o acampamento levantado, vai junto
+    if (s.exposure.away && !s.campPacked) {
+      if (s.cargo + freightWeight(s.freight) + amount > carryCapacity(s)) return false;
+      set({
+        gold: s.gold - cost,
+        cargo: s.cargo + amount,
+        settlements,
+        log: appendLog(s.log, [entry(s.day, `Compradas ${amount} rações em ${t.name} por ${cost} de ouro (nas carroças).`)]),
+      });
+      return true;
+    }
     set({
       gold: s.gold - cost,
       rations: s.rations + amount,
+      settlements,
       log: appendLog(s.log, [entry(s.day, `Compradas ${amount} rações em ${t.name} por ${cost} de ouro.`)]),
     });
     return true;
   },
 
-  tradeIronAt: (settlementId, amount) => {
-    const s = get();
-    const t = s.settlements.find((x) => x.id === settlementId);
-    if (!t) return false;
-    const prices = townPrices(t);
-    if (amount > 0) {
-      const cost = amount * prices.ironBuy;
-      if (s.gold < cost) return false;
-      set({ gold: s.gold - cost, iron: s.iron + amount });
-    } else if (amount < 0) {
-      if (s.iron < -amount) return false;
-      set({ gold: s.gold - amount * prices.ironSell, iron: s.iron + amount });
-    }
-    return amount !== 0;
-  },
+  tradeIronAt: (settlementId, amount) => get().tradeGood(settlementId, "IRON", amount) === null,
 
   // --- Reino ---
+
+  payFerry: (gold, river) => {
+    const s = get();
+    if (s.gold < gold) return false;
+    set({ gold: s.gold - gold, log: appendLog(s.log, [entry(s.day, `O bando atravessou o ${river} de balsa (${gold} de ouro).`)]) });
+    return true;
+  },
 
   foundSettlement: (x, y) => {
     const s = get();
@@ -1352,10 +1890,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const near = [...s.settlements, s.world.camp.center].some((t) => Math.hypot(t.x - x, t.y - y) < REALM.FOUND_MIN_DISTANCE);
     if (near) return false;
     const name = settlementName(createRng(randomSeed()), new Set(s.settlements.map((t) => t.name)));
-    const village: Settlement = {
+    const base = {
       id: `P${s.settlements.length}-${s.day}`,
       name,
-      kind: "VILLAGE",
+      kind: "VILLAGE" as const,
       x: Math.round(x),
       y: Math.round(y),
       owner: "PLAYER",
@@ -1363,11 +1901,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
       population: 40,
       garrison: 3,
       buildings: [],
-      taxRate: 1,
+      taxRate: 1 as const,
       market: { rationPrice: 0.8, ironBuy: 9, ironSell: 4 },
       description: `Fundada pelos ${s.world.bandName} no dia ${s.day}.`,
       lastRaidDay: null,
+      resources: resourcesAround(geoOf(s.world.geo), s.world.geo, { x, y }, createRng(Math.round(x * 31 + y))),
     };
+    const village: Settlement = { ...base, econ: initEconomy(base) };
     const settlements = [...s.settlements, village];
     set({
       gold: s.gold - gold,
@@ -1419,6 +1959,22 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
+  garrisonSally: (id) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === id);
+    if (!s.world || !t || s.siege || t.garrison <= 0) return false;
+    const atWar = isFactionOwner(t.owner) && s.factions.some((f) => f.id === t.owner && f.atWar);
+    if (!atWar && !isCalamityOwner(t.owner)) return false;
+    const text = isCalamityOwner(t.owner)
+      ? `Os ocupantes de ${t.name} saíram dos acampamentos para enfrentar os ${s.world.bandName}.`
+      : `A guarnição de ${t.name} saiu dos acampamentos para enfrentar os ${s.world.bandName}.`;
+    set({ siege: { settlementId: id }, campPanel: null, log: appendLog(s.log, [entry(s.day, text, "bad")]) });
+    return true;
+  },
+
+  garrisonLosses: (id, dead) =>
+    set((s) => ({ settlements: s.settlements.map((t) => (t.id === id ? { ...t, garrison: Math.max(0, t.garrison - dead) } : t)) })),
+
   liftSiege: () => set({ siege: null }),
 
   conquerSettlement: (id) => {
@@ -1446,7 +2002,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const t = s.settlements.find((x) => x.id === id);
     const cost = buildingCost(building);
-    if (!t || t.owner !== "PLAYER" || t.buildings.includes(building) || s.gold < cost.gold || s.iron < cost.iron) return false;
+    if (!t || t.owner !== "PLAYER" || t.buildings.includes(building) || !canHost(t, building) || s.gold < cost.gold || s.iron < cost.iron) return false;
     set({
       gold: s.gold - cost.gold,
       iron: s.iron - cost.iron,
@@ -1581,7 +2137,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
     const byId = new Map(survivors.map((x) => [x.id, x]));
     const healer = hasFollower(s.followers, "HEALER");
-    let healed = 0;
+    let woundedTotal = 0;
     let casualties = 0;
     const lostBattalions: string[] = [];
     const remaining: BattalionData[] = [];
@@ -1595,18 +2151,18 @@ export const useGameStore = create<GameState>()((set, get) => ({
         remaining.push(b);
         continue;
       }
-      let alive = report.survivors;
-      // A curandeira tira do chão um em cada três caídos (feridos que ainda tinham salvação)
-      if (healer && alive > 0 && b.soldiers - alive >= 2) {
-        const saved = Math.floor((b.soldiers - alive) / 3);
-        alive += saved;
-        healed += saved;
-      }
-      casualties += b.soldiers - alive;
+      const alive = report.survivors;
+      // Parte dos que caíram está ferida, não morta (mais com a curandeira): vai para a enfermaria.
+      // Batalhão dizimado: ninguém ficou para recolher os feridos
+      const fell = Math.max(0, b.soldiers - alive);
       if (alive <= 0) {
+        casualties += fell;
         lostBattalions.push(b.name);
         continue;
       }
+      const wounded = woundedOf(fell, healer);
+      woundedTotal += wounded;
+      casualties += fell - wounded;
       // Experiência: abates + sobreviver + vencer (tenente Instrutor vivo dá bônus)
       const kills = report.kills ?? 0;
       const leader = s.lieutenants.find((l) => l.battalionId === b.id);
@@ -1618,7 +2174,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
           xpMult,
       );
       const { battalion, levelsGained } = gainXp(
-        { ...b, soldiers: alive, formation: report.formation ?? b.formation, totalKills: b.totalKills + kills },
+        { ...b, soldiers: alive, wounded: (b.wounded ?? 0) + wounded, formation: report.formation ?? b.formation, totalKills: b.totalKills + kills },
         xp,
       );
       remaining.push(battalion);
@@ -1629,9 +2185,14 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }
 
     const notes: string[] = [];
-    if (healed > 0) notes.push(`A curandeira salvou ${healed} ferido(s) que tinham caído.`);
+    if (woundedTotal > 0) {
+      notes.push(
+        `${woundedTotal} ferido(s) foram recolhidos${healer ? " (a curandeira salvou mais gente)" : ""}: voltam da enfermaria em alguns dias, se resistirem.`,
+      );
+    }
     let gold = s.gold;
     let iron = s.iron;
+    let freight = s.freight;
     let goldEarned = 0;
     let loot = { gold: 0, iron: 0 };
     let debt = s.debt;
@@ -1651,7 +2212,16 @@ export const useGameStore = create<GameState>()((set, get) => ({
         iron: Math.floor(info.enemiesKilled * PROGRESSION.LOOT_IRON_PER_ENEMY),
       };
       gold += loot.gold;
-      iron += loot.iron;
+      // Em campo, o ferro do saque vai nas carroças, até onde couber (Marco 14)
+      if (s.exposure.away && !s.campPacked) {
+        const room = Math.max(0, carryCapacity(s) - carriedWeight(s));
+        const carried = Math.min(loot.iron, Math.floor(room / GOODS.IRON.weight));
+        freight = addLot(freight, { good: "IRON", qty: carried, from: "LOOT", faction: null, cost: 0 });
+        if (carried < loot.iron) notes.push(`${loot.iron - carried} de ferro do saque ficou no campo: não cabia nas carroças.`);
+        loot = { ...loot, iron: carried };
+      } else {
+        iron += loot.iron;
+      }
       logEntries.push(entry(s.day, `Saque: ${loot.gold} de ouro e ${loot.iron} de ferro.`, "good"));
     }
 
@@ -1780,6 +2350,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       gold,
       iron,
+      freight,
       debt,
       arrearsWeeks,
       battalions: remaining,
@@ -1793,7 +2364,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       bonds: result === "VICTORY" ? shareVictory(s.bonds, together) : s.bonds,
       lastVictoryDay: result === "VICTORY" && !info.mutinyOver ? s.day : s.lastVictoryDay,
       log: appendLog(s.log, logEntries),
-      battleReport: { result, title, goldEarned, loot, casualties, lostBattalions, xpGains, notes },
+      battleReport: { result, title, goldEarned, loot, casualties, wounded: woundedTotal, lostBattalions, xpGains, notes },
     });
     // Derrota: o Comandante passa o dia se recuperando
     if (result === "DEFEAT") get().advanceTime(1);
@@ -1825,29 +2396,658 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
-  trainBattalions: (ids) => {
-    const s = get();
-    const trainees = s.battalions.filter((b) => ids.includes(b.id) && b.level < PROGRESSION.MAX_LEVEL);
-    const cost = trainees.length * PROGRESSION.TRAINING_COST;
-    if (trainees.length === 0 || s.gold < cost || s.pendingMutiny) return false;
+  // --- Logística (Marco 13) ---
 
-    // O treino consome dias (rações, possível dia de pagamento) como uma marcha
-    const { state, log } = passDays({ ...dayState(s), gold: s.gold - cost }, PROGRESSION.TRAINING_DAYS);
-    const entries = [
-      entry(s.day, `Treino de ${PROGRESSION.TRAINING_DAYS} dias no campo: ${trainees.map((b) => b.name).join(", ")} (${cost} de ouro).`),
-      ...log,
-    ];
-    const battalions = state.battalions.map((b) => {
-      if (!trainees.some((t) => t.id === b.id)) return b;
-      const leader = state.lieutenants.find((l) => l.battalionId === b.id);
-      const xp = Math.round(PROGRESSION.TRAINING_XP * (leader ? (PASSIVES[leader.passive].xp ?? 1) : 1));
-      const { battalion, levelsGained } = gainXp(b, xp);
-      if (levelsGained > 0) entries.push(entry(state.day, `${b.name} subiu para o nível ${battalion.level}!`, "good"));
-      return battalion;
+  buyWagon: () => {
+    const s = get();
+    if (s.gold < SUPPLY.WAGON_COST || s.wagons.length >= SUPPLY.MAX_WAGONS) return false;
+    set({
+      gold: s.gold - SUPPLY.WAGON_COST,
+      wagons: [...s.wagons, { id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp }],
+      log: appendLog(s.log, [entry(s.day, `Uma carroça nova (e a junta de bois) por ${SUPPLY.WAGON_COST} de ouro.`)]),
     });
-    set({ ...state, battalions, log: appendLog(s.log, entries) });
     return true;
   },
+
+  loadWagons: () => {
+    const s = get();
+    // Quem treina e quem fica guardando o acampamento (Marco 14) come do depósito
+    const home = new Set([...s.training.map((t) => t.battalionId), ...s.campStay]);
+    const marching = s.battalions.some((b) => !home.has(b.id));
+    // Acampamento levantado: o depósito inteiro já vai junto. O Comandante sozinho leva só a mochila
+    const amount = s.campPacked
+      ? 0
+      : marching
+        ? Math.min(
+            loadAmount(s.rations, s.cargo + freightWeight(s.freight), s.wagons.length, s.battalions, s.followers, home),
+            // A parte das carroças que o Comandante reservou para a comida
+            Math.max(0, Math.floor(cargoCapacity(s.wagons.length) * (s.rationLoad ?? 1)) - s.cargo),
+          )
+        : Math.min(s.rations, Math.max(0, 6 - s.cargo));
+    set({ rations: s.rations - amount, cargo: s.cargo + amount, exposure: { ...s.exposure, away: true } });
+  },
+
+  unloadWagons: () => {
+    const s = get();
+    // O ferro vai para a Ferraria e os cavalos para o estábulo; o resto da mercadoria fica nas carroças
+    const iron = freightOf(s.freight, "IRON");
+    const horses = freightOf(s.freight, "HORSES");
+    const freight = s.freight.filter((l) => l.good !== "IRON" && l.good !== "HORSES");
+    set({
+      rations: s.rations + s.cargo,
+      cargo: 0,
+      iron: s.iron + iron,
+      depot: horses > 0 ? { ...s.depot, HORSES: (s.depot.HORSES ?? 0) + horses } : s.depot,
+      freight,
+      wagons: s.wagons.map((w) => ({ ...w, hp: SUPPLY.WAGON.hp })),
+      exposure: { ...NO_EXPOSURE },
+    });
+  },
+
+  loseWagon: (id, by) => {
+    const s = get();
+    if (!s.wagons.some((w) => w.id === id)) return;
+    const cap = cargoCapacity(s.wagons.length);
+    // A carga é de todas juntas: some a parte que cabia nesta carroça
+    const lost = Math.round(s.cargo * (SUPPLY.WAGON_CAPACITY / cap));
+    const depot = s.campPacked ? Math.round(s.rations / s.wagons.length) : 0;
+    set({
+      wagons: s.wagons.filter((w) => w.id !== id),
+      cargo: s.cargo - lost,
+      rations: s.rations - depot,
+      log: appendLog(s.log, [
+        entry(s.day, `${by} destruiu uma carroça do bando: ${lost + depot} rações perdidas.`, "bad"),
+      ]),
+    });
+  },
+
+  setWagonHp: (hp) => set((s) => ({ wagons: s.wagons.map((w) => (hp[w.id] !== undefined ? { ...w, hp: Math.round(hp[w.id]) } : w)) })),
+
+  setExposure: (e) => {
+    const x = get().exposure;
+    if (x.away !== e.away || x.swamp !== e.swamp || x.cold !== e.cold || x.sickTown !== e.sickTown) set({ exposure: e });
+  },
+
+  forageAt: (region, biome, owner) => {
+    const s = get();
+    const soldiers = s.battalions.reduce((n, b) => n + b.soldiers, 0);
+    const depleted = s.forage[region] ?? 0;
+    const gained = Math.round(
+      soldiers * SUPPLY.FORAGE_PER_SOLDIER * SUPPLY.FORAGE_SEASON[seasonOf(s.day)] * (SUPPLY.FORAGE_BIOME[biome] ?? 0.8) * (1 - depleted),
+    );
+    const room = s.campPacked ? Infinity : cargoCapacity(s.wagons.length) - s.cargo;
+    const got = Math.max(0, Math.min(gained, room));
+    const lines = [
+      entry(
+        s.day,
+        got > 0
+          ? `O bando forrageou ${got} rações${got < gained ? " (as carroças não levam mais)" : ""}${depleted > 0.3 ? "; a região já está rapada" : ""}.`
+          : "O bando forrageou e quase nada achou: a região está rapada (ou é inverno).",
+        got > 0 ? "good" : "bad",
+      ),
+    ];
+    let factions = s.factions;
+    if (owner && got > 0) {
+      factions = factions.map((f) => {
+        if (f.id !== owner.id) return f;
+        const relation = Math.max(-100, f.relation + SUPPLY.FORAGE_RELATION);
+        return { ...f, relation, atWar: f.atWar || relation <= REALM.WAR_BELOW };
+      });
+      lines.push(entry(s.day, `O ${owner.name} não gostou de ver o bando rapando os campos dos seus camponeses.`, "bad"));
+    }
+    set({
+      ...(s.campPacked ? { rations: s.rations + got } : { cargo: s.cargo + got }),
+      forage: { ...s.forage, [region]: Math.min(1, depleted + SUPPLY.FORAGE_DEPLETION) },
+      factions,
+      log: appendLog(s.log, lines),
+    });
+    return lines[0].text;
+  },
+
+  buildCampWork: (work) => {
+    const s = get();
+    const c = CAMP_WORKS[work];
+    if (s.campWorks.includes(work) || s.campPacked || s.gold < c.gold || s.iron < c.iron) return false;
+    set({
+      gold: s.gold - c.gold,
+      iron: s.iron - c.iron,
+      campWorks: [...s.campWorks, work],
+      log: appendLog(s.log, [entry(s.day, `Obra no acampamento: ${c.label}.`, "good")]),
+    });
+    return true;
+  },
+
+  buyFromPeddler: (item) => {
+    const s = get();
+    const it = PEDDLER_ITEMS[item];
+    if (!hasFollower(s.followers, "PEDDLER") || s.gold < it.gold) return false;
+    const line = entry(s.day, `Comprado na banca do mascate: ${it.label.toLowerCase()} (${it.gold} de ouro).`);
+    if (item === "WINE") {
+      set({ gold: s.gold - it.gold, campMood: Math.min(30, s.campMood + 8), log: appendLog(s.log, [line]) });
+      return true;
+    }
+    if (item === "BANDAGES") {
+      let left = 3;
+      const battalions = [...s.battalions]
+        .sort((a, b) => (b.wounded ?? 0) - (a.wounded ?? 0))
+        .map((b) => {
+          const n = Math.min(left, b.wounded ?? 0);
+          left -= n;
+          return n > 0 ? { ...b, wounded: (b.wounded ?? 0) - n, soldiers: b.soldiers + n } : b;
+        });
+      if (left === 3) return false; // ninguém ferido
+      const order = (id: string) => s.battalions.findIndex((b) => b.id === id);
+      set({ gold: s.gold - it.gold, battalions: battalions.sort((a, b) => order(a.id) - order(b.id)), log: appendLog(s.log, [line]) });
+      return true;
+    }
+    set({ gold: s.gold - it.gold, blanketsUntil: s.day + 20, log: appendLog(s.log, [line]) });
+    return true;
+  },
+
+  packCamp: () => {
+    const s = get();
+    if (s.campPacked) return "O acampamento já está levantado.";
+    if (s.mutiny || s.pendingMutiny) return "Motim no acampamento.";
+    if (s.training.length > 0) return "Há batalhões no Campo de Treino.";
+    set({
+      campPacked: true,
+      campWorks: [],
+      campPanel: null,
+      log: appendLog(s.log, [
+        entry(s.day, `Os ${s.world?.bandName ?? "mercenários"} levantaram acampamento: barracas, depósito e seguidores vão nas carroças.`),
+      ]),
+    });
+    return null;
+  },
+
+  pitchCamp: (center, field) => {
+    const s = get();
+    if (!s.world || !s.campPacked) return;
+    const world = s.world;
+    world.camp = campDefAt(center);
+    set({
+      campAt: { x: Math.round(center.x), y: Math.round(center.y) },
+      campPacked: false,
+      pendingField: field,
+      // O mundo é recriado (o acampamento novo, a colisão, as rotas)
+      loadNonce: s.loadNonce + 1,
+      log: appendLog(s.log, [entry(s.day, `O acampamento foi montado de novo em ${regionName(world, center)}.`, "good")]),
+    });
+  },
+
+  // --- Economia e comércio (Marco 14) ---
+
+  tradeGood: (settlementId, good, qty) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || qty === 0) return "Nada a negociar.";
+    if (t.owner === "RUINED" || isCalamityOwner(t.owner)) return "Não há mercado aqui.";
+    if (s.factions.some((f) => f.id === t.owner && f.atWar)) return "Em guerra: o mercado está fechado para o bando.";
+    const margin = s.posts.includes(t.id) ? TRADE.POST_MARGIN : 0;
+    const label = GOODS[good].label.toLowerCase();
+    const note = addNote(s.priceBook, t.id, noteOf(t.econ, s.day, "VISIT"));
+    if (qty > 0) {
+      if (t.econ.stock[good] < qty) return `O mercado só tem ${Math.floor(t.econ.stock[good])} de ${label}.`;
+      const room = carryCapacity(s) - carriedWeight(s);
+      if (GOODS[good].weight * qty > room) {
+        return s.battleHud?.wagonsNear === false ? "Sem as carroças por perto, o Comandante só leva o que cabe na bolsa." : "Não cabe nas carroças.";
+      }
+      const q = quote(t.econ, good, qty, "BUY", margin);
+      if (s.gold < q.total) return "Falta ouro.";
+      const after = applyTrade(t.econ, good, qty, "BUY");
+      set({
+        gold: s.gold - q.total,
+        settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: after } : x)),
+        freight: addLot(s.freight, { good, qty, from: t.id, faction: isFactionOwner(t.owner) ? t.owner : null, cost: q.total / qty }),
+        priceBook: addNote(note, t.id, noteOf(after, s.day, "VISIT")),
+        log: appendLog(s.log, [entry(s.day, `Comprados ${qty} de ${label} em ${t.name} por ${q.total} de ouro.`)]),
+      });
+      return null;
+    }
+    const n = -qty;
+    if (freightOf(s.freight, good) < n) return "Não há tanto na carga.";
+    // Vende primeiro o que não é contrabando
+    const legal = (l: TradeLot) => !isContraband(l, t, s.wars);
+    const legalQty = s.freight.filter((l) => l.good === good && legal(l)).reduce((sum, l) => sum + l.qty, 0);
+    const first = takeLots(s.freight, good, Math.min(n, legalQty), legal);
+    const second = takeLots(first.lots, good, n - Math.min(n, legalQty));
+    const taken = [...first.taken, ...second.taken];
+    const smuggled = second.taken.reduce((sum, l) => sum + l.qty, 0);
+    const q = quote(t.econ, good, n, "SELL", margin);
+    const cost = taken.reduce((sum, l) => sum + l.cost * l.qty, 0);
+    let revenue = q.total;
+    let factions = s.factions;
+    const lines: LogEntry[] = [];
+    if (smuggled > 0) {
+      const share = smuggled / n;
+      if (Math.random() < TRADE.SMUGGLE_CATCH) {
+        // Pegos: a carga ilegal é confiscada e o bando paga multa
+        const fine = Math.round(q.total * share * TRADE.SMUGGLE_FINE);
+        revenue = Math.round(q.total * (1 - share)) - fine;
+        factions = factions.map((f) => (f.id === t.owner ? { ...f, relation: Math.max(-100, f.relation + TRADE.SMUGGLE_RELATION) } : f));
+        lines.push(entry(s.day, `Contrabando apreendido em ${t.name}! Os guardas confiscaram ${smuggled} de ${label} e cobraram ${fine} de multa.`, "bad"));
+      } else {
+        revenue = Math.round(q.total * (1 - share) + q.total * share * TRADE.SMUGGLE_BONUS);
+        lines.push(entry(s.day, `Contrabando: ${smuggled} de ${label} do reino inimigo vendidos por baixo do pano em ${t.name}.`, "info"));
+      }
+    }
+    const after = applyTrade(t.econ, good, n, "SELL");
+    const profit = revenue - Math.round(cost);
+    lines.unshift(entry(s.day, `Vendidos ${n} de ${label} em ${t.name} por ${revenue} de ouro (${profit >= 0 ? "lucro" : "prejuízo"} de ${Math.abs(profit)}).`, profit >= 0 ? "good" : "info"));
+    set({
+      gold: Math.max(0, s.gold + revenue),
+      settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: after } : x)),
+      freight: second.lots,
+      factions,
+      priceBook: addNote(note, t.id, noteOf(after, s.day, "VISIT")),
+      log: appendLog(s.log, lines),
+    });
+    return null;
+  },
+
+  deliverContract: () => {
+    const s = get();
+    const active = s.activeContract;
+    const c = active?.contract;
+    if (!active || !c || !c.good || !c.qty) return "Nenhuma entrega a fazer.";
+    if (c.kind === "RECOVER" && !active.recovered) return "A carga ainda está com os goblins.";
+    if (freightOf(s.freight, c.good) < c.qty) return `Faltam ${GOODS[c.good].label.toLowerCase()}: o contrato pede ${c.qty}.`;
+    const t = s.settlements.find((x) => x.id === (c.targetId ?? c.clientId));
+    if (!t) return "O cliente não existe mais.";
+    const factions = s.factions.map((f) => (f.id === t.owner ? { ...f, relation: Math.min(100, f.relation + REALM.CONTRACT_RELATION) } : f));
+    set({
+      gold: s.gold + c.reward,
+      honor: Math.min(100, s.honor + 3),
+      freight: takeLots(s.freight, c.good, c.qty).lots,
+      factions,
+      settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: restock(x.econ, { [c.good as Good]: c.qty }), prosperity: Math.min(100, x.prosperity + 5) } : x)),
+      activeContract: null,
+      lieutenantCandidates: Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)),
+      log: appendLog(s.log, [entry(s.day, `Contrato cumprido: "${c.title}". ${t.name} pagou ${c.reward} de ouro.`, "good")]),
+    });
+    return null;
+  },
+
+  finishContract: (success, why) => {
+    const s = get();
+    const c = s.activeContract?.contract;
+    if (!c) return;
+    const owner = s.settlements.find((t) => t.id === c.clientId)?.owner;
+    set({
+      gold: s.gold + (success ? c.reward : 0),
+      honor: success ? Math.min(100, s.honor + 3) : s.honor,
+      factions: s.factions.map((f) => (f.id === owner ? { ...f, relation: Math.max(-100, Math.min(100, f.relation + (success ? REALM.CONTRACT_RELATION : -5))) } : f)),
+      activeContract: null,
+      lieutenantCandidates: success ? Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)) : s.lieutenantCandidates,
+      log: appendLog(s.log, [
+        entry(s.day, success ? `Contrato cumprido: "${c.title}" (${why}). ${c.client} pagou ${c.reward} de ouro.` : `Contrato perdido: "${c.title}" (${why}).`, success ? "good" : "bad"),
+      ]),
+    });
+  },
+
+  moveGoods: (good, qty) => {
+    const s = get();
+    if (s.exposure.away || qty === 0) return false;
+    const inDepot = good === "IRON" ? s.iron : (s.depot[good] ?? 0);
+    if (qty > 0) {
+      const room = cargoCapacity(s.wagons.length) - freightWeight(s.freight);
+      if (inDepot < qty || GOODS[good].weight * qty > room) return false;
+      set({
+        ...(good === "IRON" ? { iron: s.iron - qty } : { depot: { ...s.depot, [good]: inDepot - qty } }),
+        freight: addLot(s.freight, { good, qty, from: "CAMP", faction: null, cost: 0 }),
+      });
+      return true;
+    }
+    const n = -qty;
+    if (freightOf(s.freight, good) < n) return false;
+    set({
+      ...(good === "IRON" ? { iron: s.iron + n } : { depot: { ...s.depot, [good]: inDepot + n } }),
+      freight: takeLots(s.freight, good, n).lots,
+    });
+    return true;
+  },
+
+  millFood: (good, qty) => {
+    const s = get();
+    if ((good !== "GRAIN" && good !== "MEAT") || qty <= 0 || (s.depot[good] ?? 0) < qty) return false;
+    set({
+      depot: { ...s.depot, [good]: (s.depot[good] ?? 0) - qty },
+      rations: s.rations + qty * TRADE.RATIONS_PER_FOOD,
+      log: appendLog(s.log, [entry(s.day, `A Intendência transformou ${qty} de ${GOODS[good].label.toLowerCase()} em ${qty * TRADE.RATIONS_PER_FOOD} rações.`)]),
+    });
+    return true;
+  },
+
+  setAleRation: (on) => set({ aleRation: on }),
+
+  notePrices: (settlementId, source, ageDays = 0) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || t.owner === "RUINED") return;
+    const note = noteOf(t.econ, s.day - ageDays, source);
+    // Notícia velha: os preços daquele dia (o histórico guarda um a cada 2 dias)
+    if (ageDays >= 2) {
+      const back = Math.floor(ageDays / 2);
+      for (const g of GOOD_LIST) {
+        const h = t.econ.history[g] ?? [];
+        if (h.length > back) note.prices[g] = h[h.length - 1 - back];
+      }
+    }
+    set({ priceBook: addNote(s.priceBook, t.id, note) });
+  },
+
+  caravanDeparts: (from, good, qty, ownId) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === from);
+    if (!t || qty <= 0) return 0;
+    const n = Math.min(qty, Math.floor(t.econ.stock[good]));
+    if (n <= 0) return 0;
+    const value = quote(t.econ, good, n, "BUY").total;
+    // Caravana própria: o bando paga a compra (sem ouro, ela parte vazia)
+    if (ownId && s.gold < value) return 0;
+    const tax = t.owner === "PLAYER" ? Math.round(value * TRADE.MARKET_TAX[t.marketTax ?? 1] * (t.buildings.includes("MARKET") ? 1.4 : 1)) : 0;
+    set({
+      settlements: s.settlements.map((x) =>
+        x.id === from ? { ...x, econ: applyTrade(x.econ, good, n, "BUY"), prosperity: Math.min(100, x.prosperity + CARAVAN.PROSPERITY / 2) } : x,
+      ),
+      marketTaxIncome: s.marketTaxIncome + (ownId ? 0 : tax),
+      ...(ownId ? { gold: s.gold - value } : {}),
+    });
+    return value;
+  },
+
+  caravanArrives: (to, cargo) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === to);
+    if (!t || t.owner === "RUINED" || cargo.qty <= 0) {
+      if (cargo.own) set({ ownCaravans: s.ownCaravans.map((c) => (c.id === cargo.own ? { ...c, at: to, trips: c.trips + 1 } : c)) });
+      return;
+    }
+    const { good, qty } = cargo;
+    const value = quote(t.econ, good, qty, "SELL").total;
+    const tax = t.owner === "PLAYER" && !cargo.own ? Math.round(value * TRADE.MARKET_TAX[t.marketTax ?? 1] * (t.buildings.includes("MARKET") ? 1.4 : 1)) : 0;
+    // A febre viaja com os mercadores (Marco 13): de um povoado doente, às vezes chega junto
+    const origin = s.settlements.find((x) => x.id === cargo.from);
+    const fever = origin && isSick(origin, s.day) && !isSick(t, s.day) && Math.random() < 0.3;
+    const settlements = s.settlements.map((x) =>
+      x.id === to
+        ? {
+            ...x,
+            econ: applyTrade(x.econ, good, qty, "SELL"),
+            prosperity: Math.min(100, x.prosperity + CARAVAN.PROSPERITY),
+            ...(fever ? { sickUntil: s.day + HEALTH.TOWN_SICK_DAYS } : {}),
+          }
+        : x,
+    );
+    const lines: LogEntry[] = fever ? [entry(s.day, `A febre de ${origin?.name} chegou a ${t.name} com uma caravana.`, t.owner === "PLAYER" ? "bad" : "info")] : [];
+    const own = cargo.own ? s.ownCaravans.find((c) => c.id === cargo.own) : undefined;
+    if (!own) {
+      set({ settlements, marketTaxIncome: s.marketTaxIncome + tax, ...(lines.length ? { log: appendLog(s.log, lines) } : {}) });
+      return;
+    }
+    const profit = value - Math.round(cargo.cost);
+    lines.push(
+      entry(s.day, `${own.name} vendeu ${qty} de ${GOODS[good].label.toLowerCase()} em ${t.name}: ${value} de ouro (${profit >= 0 ? "lucro" : "prejuízo"} de ${Math.abs(profit)}).`, profit >= 0 ? "good" : "info"),
+    );
+    set({
+      settlements,
+      gold: s.gold + value,
+      ownCaravans: s.ownCaravans.map((c) => (c.id === cargo.own ? { ...c, trips: c.trips + 1, profit: c.profit + profit, at: to } : c)),
+      priceBook: addNote(s.priceBook, t.id, noteOf(t.econ, s.day, "CARAVAN")),
+      log: appendLog(s.log, lines),
+    });
+  },
+
+  robCaravan: (band) => {
+    const s = get();
+    const room = Math.max(0, carryCapacity(s) - carriedWeight(s));
+    const w = GOODS[band.good].weight;
+    const kept = w > 0 ? Math.min(band.qty, Math.floor(room / w)) : band.qty;
+    const atWar = s.factions.some((f) => f.id === band.ownerId && f.atWar);
+    const factions = band.ownerId && !atWar ? s.factions.map((f) => (f.id === band.ownerId ? { ...f, relation: Math.max(-100, f.relation + CARAVAN.ROB_RELATION) } : f)) : s.factions;
+    // Sabotagem: caravanas do reino inimigo do cliente contam
+    let activeContract = s.activeContract;
+    const c = activeContract?.contract;
+    if (activeContract && c?.kind === "SABOTAGE" && band.ownerId === c.factionTarget) activeContract = { ...activeContract, progress: (activeContract.progress ?? 0) + 1 };
+    const label = GOODS[band.good].label.toLowerCase();
+    const text =
+      kept > 0
+        ? `Saqueamos ${band.name}: ${kept} de ${label} foram para as carroças${kept < band.qty ? ` (o resto ficou na estrada: não cabia)` : ""}.`
+        : `Saqueamos ${band.name}, mas não havia onde levar a carga (${band.qty} de ${label} ficou na estrada).`;
+    const lines = [entry(s.day, text, "info")];
+    if (!atWar) lines.push(entry(s.day, `Roubar mercadores mancha o nome do bando (honra ${CARAVAN.ROB_HONOR}).`, "bad"));
+    set({
+      freight: kept > 0 ? addLot(s.freight, { good: band.good, qty: kept, from: "LOOT", faction: band.ownerId && isFactionOwner(band.ownerId) ? band.ownerId : null, cost: 0 }) : s.freight,
+      honor: atWar ? s.honor : Math.max(0, s.honor + CARAVAN.ROB_HONOR),
+      factions,
+      activeContract,
+      log: appendLog(s.log, lines),
+    });
+    if (activeContract && c?.kind === "SABOTAGE" && (activeContract.progress ?? 0) >= (c.need ?? 1)) get().finishContract(true, "as caravanas do inimigo não chegaram");
+    return text;
+  },
+
+  caravanStolen: (band) => {
+    const s = get();
+    set({ stolenCargo: [...s.stolenCargo.filter((c) => c.bandId !== band.bandId), { ...band, day: s.day }].slice(-6) });
+  },
+
+  ownCaravanLost: (id, by) => {
+    const s = get();
+    const c = s.ownCaravans.find((x) => x.id === id);
+    if (!c || c.lost) return;
+    set({
+      ownCaravans: s.ownCaravans.map((x) => (x.id === id ? { ...x, lost: s.day } : x)),
+      log: appendLog(s.log, [entry(s.day, `${c.name} foi destruída por ${by}. A carga e a carroça se perderam.`, "bad")]),
+    });
+  },
+
+  recoverCargo: (bandId) => {
+    const s = get();
+    const lost = s.stolenCargo.find((c) => c.bandId === bandId);
+    if (!lost) return null;
+    const room = Math.max(0, carryCapacity(s) - carriedWeight(s));
+    const w = GOODS[lost.good].weight;
+    const kept = w > 0 ? Math.min(lost.qty, Math.floor(room / w)) : lost.qty;
+    let activeContract = s.activeContract;
+    if (activeContract?.contract.kind === "RECOVER" && activeContract.contract.bandId === bandId) {
+      activeContract = { ...activeContract, recovered: true, contract: { ...activeContract.contract, qty: Math.min(activeContract.contract.qty ?? kept, Math.max(1, kept)) } };
+    }
+    const text = `Carga recuperada do ${lost.bandName}: ${kept} de ${GOODS[lost.good].label.toLowerCase()}${kept < lost.qty ? " (o resto não cabia nas carroças)" : ""}.`;
+    set({
+      stolenCargo: s.stolenCargo.filter((c) => c.bandId !== bandId),
+      freight: kept > 0 ? addLot(s.freight, { good: lost.good, qty: kept, from: "LOOT", faction: null, cost: 0 }) : s.freight,
+      activeContract,
+      log: appendLog(s.log, [entry(s.day, text, "good")]),
+    });
+    return text;
+  },
+
+  buyPost: (settlementId) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || s.posts.includes(t.id) || s.gold < TRADE.POST_COST || t.owner === "RUINED" || isCalamityOwner(t.owner)) return false;
+    set({
+      gold: s.gold - TRADE.POST_COST,
+      posts: [...s.posts, t.id],
+      priceBook: addNote(s.priceBook, t.id, noteOf(t.econ, s.day, "POST")),
+      log: appendLog(s.log, [entry(s.day, `O bando abriu uma feitoria em ${t.name}: preços frescos todo dia e negócios com margem melhor.`, "good")]),
+    });
+    return true;
+  },
+
+  investGuild: (settlementId, building) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || t.owner === "PLAYER" || t.owner === "RUINED" || isCalamityOwner(t.owner) || s.gold < TRADE.GUILD_COST) return false;
+    if (!GUILD_BUILDINGS.includes(building) || t.buildings.includes(building) || !canHost(t, building)) return false;
+    set({
+      gold: s.gold - TRADE.GUILD_COST,
+      settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, buildings: [...x.buildings, building] } : x)),
+      stakes: [...s.stakes, { settlementId: t.id, building, invested: TRADE.GUILD_COST, since: s.day, paid: 0 }],
+      log: appendLog(s.log, [entry(s.day, `O bando investiu ${TRADE.GUILD_COST} de ouro na guilda de ${t.name}: ${BUILDINGS[building].label} (dividendos toda semana).`, "good")]),
+    });
+    return true;
+  },
+
+  takeLoan: (settlementId, amount) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || t.kind === "VILLAGE" || s.loans.some((l) => l.from === t.id) || !(TRADE.LOAN_SIZES as readonly number[]).includes(amount)) return false;
+    const loan: Loan = { id: crypto.randomUUID(), from: t.id, principal: amount, interest: Math.round(amount * TRADE.LOAN_INTEREST), dueDay: s.day + TRADE.LOAN_WEEKS * 7, missed: 0 };
+    set({
+      gold: s.gold + amount,
+      loans: [...s.loans, loan],
+      log: appendLog(s.log, [entry(s.day, `Empréstimo de ${amount} de ouro da casa de câmbio de ${t.name}: ${loan.interest} de juros por semana, vence no dia ${loan.dueDay}.`)]),
+    });
+    return true;
+  },
+
+  repayLoan: (id) => {
+    const s = get();
+    const loan = s.loans.find((l) => l.id === id);
+    if (!loan || s.gold < loan.principal) return false;
+    set({
+      gold: s.gold - loan.principal,
+      loans: s.loans.filter((l) => l.id !== id),
+      log: appendLog(s.log, [entry(s.day, `Empréstimo de ${townName(s.settlements, loan.from)} quitado antes do prazo.`, "good")]),
+    });
+    return true;
+  },
+
+  hireOwnCaravan: (a, b) => {
+    const s = get();
+    const alive = s.ownCaravans.filter((c) => !c.lost);
+    if (!s.world || a === b || alive.length >= TRADE.OWN_CARAVAN_MAX || s.gold < TRADE.OWN_CARAVAN_COST) return false;
+    const n = s.ownCaravans.length + 1;
+    const caravan: OwnCaravan = { id: crypto.randomUUID(), name: `Caravana nº ${n} dos ${s.world.bandName}`, a, b, trips: 0, profit: 0 };
+    set({
+      gold: s.gold - TRADE.OWN_CARAVAN_COST,
+      ownCaravans: [...s.ownCaravans, caravan],
+      log: appendLog(s.log, [entry(s.day, `${caravan.name} vai fazer a rota ${townName(s.settlements, a)} ↔ ${townName(s.settlements, b)}.`, "good")]),
+    });
+    return true;
+  },
+
+  dismissOwnCaravan: (id) => set((s) => ({ ownCaravans: s.ownCaravans.filter((c) => c.id !== id) })),
+
+  setMarketTax: (settlementId, rate) =>
+    set((s) => ({ settlements: s.settlements.map((t) => (t.id === settlementId && t.owner === "PLAYER" ? { ...t, marketTax: rate } : t)) })),
+
+  buyRound: (settlementId) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || s.gold < TRADE.TAVERN_ROUND) return "Falta ouro para a rodada.";
+    // Viajantes contam os preços de mercados de longe (com o atraso da viagem deles)
+    const others = s.settlements
+      .filter((x) => x.id !== t.id && x.owner !== "RUINED")
+      .map((x) => ({ x, d: distance(x, t) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8);
+    const heard = [...others].sort(() => Math.random() - 0.5).slice(0, 3);
+    let priceBook = s.priceBook;
+    const parts: string[] = [];
+    for (const { x, d } of heard) {
+      const age = Math.max(1, Math.round(d / WORLD.DAY_DISTANCE));
+      const note = noteOf(x.econ, s.day - age, "TAVERN");
+      priceBook = addNote(priceBook, x.id, note);
+      const dear = GOOD_LIST.filter((g) => x.econ.price[g] >= GOODS[g].base * 1.8);
+      const cheap = GOOD_LIST.filter((g) => x.econ.price[g] <= GOODS[g].base * 0.5);
+      parts.push(
+        `${x.name} (há ${age} dia(s)): ${dear.length ? `falta ${dear.map((g) => GOODS[g].label.toLowerCase()).join(", ")}` : "nada em falta"}${
+          cheap.length ? `; sobra ${cheap.map((g) => GOODS[g].label.toLowerCase()).join(", ")}` : ""
+        }`,
+      );
+    }
+    const war = s.wars.find((w) => w.peace === undefined);
+    const famine = s.settlements.find((x) => x.econ.famine && x.id !== t.id);
+    const name = (id: string) => s.world?.factions.find((f) => f.id === id)?.name ?? "?";
+    const news = war ? ` Dizem que o ${name(war.a)} e o ${name(war.b)} estão em guerra: armas e cavalos valem ouro na fronteira.` : famine ? ` Contam que há fome em ${famine.name}.` : "";
+    const text = `Os viajantes falam: ${parts.join(" · ")}.${news}`;
+    set({ gold: s.gold - TRADE.TAVERN_ROUND, campMood: Math.min(30, s.campMood + 1), priceBook, log: appendLog(s.log, [entry(s.day, `Na taverna de ${t.name}: ${text}`)]) });
+    return text;
+  },
+
+  donateTemple: (settlementId, gold) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    if (!t || gold <= 0 || s.gold < gold) return false;
+    const sick = isSick(t, s.day);
+    set({
+      gold: s.gold - gold,
+      honor: Math.min(100, s.honor + Math.min(6, Math.round(gold / 10))),
+      campMood: Math.min(30, s.campMood + 2),
+      settlements: s.settlements.map((x) => (x.id === t.id && sick ? { ...x, sickUntil: Math.max(s.day, (x.sickUntil ?? s.day) - 3) } : x)),
+      log: appendLog(s.log, [entry(s.day, `O Comandante deu ${gold} de ouro ao templo de ${t.name}.${sick ? " Os monges cuidam melhor dos febris." : ""}`, "good")]),
+    });
+    return true;
+  },
+
+  giveFood: (settlementId) => {
+    const s = get();
+    const t = s.settlements.find((x) => x.id === settlementId);
+    const food = (["GRAIN", "MEAT"] as Good[]).find((g) => freightOf(s.freight, g) > 0);
+    if (!t || !food) return false;
+    set({
+      freight: takeLots(s.freight, food, 1).lots,
+      honor: Math.min(100, s.honor + 2),
+      settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: restock(x.econ, { [food]: 1 }) } : x)),
+      log: appendLog(s.log, [entry(s.day, `O Comandante deu ${GOODS[food].label.toLowerCase()} a uma família faminta de ${t.name}.`, "good")]),
+    });
+    return true;
+  },
+
+  setCampStay: (ids) => set({ campStay: ids }),
+  setRationLoad: (share) => set({ rationLoad: Math.max(0.25, Math.min(1, share)) }),
+  enterInterior: (ref) => set({ interior: ref, dialog: null, campPanel: null, campPrompt: null, contextMenu: null }),
+  leaveInterior: () => set({ interior: null, dialog: null, campPanel: null, campPrompt: null }),
+  setDialog: (dialog) => set({ dialog }),
+
+  trainBattalions: (ids) => {
+    const s = get();
+    const trainees = s.battalions.filter(
+      (b) => ids.includes(b.id) && b.level < PROGRESSION.MAX_LEVEL && !s.training.some((t) => t.battalionId === b.id),
+    );
+    const cost = trainees.length * PROGRESSION.TRAINING_COST;
+    if (trainees.length === 0 || s.gold < cost || s.pendingMutiny) return false;
+    // O treino acontece de verdade no Campo de Treino; o tempo corre (rações, pagamento) e o XP vem no fim
+    const until = s.day + s.dayProgress + PROGRESSION.TRAINING_DAYS;
+    set({
+      gold: s.gold - cost,
+      training: [...s.training, ...trainees.map((b) => ({ battalionId: b.id, until }))],
+      log: appendLog(s.log, [
+        entry(s.day, `${trainees.map((b) => b.name).join(", ")} foram para o Campo de Treino: ${PROGRESSION.TRAINING_DAYS} dias de treino (${cost} de ouro).`),
+      ]),
+    });
+    return true;
+  },
+
+  finishTraining: () => {
+    const s = get();
+    const now = s.day + s.dayProgress;
+    const exists = (t: TrainingOrder) => s.battalions.some((b) => b.id === t.battalionId);
+    const due = s.training.filter((t) => exists(t) && t.until <= now + 1e-6);
+    const stale = s.training.filter((t) => !exists(t));
+    if (due.length === 0 && stale.length === 0) return [];
+    const entries: LogEntry[] = [];
+    const battalions = s.battalions.map((b) => {
+      if (!due.some((t) => t.battalionId === b.id)) return b;
+      const leader = s.lieutenants.find((l) => l.battalionId === b.id);
+      const xp = Math.round(PROGRESSION.TRAINING_XP * (leader ? (PASSIVES[leader.passive].xp ?? 1) : 1));
+      const { battalion, levelsGained } = gainXp(b, xp);
+      entries.push(entry(s.day, `${b.name} terminou o treino (+${xp} XP).`, "good"));
+      if (levelsGained > 0) entries.push(entry(s.day, `${b.name} subiu para o nível ${battalion.level}!`, "good"));
+      return battalion;
+    });
+    set({
+      battalions,
+      training: s.training.filter((t) => !due.includes(t) && !stale.includes(t)),
+      log: appendLog(s.log, entries),
+    });
+    return due.map((t) => t.battalionId);
+  },
+
+  cancelTraining: (battalionId) => set((s) => ({ training: s.training.filter((t) => t.battalionId !== battalionId) })),
 
   learnSkill: (battalionId, skill) => {
     const s = get();
@@ -1866,7 +3066,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const b = s.battalions.find((x) => x.id === battalionId);
     if (!b || b.equipment[slot] >= PROGRESSION.MAX_EQUIPMENT_TIER) return false;
-    const cost = forgeCost(b.equipment[slot]);
+    const cost = forgeCost(b.equipment[slot], hasFollower(s.followers, "SMITH"));
     if (s.gold < cost.gold || s.iron < cost.iron) return false;
     const tier = b.equipment[slot] + 1;
     set({

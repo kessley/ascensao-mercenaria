@@ -16,6 +16,12 @@ interface Segment {
 
 const BUCKET = 800;
 
+/** Estação na água (Marco 13): gelo no inverno (abaixo da temperatura) e vaus fundos na cheia. */
+export interface GeoSeason {
+  freezeBelow: number | null;
+  flood: boolean;
+}
+
 /**
  * Consultas ao relevo e às águas do continente (Marco 11), a partir dos dados gerados
  * (GeoDef). O relevo fino é a interpolação das células com um pouco de ruído, para a costa
@@ -120,6 +126,7 @@ export class GeoMap {
   /** Travessia (ponte ou vau) cuja faixa contém o ponto. */
   crossingAt(x: number, y: number): CrossingDef | null {
     for (const c of this.def.crossings) {
+      if (c.kind === "FERRY") continue;
       const dx = x - c.x;
       const dy = y - c.y;
       if (dx * dx + dy * dy > 400 * 400) continue;
@@ -140,15 +147,21 @@ export class GeoMap {
    * colina (passo) ou null (terra comum — o terreno de superfície decide).
    * `burned` = pontes queimadas (viram água).
    */
-  geoType(x: number, y: number, burned?: ReadonlySet<string>): TerrainType | null {
+  geoType(x: number, y: number, burned?: ReadonlySet<string>, season?: GeoSeason): TerrainType | null {
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return "WATER";
     const h = this.heightAt(x, y);
-    if (h < this.def.seaLevel || this.isLake(x, y)) return "WATER";
+    if (h < this.def.seaLevel) return "WATER";
+    // Inverno: rios e lagos do frio congelam (atravessa-se em qualquer ponto)
+    const frozen = () => season?.freezeBelow != null && this.temperatureAt(x, y) < season.freezeBelow;
+    if (this.isLake(x, y)) return frozen() ? "ICE" : "WATER";
     const river = this.riverAt(x, y);
     if (river) {
       const crossing = this.crossingAt(x, y);
       if (crossing?.kind === "BRIDGE") return burned?.has(crossing.id) ? "WATER" : "BRIDGE";
-      if (crossing?.kind === "FORD" || river.width <= 50) return "SHALLOW";
+      if (frozen()) return "ICE";
+      // Cheia da primavera: os vaus dos rios ficam fundos (os riachos continuam rasos)
+      if (river.width <= 50) return "SHALLOW";
+      if (crossing?.kind === "FORD") return season?.flood ? "WATER" : "SHALLOW";
       return "WATER";
     }
     if (h > this.def.mountainLevel) return this.inPass(x, y) ? "HILL" : "MOUNTAIN";
@@ -168,8 +181,24 @@ export class GeoMap {
 
   /** Distância até o rio mais próximo (até `max`; além disso devolve `max`). */
   distanceToRiver(p: Point, max: number): number {
-    for (let r = 100; r <= max; r += 100) if (this.riverAt(p.x, p.y, r)) return r;
-    return max;
+    // Procura nos baldes em volta (um rio a mais de um balde de distância também conta)
+    const c0 = Math.max(0, Math.floor((p.x - max) / BUCKET));
+    const c1 = Math.min(this.bucketCols - 1, Math.floor((p.x + max) / BUCKET));
+    const r0 = Math.max(0, Math.floor((p.y - max) / BUCKET));
+    const r1 = Math.min(this.bucketRows - 1, Math.floor((p.y + max) / BUCKET));
+    let best = max;
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        for (const s of this.buckets[r * this.bucketCols + c]) {
+          const dx = s.bx - s.ax;
+          const dy = s.by - s.ay;
+          const t = Math.max(0, Math.min(1, ((p.x - s.ax) * dx + (p.y - s.ay) * dy) / (dx * dx + dy * dy || 1)));
+          const d = Math.hypot(s.ax + dx * t - p.x, s.ay + dy * t - p.y) - (s.wa + (s.wb - s.wa) * t) / 2;
+          if (d < best) best = Math.max(0, d);
+        }
+      }
+    }
+    return Math.ceil(best / 100) * 100;
   }
 
   /** Há mar a menos de `r` px? (amostra um anel) */
