@@ -5,7 +5,7 @@ import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/comba
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
-import { LOD_SCALE, skinOf, type Lod, type Skin } from "../art/atlas";
+import { LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
 import { ANIM, FRAMES, type Look } from "../art/figures";
 import type { Corpses } from "../art/corpses";
 
@@ -162,6 +162,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   private skin: Skin | null = null;
   private shownLod: Lod | null = null;
   private shownFrame = -1;
+  /** Quadros da folha que a figura usa agora, pelo número. */
+  private sheet: readonly Phaser.Textures.Frame[] = [];
   /** 0 = de frente, 1 = de lado (espelhado para a esquerda), 2 = de costas. */
   private dirRow = 0;
   private flipped = false;
@@ -258,6 +260,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     else if (lod === "MINI") img.setTexture(s.mini, 0).setOrigin(0.5, (s.mini2.h - 1) / s.mini2.h);
     else img.setTexture(s.dot, 0).setOrigin(0.5, 1);
     img.setScale(LOD_SCALE[lod] * (this.pose === "SIT" ? 0.85 : 1));
+    this.sheet = sheetOf(img.texture);
     this.shownFrame = -1;
   }
 
@@ -274,7 +277,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       this.lastMoveAt = now;
     }
     // Quem está mais embaixo na tela passa na frente
-    this.setDepth(this.y * 1e-6);
+    // (Mudar a profundidade pede ao Phaser para reordenar a cena inteira: só quando ela muda)
+    const depth = this.y * 1e-6;
+    if (this.depth !== depth) this.setDepth(depth);
     if (this.x < view.x - 64 || this.x > view.right + 64 || this.y < view.y - 64 || this.y > view.bottom + 96) return;
     const walking = now - this.lastMoveAt < 140;
     let frame: number;
@@ -296,7 +301,11 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       img.setFlipX(Unit.lod === "MINI" && Math.cos(this.facing) < 0);
     }
     if (frame !== this.shownFrame) {
-      img.setFrame(frame);
+      // Os quadros da folha têm o mesmo tamanho: basta trocar o quadro. O setFrame do Phaser procura
+      // pelo nome e refaz tamanho e origem, e custa umas 14 vezes mais (é chamado por figura, por quadro)
+      const f = this.sheet[frame];
+      if (f) img.frame = f;
+      else img.setFrame(frame);
       this.shownFrame = frame;
     }
   }

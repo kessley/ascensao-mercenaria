@@ -8,7 +8,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3);
   - as rações refeitas (mochilas e comboio);
   - os capitães (Marco 20 ✅ OK, no acampamento e na batalha);
-  - a `WorldScene` dividida em partes (etapa 8).
+  - a `WorldScene` dividida em partes (etapa 8);
+  - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
 - **A seguir:** os duelos no meio da batalha (Marco 21).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
@@ -496,7 +497,7 @@ Levantamento feito depois do Marco 18 e atualizado nesta fase. Vale o que está 
 As notas de mecânica vêm das regras e dos números do código e de batalhas simuladas. **Ninguém jogou uma campanha inteira.** Elas dizem onde há decisão de verdade, não onde o jogo é divertido.
 
 ### Combinado e não feito
-- **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite; o que pesa agora é a simulação (combate, moral e empurra-empurra), de 25 a 60 ms por quadro com cerca de 1500 unidades. Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
+- **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
 - **Alcance dos arcos:** subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
 - **Magia do Comandante:** etapa 15.
 
@@ -521,9 +522,13 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 - **Saves antigos:** não foram testados com os Marcos 16, 17 e 18, com a nova progressão nem com as mochilas e os capitães.
 - **Testes de confronto:** usam 6 lutas por caso, pouco para um resultado aleatório. Passam ou falham por sorte perto do limite ("cavaleiros vencem mais lanceiros montados" ficou em 2 a 4 de 6). Precisam de mais amostras ou de limites mais largos.
   - O mesmo vale para "nem o covarde larga a luta com a primeira baixa" (suíte `ia`): 3 lutas, cada uma com pelo menos 4 baixas. Numa rodada do G2, uma luta teve 3; sozinha, a suíte passou.
+  - E para "arqueiros treinados acertam menos os próprios homens que os novatos" (suíte `ia`): é uma batalha de cada lado. Repetida 6 vezes, os treinados acertam menos em todas, no código antigo e no novo (médias de 52 e 55 contra 98 e 84), mas uma batalha sozinha varia de 12 a 96. Numa rodada da etapa de desempenho deu 91 contra 84.
+  - "A guarda pesada aguenta brutamontes" (suíte `confrontos`) também passa ou falha por sorte.
 - **Assalto sem fim:** em 2 de 16 assaltos à Paliçada com jogador simulado, a batalha passou de 10 minutos com poucos sobreviventes dos dois lados. Não voltou a acontecer nas repetições, e a causa não foi encontrada. Numa partida, o menu de pausa permite sair.
 - **Defesa que demora a acabar:** defendendo o forte, os 2 ou 3 últimos arqueiros às vezes ficam parados na muralha e os orcs, já dentro, levam minutos para chegar neles. Em 5 repetições a batalha acabou entre 113 e 230 s; na suíte completa, 2 vezes não acabou nos 276 s do teste. Não vem das figuras: a mesma demora aparece sem elas.
+  - Na rodada de desempenho: 8 defesas sozinhas com cada código, contando da entrada dos orcs. O antigo levou de 69 a 273 s (1 passou dos 240 s do teste), e o novo, de 59 a 176 s. Na suíte, o novo passou do limite 2 vezes em 8.
 - **Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.
+  - Por isso a verificação "com muralha vai melhor que em campo aberto" (suíte `cercos`, 4 lutas de cada lado) falha muitas vezes: na rodada de desempenho, falhou em 1 de 3 rodadas com o código antigo e em 6 de 8 com o novo. Medida com 12 defesas de cada código, a diferença é sorte: 16 pontos por luta no antigo e 20 no novo, e cada luta vai de 4 (cai) a 43 (repele).
 - **`WorldScene.ts`:** passava de 6000 linhas. Virou a etapa 8 ✅ OK: agora são 942 linhas e 13 partes em `src/game/scenes/worldScene/`.
 
 ### Avaliação das mecânicas

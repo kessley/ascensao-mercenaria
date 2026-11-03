@@ -650,7 +650,9 @@ export class Battalion {
     const w = 60;
 
     this.label.setPosition(c.x, top - 2);
-    this.label.setColor(this.panicking ? "#ff4d4d" : "#ffffff");
+    // setColor redesenha o texto e o manda de novo para a placa: só quando a cor muda
+    const color = this.panicking ? "#ff4d4d" : "#ffffff";
+    if (this.label.style.color !== color) this.label.setColor(color);
 
     const g = this.bannerGfx;
     g.clear();

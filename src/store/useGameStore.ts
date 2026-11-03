@@ -2850,7 +2850,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
   setWorldSnapshot: (snapshot) => set({ worldSnapshot: snapshot }),
   chronicle: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
 
-  setBattleHud: (hud) => set({ battleHud: hud }),
+  setBattleHud: (hud) => {
+    // A cena publica dez vezes por segundo: igual ao anterior (parado no acampamento), nada se redesenha
+    const prev = get().battleHud;
+    if (prev && JSON.stringify(prev) === JSON.stringify(hud)) return;
+    set({ battleHud: hud });
+  },
 
   resolveEngagement: (result, survivors, support, info) => {
     const s = get();

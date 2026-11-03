@@ -46,6 +46,22 @@ function addSheet(scene: Phaser.Scene, key: string, b: Bitmap, fw: number, fh: n
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) texture.add(r * cols + c, 0, c * fw, r * fh, fw, fh);
 }
 
+const sheets = new WeakMap<Phaser.Textures.Texture, Phaser.Textures.Frame[]>();
+
+/** Os quadros de uma folha pelo número (todos do mesmo tamanho, como `addSheet` corta). */
+export function sheetOf(texture: Phaser.Textures.Texture): readonly Phaser.Textures.Frame[] {
+  let list = sheets.get(texture);
+  if (!list) {
+    list = [];
+    for (const name of texture.getFrameNames()) {
+      const i = Number(name);
+      if (Number.isInteger(i)) list[i] = texture.get(i);
+    }
+    sheets.set(texture, list);
+  }
+  return list;
+}
+
 /** Primeira linha com corpo (não sombra) no quadro parado de frente. */
 function topOf(b: Bitmap, w: number, h: number): number {
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (b.rgba[(y * b.width + x) * 4 + 3] === 255) return y;

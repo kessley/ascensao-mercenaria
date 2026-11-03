@@ -302,14 +302,23 @@ export class Enemy extends Unit {
 
   /** De quão longe este inimigo percebe `ally` (o batedor usa a mesma conta para ficar fora dela). */
   perceptionOf(ally: Unit): number {
-    const night = ally.unlit ? Enemy.darkPerception : Enemy.perception;
+    const sight = this.sightIn(ally.unlit ? Enemy.darkPerception : Enemy.perception);
+    return (ally.isInForest ? Math.min(sight, BALANCE.FOREST_DETECT_RANGE) : sight) * ally.stealth;
+  }
+
+  /** Até onde enxerga com essa luz, antes da mata e da furtividade de quem é visto (cresce com `night`). */
+  sightIn(night: number): number {
     // Criaturas da noite enxergam no escuro: apagar as tochas não as engana
     const perception = this.nightCreature ? Math.max(1, night) : night;
     // Nevoeiro, neve e chuva escondem o bando de todos (Marco 13)
     const aggro = (ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_AGGRO_RANGE) * perception * Enemy.weatherSight;
     // Quem atira de longe olha longe: a IA enxerga para o alcance que tem, como o jogador
-    const sight = this.ranged ? Math.max(aggro, this.range * BALANCE.SHOOTER_SIGHT * perception * Enemy.weatherSight) : aggro;
-    return (ally.isInForest ? Math.min(sight, BALANCE.FOREST_DETECT_RANGE) : sight) * ally.stealth;
+    return this.ranged ? Math.max(aggro, this.range * BALANCE.SHOOTER_SIGHT * perception * Enemy.weatherSight) : aggro;
+  }
+
+  /** O mais longe que enxerga alguém agora (com ou sem tochas): quem está além disso nem precisa da conta inteira. */
+  get farthestSight(): number {
+    return this.sightIn(Math.max(Enemy.perception, Enemy.darkPerception));
   }
 
   /** Aliado está ao alcance da percepção? Na floresta, só bem de perto. */
