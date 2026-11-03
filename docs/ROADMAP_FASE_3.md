@@ -3,8 +3,13 @@
 Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador, cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
 **Onde estamos (3 de novembro de 2026):**
-- **Feito:** a progressão dos batalhões, a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3), as rações refeitas (mochilas e comboio) e os capitães (Marco 20 ✅ OK, no acampamento e na batalha).
-- **A seguir:** a arrumação da `WorldScene` (etapa 8).
+- **Feito:**
+  - a progressão dos batalhões;
+  - a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3);
+  - as rações refeitas (mochilas e comboio);
+  - os capitães (Marco 20 ✅ OK, no acampamento e na batalha);
+  - a `WorldScene` dividida em partes (etapa 8).
+- **A seguir:** os duelos no meio da batalha (Marco 21).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -30,7 +35,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 5 | [Marco 20, parte 1: capitães no acampamento](#5-marco-20-parte-1-capitães-no-acampamento) | recurso | | ✅ OK |
 | 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
-| 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene) | dívida | Os Marcos 21 e 22 mexem muito nela | |
+| 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | |
 | 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
 | 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
@@ -273,12 +278,36 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - de perto, nenhum pedaço do campo de batalha é mais greybox;
 - a floresta esconde quem está dentro dela. Na tela, a árvore cobre quem passa atrás, pela profundidade do pé; na regra, quem está na mata só é visto de perto (`FOREST_DETECT_RANGE`).
 
-## 8. Arrumação: dividir a `WorldScene`
-**Objetivo:** `WorldScene.ts` passa de 6000 linhas, e os Marcos 21 e 22 vão mexer muito nela.
-- Separar em módulos pelo que já existe: comboio e expedições, carroças, cercos, mar, acampamento e a interface de batalha (HUD).
-- Nenhuma regra muda. As suítes de batalha (`npm run test:battle`) têm de passar iguais antes e depois.
+## 8. Arrumação: dividir a `WorldScene` ✅ OK
+**Objetivo:** `WorldScene.ts` passava de 6000 linhas, e os Marcos 21 e 22 vão mexer muito nela.
 
-**Pronto quando:** nenhum arquivo da cena passa de 2000 linhas, e as suítes passam.
+**Feito:**
+- **`WorldScene.ts` caiu de 6226 para 942 linhas.** Ficaram nela os campos, o `create`, o `update`, as estações e o clima.
+- **O resto foi para 13 partes em `src/game/scenes/worldScene/`:**
+  | Parte | O quê | Linhas |
+  | --- | --- | --- |
+  | `army.ts` | exército em campo, líder, carroças, fadiga e cortejo | 452 |
+  | `camp.ts` | acampamento, cidades, caminhada, forragear, acampamento móvel e noite | 582 |
+  | `sea.ts` | corsários, desembarque e o convés | 104 |
+  | `scenario.ts` | batalha personalizada | 301 |
+  | `combat.ts` | inimigos em campo, encontro, prisioneiros, objetivos, fim do combate, derrota e visão | 563 |
+  | `siege.ts` | cerco, portões e guarnições | 364 |
+  | `realm.ts` | calamidades, exércitos dos reinos, revoltas, relógio, eventos dos bandos, viagem e pontes | 724 |
+  | `agents.ts` | agentes do mundo, comboio, expedições e descanso | 321 |
+  | `save.ts` | salvar, carregar e o retrato do mapa | 293 |
+  | `orders.ts` | raio de comando, sinais e mensageiros | 418 |
+  | `input.ts` | teclado, mouse, ordens da interface, seleção e câmera | 806 |
+  | `scouts.ts` | batedores e harpias | 306 |
+  | `hud.ts` | HUD da batalha | 108 |
+  | `shared.ts` | constantes, tipos e ajudantes que as partes dividem | 188 |
+- **Como:** cada parte é um objeto de métodos com `this: WorldScene`, posto no protótipo da cena no fim de `WorldScene.ts`. Uma interface com o nome da classe diz ao TypeScript que os métodos são dela.
+  - As chamadas (`this.publishHud()`) e o corpo dos métodos não mudaram: a divisão foi feita por um roteiro, com a árvore do TypeScript, copiando cada método inteiro, com os comentários.
+  - Os membros da cena deixaram de ser `private`, porque as partes os usam de fora da classe.
+- **Nenhuma regra mudou:** as 10 suítes de batalha passam como antes (217 de 218 verificações, o mesmo placar de antes; a que falha é um dos confrontos que oscilam por sorteio), assim como os 242 testes de regras.
+
+**Ficou de fora:** as partes ainda usam o estado da cena inteira por `this`. Separar o estado de cada parte (o cerco guardar o próprio, por exemplo) fica para quando um marco pedir.
+
+**Pronto quando** (vale agora): nenhum arquivo da cena passa de 2000 linhas (o maior, `WorldScene.ts`, tem 942), e as suítes passam.
 
 ## 9. Marco 21: duelos no meio da batalha
 **Objetivo:** quando um herói inimigo de nível alto chega ao Comandante, a batalha em volta para e os dois lutam sozinhos, como nos duelos de *Total War: Three Kingdoms*. A diferença: **ninguém aceita nem recusa, o Comandante é puxado**. É uma luta de ação no chão, com esquiva e bloqueio, curta e perigosa, sem nada de fantasia.
@@ -495,7 +524,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 - **Assalto sem fim:** em 2 de 16 assaltos à Paliçada com jogador simulado, a batalha passou de 10 minutos com poucos sobreviventes dos dois lados. Não voltou a acontecer nas repetições, e a causa não foi encontrada. Numa partida, o menu de pausa permite sair.
 - **Defesa que demora a acabar:** defendendo o forte, os 2 ou 3 últimos arqueiros às vezes ficam parados na muralha e os orcs, já dentro, levam minutos para chegar neles. Em 5 repetições a batalha acabou entre 113 e 230 s; na suíte completa, 2 vezes não acabou nos 276 s do teste. Não vem das figuras: a mesma demora aparece sem elas.
 - **Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.
-- **`WorldScene.ts`:** passa de 6000 linhas. Virou a etapa 8.
+- **`WorldScene.ts`:** passava de 6000 linhas. Virou a etapa 8 ✅ OK: agora são 942 linhas e 13 partes em `src/game/scenes/worldScene/`.
 
 ### Avaliação das mecânicas
 | Mecânica | Nota | Por quê |
