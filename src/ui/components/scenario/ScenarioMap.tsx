@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { BIOME_COLOR, TerrainMap } from "../../../game/world/TerrainMap";
+import { TOWN_SIZE } from "../../../game/world/townLayout";
 import { geoOf } from "../../../game/worldgen/geoMap";
 import { SCENARIO_HEIGHT, SCENARIO_MAPS, SCENARIO_WIDTH, armyStart, buildScenarioWorld, forceSize, forceStart, type BattleScenario } from "../../../game/data/scenarios";
 import type { TerrainType } from "../../../utils/constants";
@@ -41,6 +42,16 @@ export function ScenarioMap({ scenario }: { scenario: BattleScenario }) {
         ctx.fillStyle = TERRAIN_COLOR[t] ?? base;
         ctx.fillRect(x, y, CELL, CELL);
       }
+    }
+    if (scenario.siege) {
+      const town = TOWN_SIZE[scenario.siege.town];
+      const x = (SCENARIO_WIDTH / 2 - town.w / 2) / scale;
+      const y = (SCENARIO_HEIGHT / 2 - town.h / 2) / scale;
+      ctx.fillStyle = "rgba(90,70,50,0.55)";
+      ctx.fillRect(x, y, town.w / scale, town.h / scale);
+      ctx.strokeStyle = "#d8cdb8";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x, y, town.w / scale, town.h / scale);
     }
     ctx.fillStyle = HOUR_VEIL[scenario.hour];
     ctx.fillRect(0, 0, W, H);

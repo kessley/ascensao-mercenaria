@@ -2,12 +2,13 @@ import Phaser from "phaser";
 import { Soldier } from "./Soldier";
 import type { Unit } from "./Unit";
 import type { Commander } from "./Commander";
-import { BALANCE, COLORS, FATIGUE, FORMATIONS, LIEUTENANTS, TROOPS, type Formation, type TroopType } from "../../utils/constants";
+import { BALANCE, COLORS, COMBAT, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
 import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
 import { battalionMods, soldierStats, type BattalionMods } from "../../utils/progression";
-import { formationOffset } from "../systems/formation";
+import { formationOffset, formationSize, frontOf } from "../systems/formation";
+import { cycleStep, type CycleState } from "../sim/combatRules";
 
 export type BattalionOrder =
   | { type: "HOLD"; point: Point }
@@ -20,6 +21,9 @@ export type BattalionOrder =
  * mantém uma formação e compartilha uma única barra de Moral.
  */
 export class Battalion {
+  /** Sem inimigo à vista: a tropa viaja no passo normal (a cena atualiza a cada quadro). */
+  static calm = false;
+
   readonly id: string;
   readonly name: string;
   readonly troopType: TroopType;
@@ -39,12 +43,31 @@ export class Battalion {
   order: BattalionOrder;
   /** Direção da frente da formação (rad). Golpes vindos de trás contam como flanco. */
   facing = 0;
+  /** Soldados por fileira escolhidos pelo jogador (null = o padrão da formação). */
+  width: number | null = null;
+  /** Passo acelerado: chega antes e chega cansado. */
+  running = false;
   /** Soldados perdidos desde a última leitura do MoraleSystem. */
   pendingDeaths = 0;
+  /** Abalos desde a última leitura: investida, flechas, vizinhos fugindo. */
+  pendingShock = 0;
+  /** Está apanhando pelo lado ou por trás agora. */
+  flanked = false;
+  flankShockAt = -Infinity;
+  /** Arqueiros seguram o tiro (para não acertar os próprios homens no corpo a corpo). */
+  holdFire = false;
+  /** Investida em ciclo: bate, sai, ganha distância e volta. */
+  cycle = false;
+  private cycleState: CycleState = { phase: "IN", hitAt: null };
+  /** Modo escaramuça: recua sozinho de quem chega perto. */
+  kiting: boolean;
+  private nextKiteAt = 0;
   selected = false;
   /** Fadiga (Marco 13): 0 descansado, 100 exausto. Lento, fraco e com moral que custa a voltar. */
   fatigue = 0;
 
+  private readonly scene: Phaser.Scene;
+  private readonly stats: UnitStats;
   private readonly label: Phaser.GameObjects.Text;
   private readonly bannerGfx: Phaser.GameObjects.Graphics;
   /** Anéis de seleção, desenhados abaixo das unidades. */
@@ -89,6 +112,9 @@ export class Battalion {
     this.order = { type: "FOLLOW", leader };
 
     const stats = soldierStats(data, this.mods);
+    this.scene = scene;
+    this.stats = stats;
+    this.kiting = stats.kite ?? false;
     this.soldiers = [];
     for (let i = 0; i < data.soldiers; i++) {
       const slot = this.slotFor(i, data.soldiers, { x, y });
@@ -157,8 +183,48 @@ export class Battalion {
     return !!this.lieutenant && !this.lieutenantDied;
   }
 
+  /** Fração da velocidade conforme o passo: quem segue o Comandante acompanha o ritmo dele. */
+  get stride(): number {
+    if (Battalion.calm || this.panicking || this.restDriver || this.order.type === "FOLLOW") return 1;
+    if (!this.running) return COMBAT.WALK;
+    return TROOPS[this.troopType].family === "CAVALRY" ? COMBAT.GALLOP : COMBAT.RUN;
+  }
+
+  /** Bravura da tropa (< 1 = perde menos moral). */
+  get steadiness(): number {
+    return this.stats.nerve ?? 1;
+  }
+
+  /** Tiros que restam, somando todos (null = tropa que não atira). */
+  get ammoLeft(): number | null {
+    if (!this.stats.ranged) return null;
+    return this.soldiers.reduce((n, s) => n + Math.max(0, s.ammo), 0);
+  }
+
+  get mayCycle(): boolean {
+    return TROOPS[this.troopType].family === "CAVALRY" && !this.stats.ranged;
+  }
+
+  /** Bateu de investida: o relógio do ciclo começa a contar. */
+  noteImpact(time: number): void {
+    if (this.cycleState.phase === "IN" && this.cycleState.hitAt === null) this.cycleState.hitAt = time;
+  }
+
+  /** Depois da batalha: aljavas cheias. */
+  resupply(): void {
+    for (const s of this.soldiers) s.refillAmmo(this.stats);
+  }
+
+  /** Fileiras atrás da primeira seguram quem está na frente. */
+  get rankSupport(): number {
+    if (this.formation === "WEDGE") return 1;
+    const count = this.soldiers.length;
+    const ranks = Math.ceil(count / frontOf(this.formation, count, this.width));
+    return 1 - Math.min(ranks - 1, COMBAT.MAX_SUPPORT_RANKS) * COMBAT.RANK_SUPPORT;
+  }
+
   /** true se o ponto cai sobre algum soldado (com folga de `pad` px). */
-  containsPoint(p: Point, pad = 6): boolean {
+  containsPoint(p: Point, pad = 14): boolean {
     return this.soldiers.some((s) => s.isAlive && distance(s, p) <= s.radius + pad);
   }
 
@@ -177,18 +243,40 @@ export class Battalion {
 
   // --- Ordens (ignoradas em pânico) ---
 
-  /** `facing` opcional: numa marcha em grupo todos olham para a mesma direção. */
-  orderMove(point: Point, facing = angleTo(this.center, point)): boolean {
+  /**
+   * `facing` opcional: numa marcha em grupo todos olham para a mesma direção.
+   * `width`: soldados por fileira na chegada; `run`: passo acelerado.
+   */
+  orderMove(point: Point, facing = angleTo(this.center, point), { width, run = false }: { width?: number; run?: boolean } = {}): boolean {
     if (this.panicking || this.isDestroyed) return false;
     this.facing = facing;
+    if (width !== undefined) this.width = width;
+    this.running = run;
     this.order = { type: "MOVE", point };
     for (const s of this.soldiers) s.target = null;
+    this.assignRanks();
     return true;
+  }
+
+  /** Cada soldado fica com o lugar mais perto na forma nova: ninguém atravessa o batalhão ao girar. */
+  private assignRanks(): void {
+    if (this.formation === "WEDGE") return;
+    const fx = Math.cos(this.facing);
+    const fy = Math.sin(this.facing);
+    const troops = this.soldiers.filter((s) => !s.isLieutenant).sort((a, b) => b.x * fx + b.y * fy - (a.x * fx + a.y * fy));
+    const cols = frontOf(this.formation, this.soldiers.length, this.width);
+    const ordered: Soldier[] = [];
+    for (let i = 0; i < troops.length; i += cols) {
+      ordered.push(...troops.slice(i, i + cols).sort((a, b) => -a.x * fy + a.y * fx - (-b.x * fy + b.y * fx)));
+    }
+    this.soldiers = [...ordered, ...this.soldiers.filter((s) => s.isLieutenant)];
   }
 
   orderAttack(target: Unit): boolean {
     if (this.panicking || this.isDestroyed) return false;
     this.facing = angleTo(this.center, target);
+    this.running = true;
+    this.holdFire = false;
     this.order = { type: "ATTACK", target, lastKnown: { x: target.x, y: target.y } };
     return true;
   }
@@ -211,12 +299,14 @@ export class Battalion {
     if (this.panicking) this.rally();
     // De frente para a barraca: as fileiras se estendem para longe dela (a barraca é sólida)
     this.facing = -Math.PI / 2;
+    this.running = false;
     this.order = { type: "HOLD", point: slot };
     for (const s of this.soldiers) s.target = null;
   }
 
   holdPosition(): boolean {
     if (this.panicking || this.isDestroyed) return false;
+    this.running = false;
     this.order = { type: "HOLD", point: this.center };
     return true;
   }
@@ -305,12 +395,19 @@ export class Battalion {
   }
 
   private updateOrdered(dt: number, enemies: readonly Unit[]): void {
+    const now = this.scene.time.now;
+    if (this.cycle && this.mayCycle) this.stepCycle(now, enemies);
+    if (this.kiting) this.stepKite(now, enemies);
     const anchor = this.resolveAnchor();
     const engaging = this.order.type !== "MOVE";
+    const attacking = this.order.type === "ATTACK";
+    const holding = this.order.type === "HOLD";
     const count = this.soldiers.length;
 
     this.soldiers.forEach((s, i) => {
-      if (engaging) this.pickTarget(s, anchor, enemies);
+      if (s.carryMomentum(dt, now)) return;
+      const slot = this.slotFor(i, count, anchor);
+      if (engaging) this.pickTarget(s, anchor, slot, enemies);
       else s.target = null;
       if (this.restDriver && !s.target && this.restDriver(s, i, dt)) return;
 
@@ -319,15 +416,19 @@ export class Battalion {
         s.setFacing(angleTo(s, s.target));
         return;
       }
+      // A caminho do alvo a tropa anda em forma: só perto dele cada um corre para o golpe
+      const formed = attacking && !!s.target && distance(s, s.target) > COMBAT.CHARGE_RANGE;
       // Parede de Escudos não quebra a fileira para perseguir: espera o inimigo chegar
-      if (s.target && this.formation !== "SHIELD_WALL") {
+      const planted = holding && s.canBrace;
+      if (s.target && !formed && !planted && this.formation !== "SHIELD_WALL") {
         s.moveTowards(s.target.x, s.target.y, dt);
         s.unitState = "MOVING";
         return;
       }
 
-      const slot = this.slotFor(i, count, anchor);
-      s.unitState = s.moveTowards(slot.x, slot.y, dt) ? "IDLE" : "MOVING";
+      // Dentro da folga do lugar ninguém se mexe: a fileira assenta, em vez de tremer com cada empurrão
+      const settled = holding && Math.hypot(slot.x - s.x, slot.y - s.y) <= COMBAT.SLOT_SLACK;
+      s.unitState = settled || s.moveTowards(slot.x, slot.y, dt) ? "IDLE" : "MOVING";
       if (s.unitState === "IDLE") {
         s.setFacing(this.facing);
         s.chargeDistance = 0; // parado não acumula investida
@@ -337,7 +438,39 @@ export class Battalion {
     // Marcha concluída → segura a posição
     if (this.order.type === "MOVE" && this.soldiers.every((s) => s.unitState === "IDLE")) {
       this.order = { type: "HOLD", point: this.order.point };
+      this.running = false;
     }
+  }
+
+  /** Investida em ciclo: depois do choque, sai correndo, ganha distância e volta à carga. */
+  private stepCycle(now: number, enemies: readonly Unit[]): void {
+    const step = cycleStep(this.cycleState, now, this.order.type !== "MOVE");
+    const idle = this.cycleState.phase === "IN" && this.order.type === "HOLD";
+    if (step === "WITHDRAW") {
+      const c = this.center;
+      const near = enemies.filter((e) => distance(e, c) < COMBAT.CYCLE_DISTANCE);
+      const away = near.length > 0 ? angleTo(centroid(near), c) : this.facing + Math.PI;
+      const point = { x: c.x + Math.cos(away) * COMBAT.CYCLE_DISTANCE, y: c.y + Math.sin(away) * COMBAT.CYCLE_DISTANCE };
+      this.orderMove(point, away + Math.PI, { run: true });
+      this.cycleState = { phase: "OUT", hitAt: null };
+    } else if (step === "CHARGE" || idle) {
+      // Vai na tropa que está lutando, não atrás de um batedor que corre tanto quanto ela
+      const foe = nearest(enemies.filter((e) => !e.isOutrider), this.center, COMBAT.CYCLE_SEEK) ?? nearest(enemies, this.center, COMBAT.CYCLE_SEEK);
+      if (!foe) return;
+      this.orderAttack(foe);
+      this.cycleState = { phase: "IN", hitAt: null };
+    }
+  }
+
+  /** Modo escaramuça: quem chega perto faz a tropa recuar, sem deixar de virar a frente para ele. */
+  private stepKite(now: number, enemies: readonly Unit[]): void {
+    if (now < this.nextKiteAt || this.order.type === "MOVE" || !this.soldiers.some((s) => s.ranged)) return;
+    const c = this.center;
+    const threat = nearest(enemies.filter((e) => !e.ranged), c, COMBAT.KITE_RANGE);
+    if (!threat) return;
+    this.nextKiteAt = now + COMBAT.KITE_EVERY_MS;
+    const away = angleTo(threat, c);
+    this.orderMove({ x: c.x + Math.cos(away) * COMBAT.KITE_DISTANCE, y: c.y + Math.sin(away) * COMBAT.KITE_DISTANCE }, away + Math.PI, { run: true });
   }
 
   /** Ponto em volta do qual a formação se organiza e os soldados engajam. */
@@ -361,45 +494,66 @@ export class Battalion {
       }
       case "ATTACK": {
         const order = this.order;
-        if (order.target.isAlive) {
+        // Sumiu de vista: a tropa vai até onde o viu por último, não adivinha para onde ele foi
+        if (order.target.isAlive && order.target.revealed) {
           order.lastKnown = { x: order.target.x, y: order.target.y };
+          // A frente acompanha o alvo até o choque
+          if (distance(this.center, order.lastKnown) > COMBAT.CHARGE_RANGE) this.facing = angleTo(this.center, order.lastKnown);
         }
         return order.lastKnown;
       }
     }
   }
 
-  private pickTarget(s: Soldier, anchorPoint: Point, enemies: readonly Unit[]): void {
+  private pickTarget(s: Soldier, anchorPoint: Point, slot: Point, enemies: readonly Unit[]): void {
+    if (s.ranged && this.holdFire) {
+      s.target = null;
+      return;
+    }
+    // Segurando a posição, cada um cuida do que está diante do próprio lugar na fileira
+    const holding = this.order.type === "HOLD" && !this.restDriver;
     // Descansando no acampamento, cada um reage ao inimigo perto de si (e não do alojamento)
-    const anchor = this.restDriver ? s : anchorPoint;
+    const anchor = this.restDriver ? s : holding ? slot : anchorPoint;
     // Arqueiros engajam até o próprio alcance além do raio padrão
-    const radius = Math.max(BALANCE.ENGAGE_RADIUS * (this.restDriver ? 1.6 : 1), s.attackRange() + 40);
+    const radius = Math.max(holding ? COMBAT.HOLD_LEASH : BALANCE.ENGAGE_RADIUS * (this.restDriver ? 1.6 : 1), s.attackRange() + 40);
     if (this.order.type === "ATTACK" && this.order.target.isAlive && this.order.target.revealed && !s.target) {
       s.target = this.order.target;
     }
-    if (s.target && s.target.isAlive && s.target.revealed && distance(s.target, anchor) <= radius * 1.2) return;
+    // Quem apanha no caminho vira e luta: não vai morrer de costas atrás do alvo da ordem
+    const hit = s.lastHitFrom;
+    if (hit?.isAlive && !hit.ranged && hit !== s.target && !s.ranged && (!s.target || !s.inRange(s.target)) && s.scene.time.now - s.lastHitAt < BALANCE.MORALE.HIT_MEMORY_MS) {
+      s.target = hit;
+      return;
+    }
+    // Quem está colado num inimigo não larga a briga para correr atrás do alvo da ordem
+    const fighting = !!s.target?.isAlive && s.inRange(s.target);
+    if (s.target && s.target.isAlive && s.target.revealed && (fighting || distance(s.target, anchor) <= radius * 1.2)) return;
+    if (this.order.type === "ATTACK" && !s.ranged) {
+      const close = nearest(enemies, s, COMBAT.HOLD_LEASH);
+      if (close) {
+        s.target = close;
+        return;
+      }
+    }
 
     const candidates = enemies.filter((e) => distance(e, anchor) <= radius);
     s.target = nearest(candidates, s);
 
-    // Alvo da ordem morreu e não há mais ninguém por perto → segura a posição
-    if (!s.target && this.order.type === "ATTACK" && !this.order.target.isAlive) {
+    // Alvo da ordem morreu ou sumiu de vista e não há mais ninguém por perto → segura a posição
+    if (!s.target && this.order.type === "ATTACK" && (!this.order.target.isAlive || (!this.order.target.revealed && distance(s, anchorPoint) < BALANCE.ENGAGE_RADIUS / 2))) {
       this.order = { type: "HOLD", point: anchorPoint };
+      this.running = false;
     }
   }
 
   /** Largura da frente da formação atual (px), usada para alinhar vários batalhões lado a lado. */
   frontWidth(): number {
-    const count = Math.max(1, this.soldiers.length);
-    const laterals = Array.from({ length: count }, (_, i) => this.slotOffset(i, count).lateral);
-    return Math.max(...laterals) - Math.min(...laterals) + FORMATIONS[this.formation].spacing;
+    return formationSize(this.formation, this.soldiers.length, this.width).width;
   }
 
   /** Profundidade da formação atual (px): da primeira à última fileira. */
   formationDepth(): number {
-    const count = Math.max(1, this.soldiers.length);
-    const depths = Array.from({ length: count }, (_, i) => this.slotOffset(i, count).depth);
-    return Math.max(...depths) - Math.min(...depths) + FORMATIONS[this.formation].spacing;
+    return formationSize(this.formation, this.soldiers.length, this.width).depth;
   }
 
   /** O batalhão está, de fato, acompanhando o Comandante? */
@@ -420,7 +574,7 @@ export class Battalion {
 
   /** Deslocamento do soldado `i` no referencial da formação: `lateral` (lado) e `depth` (para trás). */
   private slotOffset(i: number, count: number): { lateral: number; depth: number } {
-    return formationOffset(this.formation, i, count);
+    return formationOffset(this.formation, i, count, this.width);
   }
 
   /** Leva o batalhão inteiro (em forma) para outro ponto: viagem rápida, recuo ao acampamento. */
@@ -442,7 +596,7 @@ export class Battalion {
     this.selectionGfx.destroy();
   }
 
-  private drawBanner(): void {
+  drawBanner(): void {
     const c = this.center;
     const top = Math.min(...this.soldiers.map((s) => s.y)) - 22;
     const w = 60;

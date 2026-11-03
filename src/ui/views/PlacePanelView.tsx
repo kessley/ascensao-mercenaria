@@ -1,3 +1,5 @@
+import { SagaPanel } from "../components/legacy/SagaPanel";
+import { DockPanel } from "../components/sea/DockPanel";
 import { useGameStore, type CampPanel } from "../../store/useGameStore";
 import { fullName, PASSIVES } from "../../game/data/lieutenants";
 import { BattalionList, RecruitPanel } from "../components/tent/ArmyPanel";
@@ -7,6 +9,7 @@ import { LieutenantCandidates, LieutenantRoster, LieutenantSheet } from "../comp
 import { CampLog } from "../components/tent/CampLog";
 import { CampStatus } from "../components/tent/CampStatus";
 import { ContractBoard } from "../components/tent/ContractBoard";
+import { MissionJournal } from "../components/missions/MissionJournal";
 import { MarketPanel } from "../components/tent/MarketPanel";
 import { MutinyBanner } from "../components/tent/MutinyBanner";
 import { StablePanel } from "../components/tent/StablePanel";
@@ -43,10 +46,13 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   PRICE_BOOK: "Livro de Preços",
   DEPARTURE: "Portão do acampamento",
   NOBILITY: "Livro da Nobreza",
+  MISSIONS: "Diário de missões",
+  DOCK: "Cais do porto",
+  SAGA: "Livro do Bando",
 };
 
 /** Painéis fora do acampamento (ou sobre um assunto só): sem o resumo do acampamento em cima. */
-const NO_STATUS = new Set<CampPanel["kind"]>(["TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE", "NOBILITY"]);
+const NO_STATUS = new Set<CampPanel["kind"]>(["MISSIONS", "DOCK", "SAGA", "TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE", "NOBILITY"]);
 
 /** Atalhos da mesa da Tenda: Livro de Preços (Marco 14) e Livro da Nobreza (Marco 15). */
 function BookButton() {
@@ -105,6 +111,8 @@ function PanelContent({ panel }: { panel: CampPanel }) {
   );
 
   switch (panel.kind) {
+    case "MISSIONS":
+      return <MissionJournal />;
     case "TENT":
       return (
         <>
@@ -178,6 +186,10 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return <DeparturePanel />;
     case "NOBILITY":
       return <NobilityBook />;
+    case "DOCK":
+      return <DockPanel settlementId={panel.settlementId} />;
+    case "SAGA":
+      return <SagaPanel />;
   }
 }
 
@@ -196,7 +208,7 @@ export function PlacePanelView() {
       const l = s.lieutenants.find((x) => x.id === panel.lieutenantId);
       return l ? fullName(l) : undefined;
     }
-    if (panel?.kind === "TOWN" || panel?.kind === "GUILD" || panel?.kind === "TAVERN" || panel?.kind === "TEMPLE") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
+    if (panel?.kind === "TOWN" || panel?.kind === "DOCK" || panel?.kind === "GUILD" || panel?.kind === "TAVERN" || panel?.kind === "TEMPLE") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
     return undefined;
   });
   const pendingMutiny = useGameStore((s) => s.pendingMutiny);

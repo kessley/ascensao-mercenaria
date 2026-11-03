@@ -5,9 +5,10 @@ import { EnemySquad, type SquadCommand, type SquadOrder, type SquadRole } from "
 import { updateMorale } from "./MoraleSystem";
 import type { Warband } from "./Warbands";
 import type { TerrainType } from "../../utils/constants";
-import { SUPPORT, WAR_AI, type EnemyKind, type Formation } from "../../utils/constants";
+import { COMBAT, SUPPORT, WAR_AI, type EnemyKind, type Formation } from "../../utils/constants";
 import { PASSIVES, type PassiveId } from "../data/lieutenants";
-import { choosePlan, exposedHero, foeCenter, PLAN_LABEL, type BattleView, type ContactView, type PlanKind } from "../sim/warMind";
+import { choosePlan, choosePrey, exposedHero, foeCenter, PLAN_LABEL, type BattleView, type ContactView, type PlanKind } from "../sim/warMind";
+import { cycleStep } from "../sim/combatRules";
 import type { NobleTrait } from "../sim/nobility";
 import { chiefName, necromancerName } from "../worldgen/names";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
@@ -18,6 +19,21 @@ export interface StaffData {
   traits: NobleTrait[];
   competence: number;
   lieutenants: { name: string; passive: PassiveId }[];
+}
+
+/** O que a hoste atrás dos muros precisa saber deles (batalha de cerco). */
+export interface WallPlan {
+  /** Postos ao longo da muralha, por dentro. */
+  posts: readonly Point[];
+  /** Portões, por dentro: onde a tropa espera enquanto nada caiu. */
+  gates: readonly Point[];
+  /** Por onde se passa agora, do lado de dentro. */
+  gaps: () => readonly Point[];
+  inside: (p: Point) => boolean;
+  /** Para onde olha o trecho de muralha mais perto de um ponto. */
+  outward: (p: Point) => number;
+  /** De onde se espera o inimigo enquanto ninguém o viu. */
+  front: Point;
 }
 
 /** O que a hoste precisa do mundo a cada quadro. */
@@ -65,7 +81,7 @@ interface Contact {
 export type Doctrine = "RIDERS" | "SHIELDS" | "BOWS";
 
 /** Quem é o quê no bando. */
-const CHIEFS: ReadonlySet<EnemyKind> = new Set<EnemyKind>(["GOBLIN_CHIEF", "BANDIT_CHIEF", "SERGEANT", "LORD", "ORC_CHIEF", "ORC_WARLORD", "NECROMANCER"]);
+const CHIEFS: ReadonlySet<EnemyKind> = new Set<EnemyKind>(["GOBLIN_CHIEF", "BANDIT_CHIEF", "SERGEANT", "LORD", "ORC_CHIEF", "ORC_WARLORD", "NECROMANCER", "PIRATE_CAPTAIN"]);
 const CAPTAINS: ReadonlySet<EnemyKind> = new Set<EnemyKind>(["GOBLIN_CAPTAIN", "BANDIT_CAPTAIN", "CAPTAIN", "ORC_CAPTAIN", "DEATH_KNIGHT"]);
 const EYES_KINDS: ReadonlySet<EnemyKind> = new Set<EnemyKind>(["OUTRIDER", "WOLF_RIDER"]);
 
@@ -75,11 +91,18 @@ const pick = <T>(l: readonly T[]) => l[Math.floor(Math.random() * l.length)];
 
 /** Oficiais de cada tipo de tropa: quem vira chefe e quem vira capitão. */
 function officersOf(kinds: readonly EnemyKind[], army: boolean): { base: EnemyKind; chief: EnemyKind; captain: EnemyKind } | null {
-  if (kinds.includes("GOBLIN")) return { base: "GOBLIN", chief: "GOBLIN_CHIEF", captain: "GOBLIN_CAPTAIN" };
-  if (kinds.includes("BANDIT")) return { base: "BANDIT", chief: "BANDIT_CHIEF", captain: "BANDIT_CAPTAIN" };
-  if (kinds.includes("SOLDIER")) return { base: "SOLDIER", chief: army ? "LORD" : "SERGEANT", captain: "CAPTAIN" };
-  if (kinds.includes("ORC")) return { base: "ORC", chief: "ORC_CHIEF", captain: "ORC_CAPTAIN" };
-  if (kinds.includes("SKELETON")) return { base: "SKELETON", chief: "DEATH_KNIGHT", captain: "DEATH_KNIGHT" };
+  // De cada povo, sai oficial de quem houver: primeiro de quem luta a pé, por último de quem atira
+  const from = (...list: EnemyKind[]) => list.find((k) => kinds.includes(k));
+  const goblin = from("GOBLIN", "GOBLIN_SPEAR", "WOLF_RIDER", "GOBLIN_ARCHER");
+  if (goblin) return { base: goblin, chief: "GOBLIN_CHIEF", captain: "GOBLIN_CAPTAIN" };
+  const bandit = from("BANDIT", "BANDIT_RIDER", "BANDIT_JAVELIN", "BANDIT_ARCHER");
+  if (bandit) return { base: bandit, chief: "BANDIT_CHIEF", captain: "BANDIT_CAPTAIN" };
+  const soldier = from("SOLDIER", "PIKEMAN", "MAN_AT_ARMS", "LANCER", "KNIGHT", "LONGBOW", "CROSSBOW");
+  if (soldier) return { base: soldier, chief: army ? "LORD" : "SERGEANT", captain: "CAPTAIN" };
+  const orc = from("ORC", "ORC_BRUTE");
+  if (orc) return { base: orc, chief: "ORC_CHIEF", captain: "ORC_CAPTAIN" };
+  const dead = from("SKELETON", "BONE_GUARD", "SKELETON_ARCHER");
+  if (dead) return { base: dead, chief: "DEATH_KNIGHT", captain: "DEATH_KNIGHT" };
   return null;
 }
 
@@ -119,7 +142,7 @@ export function promoteRoster(kinds: readonly EnemyKind[], army = false, doctrin
 
 /** Comando de um bando novo. `base`: 1 goblins e camponeses, 2 salteadores e hordas, 3 patrulhas e exércitos. */
 export function makeStaff(kinds: readonly EnemyKind[], base: number, chief?: { name: string; traits: readonly NobleTrait[]; martial?: number }): StaffData {
-  const undead = kinds.includes("SKELETON");
+  const undead = kinds.includes("SKELETON") || kinds.includes("BONE_GUARD") || kinds.includes("SKELETON_ARCHER");
   const name = chief?.name ?? (undead ? necromancerName() : chiefName());
   const traits = chief ? [...chief.traits] : [pick(TRAIT_POOL)];
   const competence = chief?.martial !== undefined ? Math.max(2, Math.min(5, 1 + Math.round(chief.martial / 2.5))) : base;
@@ -127,7 +150,8 @@ export function makeStaff(kinds: readonly EnemyKind[], base: number, chief?: { n
   return { chief: name, traits, competence, lieutenants };
 }
 
-const unitPower = (u: Unit) => Math.sqrt(Math.max(1, u.hp) * Math.max(0.5, (u.damage * 1000) / Math.max(200, u.cooldown)));
+/** Quanto vale em combate: vida atrás da armadura vezes o que ele bate. */
+const unitPower = (u: Unit) => Math.sqrt((Math.max(1, u.hp) / (1 - u.armor * 0.8)) * Math.max(0.5, (u.damage * 1000) / Math.max(200, u.cooldown)));
 
 function contactKind(u: Unit): ContactView["kind"] {
   if (u.role === "HERO") return "HERO";
@@ -135,6 +159,7 @@ function contactKind(u: Unit): ContactView["kind"] {
   if (u.role === "COURIER") return "COURIER";
   if (u.role === "WAGON") return "WAGON";
   if (u.ranged) return "ARCHER";
+  if (u.canBrace) return "SPEAR";
   return u.canCharge ? "RIDER" : "TROOP";
 }
 
@@ -178,6 +203,10 @@ export class WarHost implements SquadCommand {
   private introduced = false;
   /** Recuo fingido e emboscada: engana-se uma vez só. */
   private spent: PlanKind[] = [];
+  /** Onde o inimigo estava quando os postos da muralha foram repartidos. */
+  private wallFoe: Point | null = null;
+  /** Largou o campo de vez: nada do que aparecer muda isso. */
+  private abandoned = false;
 
   constructor(
     readonly key: string,
@@ -204,7 +233,8 @@ export class WarHost implements SquadCommand {
     const scene = this.links.scene;
     const chiefs = this.members.filter((m) => CHIEFS.has(m.kind));
     const captains = this.members.filter((m) => CAPTAINS.has(m.kind));
-    this.riders = this.members.filter((m) => EYES_KINDS.has(m.kind));
+    // Dois olhos bastam: os outros montados lutam com a cavalaria
+    this.riders = this.members.filter((m) => EYES_KINDS.has(m.kind)).slice(0, WAR_AI.MAX_EYES);
     this.heralds = this.members.filter((m) => m.kind === "HERALD");
     const soldiers = this.members.filter((m) => !chiefs.includes(m) && !captains.includes(m) && !this.riders.includes(m) && !this.heralds.includes(m));
     const chunk = (list: Enemy[], role: SquadRole) => {
@@ -213,14 +243,29 @@ export class WarHost implements SquadCommand {
       list.forEach((m, i) => parts[i % n].push(m));
       for (const p of parts) if (p.length > 0) this.squads.push(new EnemySquad(scene, role, p, this));
     };
-    const lancers = soldiers.filter((m) => m.kind === "LANCER");
-    const melee = soldiers.filter((m) => !m.ranged && m.kind !== "LANCER");
+    /** Cada tipo de tropa no próprio esquadrão: lança com lança, armadura com armadura. */
+    const byKind = (list: Enemy[], role: SquadRole) => {
+      const kinds = [...new Set(list.map((m) => m.kind))];
+      const strays: Enemy[] = [];
+      for (const k of kinds) {
+        const same = list.filter((m) => m.kind === k);
+        if (same.length >= WAR_AI.SQUAD_MIN) chunk(same, role);
+        else strays.push(...same);
+      }
+      const home = this.squads.find((s) => s.role === role);
+      if (home) for (const m of strays) home.add(m);
+      return home ? [] : strays;
+    };
+    const lancers = soldiers.filter((m) => m.canCharge);
+    const melee = soldiers.filter((m) => !m.ranged && !m.canCharge);
     const ranged = soldiers.filter((m) => m.ranged);
-    chunk(melee, "MELEE");
-    if (lancers.length >= WAR_AI.SQUAD_MIN) this.squads.push(new EnemySquad(scene, "RIDERS", lancers, this));
-    else if (this.squads[0]) for (const m of lancers) this.squads[0].add(m);
-    if (ranged.length >= WAR_AI.SQUAD_MIN || melee.length === 0) chunk(ranged, "RANGED");
-    else if (this.squads[0]) for (const m of ranged) this.squads[0].add(m);
+    chunk(byKind(melee, "MELEE"), "MELEE");
+    const looseRiders = byKind(lancers, "RIDERS");
+    if (this.squads[0]) for (const m of looseRiders) this.squads[0].add(m);
+    else chunk(looseRiders, "RIDERS");
+    const looseShots = byKind(ranged, "RANGED");
+    if (melee.length === 0) chunk(looseShots, "RANGED");
+    else if (this.squads[0]) for (const m of looseShots) this.squads[0].add(m);
     if (this.squads.length === 0 && (chiefs.length > 0 || captains.length > 0)) this.squads.push(new EnemySquad(scene, "MELEE", [], this));
 
     // Tenentes: um por esquadrão, dos maiores para os menores
@@ -245,8 +290,15 @@ export class WarHost implements SquadCommand {
       this.headless = true;
     }
     for (const m of chiefs.slice(1)) bySize[0]?.add(m);
-    for (const r of this.riders) r.driver = (dt) => this.driveRider(r, dt);
+    for (const r of this.riders) {
+      r.driver = (dt) => this.driveRider(r, dt);
+      r.isOutrider = true;
+    }
     for (const h of this.heralds) h.driver = (dt) => this.driveHerald(h, dt);
+  }
+
+  get cornered(): boolean {
+    return !!this.band?.walls;
   }
 
   /** Largou a luta (ou acabou de largar): no fim do combate, conta como quem fugiu. */
@@ -284,6 +336,11 @@ export class WarHost implements SquadCommand {
   spotted(s: Enemy, u: Unit): void {
     s.spotScout(u);
     this.raiseAlert(2);
+  }
+
+  /** Nossa gente em cima do alvo: atirar ali é acertar os próprios homens. */
+  holdsFire(u: Unit): boolean {
+    return this.disciplined && this.members.some((m) => m.isAlive && !m.ranged && distance(m, u) < WAR_AI.FIRE_CLEARANCE);
   }
 
   raiseAlert(level: number): void {
@@ -342,7 +399,10 @@ export class WarHost implements SquadCommand {
     if (!this.leader && this.successionAt > 0 && w.time >= this.successionAt) this.succession();
     for (const p of this.pending) if (p.at <= w.time) p.squad.setOrder(p.order);
     this.pending = this.pending.filter((p) => p.at > w.time);
-    for (const s of this.squads) s.draw();
+    for (const s of this.squads) {
+      s.draw();
+      if (this.staff.competence >= WAR_AI.TURN_COMPETENCE) s.faceThreat(w.time);
+    }
 
     // Fora da bolha ativa, ninguém pensa (e o bando volta a marchar)
     if (this.members.every((m) => m.dormant)) {
@@ -359,6 +419,7 @@ export class WarHost implements SquadCommand {
       this.perceive(w);
     }
     if (w.time < this.nextThink) return;
+    if (this.band?.walls) return this.manWalls(this.band.walls, w);
     const competence = this.competence(w);
     this.nextThink = w.time + WAR_AI.THINK_MS[competence - 1] * (0.85 + Math.random() * 0.3);
     if (!this.headless && this.leader) this.decide(w, competence);
@@ -398,6 +459,7 @@ export class WarHost implements SquadCommand {
       contacts,
       engaged,
       exposed: this.exposed,
+      pitched: this.band?.pitched,
       cover: this.cover,
     };
   }
@@ -419,6 +481,7 @@ export class WarHost implements SquadCommand {
   }
 
   private decide(w: HostWorld, competence: number): void {
+    if (this.abandoned) return this.keepRetreating(w);
     const main = this.mainContacts();
     if (main.length === 0) {
       if (this.plan === "RETREAT") return this.keepRetreating(w);
@@ -440,10 +503,62 @@ export class WarHost implements SquadCommand {
     const view = this.view(w, competence);
     let next = choosePlan(view, WAR_AI.EXPOSED_RADIUS);
     if (this.standFast && next === "RETREAT") next = "ASSAULT";
+    if (this.band?.storming && next !== "RETREAT") next = "ASSAULT";
+    // Quem guarda um lugar não larga o posto antes da primeira luta
+    if (!this.band && next === "RETREAT" && !view.exposed) next = "ASSAULT";
     const locked = this.plan !== null && (this.plan === "FEINT" || w.time - this.planAt < WAR_AI.PLAN_LOCK_MS) && next !== "RETREAT" && (next !== "DECAPITATE" || this.plan === "FEINT");
     if (next !== this.plan && !locked) this.setPlan(next, w);
     this.runPlan(w, main);
+    if (this.plan !== "RETREAT") this.runSpecialists(w, main, competence, view.engaged);
     if (competence >= 3 && this.plan !== "RETREAT") this.huntCouriers(w);
+  }
+
+  /**
+   * Atrás dos muros: quem atira sobe na muralha, de frente para o inimigo; o resto espera onde
+   * ele pode entrar e, quando ele entra, vai para cima. Ninguém larga o posto: não há para onde ir.
+   */
+  private manWalls(plan: WallPlan, w: HostWorld): void {
+    this.nextThink = w.time + WAR_AI.THINK_MS[this.competence(w) - 1];
+    const foes = this.mainContacts().filter((c) => c.unit.isAlive);
+    if (foes.length > 0) this.raiseAlert(3);
+    const foe = foeCenter(foes.map(asView)) ?? plan.front;
+    if (!this.wallFoe || distance(this.wallFoe, foe) > WAR_AI.WALL_SHIFT) this.wallFoe = foe;
+    const seen = this.wallFoe;
+    const byFoe = (list: readonly Point[]) => [...list].sort((a, b) => distance(a, seen) - distance(b, seen));
+    const posts = byFoe(plan.posts);
+    const gaps = plan.gaps();
+    const spots = gaps.length > 0 ? byFoe(gaps) : byFoe(plan.gates);
+    const inside = foes.filter((c) => plan.inside(c));
+    let shots = 0;
+    let line = 0;
+    for (const s of this.squads) {
+      if (s.role === "RANGED" && s.soldiers.some((m) => m.ranged)) {
+        const post = posts[(shots++ * 2) % posts.length];
+        this.takePost(s, post, plan.outward(post));
+        continue;
+      }
+      const prey = nearest(inside, s.center);
+      if (prey) {
+        if (s.order.type !== "ATTACK" || !s.order.target.isAlive) s.setOrder(attackOrder(prey));
+        continue;
+      }
+      // Esquadrões em fila atrás do lugar por onde o inimigo vem
+      const k = line++;
+      const spot = spots[k % Math.max(1, spots.length)] ?? posts[0];
+      const out = plan.outward(spot);
+      const rank = Math.floor(k / Math.max(1, spots.length));
+      this.takePost(s, { x: spot.x - Math.cos(out) * rank * WAR_AI.WALL_RANK, y: spot.y - Math.sin(out) * rank * WAR_AI.WALL_RANK }, out);
+    }
+  }
+
+  /** Vai correndo até o posto e, chegando, fica ali de frente para fora. */
+  private takePost(s: EnemySquad, point: Point, facing: number): void {
+    const o = s.order;
+    if (distance(s.center, point) > WAR_AI.WALL_RUN) {
+      if (o.type !== "ADVANCE" || distance(o.point, point) > 40) s.setOrder({ type: "ADVANCE", point: { ...point } });
+    } else if (o.type !== "HOLD" || distance(o.point, point) > 40) {
+      s.setOrder({ type: "HOLD", point: { ...point }, facing });
+    }
   }
 
   private setPlan(plan: PlanKind, w: HostWorld): void {
@@ -453,6 +568,8 @@ export class WarHost implements SquadCommand {
     this.planAt = w.time;
     this.leaving = plan === "RETREAT";
     if (plan === "RETREAT") this.fallback = null;
+    // Numa batalha campal, quem decidiu largar o campo não volta atrás ao perder o inimigo de vista
+    if (plan === "RETREAT" && this.band?.pitched) this.abandoned = true;
     if (plan === "FEINT" || plan === "AMBUSH") this.spent.push(plan);
     if (was !== plan) this.sound(w);
     for (const s of this.squads) s.setFormation(this.formationFor(s));
@@ -465,7 +582,9 @@ export class WarHost implements SquadCommand {
     const archers = foes.filter((c) => c.kind === "ARCHER").length;
     const shower = archers > 0 && archers >= foes.length * 0.4;
     if (s.role === "RANGED") return shower ? "LOOSE" : "LINE";
-    const drilled = s.soldiers.some((m) => m.kind === "SOLDIER");
+    // Lança só segura cavalo em forma: dispersa, ela não adianta
+    if (s.soldiers.some((m) => m.canBrace) && foes.some((c) => c.kind === "RIDER")) return "LINE";
+    const drilled = s.soldiers.some((m) => m.shieldBlock >= 0.3);
     if (this.plan === "HOLD") return drilled ? "SHIELD_WALL" : "LINE";
     if (this.plan === "DECAPITATE") return "WEDGE";
     if (shower) return "LOOSE";
@@ -487,6 +606,61 @@ export class WarHost implements SquadCommand {
     }
     const herald = this.heralds.find((h) => !h.mission);
     if (herald) herald.mission = { squad, order };
+  }
+
+  /** Cada tropa fazendo o que sabe, por cima do plano: cavalaria, lanças e quem atira e foge. */
+  private runSpecialists(w: HostWorld, main: readonly Contact[], competence: number, engaged: boolean): void {
+    if (competence >= 2) for (const s of this.squads.filter((x) => x.role === "RIDERS")) this.driveCavalry(s, w, main, competence, engaged);
+    const riders = main.filter((c) => c.kind === "RIDER");
+    for (const s of this.squads) {
+      // Cavalo vindo: lança para e firma, em vez de ser pega andando
+      if (s.role === "MELEE" && s.soldiers.some((m) => m.canBrace)) {
+        const rider = nearest(riders, s.center, WAR_AI.BRACE_RANGE);
+        if (rider) this.order(s, { type: "HOLD", point: { ...s.center }, facing: angleTo(s.center, rider) }, w);
+      }
+      // Quem atira e não aguenta o choque sai de perto
+      if (s.role === "RANGED" && s.soldiers.some((m) => m.kite && m.ranged)) {
+        const melee = main.filter((c) => c.kind !== "ARCHER" && c.kind !== "WAGON");
+        const threat = nearest(melee, s.center, COMBAT.KITE_RANGE);
+        if (threat) {
+          const away = angleTo(threat, s.center);
+          this.order(s, { type: "MOVE", point: { x: s.center.x + Math.cos(away) * COMBAT.KITE_DISTANCE, y: s.center.y + Math.sin(away) * COMBAT.KITE_DISTANCE }, facing: away + Math.PI }, w);
+        }
+      }
+    }
+  }
+
+  /**
+   * Cavalaria: espera o choque das linhas pelo lado, escolhe em quem bater, carrega, sai e volta.
+   * Plantada no meio da briga ela só morre.
+   */
+  private driveCavalry(s: EnemySquad, w: HostWorld, main: readonly Contact[], competence: number, engaged: boolean): void {
+    const arrived = s.order.type !== "MOVE" || s.settled;
+    const step = cycleStep(s.cycle, w.time, arrived);
+    if (s.cycle.phase === "OUT" && step !== "CHARGE") return;
+    if (step === "WITHDRAW") {
+      const foe = foeCenter(main.map(asView)) ?? s.center;
+      const away = angleTo(foe, s.center);
+      const point = { x: s.center.x + Math.cos(away) * COMBAT.CYCLE_DISTANCE, y: s.center.y + Math.sin(away) * COMBAT.CYCLE_DISTANCE };
+      this.order(s, { type: "MOVE", point: this.links.nearestOpen(point, 300) ?? point, facing: away + Math.PI }, w);
+      s.cycle = { phase: "OUT", hitAt: null };
+      return;
+    }
+    const foe = foeCenter(main.map(asView));
+    // Quem sabe o que faz deixa as linhas se prenderem antes de entrar pelo lado
+    if (competence >= 3 && !engaged && foe && s.cycle.phase === "IN" && s.cycle.hitAt === null) {
+      if (this.stage === 0 || s.order.type === "MARCH") {
+        const dir = angleTo(this.ownCenter(), foe);
+        const p = this.flankPoint(foe, dir, this.squads.indexOf(s) % 2 === 0 ? 1 : -1);
+        this.order(s, { type: "MOVE", point: p, facing: angleTo(p, foe) }, w);
+      }
+      return;
+    }
+    if (s.cycle.hitAt !== null) return;
+    const prey = choosePrey(main, s.center, competence);
+    if (!prey) return;
+    s.cycle = { phase: "IN", hitAt: null };
+    this.order(s, attackOrder(prey), w);
   }
 
   /** Quem leva ordens não chega: cavalaria e batedores inimigos vão atrás de todo mensageiro à vista. */
@@ -542,10 +716,16 @@ export class WarHost implements SquadCommand {
    */
   private runAssault(w: HostWorld, main: readonly Contact[], squads: readonly EnemySquad[]): void {
     const forming = this.staff.competence >= 2 && w.time - this.planAt < WAR_AI.FORM_UP_MS && this.squads.some((s) => s.role === "RANGED");
+    // Grande capitão guarda um esquadrão: só entra quando a linha já está presa
+    const lines = squads.filter((s) => s.role === "MELEE").sort((a, b) => a.alive - b.alive);
+    const engaged = this.members.some((m) => m.target?.isAlive && !m.ranged && m.inRange(m.target));
+    const reserve = this.staff.competence >= WAR_AI.RESERVE_COMPETENCE && lines.length >= 3 && !engaged ? lines[0] : null;
     for (const s of squads) {
       const target = nearest(main, s.center);
       if (!target) continue;
-      if (s.role === "RANGED") this.order(s, this.rangeOrder(s, target), w);
+      if (s === reserve) this.order(s, { type: "HOLD", point: { ...s.center }, facing: angleTo(s.center, target) }, w);
+      // Sem munição, quem atirava vai para o corpo a corpo com os outros
+      else if (s.role === "RANGED" && s.soldiers.some((m) => m.ranged)) this.order(s, this.rangeOrder(s, target), w);
       else if (forming && distance(s.center, target) > WAR_AI.FORM_UP_DISTANCE) this.order(s, { type: "HOLD", point: { ...s.center }, facing: angleTo(s.center, target) }, w);
       else this.order(s, attackOrder(target), w);
     }
@@ -671,6 +851,26 @@ export class WarHost implements SquadCommand {
   /** Perdeu o campo: larga a luta de vez (quem estava em pânico não volta para a mesma briga). */
   giveUp(): void {
     if (this.leaving || this.headless || !this.leader || this.standFast) return;
+    this.plan = "RETREAT";
+    this.leaving = true;
+    this.fallback = null;
+    this.planAt = this.links.scene.time.now;
+  }
+
+  /** Perdeu a maior parte da tropa, ou perdeu gente sem ter quem mande. */
+  get beaten(): boolean {
+    return this.members.length <= this.startCount * (1 - WAR_AI.BROKEN_SHARE) || (this.headless && this.members.length < this.startCount);
+  }
+
+  /** Já entrou na luta. */
+  get bloodied(): boolean {
+    return this.exposed || this.members.length < this.startCount;
+  }
+
+  /** O que sobrou deixa o campo, tenha ou não quem mande (ver WorldScene.sweepField). */
+  abandon(): void {
+    if (this.abandoned) return;
+    this.abandoned = true;
     this.plan = "RETREAT";
     this.leaving = true;
     this.fallback = null;

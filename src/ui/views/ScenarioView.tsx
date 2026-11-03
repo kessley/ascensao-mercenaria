@@ -4,6 +4,8 @@ import {
   PRESET_SCENARIOS,
   SCENARIO_HOURS,
   SCENARIO_MAPS,
+  SIEGE_ROLES,
+  SIEGE_TOWNS,
   SCENARIO_OBJECTIVES,
   blankScenario,
   forceSize,
@@ -20,6 +22,7 @@ import { SEASONS, WAR_AI, WEATHER } from "../../utils/constants";
 import { Button } from "../components/Button";
 import { ScenarioEditor } from "../components/scenario/ScenarioEditor";
 import { ScenarioMap } from "../components/scenario/ScenarioMap";
+import { newId } from "../../utils/id";
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.round(seconds) % 60).padStart(2, "0")}`;
 
@@ -32,7 +35,7 @@ function ScenarioRow({ s, selected, onPick }: { s: BattleScenario; selected: boo
     >
       <span className={`font-serif ${selected ? "text-amber-100" : "text-neutral-200"}`}>{s.name}</span>
       <span className="text-xs text-neutral-500">
-        {SCENARIO_MAPS[s.map].label} · {scenarioArmyTotal(s)} contra {scenarioEnemyTotal(s)}
+        {s.siege ? `Cerco · ${SIEGE_ROLES[s.siege.role].label.replace("Você ", "")}` : SCENARIO_MAPS[s.map].label} · {scenarioArmyTotal(s)} contra {scenarioEnemyTotal(s)}
       </span>
     </button>
   );
@@ -59,12 +62,14 @@ function ScenarioSheet({ s }: { s: BattleScenario }) {
       </header>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
         <Fact label="Objetivo" value={s.objective === "SURVIVE" ? `Resistir ${s.surviveMinutes} min` : SCENARIO_OBJECTIVES[s.objective].label} />
+        {s.siege && <Fact label="Cerco" value={`${SIEGE_ROLES[s.siege.role].label} · ${SIEGE_TOWNS[s.siege.town].label}`} />}
         <Fact label="Hora" value={SCENARIO_HOURS[s.hour].label} />
         <Fact label="Estação e tempo" value={`${SEASONS.LABEL[s.season]} · ${WEATHER.LABEL[s.weather]}`} />
         <Fact label="Dificuldade" value={WAR_AI.DIFFICULTY[s.difficulty].label} />
         <Fact label="Seu exército" value={`${troops} batalh${troops === 1 ? "ão" : "ões"} · ${scenarioArmyTotal(s)} soldados`} />
         <Fact label="Inimigo" value={`${scenarioEnemyTotal(s)} combatentes`} />
         <Fact label="Névoa de guerra" value={s.fog ? "Ligada" : "Desligada"} />
+        <Fact label="Ordens" value={s.directOrders ? "Diretas" : "Voz e mensageiros"} />
         <Fact label="Recorde" value={record ? `${record.wins}/${record.plays} vitórias${record.best !== null ? ` · ${clock(record.best)}` : ""}` : "Ainda não jogado"} />
       </dl>
       <ul className="flex flex-col gap-1 text-sm text-neutral-300">
@@ -105,7 +110,7 @@ export function ScenarioView({ onBack, initialId }: { onBack: () => void; initia
   /** Copia de um cenário pronto ou edição de um do jogador. */
   const edit = () => {
     setConfirmDelete(false);
-    setDraft(selected.builtin ? { ...structuredClone(selected), id: crypto.randomUUID(), builtin: false, name: `${selected.name} (cópia)` } : structuredClone(selected));
+    setDraft(selected.builtin ? { ...structuredClone(selected), id: newId(), builtin: false, name: `${selected.name} (cópia)` } : structuredClone(selected));
   };
   const saveDraft = (): BattleScenario | null => {
     if (!draft) return null;
@@ -166,7 +171,7 @@ export function ScenarioView({ onBack, initialId }: { onBack: () => void; initia
             <div className="flex w-full shrink-0 flex-col gap-1 lg:sticky lg:top-0 lg:w-96">
               <ScenarioMap scenario={shown} />
               <p className="text-xs text-neutral-500">
-                {SCENARIO_MAPS[shown.map].label}. Círculo azul: você. Quadrados vermelhos: inimigos (tracejado: chegam depois).
+                {SCENARIO_MAPS[shown.map].label}. Círculo azul: você. Quadrados vermelhos: inimigos (tracejado: chegam depois).{shown.siege ? " No centro, a fortaleza." : ""}
               </p>
             </div>
           </div>

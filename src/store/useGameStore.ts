@@ -4,6 +4,7 @@ import {
   BALANCE,
   ECONOMY,
   LIEUTENANTS,
+  EXPEDITION,
   MUTINEER_OF,
   PROGRESSION,
   SUPPORT,
@@ -69,8 +70,14 @@ import { applyTrade, foodGood, initEconomy, quote, rationPackPrice } from "../ga
 import { generateNobles } from "../game/sim/nobility";
 import { hearRumors, rumorLine, type Ear, type Rumor } from "../game/sim/rumors";
 import { INITIAL_COURT, courtSlice, type CourtActions, type CourtState } from "./courtSlice";
+import { FOUNDER, INITIAL_LEGACY, legacySlice, type LegacyActions, type LegacyState } from "./legacySlice";
+import { leaderBonus, type Leader } from "../game/sim/legacy";
+import { trimAnnals } from "../game/sim/legends";
+import { rememberSaga, type SagaRecord } from "../game/data/sagas";
+import { personName } from "../game/worldgen/names";
+import { CONTINENT_KEYS, INITIAL_SEA, seaSlice, type ContinentKey, type SeaActions, type SeaState } from "./seaSlice";
 import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
-import { buildScenarioWorld, noteResult, scenarioDay, scenarioProgress, type BattleScenario, type ScenarioHud, type ScenarioResult } from "../game/data/scenarios";
+import { SCENARIO_TOWN, buildScenarioWorld, noteResult, scenarioDay, scenarioProgress, type BattleScenario, type ScenarioHud, type ScenarioResult } from "../game/data/scenarios";
 import {
   GUILD_BUILDINGS,
   addLot,
@@ -90,7 +97,9 @@ import {
   type TradeLot,
 } from "../game/sim/trade";
 import { ofRealm, settlementName } from "../game/worldgen/names";
-import { generateWorld } from "../game/worldgen/generateWorld";
+import { continentWorld, generateWorld } from "../game/worldgen/generateWorld";
+import { generatePlanet } from "../game/data/planet";
+import { LEGACY } from "../utils/constants";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
 import {
   FOLLOWERS,
@@ -127,6 +136,8 @@ import type { ScoutMode, ScoutOrder } from "../game/entities/Scout";
 import type { NobleTrait } from "../game/sim/nobility";
 import type { Doctrine } from "../game/systems/WarHost";
 import type { HarpyState } from "../game/entities/Harpy";
+import { newId } from "../utils/id";
+import { canDelegate, expeditionDays, expeditionRations, resolveExpedition } from "../game/sim/expeditions";
 
 /** Um batalhão no Campo de Treino: treina de verdade até `until` (dia + fração do dia). */
 export interface TrainingOrder {
@@ -155,7 +166,13 @@ export type CampPanel =
   /** Cais de uma balsa num rio grande: atravessar o exército. */
   | { kind: "FERRY"; ferryId: string }
   /** Salvar, carregar e novo mundo (aberto pelo HUD, em qualquer lugar). */
-  | { kind: "GAME" };
+  | { kind: "GAME" }
+  /** Diário de missões: contrato, tropas fora e favores da corte. */
+  | { kind: "MISSIONS" }
+  /** Cais de um porto (Marco 17): cartas náuticas, navios e viagens. */
+  | { kind: "DOCK"; settlementId: string }
+  /** Livro do Bando (Marco 18): o Comandante, o testamento, as ambições e as Lendas. */
+  | { kind: "SAGA" };
 
 /** Dados persistentes de um batalhão (sobrevivem entre batalhas). */
 export interface BattalionData {
@@ -219,6 +236,17 @@ export interface BattleHud {
     max: number;
     morale: number;
     status: BattalionStatus;
+    /** Em passo acelerado. */
+    running: boolean;
+    /** Apanhando pelo lado ou por trás agora. */
+    flanked: boolean;
+    /** Tiros que restam (null = não atira). */
+    ammo: number | null;
+    holdFire: boolean;
+    cycle: boolean;
+    kiting: boolean;
+    /** Cavalaria de choque: sabe investir em ciclo. */
+    mayCycle: boolean;
     selected: boolean;
     /** Dentro do raio de comando (ordens instantâneas)? */
     inCommand: boolean;
@@ -256,6 +284,14 @@ export interface BattleHud {
   camera: { locked: boolean; zoom: number };
   /** Segundos até o próximo grito de guerra (0 = pronto). */
   warCryIn: number;
+  /** O mundo está parado, esperando ordens. */
+  tacticalPause: boolean;
+  /** Onde o Comandante está. */
+  position: { x: number; y: number };
+  /** Caravana sob escolta, se houver. */
+  escort: { x: number; y: number; waiting: boolean } | null;
+  /** Câmera lenta: ms que faltam e ms de espera até poder usar de novo. */
+  slow: { left: number; wait: number };
   /** Comandante muito ferido: o estandarte vacila. */
   bannerFaltering: boolean;
   /** Inimigos visíveis agora. */
@@ -352,6 +388,32 @@ export interface ActiveContract {
   recovered?: boolean;
 }
 
+/** Tropas cumprindo um contrato sem o Comandante: marcham até o serviço e voltam (ver ExpeditionParty). */
+export interface Expedition {
+  id: string;
+  contract: Contract;
+  battalions: BattalionData[];
+  departDay: number;
+  /** Momento exato da partida (dia com a fração). */
+  departAt?: number;
+  returnDay: number;
+  /** Por onde vai (a cena traça a rota quando a tropa sai do campo). */
+  path?: Point[];
+  /** Ponto da rota em que o serviço começa. */
+  meet?: number;
+}
+
+/** No que deu uma expedição (fica no diário). */
+export interface ExpeditionReport {
+  id: string;
+  title: string;
+  success: boolean;
+  gold: number;
+  casualties: number;
+  lost: string[];
+  day: number;
+}
+
 /** Motim em curso: os rebeldes pegaram em armas dentro do acampamento. */
 export interface MutinyState {
   rebel: BattalionData;
@@ -375,7 +437,7 @@ export interface SiegeState {
 }
 
 /** Ordens do cerco (painel do HUD). */
-export type SiegeAction = "WAIT" | "LADDER" | "RAM" | "ASSAULT" | "LIFT" | "DEMAND";
+export type SiegeAction = "WAIT" | "LADDER" | "RAM" | "ASSAULT" | "LIFT" | "DEMAND" | "PLANT_LADDER" | "SEND_RAM";
 
 /** Bando que chegou a um povoado ou ao acampamento (combate abstrato, sem o exército por perto). */
 export interface BandArrival {
@@ -471,6 +533,8 @@ export type BattleCommand =
   /** Toque de trombeta pré-combinado para os batalhões `ids` (vazio = todo o exército). */
   | { type: "TRUMPET"; ids: string[]; call: TrumpetCall }
   | { type: "WAR_CRY"; ids: string[] }
+  /** Pausa tática liga/desliga; selecionados correm ou voltam ao passo. */
+  | { type: "TACTICAL_PAUSE" | "RUN" | "SLOW_MOTION" | "HOLD_FIRE" | "CYCLE" | "KITE"; ids: string[] }
   /** Viagem rápida pelo Mapa do Continente até o ponto (x, y) do mundo. */
   | { type: "TRAVEL"; ids: string[]; x: number; y: number }
   /** Fundar uma vila onde o Comandante está. */
@@ -503,7 +567,9 @@ export interface BattalionContextMenu {
   y: number;
 }
 
-export interface GameState extends CourtState, CourtActions, WarState, WarActions {
+export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions {
+  /** Mesma semente, séculos depois de uma saga terminada. */
+  revisitSaga: (saga: SagaRecord) => void;
   /** Tela de criação do mundo ou campanha em andamento. */
   phase: "NEW_GAME" | "PLAYING";
   /** Campo a restaurar quando a cena do mundo for criada (jogo carregado). */
@@ -549,6 +615,13 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   /** Fração do dia corrente (0–1); o relógio anda com a marcha e com o tempo fora do acampamento. */
   dayProgress: number;
   activeContract: ActiveContract | null;
+  /** Tropas fora, cumprindo contratos por conta própria. */
+  expeditions: Expedition[];
+  expeditionReports: ExpeditionReport[];
+  /** Manda batalhões cumprirem uma oferta sem o Comandante; devolve o motivo se não der. */
+  sendExpedition: (contractId: string, battalionIds: string[]) => string | null;
+  /** Quem já cumpriu o tempo fora volta e presta contas. */
+  returnExpeditions: () => void;
   mutiny: MutinyState | null;
   /** Povoados vivos: dono, prosperidade, guarnição, construções (Marco 9). */
   settlements: Settlement[];
@@ -883,7 +956,7 @@ function newBattalion(existing: BattalionData[], troopType: TroopType): Battalio
   const used = new Set(existing.map((b) => b.name));
   const name = BATTALION_NAMES.find((n) => !used.has(n)) ?? `Companhia ${existing.length + 1}`;
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     name,
     troopType,
     formation: TROOPS[troopType].formations[0],
@@ -936,6 +1009,9 @@ const TRANSIENT_KEYS = new Set<string>([
   "pendingField",
   "loadNonce",
   "worldMapOpen",
+  "atlasOpen",
+  "legendsOpen",
+  "epilogue",
   "worldSnapshot",
   "battleHud",
   "battleReport",
@@ -982,6 +1058,7 @@ type DayState = Pick<
   | "arrearsWeeks"
   | "pendingMutiny"
   | "battalions"
+  | "expeditions"
   | "lieutenants"
   | "scouts"
   | "messengers"
@@ -1138,7 +1215,9 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     s.lieutenants = idle.lieutenants;
     log.push(...idle.log);
 
-    const wages = weeklyWages(s.battalions, s.lieutenants) + supportWages(s.scouts.length, s.messengers.length);
+    // Quem está fora em expedição também recebe
+    const away = s.expeditions.flatMap((e) => e.battalions);
+    const wages = weeklyWages([...s.battalions, ...away], s.lieutenants) + supportWages(s.scouts.length, s.messengers.length);
     if (wages === 0) continue;
     const due = wages + s.debt;
     if (s.gold >= due) {
@@ -1167,7 +1246,7 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
       entry(s.day, `Salários atrasados (dívida: ${s.debt}). Deserções: ${deserted.join(", ")}.`, "bad"),
     );
     if (gone.length) log.push(entry(s.day, `${gone.join(", ")} desertou por completo.`, "bad"));
-    s.lieutenants = unassignMissing(s.lieutenants, s.battalions);
+    s.lieutenants = unassignMissing(s.lieutenants, [...s.battalions, ...away]);
 
     const unpaid = applyLoyalty(
       s.lieutenants,
@@ -1197,6 +1276,7 @@ function dayState(s: GameState): DayState {
     arrearsWeeks: s.arrearsWeeks,
     pendingMutiny: s.pendingMutiny,
     battalions: s.battalions,
+    expeditions: s.expeditions,
     lieutenants: s.lieutenants,
     scouts: s.scouts,
     messengers: s.messengers,
@@ -1294,7 +1374,7 @@ function contractClients(settlements: readonly Settlement[], factions: readonly 
   );
 }
 
-function freshContract(s: Pick<GameState, "world" | "settlements" | "factions" | "wars" | "stolenCargo" | "armies" | "nobles" | "fame">): Contract | null {
+function freshContract(s: Pick<GameState, "world" | "settlements" | "factions" | "wars" | "stolenCargo" | "armies" | "nobles" | "fame"> & { leader?: Leader }): Contract | null {
   const world = s.world;
   if (!world) return null;
   const c = generateContract(world, contractClients(s.settlements, s.factions), world.camp.center, {
@@ -1307,7 +1387,10 @@ function freshContract(s: Pick<GameState, "world" | "settlements" | "factions" |
     relationOf: (id) => s.factions.find((f) => f.id === id)?.relation ?? 0,
   });
   // A fama paga: até +50% num nome conhecido em todo o continente
-  return c ? { ...c, reward: Math.round(c.reward * (1 + s.fame * REPUTE.CONTRACT_FAME_BONUS)) } : null;
+  // Em terra estranha ninguém conhece o bando: os primeiros serviços pagam mal (Marco 17)
+  const stranger = world.culture && world.culture !== "REALMS" && s.fame < 10 ? 0.7 : 1;
+  const boss = s.leader ? leaderBonus(s.leader).reward : 1;
+  return c ? { ...c, reward: Math.round(c.reward * (1 + s.fame * REPUTE.CONTRACT_FAME_BONUS) * stranger * boss) } : null;
 }
 
 function playerSettlements(settlements: readonly Settlement[]): Settlement[] {
@@ -1381,6 +1464,8 @@ function campaignState(world: WorldDef | null): CampaignState {
     // A campanha começa às 8h (o dia vira na aurora, às 6h)
     dayProgress: 2 / 24,
     activeContract: null,
+    expeditions: [],
+    expeditionReports: [],
     mutiny: null,
     settlements,
     factions,
@@ -1399,7 +1484,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     battlefields: [],
     warLessons: {},
     townIntel: {},
-    wagons: Array.from({ length: SUPPLY.START_WAGONS }, () => ({ id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp })),
+    wagons: Array.from({ length: SUPPLY.START_WAGONS }, () => ({ id: newId(), hp: SUPPLY.WAGON.hp })),
     cargo: 0,
     exposure: NO_EXPOSURE,
     forage: {},
@@ -1424,6 +1509,10 @@ function campaignState(world: WorldDef | null): CampaignState {
     dialog: null,
     ...INITIAL_COURT,
     ...INITIAL_WAR,
+    ...INITIAL_SEA,
+    ...INITIAL_LEGACY,
+    leader: { ...FOUNDER, name: personName(r), age: r.int(LEGACY.START_AGE[0], LEGACY.START_AGE[1]) },
+    planet: world ? generatePlanet(world) : null,
     nobles: world ? generateNobles(world, settlements) : [],
     worldMapOpen: false,
     worldSnapshot: null,
@@ -1468,7 +1557,7 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     lieutenantCandidates: [],
     scouts: Array.from({ length: scenario.army.scouts }, newScout),
     messengers: Array.from({ length: scenario.army.messengers }, newMessenger),
-    wagons: Array.from({ length: scenario.army.wagons }, () => ({ id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp })),
+    wagons: Array.from({ length: scenario.army.wagons }, () => ({ id: newId(), hp: SUPPLY.WAGON.hp })),
     contracts: [],
     log: [],
     gold: 0,
@@ -1477,6 +1566,27 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     nextCalamityDay: Infinity,
     warDifficulty: scenario.difficulty,
     scenario,
+    // Escadas e aríete vêm prontos: o relógio parado não deixa ninguém cortar madeira
+    siege: scenario.siege && { settlementId: SCENARIO_TOWN, walled: true, startDay: 0, food: 0, wood: 0, ladders: scenario.siege.role === "ATTACK" ? scenario.siege.ladders : 0, ram: scenario.siege.role === "ATTACK" ? scenario.siege.rams : 0 },
+  };
+}
+
+/** Contrato encerrado: o pagamento, o nome do bando e o rancor de quem saiu perdendo. */
+function contractClosing(s: GameState, c: Contract, success: boolean, text: string): Partial<GameState> {
+  const owner = s.settlements.find((t) => t.id === c.clientId)?.owner;
+  // O lado contrário lembra (Marco 15): quem o bando prejudicou guarda rancor
+  const rivalRuler = c.rival && success ? s.nobles.find((n) => n.alive && n.factionId === c.rival && n.rank === "RULER") : undefined;
+  return {
+    gold: s.gold + (success ? c.reward : 0),
+    honor: success ? Math.min(100, s.honor + 3 + leaderBonus(s.leader).honor) : s.honor,
+    fame: success ? Math.min(100, s.fame + REPUTE.FAME.CONTRACT) : s.fame,
+    factions: s.factions.map((f) => {
+      if (f.id === owner) return { ...f, relation: Math.max(-100, Math.min(100, f.relation + (success ? REALM.CONTRACT_RELATION : -5))) };
+      return success && f.id === c.rival ? { ...f, relation: Math.max(-100, f.relation - 12) } : f;
+    }),
+    nobles: rivalRuler ? s.nobles.map((n) => (n.id === rivalRuler.id ? { ...n, opinion: Math.max(-100, n.opinion - 12), memory: [...n.memory, { day: s.day, text: `o bando trabalhou contra o reino: ${c.title}`, delta: -12 }].slice(-8) } : n)) : s.nobles,
+    lieutenantCandidates: success ? Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)) : s.lieutenantCandidates,
+    log: appendLog(s.log, [entry(s.day, text, success ? "good" : "bad")]),
   };
 }
 
@@ -1505,7 +1615,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   finishScenario: (result) => {
     const s = get();
     if (!s.scenario || s.scenarioResult) return;
-    noteResult(s.scenario.id, result);
+    if (!s.scenario.boarding) noteResult(s.scenario.id, result);
     set({ scenarioResult: result, scenarioPaused: false, contextMenu: null });
   },
 
@@ -1513,6 +1623,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     if (!s.world || s.phase !== "PLAYING") return "Nenhuma campanha em andamento.";
     if (s.scenario) return "Batalhas personalizadas não são salvas.";
+    if (s.voyage) return "Em alto-mar não dá para salvar: espere chegar ao porto.";
     const field = captureField();
     if (typeof field === "string") return field;
     const store: Record<string, unknown> = {};
@@ -1537,9 +1648,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const file = readSave(slot);
     if (!file) return "Save não encontrado.";
     if (file.version !== SAVE.VERSION) return "Save de outra versão do jogo.";
-    const world = generateWorld(file.seed, file.options);
-    if (world.name !== file.worldName) return "Este mundo não pôde ser recriado (o gerador mudou desde o save).";
     const loaded = file.store as Partial<CampaignState>;
+    // Longe de casa, o mundo a recriar é o do continente onde o bando está (Marco 17)
+    const away = loaded.planet?.continents.find((c) => c.id === loaded.continent && !c.home);
+    const world = away ? continentWorld(away, file.options) : generateWorld(file.seed, file.options);
+    if (world.name !== file.worldName) return "Este mundo não pôde ser recriado (o gerador mudou desde o save).";
+    world.bandName = file.bandName;
+    if (loaded.echo && !away) rememberSaga(world, loaded.echo);
     logSeq = Math.max(0, ...(loaded.log ?? []).map((e) => e.id));
     // Acampamento montado em outro lugar (Marco 13)
     if (loaded.campAt) world.camp = campDefAt(loaded.campAt);
@@ -1565,7 +1680,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   recruitBattalion: (troopType) => {
     const s = get();
     // Cavalaria (Marco 14): um cavalo por cavaleiro; os que faltam no estábulo vêm do negociante
-    const horses = troopType === "CAVALRY" ? horseDeal(s, BALANCE.BATTALION_SIZE * TRADE.HORSES_PER_RIDER) : null;
+    const horses = TROOPS[troopType].family === "CAVALRY" ? horseDeal(s, BALANCE.BATTALION_SIZE * TRADE.HORSES_PER_RIDER) : null;
     const cost = TROOPS[troopType].cost + (horses?.cost ?? 0);
     if (s.gold < cost || (horses && !horses.ok)) return false;
     const b = newBattalion(s.battalions, troopType);
@@ -1594,7 +1709,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     let count = Math.min(b.maxSoldiers - b.soldiers, Math.floor(s.gold / per));
     if (count <= 0) return false;
     let horses: ReturnType<typeof horseDeal> | null = null;
-    if (b.troopType === "CAVALRY") {
+    if (TROOPS[b.troopType].family === "CAVALRY") {
       // Cada cavaleiro novo precisa de um cavalo
       while (count > 0) {
         horses = horseDeal(s, count * TRADE.HORSES_PER_RIDER);
@@ -1688,6 +1803,54 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
+  sendExpedition: (contractId, battalionIds) => {
+    const s = get();
+    const contract = s.contracts.find((c) => c.id === contractId);
+    if (!contract) return "Esse contrato não está mais na mesa.";
+    if (!canDelegate(contract)) return "Este serviço pede o Comandante em pessoa.";
+    if (s.pendingMutiny || s.mutiny) return "Com um motim no acampamento, ninguém sai.";
+    const party = s.battalions.filter((b) => battalionIds.includes(b.id));
+    if (party.length === 0) return "Escolha quem vai.";
+    if (party.some((b) => s.training.some((t) => t.battalionId === b.id))) return "Quem está em treino não pode sair.";
+    const days = expeditionDays(contract);
+    const food = expeditionRations(party, days);
+    if (food > s.rations) return `Faltam rações: a viagem pede ${food}.`;
+    const away = new Set(party.map((b) => b.id));
+    set({
+      gold: s.gold + contract.advance,
+      rations: s.rations - food,
+      battalions: s.battalions.filter((b) => !away.has(b.id)),
+      contracts: [...s.contracts.filter((c) => c.id !== contractId), freshContract(s)].filter((c): c is Contract => c !== null),
+      expeditions: [...s.expeditions, { id: newId(), contract, battalions: party, departDay: s.day, departAt: s.day + s.dayProgress, returnDay: s.day + days }],
+      campStay: s.campStay.filter((id) => !away.has(id)),
+      log: appendLog(s.log, [entry(s.day, `${party.map((b) => b.name).join(", ")} partiu para "${contract.title}". Adiantamento: ${contract.advance}. Volta prevista: dia ${s.day + days}.`)]),
+    });
+    return null;
+  },
+
+  returnExpeditions: () => {
+    const s = get();
+    const due = s.expeditions.filter((e) => e.returnDay <= s.day);
+    if (due.length === 0) return;
+    for (const e of due) {
+      const now = get();
+      const led = (b: BattalionData) => now.lieutenants.some((l) => l.battalionId === b.id);
+      const r = resolveExpedition(e.battalions, e.contract, led);
+      const c = e.contract;
+      const lostNote = r.lost.length > 0 ? ` ${r.lost.join(", ")} não voltou.` : "";
+      const text = r.success
+        ? `Chegou notícia: "${c.title}" foi cumprido sem o Comandante. ${c.client} pagou ${c.reward} de ouro, ao preço de ${r.casualties} baixa(s).${lostNote}`
+        : `Chegou notícia: "${c.title}" fracassou. Foram ${r.casualties} baixa(s).${lostNote}`;
+      set({
+        ...contractClosing(now, c, r.success, text),
+        battalions: [...now.battalions, ...r.battalions],
+        lieutenants: unassignMissing(now.lieutenants, [...now.battalions, ...r.battalions, ...now.expeditions.filter((x) => x !== e).flatMap((x) => x.battalions)]),
+        expeditions: now.expeditions.filter((x) => x !== e),
+        expeditionReports: [{ id: e.id, title: c.title, success: r.success, gold: r.success ? c.reward : 0, casualties: r.casualties, lost: r.lost, day: now.day }, ...now.expeditionReports].slice(0, EXPEDITION.REPORTS),
+      });
+    }
+  },
+
   abandonContract: () => {
     const s = get();
     if (!s.activeContract) return;
@@ -1707,10 +1870,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const entries = [entry(s.day, `${rebel.name} pegou em armas contra o Comandante!`, "bad")];
     const leader = s.lieutenants.find((l) => l.battalionId === rebel.id);
     let lieutenants = s.lieutenants;
-    const units: [EnemyKind, number][] = [[MUTINEER_OF[rebel.troopType], rebel.soldiers]];
+    const units: [EnemyKind, number][] = [[MUTINEER_OF[TROOPS[rebel.troopType].family], rebel.soldiers]];
     if (leader && leader.loyalty < 50) {
       lieutenants = lieutenants.filter((l) => l.id !== leader.id);
-      units.push([MUTINEER_OF[rebel.troopType], 1]);
+      units.push([MUTINEER_OF[TROOPS[rebel.troopType].family], 1]);
       entries.push(entry(s.day, `${fullName(leader)} ficou do lado dos amotinados.`, "bad"));
     } else if (leader) {
       lieutenants = lieutenants.map((l) =>
@@ -1971,10 +2134,33 @@ export const useGameStore = create<GameState>()((set, get) => ({
       stolenCargo,
       log: appendLog(s.log, entries),
     });
+    get().returnExpeditions();
+    get().farTick();
+    get().legacyDay(whole);
   },
 
   ...courtSlice((partial) => set(partial), get),
   ...warSlice(set, get),
+  ...legacySlice(set, get, {
+    note: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
+    heirName: () => personName(createRng(randomSeed())),
+    heirAge: () => createRng(randomSeed()).int(LEGACY.HEIR_AGE[0], LEGACY.HEIR_AGE[1]),
+  }),
+  revisitSaga: (saga) => {
+    const world = generateWorld(saga.seed, saga.options);
+    rememberSaga(world, saga.echo);
+    set({ ...campaignState(world), echo: saga.echo, loadNonce: get().loadNonce + 1 });
+  },
+  ...seaSlice(set, get, {
+    fresh: (world, day) => {
+      // Uma terra nova: reinos, nobres e mercado dela; o bando chega sem nome e sem acampamento
+      const fresh = campaignState(world);
+      const out = {} as Pick<GameState, ContinentKey>;
+      for (const k of CONTINENT_KEYS) Object.assign(out, { [k]: fresh[k] });
+      return { ...out, fame: 0, fear: 0, campPacked: true, nextCalamityDay: day + out.nextCalamityDay };
+    },
+    note: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
+  }),
 
   bandArrives: (targetId, band) => {
     const s = get();
@@ -2069,7 +2255,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       rations: r.ctx.rations,
       debt: r.ctx.debt,
       battalions: r.ctx.battalions,
-      lieutenants: unassignMissing(lieutenants, r.ctx.battalions),
+      lieutenants: unassignMissing(lieutenants, [...r.ctx.battalions, ...s.expeditions.flatMap((e) => e.battalions)]),
       followers: r.ctx.followers,
       honor: r.ctx.honor,
       campMood: r.ctx.campMood,
@@ -2469,6 +2655,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       gold: s.gold + REALM.CALAMITY_REWARD,
       fame: Math.min(100, s.fame + REPUTE.FAME.CALAMITY),
       calamities: s.calamities.map((x) => (x.id === id ? { ...x, defeated: true } : x)),
+      calamitiesSlain: s.calamitiesSlain + 1,
       // Povoados ocupados pela horda ficam livres (o jogador pode reivindicá-los)
       settlements: s.settlements.map((t) => (t.owner === id ? { ...t, owner: "FREE", garrison: 3 } : t)),
       factions: s.factions.map((f) => ({ ...f, relation: Math.min(100, f.relation + REALM.CALAMITY_RELATION) })),
@@ -2783,6 +2970,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       // Fama (Marco 15): vencer dá nome ao bando; vencer muitos, mais ainda
       fame: result === "VICTORY" && info.enemiesKilled > 0 && !info.mutinyOver ? Math.min(100, s.fame + (info.enemiesKilled >= 10 ? REPUTE.FAME.BIG_VICTORY : REPUTE.FAME.VICTORY)) : s.fame,
       log: appendLog(s.log, logEntries),
+      battles: [...s.battles, { day: s.day, title, won: result === "VICTORY", casualties, lost: lostBattalions, land: s.world?.name ?? "" }],
       battleReport: { result, title, goldEarned, loot, casualties, wounded: woundedTotal, lostBattalions, xpGains, notes },
     });
     // Derrota: o Comandante passa o dia se recuperando
@@ -2884,7 +3072,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (s.gold < SUPPLY.WAGON_COST || s.wagons.length >= SUPPLY.MAX_WAGONS) return false;
     set({
       gold: s.gold - SUPPLY.WAGON_COST,
-      wagons: [...s.wagons, { id: crypto.randomUUID(), hp: SUPPLY.WAGON.hp }],
+      wagons: [...s.wagons, { id: newId(), hp: SUPPLY.WAGON.hp }],
       log: appendLog(s.log, [entry(s.day, `Uma carroça nova (e a junta de bois) por ${SUPPLY.WAGON_COST} de ouro.`)]),
     });
     return true;
@@ -3117,6 +3305,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     lines.unshift(entry(s.day, `Vendidos ${n} de ${label} em ${t.name} por ${revenue} de ouro (${profit >= 0 ? "lucro" : "prejuízo"} de ${Math.abs(profit)}).`, profit >= 0 ? "good" : "info"));
     set({
       gold: Math.max(0, s.gold + revenue),
+      saltSold: s.saltSold + (good === "SALT" ? n : 0),
       settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: after } : x)),
       freight: second.lots,
       factions,
@@ -3154,23 +3343,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const c = s.activeContract?.contract;
     if (!c) return;
-    const owner = s.settlements.find((t) => t.id === c.clientId)?.owner;
-    // O lado contrário lembra (Marco 15): quem o bando prejudicou guarda rancor
-    const rivalRuler = c.rival && success ? s.nobles.find((n) => n.alive && n.factionId === c.rival && n.rank === "RULER") : undefined;
     set({
-      gold: s.gold + (success ? c.reward : 0),
-      honor: success ? Math.min(100, s.honor + 3) : s.honor,
-      fame: success ? Math.min(100, s.fame + REPUTE.FAME.CONTRACT) : s.fame,
-      factions: s.factions.map((f) => {
-        if (f.id === owner) return { ...f, relation: Math.max(-100, Math.min(100, f.relation + (success ? REALM.CONTRACT_RELATION : -5))) };
-        return success && f.id === c.rival ? { ...f, relation: Math.max(-100, f.relation - 12) } : f;
-      }),
-      nobles: rivalRuler ? s.nobles.map((n) => (n.id === rivalRuler.id ? { ...n, opinion: Math.max(-100, n.opinion - 12), memory: [...n.memory, { day: s.day, text: `o bando trabalhou contra o reino: ${c.title}`, delta: -12 }].slice(-8) } : n)) : s.nobles,
+      ...contractClosing(s, c, success, success ? `Contrato cumprido: "${c.title}" (${why}). ${c.client} pagou ${c.reward} de ouro.` : `Contrato perdido: "${c.title}" (${why}).`),
       activeContract: null,
-      lieutenantCandidates: success ? Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)) : s.lieutenantCandidates,
-      log: appendLog(s.log, [
-        entry(s.day, success ? `Contrato cumprido: "${c.title}" (${why}). ${c.client} pagou ${c.reward} de ouro.` : `Contrato perdido: "${c.title}" (${why}).`, success ? "good" : "bad"),
-      ]),
     });
   },
 
@@ -3388,7 +3563,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const t = s.settlements.find((x) => x.id === settlementId);
     if (!t || t.kind === "VILLAGE" || s.loans.some((l) => l.from === t.id) || !(TRADE.LOAN_SIZES as readonly number[]).includes(amount)) return false;
-    const loan: Loan = { id: crypto.randomUUID(), from: t.id, principal: amount, interest: Math.round(amount * TRADE.LOAN_INTEREST), dueDay: s.day + TRADE.LOAN_WEEKS * 7, missed: 0 };
+    const loan: Loan = { id: newId(), from: t.id, principal: amount, interest: Math.round(amount * TRADE.LOAN_INTEREST), dueDay: s.day + TRADE.LOAN_WEEKS * 7, missed: 0 };
     set({
       gold: s.gold + amount,
       loans: [...s.loans, loan],
@@ -3414,7 +3589,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const alive = s.ownCaravans.filter((c) => !c.lost);
     if (!s.world || a === b || alive.length >= TRADE.OWN_CARAVAN_MAX || s.gold < TRADE.OWN_CARAVAN_COST) return false;
     const n = s.ownCaravans.length + 1;
-    const caravan: OwnCaravan = { id: crypto.randomUUID(), name: `Caravana nº ${n} dos ${s.world.bandName}`, a, b, trips: 0, profit: 0 };
+    const caravan: OwnCaravan = { id: newId(), name: `Caravana nº ${n} dos ${s.world.bandName}`, a, b, trips: 0, profit: 0 };
     set({
       gold: s.gold - TRADE.OWN_CARAVAN_COST,
       ownCaravans: [...s.ownCaravans, caravan],
@@ -3657,6 +3832,20 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (get().campPrompt !== prompt) set({ campPrompt: prompt });
   },
 }));
+
+// A crônica nunca se perde: o diário é curto, as Lendas guardam tudo (Marco 18)
+useGameStore.subscribe((s, prev) => {
+  if (s.log === prev.log && s.lieutenants === prev.lieutenants) return;
+  const last = s.annals[s.annals.length - 1]?.id ?? 0;
+  const fresh = s.log.filter((e) => e.id > last);
+  const unseen = s.lieutenants.filter((l) => s.roll[l.id]?.history.length !== l.history.length);
+  if (fresh.length === 0 && unseen.length === 0) return;
+  const land = s.world?.name ?? "";
+  useGameStore.setState({
+    annals: fresh.length > 0 ? trimAnnals([...s.annals, ...fresh.map((e) => ({ id: e.id, day: e.day, text: e.text, tone: e.tone, land }))], LEGACY.ANNALS_MAX) : s.annals,
+    roll: unseen.length > 0 ? { ...s.roll, ...Object.fromEntries(unseen.map((l) => [l.id, { name: l.name, history: l.history }])) } : s.roll,
+  });
+});
 
 // Acesso para depuração/testes automatizados (somente em dev)
 if (import.meta.env.DEV) (window as unknown as { __store?: typeof useGameStore }).__store = useGameStore;

@@ -8,10 +8,15 @@ import {
   SCENARIO_LIMITS,
   SCENARIO_MAPS,
   SCENARIO_OBJECTIVES,
+  SIEGE_MAPS,
+  SIEGE_ROLES,
+  SIEGE_TOWNS,
   forceSize,
   newBattalionSpec,
   newForce,
+  newSiege,
   scenarioEnemyTotal,
+  withSiege,
   type BattleScenario,
   type EnemyFactionId,
   type ForceSide,
@@ -22,6 +27,9 @@ import {
   type ScenarioHour,
   type ScenarioMapId,
   type ScenarioObjective,
+  type ScenarioSiege,
+  type SiegeRole,
+  type SiegeTown,
 } from "../../../game/data/scenarios";
 import { NOBLE_TRAITS, type NobleTrait } from "../../../game/sim/nobility";
 import { ENEMIES, FORMATIONS, PROGRESSION, SEASONS, TROOPS, WAR_AI, WEATHER, type Formation, type Season, type TroopType, type WarDifficulty, type Weather } from "../../../utils/constants";
@@ -133,8 +141,35 @@ function ArmyEditor({ army, onChange }: { army: ScenarioArmy; onChange: (a: Scen
   );
 }
 
-function ForceEditor({ force, index, onChange, onRemove }: { force: ScenarioForce; index: number; onChange: (f: ScenarioForce) => void; onRemove: () => void }) {
+function SiegeEditor({ scenario, onChange }: { scenario: BattleScenario; onChange: (s: BattleScenario) => void }) {
+  const siege = scenario.siege;
+  const set = (next: ScenarioSiege | null) => onChange(withSiege(scenario, next));
+  return (
+    <Section title="Cerco" hint={siege ? SIEGE_TOWNS[siege.town].description : "Uma fortaleza no centro do mapa"}>
+      <label className="flex items-center gap-2 text-sm text-neutral-200">
+        <input type="checkbox" checked={!!siege} onChange={(e) => set(e.target.checked ? newSiege() : null)} className="accent-amber-500" />
+        Batalha de cerco
+      </label>
+      {siege && (
+        <>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Pick<SiegeRole> label="Seu lado" value={siege.role} options={(Object.keys(SIEGE_ROLES) as SiegeRole[]).map((id) => [id, SIEGE_ROLES[id].label])} onChange={(role) => set({ ...siege, role })} />
+            <Pick<SiegeTown> label="Fortaleza" value={siege.town} options={(Object.keys(SIEGE_TOWNS) as SiegeTown[]).map((id) => [id, SIEGE_TOWNS[id].label])} onChange={(town) => set({ ...siege, town })} />
+            <Count label={siege.role === "ATTACK" ? "Suas escadas" : "Escadas deles"} value={siege.ladders} min={0} max={SCENARIO_LIMITS.LADDERS} onChange={(ladders) => set({ ...siege, ladders })} />
+            <Count label={siege.role === "ATTACK" ? "Seus aríetes" : "Aríetes deles"} value={siege.rams} min={0} max={SCENARIO_LIMITS.RAMS} onChange={(rams) => set({ ...siege, rams })} />
+          </div>
+          <p className="text-xs text-neutral-400">{SIEGE_ROLES[siege.role].description}</p>
+        </>
+      )}
+    </Section>
+  );
+}
+
+function ForceEditor({ force, index, siege, onChange, onRemove }: { force: ScenarioForce; index: number; siege: ScenarioSiege | null; onChange: (f: ScenarioForce) => void; onRemove: () => void }) {
   const faction = ENEMY_FACTIONS[force.faction];
+  // Só há "atrás dos muros" quando os muros são do inimigo; lá dentro, ou no assalto, ninguém escolhe o que fazer
+  const sides = (Object.entries(FORCE_SIDES) as [ForceSide, string][]).filter(([id]) => id !== "WALLS" || siege?.role === "ATTACK");
+  const fixed = force.side === "WALLS" || siege?.role === "DEFEND";
   const setFaction = (id: EnemyFactionId) => onChange({ ...newForce(id), id: force.id, side: force.side, stance: force.stance, delay: force.delay, competence: force.competence, trait: force.trait, chief: force.chief });
   return (
     <div className="flex flex-col gap-3 rounded border border-neutral-800 bg-neutral-950/60 p-3">
@@ -148,8 +183,14 @@ function ForceEditor({ force, index, onChange, onRemove }: { force: ScenarioForc
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Pick<EnemyFactionId> label="Quem são" value={force.faction} options={(Object.keys(ENEMY_FACTIONS) as EnemyFactionId[]).map((id) => [id, ENEMY_FACTIONS[id].label])} onChange={setFaction} />
-        <Pick<ForceSide> label="De onde vêm" value={force.side} options={Object.entries(FORCE_SIDES) as [ForceSide, string][]} onChange={(side) => onChange({ ...force, side })} />
-        <Pick<ForceStance> label="O que fazem" value={force.stance} options={Object.entries(FORCE_STANCES) as [ForceStance, string][]} onChange={(stance) => onChange({ ...force, stance })} />
+        <Pick<ForceSide> label="De onde vêm" value={force.side} options={sides} onChange={(side) => onChange({ ...force, side })} />
+        {fixed ? (
+          <Field label="O que fazem">
+            <span className="py-1.5 text-sm text-neutral-300">{force.side === "WALLS" ? "Guardam os muros" : "Assaltam os muros"}</span>
+          </Field>
+        ) : (
+          <Pick<ForceStance> label="O que fazem" value={force.stance} options={Object.entries(FORCE_STANCES) as [ForceStance, string][]} onChange={(stance) => onChange({ ...force, stance })} />
+        )}
         <Count label="Chegam em (segundos)" value={force.delay} min={0} max={SCENARIO_LIMITS.DELAY} step={15} onChange={(delay) => onChange({ ...force, delay })} />
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -164,7 +205,7 @@ function ForceEditor({ force, index, onChange, onRemove }: { force: ScenarioForc
         <Pick<string> label="Competência" value={String(force.competence)} options={COMPETENCE.map((text, i) => [String(i + 1), `${i + 1} · ${text}`])} onChange={(v) => onChange({ ...force, competence: Number(v) })} />
         <Pick<NobleTrait> label="Personalidade" value={force.trait} options={FORCE_TRAITS.map((t) => [t, NOBLE_TRAITS[t].label])} onChange={(trait) => onChange({ ...force, trait })} />
       </div>
-      {force.stance === "HOLD" && force.delay > 0 && <p className="text-xs text-neutral-400">Quem chega depois e espera em posição só luta se você for até lá.</p>}
+      {!fixed && force.stance === "HOLD" && force.delay > 0 && <p className="text-xs text-neutral-400">Quem chega depois e espera em posição só luta se você for até lá.</p>}
     </div>
   );
 }
@@ -189,7 +230,7 @@ export function ScenarioEditor({ scenario, onChange }: { scenario: BattleScenari
 
       <Section title="O campo" hint={SCENARIO_MAPS[scenario.map].description}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Pick<ScenarioMapId> label="Mapa" value={scenario.map} options={(Object.keys(SCENARIO_MAPS) as ScenarioMapId[]).map((id) => [id, SCENARIO_MAPS[id].label])} onChange={(map) => set({ map })} />
+          <Pick<ScenarioMapId> label="Mapa" value={scenario.map} options={(scenario.siege ? SIEGE_MAPS : (Object.keys(SCENARIO_MAPS) as ScenarioMapId[]).filter((id) => id !== "DECK")).map((id) => [id, SCENARIO_MAPS[id].label])} onChange={(map) => set({ map })} />
           <Pick<ScenarioHour> label="Hora" value={scenario.hour} options={(Object.keys(SCENARIO_HOURS) as ScenarioHour[]).map((id) => [id, SCENARIO_HOURS[id].label])} onChange={(hour) => set({ hour })} />
           <Pick<Season> label="Estação" value={scenario.season} options={SEASONS.ORDER.map((id) => [id, SEASONS.LABEL[id]])} onChange={(season) => set({ season })} />
           <Pick<Weather> label="Tempo" value={scenario.weather} options={(Object.keys(WEATHER.LABEL) as Weather[]).map((id) => [id, WEATHER.LABEL[id]])} onChange={(weather) => set({ weather })} />
@@ -203,17 +244,23 @@ export function ScenarioEditor({ scenario, onChange }: { scenario: BattleScenari
             <input type="checkbox" checked={scenario.fog} onChange={(e) => set({ fog: e.target.checked })} className="accent-amber-500" />
             Névoa de guerra
           </label>
+          <label className="flex items-end gap-2 pb-2 text-sm text-neutral-200" title="Desligado: longe do Comandante, as ordens dependem de trombeta, bandeira e mensageiro">
+            <input type="checkbox" checked={scenario.directOrders} onChange={(e) => set({ directOrders: e.target.checked })} className="accent-amber-500" />
+            Ordens diretas
+          </label>
         </div>
         <p className="text-xs text-neutral-400">
           {SCENARIO_OBJECTIVES[scenario.objective].description} {WAR_AI.DIFFICULTY[scenario.difficulty].description}
         </p>
       </Section>
 
+      <SiegeEditor scenario={scenario} onChange={onChange} />
+
       <ArmyEditor army={scenario.army} onChange={(army) => set({ army })} />
 
       <Section title="O inimigo" hint={`${scenario.forces.length}/${SCENARIO_LIMITS.FORCES} forças · ${total} combatentes`}>
         {scenario.forces.map((f, i) => (
-          <ForceEditor key={f.id} force={f} index={i} onChange={(next) => setForce(i, next)} onRemove={() => set({ forces: scenario.forces.filter((x) => x !== f) })} />
+          <ForceEditor key={f.id} force={f} index={i} siege={scenario.siege} onChange={(next) => setForce(i, next)} onRemove={() => set({ forces: scenario.forces.filter((x) => x !== f) })} />
         ))}
         <div>
           <button type="button" disabled={scenario.forces.length >= SCENARIO_LIMITS.FORCES} onClick={() => set({ forces: [...scenario.forces, newForce()] })} className={SMALL_BTN}>

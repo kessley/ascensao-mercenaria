@@ -3,6 +3,7 @@ import { nobleDies } from "../game/sim/kingdoms";
 import { RANSOM_OF, nobleName, remember } from "../game/sim/nobility";
 import type { RealmState } from "../game/sim/realm";
 import type { GameState } from "./useGameStore";
+import { newId } from "../utils/id";
 
 /**
  * Prisioneiros e o preço da vitória (Marco 16): quem se rende, oficiais capturados e o Comandante
@@ -125,12 +126,12 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
   return {
     addCaptives: (groups) =>
       set((s) => ({
-        captives: [...s.captives, ...groups.filter((g) => g.count > 0).map((g) => ({ ...g, id: crypto.randomUUID(), day: s.day }))],
+        captives: [...s.captives, ...groups.filter((g) => g.count > 0).map((g) => ({ ...g, id: newId(), day: s.day }))],
       })),
 
     addCaptiveOfficer: (o) =>
       set((s) => ({
-        captiveOfficers: [...s.captiveOfficers, { ...o, id: crypto.randomUUID(), day: s.day, questioned: false }],
+        captiveOfficers: [...s.captiveOfficers, { ...o, id: newId(), day: s.day, questioned: false }],
       })),
 
     captiveChoice: (id, choice) => {

@@ -16,7 +16,7 @@ import * as names from "./names";
  *    cada célula o caminho até o mar; a chuva acumulada nesse caminho faz os rios
  *    (riacho, rio, rio grande), traçados das nascentes até a foz com meandros.
  */
-export function generateGeography(rng: Rng, regionCols: number, regionRows: number): GeoDef {
+export function generateGeography(rng: Rng, regionCols: number, regionRows: number, climate: { heat: number; wet: number } = { heat: 0, wet: 0 }): GeoDef {
   const cell = GEO.CELL;
   const cols = Math.round((regionCols * REGION_WIDTH) / cell);
   const rows = Math.round((regionRows * REGION_HEIGHT) / cell);
@@ -65,13 +65,13 @@ export function generateGeography(rng: Rng, regionCols: number, regionRows: numb
       const nx = (c + 0.5) / cols;
       const ny = (r + 0.5) / rows;
       const altitude = Math.max(0, elevation[i] - seaLevel) / (1 - seaLevel);
-      temperature[i] = clamp01(0.1 + 0.85 * ny + (fbm(nTemp, nx * 3, ny * 3, 3) - 0.5) * 0.18 - altitude * 0.45);
+      temperature[i] = clamp01(0.1 + 0.85 * ny + (fbm(nTemp, nx * 3, ny * 3, 3) - 0.5) * 0.18 - altitude * 0.45 + climate.heat);
       if (isSea(i)) carry = Math.min(1, carry + 0.25);
       else {
         const rise = c > 0 ? Math.max(0, elevation[i] - elevation[i - 1]) : 0;
         carry = Math.max(0.05, carry * (0.975 - rise * 2.2));
       }
-      moisture[i] = clamp01(0.45 * fbm(nMoist, nx * 3.5 * aspect, ny * 3.5, 4) + 0.6 * carry - 0.08);
+      moisture[i] = clamp01(0.45 * fbm(nMoist, nx * 3.5 * aspect, ny * 3.5, 4) + 0.6 * carry - 0.08 + climate.wet);
     }
   }
 

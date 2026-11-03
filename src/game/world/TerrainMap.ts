@@ -122,6 +122,11 @@ export class TerrainMap {
   private siegeSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
   private breaches: readonly Rect[] = [];
 
+  /** Está numa escada apoiada na muralha? */
+  onLadder(x: number, y: number): boolean {
+    return this.breaches.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+  }
+
   setSiegeWorks(solids: readonly Rect[], breaches: readonly Rect[]): void {
     this.siegeSolids = solids.map((rect) => ({ rect, type: "WALL" as const }));
     this.breaches = breaches;

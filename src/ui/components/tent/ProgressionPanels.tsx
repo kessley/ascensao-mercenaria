@@ -18,7 +18,7 @@ export function SkillTree({ battalion: b }: { battalion: BattalionData }) {
         Habilidades <span className="font-normal normal-case text-neutral-500">· {b.skillPoints} ponto(s)</span>
       </h3>
       <div className="grid grid-cols-2 gap-2">
-        {SKILL_TREE[b.troopType].map((branch) => (
+        {SKILL_TREE[TROOPS[b.troopType].family].map((branch) => (
           <div key={branch[0]} className="flex flex-col items-stretch gap-1">
             {branch.map((id, tier) => {
               const skill = SKILLS[id];

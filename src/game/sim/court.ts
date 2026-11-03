@@ -1,5 +1,6 @@
 import { COURT, GOODS, type Good } from "../../utils/constants";
 import { NOBLE_TRAITS, isAdult, nobleName, type Noble, type Plot, type TalkTopic } from "./nobility";
+import { newId } from "../../utils/id";
 
 /**
  * A vida na corte (Marco 15), em funções puras: primeira impressão, conversas, presentes e os
@@ -91,7 +92,7 @@ export function questFor(n: Noble, ctx: CourtCtx, payScale: number): NobleQuest 
   const rivals = rivalsOf(n, ctx);
   const rival = rivals[Math.floor(Math.random() * rivals.length)];
   const name = (o: Noble) => nobleName(o, ctx.realm(o.factionId));
-  const base = { id: crypto.randomUUID(), giverId: n.id, deadline: ctx.day + 12 };
+  const base = { id: newId(), giverId: n.id, deadline: ctx.day + 12 };
   const gold = (v: number) => Math.round(v * payScale);
   // Parente preso: o favor mais urgente
   const kin = ctx.nobles.find((o) => o.alive && o.captiveOf && o.captiveOf !== "PLAYER" && (o.parentId === n.id || o.id === n.spouseId || n.parentId === o.id));

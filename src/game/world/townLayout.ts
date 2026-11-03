@@ -658,6 +658,18 @@ export function wallPosts(layout: TownLayout): Point[] {
   return out;
 }
 
+/** Para onde olha o trecho de muralha mais perto de `p` (para fora do povoado). */
+export function wallOutward(layout: TownLayout, p: Point): number {
+  const b = layout.bounds;
+  const sides: [number, number][] = [
+    [p.x - b.x, Math.PI],
+    [b.x + b.w - p.x, 0],
+    [p.y - b.y, -Math.PI / 2],
+    [b.y + b.h - p.y, Math.PI / 2],
+  ];
+  return sides.reduce((best, s) => (s[0] < best[0] ? s : best))[1];
+}
+
 /** Caminho de `from` até `to` pelas ruas (busca em largura na grade de cruzamentos da planta). */
 export function streetPath(layout: TownLayout, from: Point, to: Point): Point[] {
   const d2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;

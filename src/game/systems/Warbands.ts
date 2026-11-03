@@ -4,7 +4,7 @@ import { chiefName } from "../worldgen/names";
 import { isCalamityOwner, isRaiderKind, type BandKind, type CalamityKind, type Settlement } from "../sim/realm";
 import { AGENTS, WAR_AI, WORLD, type EnemyKind, type Good } from "../../utils/constants";
 import { centroid, distance, type Point } from "../../utils/math";
-import { makeStaff, promoteRoster, type Doctrine, type StaffData, type WarHost } from "./WarHost";
+import { makeStaff, promoteRoster, type Doctrine, type StaffData, type WallPlan, type WarHost } from "./WarHost";
 
 /** Carga de uma caravana (Marco 14): o que leva, de onde e para onde, e quanto custou. */
 export interface CaravanCargo {
@@ -66,6 +66,12 @@ export interface Warband {
   name: string;
   kind: BandKind;
   ownerId: string | null;
+  /** Batalha personalizada: veio lutar, e não sai do campo sem ter lutado. */
+  pitched?: boolean;
+  /** Batalha de cerco: este bando defende os muros, em vez de marchar. */
+  walls?: WallPlan;
+  /** Batalha de cerco: este bando veio tomar os muros e não fica olhando para eles. */
+  storming?: boolean;
   calamityKind?: CalamityKind;
   color?: number;
   materialized: boolean;

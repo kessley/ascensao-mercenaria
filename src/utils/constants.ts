@@ -64,6 +64,11 @@ export const COLORS = {
   ALLY: 0x2f6fdf,
   ALLY_ARCHER: 0x5aa8ff,
   ALLY_CAVALRY: 0x1f4fae,
+  ALLY_SPEAR: 0x3f86c9,
+  ALLY_HEAVY: 0x24508f,
+  ALLY_CROSSBOW: 0x7fb6d9,
+  ALLY_JAVELIN: 0x6fc7c9,
+  ALLY_KNIGHT: 0x16386f,
   ALLY_PANIC: 0x9db8e8,
   COMMANDER_OUTLINE: 0xe0b040,
   ENEMY: 0xc0392b,
@@ -90,7 +95,9 @@ export const COLORS = {
 
 // --- Tipos de domínio compartilhados por Phaser e React ---
 
-export type TroopType = "INFANTRY" | "ARCHERS" | "CAVALRY";
+export type TroopType = "INFANTRY" | "SPEARMEN" | "HEAVY" | "ARCHERS" | "CROSSBOW" | "JAVELINS" | "CAVALRY" | "KNIGHTS" | "HORSE_ARCHERS";
+/** Família da tropa: decide a árvore de habilidades, o desenho e quem precisa de cavalo. */
+export type TroopFamily = "INFANTRY" | "ARCHERS" | "CAVALRY";
 export type EnemyKind =
   | "GOBLIN"
   | "GOBLIN_ARCHER"
@@ -128,7 +135,32 @@ export type EnemyKind =
   | "OUTRIDER"
   | "WOLF_RIDER"
   | "HERALD"
-  | "LANCER";
+  | "LANCER"
+  /** Mais tropas: cada bando tem quem segure a frente, quem bata forte e quem atire. */
+  | "GOBLIN_SPEAR"
+  | "BANDIT_JAVELIN"
+  | "BANDIT_RIDER"
+  | "PIKEMAN"
+  | "MAN_AT_ARMS"
+  | "LONGBOW"
+  | "KNIGHT"
+  | "ORC_BRUTE"
+  | "SKELETON_ARCHER"
+  | "BONE_GUARD"
+  /** Aríete de quem assalta a muralha do bando (batalha de cerco). */
+  | "SIEGE_RAM"
+  /** Tropas típicas de ultramar (Marco 17). */
+  | "SAND_SPEAR"
+  | "DUNE_ARCHER"
+  | "MAMELUKE"
+  | "AXEMAN"
+  | "HOUSECARL"
+  | "PIKE_LEVY"
+  | "REPEATER"
+  | "JADE_GUARD"
+  | "PIRATE"
+  | "PIRATE_BOW"
+  | "PIRATE_CAPTAIN";
 export type Formation = "LINE" | "SHIELD_WALL" | "WEDGE" | "LOOSE";
 export type TerrainType =
   | "GRASS"
@@ -158,10 +190,42 @@ export interface UnitStats {
   radius: number;
   /** Ataca com flechas (projéteis) em vez de corpo a corpo. */
   ranged?: boolean;
+  /** Perícia no corpo a corpo (0 a 100): chance de acertar e de aparar. Sem valor, 40. */
+  attack?: number;
+  defense?: number;
+  /** Fração do dano que a armadura segura (0 a 1). */
+  armor?: number;
+  /** Chance de o escudo parar uma flecha vinda da frente (0 a 1). */
+  shield?: number;
+  /** Fração da armadura que o golpe ignora (0 a 1). */
+  pierce?: number;
+  /** Multiplica o dano contra quem está a cavalo. */
+  antiCavalry?: number;
+  /** Lanças firmes: parado, de frente, segura a investida. */
+  brace?: boolean;
+  /** Peso no empurra-empurra e na investida. */
+  mass?: number;
+  /** Multiplica toda perda de moral (< 1 = mais firme). */
+  nerve?: number;
+  /** A cavalo: sofre o terreno como cavalaria. */
+  mounted?: boolean;
+  /** Multiplica o dano da investida. */
+  charge?: number;
+  /** Tiro: dispersão (1 = arco comum, menor = mais preciso), tiros e flechas por disparo. */
+  spread?: number;
+  ammo?: number;
+  volley?: number;
+  /** Tiro reto e rápido (besta, dardo), sem a parábola da flecha. */
+  flat?: boolean;
+  /** Recua sozinho quando alguém chega perto (modo escaramuça). */
+  kite?: boolean;
 }
 
 export interface TroopDef {
   label: string;
+  family: TroopFamily;
+  /** Para que serve, em uma frase. */
+  hint: string;
   /** Custo de recrutar um batalhão completo. */
   cost: number;
   /** Salário semanal de cada soldado (ouro). */
@@ -169,34 +233,89 @@ export interface TroopDef {
   stats: UnitStats;
   /** Formações que este tipo de tropa sabe executar (a primeira é a padrão). */
   formations: readonly Formation[];
-  /** Ganha bônus de investida após correr em linha reta (cavalaria). */
-  canCharge: boolean;
 }
 
 export const TROOPS: Record<TroopType, TroopDef> = {
   INFANTRY: {
     label: "Infantaria",
+    family: "INFANTRY",
+    hint: "Espada e escudo: a linha de frente equilibrada.",
     cost: 60,
     wagePerSoldier: 1.5,
-    stats: { hp: 60, speed: 125, damage: 8, range: 8, cooldown: 900, radius: 9 },
+    stats: { hp: 60, speed: 125, damage: 8, range: 8, cooldown: 900, radius: 9, attack: 42, defense: 48, armor: 0.2, shield: 0.35 },
     formations: ["LINE", "SHIELD_WALL", "WEDGE", "LOOSE"],
-    canCharge: false,
+  },
+  SPEARMEN: {
+    label: "Lanceiros",
+    family: "INFANTRY",
+    hint: "Baratos e firmes. Parados e de frente, seguram a investida da cavalaria.",
+    cost: 65,
+    wagePerSoldier: 1.5,
+    stats: { hp: 55, speed: 118, damage: 7, range: 30, cooldown: 1000, radius: 9, attack: 34, defense: 52, armor: 0.15, shield: 0.25, antiCavalry: 3.4, brace: true },
+    formations: ["LINE", "SHIELD_WALL", "LOOSE"],
+  },
+  HEAVY: {
+    label: "Guarda pesada",
+    family: "INFANTRY",
+    hint: "Muita armadura, muito peso: quebra a linha inimiga, mas é lenta e cara.",
+    cost: 130,
+    wagePerSoldier: 3,
+    stats: { hp: 90, speed: 98, damage: 11, range: 8, cooldown: 1050, radius: 10, attack: 54, defense: 58, armor: 0.5, shield: 0.3, pierce: 0.2, mass: 1.7, nerve: 0.75 },
+    formations: ["LINE", "SHIELD_WALL", "WEDGE"],
   },
   ARCHERS: {
     label: "Arqueiros",
+    family: "ARCHERS",
+    hint: "Salvas em área de longe: letais contra tropa fechada, perigosas para os amigos.",
     cost: 70,
     wagePerSoldier: 1.75,
-    stats: { hp: 40, speed: 120, damage: 9, range: 210, cooldown: 1500, radius: 8, ranged: true },
+    stats: { hp: 40, speed: 120, damage: 9, range: 230, cooldown: 1500, radius: 8, ranged: true, attack: 22, defense: 22, armor: 0.05, ammo: 30, volley: 3 },
     formations: ["LINE", "LOOSE"],
-    canCharge: false,
+  },
+  CROSSBOW: {
+    label: "Besteiros",
+    family: "ARCHERS",
+    hint: "Tiro lento, reto e preciso que atravessa armadura.",
+    cost: 90,
+    wagePerSoldier: 2,
+    stats: { hp: 46, speed: 108, damage: 16, range: 215, cooldown: 2600, radius: 9, ranged: true, attack: 26, defense: 26, armor: 0.15, pierce: 0.6, ammo: 20, volley: 1, spread: 0.55, flat: true },
+    formations: ["LINE", "LOOSE"],
+  },
+  JAVELINS: {
+    label: "Dardeiros",
+    family: "ARCHERS",
+    hint: "Rápidos, de pouco alcance e poucos dardos: fustigam e fogem de quem chega perto.",
+    cost: 65,
+    wagePerSoldier: 1.75,
+    stats: { hp: 42, speed: 150, damage: 13, range: 115, cooldown: 1700, radius: 8, ranged: true, attack: 30, defense: 28, armor: 0.05, pierce: 0.35, ammo: 10, volley: 1, spread: 0.8, flat: true, kite: true },
+    formations: ["LOOSE", "LINE"],
   },
   CAVALRY: {
     label: "Cavalaria",
+    family: "CAVALRY",
+    hint: "Rápida. A investida empurra e derruba; depois é sair e voltar. Atola na lama.",
     cost: 100,
     wagePerSoldier: 2.5,
-    stats: { hp: 90, speed: 205, damage: 10, range: 10, cooldown: 900, radius: 11 },
+    stats: { hp: 90, speed: 205, damage: 10, range: 10, cooldown: 900, radius: 11, mounted: true, attack: 46, defense: 34, armor: 0.2, mass: 2.2, charge: 1 },
     formations: ["LINE", "WEDGE", "LOOSE"],
-    canCharge: true,
+  },
+  KNIGHTS: {
+    label: "Cavaleiros",
+    family: "CAVALRY",
+    hint: "Cavalaria pesada: a investida mais forte do campo, ao preço de um pequeno feudo.",
+    cost: 200,
+    wagePerSoldier: 5,
+    stats: { hp: 130, speed: 170, damage: 13, range: 10, cooldown: 1000, radius: 12, mounted: true, attack: 56, defense: 50, armor: 0.5, mass: 3.2, charge: 1.4, nerve: 0.8 },
+    formations: ["WEDGE", "LINE"],
+  },
+  HORSE_ARCHERS: {
+    label: "Arqueiros montados",
+    family: "CAVALRY",
+    hint: "Atiram em movimento e somem de quem chega perto. Fracos no choque.",
+    cost: 135,
+    wagePerSoldier: 3.5,
+    stats: { hp: 62, speed: 205, damage: 8, range: 170, cooldown: 1500, radius: 11, mounted: true, ranged: true, attack: 26, defense: 26, armor: 0.1, mass: 1.6, ammo: 20, volley: 3, spread: 1.25, kite: true },
+    formations: ["LOOSE", "LINE"],
   },
 };
 
@@ -339,15 +458,77 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   OUTRIDER: { label: "Batedor inimigo", color: 0x6b7f7f, aggroRange: 520, stats: { hp: 55, speed: 240, damage: 6, range: 8, cooldown: 1000, radius: 10 } },
   WOLF_RIDER: { label: "Goblin montado em lobo", color: 0x8a5a4a, aggroRange: 480, stats: { hp: 48, speed: 215, damage: 7, range: 8, cooldown: 950, radius: 10 } },
   HERALD: { label: "Arauto inimigo", color: 0xd8c86a, aggroRange: 0, stats: { hp: 50, speed: 235, damage: 4, range: 8, cooldown: 1200, radius: 9 } },
+  SAND_SPEAR: { label: "Lanceiro das areias", color: 0xc9a25c, stats: { hp: 52, speed: 118, damage: 7, range: 26, cooldown: 1000, radius: 9, attack: 38, defense: 46, armor: 0.1, shield: 0.3, antiCavalry: 2.4, brace: true } },
+  DUNE_ARCHER: { label: "Arqueiro das dunas", color: 0xd8b25a, stats: { hp: 56, speed: 185, damage: 7, range: 170, cooldown: 1700, radius: 11, ranged: true, mounted: true, attack: 24, defense: 26, ammo: 18, volley: 1, spread: 0.9, kite: true, mass: 1.6 } },
+  MAMELUKE: { label: "Mameluco", color: 0xa8843c, stats: { hp: 95, speed: 190, damage: 11, range: 10, cooldown: 1000, radius: 11, mounted: true, attack: 50, defense: 44, armor: 0.3, mass: 2.4, charge: 1.1 } },
+  AXEMAN: { label: "Machadeiro", color: 0x6f8aa0, stats: { hp: 72, speed: 115, damage: 11, range: 14, cooldown: 1100, radius: 10, attack: 48, defense: 34, armor: 0.15, pierce: 0.3, shield: 0.2, nerve: 0.85 } },
+  HOUSECARL: { label: "Huscarlo", color: 0x4f6a80, stats: { hp: 95, speed: 105, damage: 12, range: 14, cooldown: 1150, radius: 10, attack: 54, defense: 52, armor: 0.4, pierce: 0.35, shield: 0.35, nerve: 0.7 } },
+  PIKE_LEVY: { label: "Alabardeiro de jade", color: 0x5c9a7a, stats: { hp: 54, speed: 104, damage: 7, range: 30, cooldown: 1050, radius: 9, attack: 36, defense: 50, armor: 0.2, shield: 0.15, antiCavalry: 3, brace: true } },
+  REPEATER: { label: "Besteiro de repetição", color: 0x7ab890, stats: { hp: 46, speed: 110, damage: 6, range: 180, cooldown: 1000, radius: 9, ranged: true, attack: 24, defense: 26, pierce: 0.3, ammo: 30, volley: 2, spread: 0.9, flat: true } },
+  JADE_GUARD: { label: "Guarda de jade", color: 0x3f7a5c, stats: { hp: 90, speed: 105, damage: 11, range: 16, cooldown: 1100, radius: 10, attack: 50, defense: 56, armor: 0.35, shield: 0.35, nerve: 0.75 } },
+  PIRATE: { label: "Pirata", color: 0x8a5a5a, stats: { hp: 48, speed: 125, damage: 8, range: 12, cooldown: 950, radius: 9, attack: 40, defense: 34, armor: 0.05 } },
+  PIRATE_BOW: { label: "Pirata besteiro", color: 0x9a6a6a, stats: { hp: 38, speed: 120, damage: 8, range: 170, cooldown: 1900, radius: 8, ranged: true, attack: 24, defense: 24, pierce: 0.4, ammo: 18, volley: 1, spread: 0.8, flat: true } },
+  PIRATE_CAPTAIN: { label: "Capitão pirata", color: 0x5a2a2a, stats: { hp: 150, speed: 125, damage: 13, range: 14, cooldown: 900, radius: 11, attack: 56, defense: 50, armor: 0.25 } },
+  SIEGE_RAM: { label: "Aríete", color: 0x5a3e24, aggroRange: 0, stats: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18, armor: 0.5, mass: 12 } },
   // Cavalaria dos exércitos: o braço rápido de quem flanqueia e caça mensageiros
   LANCER: { label: "Lanceiro montado", color: 0x7f8c8d, stats: { hp: 80, speed: 190, damage: 10, range: 10, cooldown: 1000, radius: 11 } },
+  GOBLIN_SPEAR: { label: "Goblin lanceiro", color: 0xb5463a, stats: { hp: 38, speed: 100, damage: 6, range: 26, cooldown: 1000, radius: 9, attack: 28, defense: 38, antiCavalry: 2.6, brace: true, shield: 0.15 } },
+  BANDIT_JAVELIN: { label: "Bandido dardeiro", color: 0xb08a50, stats: { hp: 34, speed: 125, damage: 11, range: 110, cooldown: 1800, radius: 8, ranged: true, attack: 28, defense: 26, pierce: 0.3, ammo: 10, volley: 1, spread: 0.85, flat: true } },
+  BANDIT_RIDER: { label: "Salteador montado", color: 0x7a5a30, stats: { hp: 66, speed: 190, damage: 8.5, range: 10, cooldown: 950, radius: 11, mounted: true, attack: 38, defense: 30, armor: 0.1, mass: 2, charge: 0.9 } },
+  PIKEMAN: { label: "Piqueiro", color: 0x7f8c8d, stats: { hp: 62, speed: 102, damage: 7.5, range: 32, cooldown: 1050, radius: 10, attack: 36, defense: 54, armor: 0.2, shield: 0.2, antiCavalry: 3.4, brace: true } },
+  MAN_AT_ARMS: { label: "Homem de armas", color: 0x7f8c8d, stats: { hp: 96, speed: 96, damage: 11, range: 8, cooldown: 1050, radius: 10, attack: 54, defense: 60, armor: 0.5, shield: 0.3, pierce: 0.2, mass: 1.7, nerve: 0.75 } },
+  LONGBOW: { label: "Arqueiro de guerra", color: 0x95a5a6, stats: { hp: 42, speed: 112, damage: 9.5, range: 240, cooldown: 1500, radius: 8, ranged: true, attack: 26, defense: 24, armor: 0.1, ammo: 30, volley: 3, spread: 0.9 } },
+  KNIGHT: { label: "Cavaleiro", color: 0x7f8c8d, stats: { hp: 125, speed: 170, damage: 13, range: 10, cooldown: 1000, radius: 12, mounted: true, attack: 56, defense: 50, armor: 0.5, mass: 3.2, charge: 1.4, nerve: 0.8 } },
+  ORC_BRUTE: { label: "Brutamontes orc", color: 0x3f5a22, stats: { hp: 140, speed: 96, damage: 16, range: 9, cooldown: 1350, radius: 13, attack: 55, defense: 36, armor: 0.3, pierce: 0.35, mass: 2.6, nerve: 0.7 } },
+  SKELETON_ARCHER: { label: "Esqueleto arqueiro", color: 0xc4bda8, stats: { hp: 28, speed: 90, damage: 6.5, range: 190, cooldown: 1700, radius: 8, ranged: true, attack: 20, defense: 20, ammo: 24, volley: 3, spread: 1.2 } },
+  BONE_GUARD: { label: "Guarda de ossos", color: 0xe6e0cc, stats: { hp: 70, speed: 88, damage: 9, range: 9, cooldown: 1050, radius: 10, attack: 44, defense: 50, armor: 0.4, shield: 0.45, mass: 1.5 } },
 };
+
+/** Atributos de combate das tropas que já existiam: quem sabe lutar e quem só tem número. */
+const ENEMY_TRAITS: Partial<Record<EnemyKind, Partial<UnitStats>>> = {
+  GOBLIN: { attack: 30, defense: 30, shield: 0.1 },
+  GOBLIN_ARCHER: { attack: 18, defense: 18, ammo: 24, volley: 3, spread: 1.25 },
+  BANDIT: { attack: 36, defense: 32, armor: 0.05, shield: 0.1 },
+  BANDIT_ARCHER: { attack: 22, defense: 22, ammo: 24, volley: 3, spread: 1.15 },
+  SOLDIER: { attack: 44, defense: 50, armor: 0.25, shield: 0.35 },
+  CROSSBOW: { attack: 26, defense: 26, armor: 0.15, pierce: 0.6, ammo: 20, volley: 1, spread: 0.55, flat: true },
+  SKELETON: { attack: 30, defense: 26, armor: 0.1, shield: 0.3 },
+  ORC: { attack: 50, defense: 34, armor: 0.15, mass: 1.5, nerve: 0.85 },
+  WOLF: { attack: 40, defense: 24, mounted: true, mass: 1.2 },
+  CARAVAN_GUARD: { attack: 36, defense: 40, armor: 0.15, shield: 0.25 },
+  MUTINEER: { ...TROOPS.INFANTRY.stats },
+  MUTINEER_ARCHER: { ...TROOPS.ARCHERS.stats },
+  MUTINEER_RIDER: { ...TROOPS.CAVALRY.stats },
+  OUTRIDER: { attack: 34, defense: 30, mounted: true, mass: 1.8 },
+  WOLF_RIDER: { attack: 34, defense: 28, mounted: true, mass: 1.8, charge: 0.8 },
+  HERALD: { mounted: true },
+  LANCER: { attack: 46, defense: 36, armor: 0.25, mounted: true, mass: 2.2, charge: 1 },
+  GOBLIN_CHIEF: { attack: 50, defense: 48, armor: 0.2 },
+  GOBLIN_CAPTAIN: { attack: 42, defense: 40, armor: 0.15 },
+  BANDIT_CHIEF: { attack: 54, defense: 50, armor: 0.2 },
+  BANDIT_CAPTAIN: { attack: 46, defense: 44, armor: 0.15 },
+  SERGEANT: { attack: 56, defense: 56, armor: 0.3, shield: 0.3 },
+  CAPTAIN: { attack: 58, defense: 58, armor: 0.35, shield: 0.3 },
+  LORD: { attack: 66, defense: 66, armor: 0.45, shield: 0.3, nerve: 0.7 },
+  ORC_CHIEF: { attack: 64, defense: 50, armor: 0.3, mass: 2.2, nerve: 0.7 },
+  ORC_CAPTAIN: { attack: 58, defense: 44, armor: 0.25, mass: 2, nerve: 0.75 },
+  DEATH_KNIGHT: { attack: 56, defense: 54, armor: 0.4, shield: 0.3, mass: 1.5 },
+  NECROMANCER: { attack: 50, defense: 50, armor: 0.2, ammo: Infinity, volley: 1, spread: 0.6 },
+  ORC_WARLORD: { attack: 72, defense: 56, armor: 0.4, mass: 4, nerve: 0.5 },
+};
+for (const [kind, traits] of Object.entries(ENEMY_TRAITS)) Object.assign(ENEMIES[kind as EnemyKind].stats, traits);
 
 /**
  * Inteligência do inimigo (Marco 16). Ninguém ganha vida nem dano: a dificuldade vem de decidir
  * melhor. Competência vai de 1 (reage devagar, conhece poucos planos) a 5 (grande capitão).
  */
 export const WAR_AI = {
+  /** Muralha: o inimigo andou tanto e os postos são repartidos de novo. */
+  WALL_SHIFT: 320,
+  /** Longe assim do posto, corre; perto, chega em forma. */
+  WALL_RUN: 220,
+  /** Entre um esquadrão e o de trás, esperando atrás da mesma brecha. */
+  WALL_RANK: 90,
   /** Intervalo entre decisões por competência (índice = competência − 1), em ms. */
   THINK_MS: [2600, 2000, 1500, 1100, 800],
   /** Olhar em volta (ms). */
@@ -372,6 +553,15 @@ export const WAR_AI = {
   LEADER_DEATH_MORALE: 30,
   /** Soldados por esquadrão; abaixo do mínimo, não se divide. */
   SQUAD_SIZE: 10,
+  /** Montados que ficam de olhos do bando; os outros lutam como cavalaria. */
+  MAX_EYES: 2,
+  /** Quem atira segura o tiro com gente nossa a esta distância do alvo. */
+  FIRE_CLEARANCE: 70,
+  /** Competência para virar a frente sozinho quando pego de lado e para guardar uma reserva. */
+  TURN_COMPETENCE: 3,
+  RESERVE_COMPETENCE: 4,
+  /** Lanças firmam quando a cavalaria chega a esta distância. */
+  BRACE_RANGE: 420,
   SQUAD_MIN: 3,
   /** Um tenente a cada tantos soldados, no máximo 4. */
   LIEUTENANT_EVERY: 9,
@@ -411,6 +601,10 @@ export const WAR_AI = {
   ROUTED_GONE_RADIUS: 1100,
   /** Bandos que perderam mais que isso largam a luta de vez. */
   BROKEN_SHARE: 0.55,
+  /** Batalha personalizada: com fugitivos no campo, ainda dá tempo de eles se reagruparem (s). */
+  RALLY_WAIT_S: 12,
+  /** Batalha personalizada: longe assim de todos e sem lutar, o bando vencido deixa o campo. */
+  BROKEN_ALONE: 700,
   /** Cerca de quanto vale a disciplina por tipo (multiplica a perda de moral; 0 = não sente medo). */
   DISCIPLINE: {
     GOBLIN: 1.3,
@@ -422,6 +616,17 @@ export const WAR_AI = {
     ORC: 0.8,
     SKELETON: 0,
     CARAVAN_GUARD: 1.2,
+    GOBLIN_SPEAR: 1.3,
+    BANDIT_JAVELIN: 1.2,
+    BANDIT_RIDER: 1.2,
+    PIKEMAN: 1,
+    MAN_AT_ARMS: 0.8,
+    LONGBOW: 1,
+    KNIGHT: 0.8,
+    LANCER: 1,
+    ORC_BRUTE: 0.7,
+    SKELETON_ARCHER: 0,
+    BONE_GUARD: 0,
   } as Partial<Record<EnemyKind, number>>,
   /** Campanha: de quantos em quantos dias cada bando revê o rumo. */
   REVIEW_DAYS: 0.25,
@@ -512,7 +717,7 @@ export const AGENTS = {
 } as const;
 
 /** Tipo de amotinado que cada tropa vira ao se rebelar. */
-export const MUTINEER_OF: Record<TroopType, EnemyKind> = {
+export const MUTINEER_OF: Record<TroopFamily, EnemyKind> = {
   INFANTRY: "MUTINEER",
   ARCHERS: "MUTINEER_ARCHER",
   CAVALRY: "MUTINEER_RIDER",
@@ -563,7 +768,7 @@ export const CAMERA = {
   PAN_SPEED: 900,
   /** Distância da borda da tela (px) que faz a câmera rolar quando solta. */
   EDGE_PX: 14,
-  MIN_ZOOM: 0.5,
+  MIN_ZOOM: 0.25,
   MAX_ZOOM: 1.25,
   ZOOM_STEP: 0.1,
 } as const;
@@ -590,7 +795,7 @@ export const SUPPORT = {
   WAR_CRY: { RADIUS: 450, MORALE: 15, RALLY_RADIUS: 300, COOLDOWN_MS: 30000 },
   /** Avançar: distância à frente da formação; Recuar: volta para junto do Comandante. */
   ADVANCE_DISTANCE: 300,
-  VISION: { COMMANDER: 320, BATTALION: 240, SCOUT: 900, MESSENGER: 160, TOWER: 506, MARCH: 460 },
+  VISION: { COMMANDER: 520, BATTALION: 420, ARCHERS: 620, SCOUT: 900, MESSENGER: 200, TOWER: 620, MARCH: 560 },
   /** Quem está na colina enxerga mais longe; na floresta, menos. */
   VISION_HILL_BONUS: 1.35,
   VISION_FOREST_PENALTY: 0.7,
@@ -769,6 +974,9 @@ export interface FormationDef {
   key: string;
   spacing: number;
   speed: number;
+  /** Somados à perícia de ataque e de defesa de quem está nela. */
+  attackBonus: number;
+  defenseBonus: number;
   damageDealt: number;
   meleeTaken: number;
   rangedTaken: number;
@@ -783,6 +991,8 @@ export const FORMATIONS: Record<Formation, FormationDef> = {
     key: "1",
     spacing: 26,
     speed: 1,
+    attackBonus: 0,
+    defenseBonus: 0,
     damageDealt: 1,
     meleeTaken: 1,
     rangedTaken: 1,
@@ -793,6 +1003,8 @@ export const FORMATIONS: Record<Formation, FormationDef> = {
     key: "2",
     spacing: 20,
     speed: 0.55,
+    attackBonus: -6,
+    defenseBonus: 16,
     damageDealt: 0.8,
     meleeTaken: 0.5,
     rangedTaken: 0.25,
@@ -804,6 +1016,8 @@ export const FORMATIONS: Record<Formation, FormationDef> = {
     key: "3",
     spacing: 24,
     speed: 1.1,
+    attackBonus: 10,
+    defenseBonus: -8,
     damageDealt: 1.3,
     meleeTaken: 1.15,
     rangedTaken: 1.1,
@@ -814,6 +1028,8 @@ export const FORMATIONS: Record<Formation, FormationDef> = {
     key: "4",
     spacing: 46,
     speed: 1.15,
+    attackBonus: -4,
+    defenseBonus: -6,
     damageDealt: 0.9,
     meleeTaken: 1.1,
     rangedTaken: 0.5,
@@ -919,14 +1135,18 @@ export const ARRANGEMENTS: Record<GroupArrangement, { label: string; description
 
 /** Números de balanceamento: ajuste aqui, não espalhados pelo código. */
 export const BALANCE = {
-  COMMANDER: { hp: 220, speed: 210, damage: 22, range: 34, cooldown: 550, radius: 16 } satisfies UnitStats,
+  COMMANDER: { hp: 220, speed: 210, damage: 22, range: 34, cooldown: 550, radius: 16, attack: 75, defense: 70, armor: 0.3, mounted: false, mass: 3 } satisfies UnitStats,
   /** Ângulo (rad) do golpe em arco do Comandante, para cada lado da direção em que ele olha. */
   COMMANDER_SWING_ARC: 1.0,
   GOBLIN_AGGRO_RANGE: 260,
+  /** Quem atira percebe a esta fração além do próprio alcance. */
+  SHOOTER_SIGHT: 1.4,
   /** Distância da posição inicial a partir da qual o goblin desiste e volta. */
   GOBLIN_LEASH_RANGE: 650,
 
   BATTALION_SIZE: 8,
+  /** Sem munição: quem atirava luta com o que tem na mão. */
+  OUT_OF_AMMO: { range: 8, cooldown: 1100 },
   /** Raio, em volta do ponto de ancoragem do batalhão, no qual os soldados engajam inimigos sozinhos. */
   ENGAGE_RADIUS: 220,
   /** Distância entre o Comandante e a primeira fileira de quem o segue. */
@@ -968,12 +1188,14 @@ export const BALANCE = {
     MAX: 100,
     PANIC_BELOW: 25,
     RALLY_ABOVE: 50,
-    LOSS_PER_DEATH: 12,
+    LOSS_PER_DEATH: 8,
     /** Perda por segundo para cada soldado atacado pelo flanco/retaguarda. */
-    FLANKED_PER_SOLDIER_PER_SEC: 2,
+    FLANKED_PER_SOLDIER_PER_SEC: 0.9,
+    /** Por trás é pior: ninguém vê de onde vem. */
+    REAR_PER_SOLDIER_PER_SEC: 1.8,
     /** Perda por segundo quando há 2x mais inimigos que soldados por perto. */
-    OUTNUMBERED_PER_SEC: 4,
-    RECOVERY_PER_SEC: 6,
+    OUTNUMBERED_PER_SEC: 1.5,
+    RECOVERY_PER_SEC: 3,
     COMMANDER_AURA_PER_SEC: 2,
     COMMANDER_AURA_RADIUS: 180,
     THREAT_RADIUS: 200,
@@ -982,6 +1204,198 @@ export const BALANCE = {
   },
 
   HUD_UPDATE_MS: 100,
+} as const;
+
+/**
+ * Ritmo do combate: batalhas longas, em que manobrar pesa mais que os números. Vale igual para os
+ * dois lados. Quem anda em ordem vai devagar, correr cansa, e só o último trecho é a toda.
+ */
+export const COMBAT = {
+  /** Fração do dano de cada golpe que acerta (metade erra ou é aparada) e de uma salva inteira de flechas. */
+  DAMAGE_PACE: 0.24,
+  ARROW_PACE: 0.38,
+  /** Fração do dano da investida da cavalaria: o choque continua decidindo. */
+  CHARGE_PACE: 0.5,
+  /** O Comandante bate por vários (multiplica DAMAGE_PACE). */
+  HERO_PACE: 1.5,
+  /** Lados da formação (rad, a partir da frente): até FRONT_ARC é frente; além de REAR_ARC, costas. */
+  FRONT_ARC: Math.PI / 3,
+  REAR_ARC: (2 * Math.PI) / 3,
+  /** Dano extra de quem apanha de lado ou por trás, no corpo a corpo e de flecha. */
+  FLANK_TAKEN: 1.35,
+  REAR_TAKEN: 1.75,
+  FLANK_ARROW: 1.2,
+  REAR_ARROW: 1.5,
+  /** Quanta defesa sobra de lado e de costas. */
+  DEFENSE_FLANK: 0.6,
+  DEFENSE_REAR: 0.2,
+  /** Chance de acerto: base com ataque igual à defesa, e os limites. */
+  HIT_BASE: 0.5,
+  HIT_MIN: 0.15,
+  HIT_MAX: 0.92,
+  /** Moral: o choque de ser pego pelo lado (no máximo uma vez a cada tanto) e o de ver vizinhos fugirem. */
+  FLANK_SHOCK: 10,
+  FLANK_SHOCK_EVERY_MS: 8000,
+  ROUT_CONTAGION: 9,
+  ROUT_RADIUS: 320,
+  /** Moral perdida a cada golpe de investida e a cada flecha que acerta. */
+  CHARGE_SHOCK: 1.5,
+  ARROW_SHOCK: 0.5,
+  /** Investida: derruba (ms), empurra quem está em volta, segue em frente depois do choque. */
+  CHARGE_STUN_MS: 900,
+  CHARGE_SPLASH: 34,
+  CHARGE_THROUGH_MS: 450,
+  /** Lanças firmes devolvem a investida com este multiplicador do próprio dano. */
+  BRACE_COUNTER: 4,
+  BRACE_STUN_MS: 800,
+  /** Investida em ciclo: tempo no choque, distância para ganhar embalo e até onde procura outro alvo. */
+  CYCLE_HIT_MS: 1800,
+  CYCLE_DISTANCE: 380,
+  CYCLE_SEEK: 800,
+  /** Modo escaramuça: quem chega a esta distância faz a tropa recuar por tanto, de tempos em tempos. */
+  KITE_RANGE: 85,
+  KITE_DISTANCE: 240,
+  KITE_EVERY_MS: 2200,
+  /** Flechas: dispersão base, por px de distância, na linha do tiro e pelo tamanho de quem atira. */
+  SPREAD_BASE: 16,
+  SPREAD_PER_PX: 0.13,
+  SPREAD_LONG: 1.4,
+  SPREAD_REFERENCE: 8,
+  SPREAD_MIN_SIZE: 0.55,
+  SPREAD_MAX_SIZE: 1.6,
+  ARROW_HIT_MARGIN: 4,
+  /** A flecha sobe e desce; o tiro reto vai mais rápido. */
+  ARROW_SPEED: 420,
+  BOLT_SPEED: 900,
+  /** Empurra-empurra: fração da sobreposição resolvida por quadro e pesos de quem luta ou carrega. */
+  PUSH_RATE: 0.3,
+  PUSH_PLANTED: 3,
+  PUSH_CHARGING: 6,
+  PUSH_RIDER: 3,
+  PUSH_MIN_RATIO: 0.4,
+  PUSH_MAX_RATIO: 1.6,
+  /** Folga do lugar na fileira: dentro dela o soldado não se mexe (sem tremedeira). */
+  SLOT_SLACK: 7,
+  /** Passo em ordem e passo acelerado (fração da velocidade da tropa). */
+  WALK: 0.45,
+  RUN: 0.72,
+  /** Cavalo a galope: é o que deixa a cavalaria sair de um combate e escolher onde bater. */
+  GALLOP: 0.92,
+  /** Até aqui do alvo a tropa mantém a forma; mais perto, cada um corre para o golpe. */
+  CHARGE_RANGE: 170,
+  /** Quem segura a posição só sai do seu lugar na fileira por um inimigo a esta distância. */
+  HOLD_LEASH: 70,
+  /** Cada fileira extra atrás amortece a perda de moral (até MAX_SUPPORT_RANKS fileiras). */
+  RANK_SUPPORT: 0.08,
+  MAX_SUPPORT_RANKS: 3,
+  /** Segundo clique com o botão direito dentro deste tempo (ms): correr. */
+  DOUBLE_CLICK_MS: 320,
+  /** Arrasto com o botão direito (px de tela) a partir do qual vira posicionamento. */
+  LINE_DRAG_MIN: 18,
+  /** Numa linha larga, folga máxima entre batalhões vizinhos (px). */
+  LINE_MAX_GAP: 140,
+  /** Câmera lenta para decidir: ritmo do tempo, duração e espera até poder usar de novo (ms de verdade). */
+  SLOW_RATE: 0.25,
+  SLOW_MS: 4000,
+  SLOW_WAIT_MS: 10000,
+} as const;
+
+/** Expedições: tropas cumprindo contratos sem o Comandante. */
+/**
+ * Legado (Marco 18). A idade corre mais depressa que o calendário: uma campanha de verdade dura
+ * poucos anos, e sem isso o Comandante nunca envelheceria.
+ */
+export const LEGACY = {
+  START_AGE: [30, 38] as const,
+  HEIR_AGE: [24, 40] as const,
+  AGE_PER_YEAR: 3,
+  /** Queda em combate: chance de morrer, somando idade e cicatrizes. */
+  FALL_DEATH: 0.1,
+  FALL_PER_AGE: 0.008,
+  FALL_PER_WOUND: 0.05,
+  FALL_MAX: 0.6,
+  /** Velhice: a partir desta idade, chance por dia e por ano a mais. */
+  OLD_FROM: 50,
+  OLD_PER_YEAR: 0.00025,
+  /** Cada cicatriz tira vida do Comandante, até este tanto delas. */
+  WOUND_HP: 0.05,
+  WOUND_MAX: 6,
+  /** Sucessão: a fama que fica, quanto a Honra volta ao meio, lealdade perdida e luto. */
+  FAME_KEPT: 0.75,
+  HONOR_FADE: 0.4,
+  GRIEF: 10,
+  MOURNING: 15,
+  /** Sem tropas, sem tenentes e com menos ouro que isso, o bando acabou. */
+  BROKE: 50,
+  /** Acontecimentos guardados na crônica, na campanha e numa saga terminada. */
+  ANNALS_MAX: 3000,
+  SAGA_ANNALS: 1200,
+} as const;
+
+/** Mar (Marco 17). Os lugares são contados como no GDD: soldado 1, cavalo 3, carroça 4. */
+export const SEA = {
+  SHIPS: {
+    BARCA: { label: "Barca costeira", seats: 30, price: 350, upkeep: 8, speed: 0.75, openSea: false, description: "Barata, mas só acompanha a costa: não chega longe." },
+    COCA: { label: "Coca", seats: 70, price: 1100, upkeep: 20, speed: 1, openSea: true, description: "Carga e tropas em mar aberto." },
+    NAU: { label: "Nau", seats: 140, price: 3200, upkeep: 50, speed: 1.3, openSea: true, description: "Grande e cara, feita para viagens longas." },
+  },
+  SEATS: { SOLDIER: 1, HORSE: 3, WAGON: 4 },
+  /** Frete, por lugar e por dia de viagem. */
+  CHARTER_PER_SEAT_DAY: 0.9,
+  /** Mínimo de lugares que um armador cobra. */
+  CHARTER_MIN_SEATS: 20,
+  CHART_PRICE: 180,
+  /** Até esta distância no mapa do planeta, a barca costeira chega. */
+  COAST_RANGE: 380,
+  /** Unidades do mapa do planeta por dia, a velocidade 1. */
+  MAP_PER_DAY: 40,
+  WIND: { SPRING: 1, SUMMER: 1.1, AUTUMN: 0.92, WINTER: 0.75 },
+  STORM: { SPRING: 0.04, SUMMER: 0.02, AUTUMN: 0.07, WINTER: 0.1 },
+  CALM: { SPRING: 0.04, SUMMER: 0.08, AUTUMN: 0.03, WINTER: 0.02 },
+  PIRATES: 0.055,
+  /** Tempestade: carga e gente perdidas. */
+  STORM_CARGO: 0.2,
+  STORM_MEN: 0.06,
+  /** Calmaria: dias a mais. */
+  CALM_DAYS: [1, 3] as const,
+  /** Pedágio dos piratas por lugar ocupado. */
+  TOLL_PER_SEAT: 2.5,
+  TOLL_MIN: 60,
+  /** Quanto o navio rápido ajuda a despistar piratas. */
+  ESCAPE: 0.35,
+  /** Derrota no convés: a parte de cada batalhão que os piratas devolvem por resgate. */
+  RANSOMED: 0.25,
+  /** Saque do navio pirata tomado. */
+  PRIZE_GOLD: [120, 320] as const,
+  /** Notícias de ultramar: dias de atraso por unidade do mapa do planeta. */
+  NEWS_PER_MAP: 0.06,
+  /** Corsários na costa: a cada quantos dias, e a chance. */
+  CORSAIR_EVERY: 12,
+  CORSAIR_CHANCE: 0.35,
+  CORSAIR_SIZE: [8, 16] as const,
+};
+export type ShipType = keyof typeof SEA.SHIPS;
+
+export const EXPEDITION = {
+  /** Força do que espera do outro lado, por dificuldade do contrato. */
+  FOE: { 1: 130, 2: 240, 3: 380 } as Record<1 | 2 | 3, number>,
+  /** Tropa com tenente rende mais. */
+  LEADER_BONUS: 1.2,
+  /** Chance com forças iguais, quanto cada dobro de força soma e os limites. */
+  CHANCE_EVEN: 0.5,
+  CHANCE_PER_DOUBLE: 0.3,
+  CHANCE_MIN: 0.05,
+  CHANCE_MAX: 0.95,
+  /** Baixas: parte da força do inimigo que vira gente morta, na vitória e na derrota. */
+  LOSS_WIN: 0.5,
+  LOSS_DEFEAT: 1.25,
+  /** Dias de serviço, além da viagem de ida e volta, e o mínimo fora. */
+  WORK_DAYS: 1,
+  MIN_DAYS: 2,
+  /** XP por dificuldade para quem volta vitorioso. */
+  XP: 30,
+  /** Quantas notícias o diário guarda. */
+  REPORTS: 8,
 } as const;
 
 /** Mundo contínuo, relógio, bandos errantes e viagem rápida (Marcos 7 e 12). */
@@ -1008,7 +1422,7 @@ export const WORLD = {
   /** Inimigos mais longe que isto de qualquer aliado ficam "adormecidos" (não pensam nem lutam). */
   ACTIVE_RADIUS: 1800,
   /** Combate: inimigo perseguindo um aliado ou a esta distância de uma tropa visível. */
-  ENGAGE_RADIUS: 500,
+  ENGAGE_RADIUS: 320,
   /** Sem inimigos ativos por este tempo, o combate acaba e sai o relatório. */
   ENGAGE_END_MS: 3000,
   /** Viagem rápida: proibida com inimigos à vista a menos disto do Comandante. */
@@ -1102,7 +1516,24 @@ export const SIEGE = {
   /** Até quantas escadas. */
   MAX_LADDERS: 4,
   LADDER_WIDTH: 46,
-  RAM: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18 } satisfies UnitStats,
+  /** A esta distância da muralha, uma tropa alcança para erguer a escada. */
+  LADDER_REACH: 240,
+  /** Assaltante ao pé da muralha: a escada sobe depois desse tempo (a chance de quem defende). */
+  LADDER_RAISE_S: 18,
+  /** Na escada se sobe devagar, um de cada vez. */
+  LADDER_CLIMB: 0.15,
+  /** Atrás de quem está na muralha, a reserva (px). */
+  RESERVE_DEPTH: 240,
+  /** Atrás dos muros não há para onde fugir: a moral cede mais devagar. */
+  WALLS_NERVE: 0.7,
+  /** Quem está ao pé da muralha para contar como ao pé dela. */
+  WALL_FOOT: 150,
+  /** Dano por segundo de cada soldado batendo num portão, sem aríete. */
+  CHOP_DPS: 0.6,
+  CHOP_REACH: 120,
+  /** Até esta distância da muralha, por dentro, quem atira está em cima dela. */
+  RAMPART_DEPTH: 190,
+  RAM: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18, mass: 12 } satisfies UnitStats,
   RAM_DPS: 34,
   GATE_HP: { PALISADE: 260, STONE: 620 },
   /** O portão mal cuidado que um batedor pode achar. */
@@ -1148,7 +1579,7 @@ export const TIME = {
   /** Marchar no escuro é mais lento (o cansaço de verdade chega com a fadiga, no Marco 13). */
   NIGHT_SPEED: 0.85,
   /** Criaturas da noite (goblins e mortos-vivos) ganham força e velocidade no escuro. */
-  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "GOBLIN_CHIEF", "GOBLIN_CAPTAIN", "WOLF_RIDER", "SKELETON", "DEATH_KNIGHT", "NECROMANCER", "WOLF"] as readonly EnemyKind[],
+  NIGHT_CREATURES: ["GOBLIN", "GOBLIN_ARCHER", "GOBLIN_SPEAR", "GOBLIN_CHIEF", "GOBLIN_CAPTAIN", "WOLF_RIDER", "SKELETON", "SKELETON_ARCHER", "BONE_GUARD", "DEATH_KNIGHT", "NECROMANCER", "WOLF"] as readonly EnemyKind[],
   NIGHT_CREATURE_DAMAGE: 1.25,
   NIGHT_CREATURE_SPEED: 1.1,
   /** Emboscada noturna: inimigo que surge do escuro e ataca em poucos segundos abala a moral. */
@@ -1242,7 +1673,9 @@ export const FATIGUE = {
   ROUGH: 1.5,
   FORCED: 2.5,
   /** Lutando: por segundo, para cada batalhão com gente em combate. */
-  COMBAT_PER_SEC: 0.5,
+  COMBAT_PER_SEC: 0.3,
+  /** Correndo: por segundo, além do cansaço da marcha. */
+  RUN_PER_SEC: 1.2,
   /** Parado: recupera por dia de relógio (ao relento) e por segundo de verdade nos alojamentos. */
   REST_PER_DAY: 60,
   CAMP_PER_SEC: 2,
@@ -1390,10 +1823,10 @@ export const REALM = {
   CALAMITY_RELATION: 25,
   /** Títulos do Comandante pelo número de povoados que governa. */
   TITLES: [
-    { min: 0, label: "Capitão mercenário" },
-    { min: 1, label: "Senhor" },
-    { min: 2, label: "Barão" },
-    { min: 4, label: "Rei" },
+    { min: 0, label: "Capitão mercenário", female: "Capitã mercenária" },
+    { min: 1, label: "Senhor", female: "Senhora" },
+    { min: 2, label: "Barão", female: "Baronesa" },
+    { min: 4, label: "Rei", female: "Rainha" },
   ],
 } as const;
 

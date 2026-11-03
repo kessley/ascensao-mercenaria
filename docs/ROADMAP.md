@@ -4,10 +4,12 @@ Desenvolvimento em **greybox**: só primitivas gráficas (círculos = aliados, q
 
 O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 - [Fase 1 — O bando](ROADMAP_FASE_1.md): Marcos 1 a 9 — ✅ OK, fase concluída.
-- [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md): Marcos 10 a 18 — em andamento.
+- [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md): Marcos 10 a 18 — ✅ OK, fase concluída.
 - Fase 3 — O arcano: Marco 19, neste arquivo (abaixo), até a fase começar.
 
 **OK** = marco concluído e jogável em greybox.
+
+O que ficou de fora e a avaliação das mecânicas: [PENDENCIAS.md](PENDENCIAS.md). Plano dos gráficos: [PLANO_GRAFICO.md](PLANO_GRAFICO.md).
 
 ## Visão geral
 
@@ -28,9 +30,9 @@ O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 | | 14 | Economia e comércio (e interiores das estruturas) | ✅ OK |
 | | 15 | Reinos vivos (e a Cidade Alta das capitais) | ✅ OK |
 | | 16 | Guerra de verdade: inimigos que pensam, cercos e prisioneiros | ✅ OK |
-| | 17 | Mares e continentes (o novo Mapa Múndi) | ⏭ próximo |
-| | 18 | Legado e Lendas | |
-| 3 — O arcano (abaixo) | 19 | Magia do Comandante (era o Marco 8) | por último |
+| | 17 | Mares e continentes (o novo Mapa Múndi) | ✅ OK |
+| | 18 | Legado e Lendas | ✅ OK |
+| 3 — O arcano (abaixo) | 19 | Magia do Comandante (era o Marco 8) | ⏭ próximo |
 
 **Regras para todos os marcos novos** (detalhes no GDD, seção 8.1):
 - toda mecânica cria uma decisão com custo e conta uma história no diário;
@@ -66,7 +68,70 @@ O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 - **Inimigo:** até 4 forças (quem são, de onde vêm, se atacam ou esperam, quando chegam, quantos de cada tipo, nome, competência e personalidade do comandante).
 - **Motor:** a batalha roda na cena do mundo, com as mesmas tropas, ordens e IA do Marco 16, num mapa pequeno gerado do cenário (`src/game/data/scenarios.ts`). O relógio fica parado e não há economia, eventos nem save.
 - **Medido:** 46 fps com 283 inimigos e 128 soldados em combate. O equilíbrio dos cenários prontos foi visto só com o exército parado, sem partida jogada de verdade.
-- **Ficou de fora:** cercos a cidades muradas e batalhas com aliados controlados pela IA.
+- **Ficou de fora:** batalhas com aliados controlados pela IA.
+
+### Batalha personalizada de cerco ✅ OK
+**Objetivo:** atacar ou defender uma fortaleza nas batalhas personalizadas, com as mesmas muralhas, portões, escadas e aríete do cerco da campanha.
+- **O que se configura:** ligar o cerco no editor, escolher o lado (atacar ou defender), a fortaleza (aldeia com paliçada, forte de pedra ou cidade murada) e quantas escadas e aríetes tem quem ataca. A fortaleza fica no centro do mapa; mapas com rio ou desfiladeiro não valem. Três cenários prontos: A Paliçada, O Forte da Fronteira e O Último Portão.
+- **Atacando:** as forças marcadas "Atrás dos muros" guardam a fortaleza; as outras vêm de fora, como socorro. A tropa a até 240 px da muralha ergue a escada; o aríete sai de perto da tropa e leva tempo até o portão.
+- **Defendendo:** arcos na muralha virada para o inimigo, reserva logo atrás. O inimigo vem até o pé da muralha, ergue uma escada a cada 18 s, bate nos portões e traz o aríete.
+- **Muralha:** quem atira de cima alcança 40% mais, bate 15% mais forte, leva 40% menos flechas e não gasta munição, dos dois lados. Na escada se anda a 15% da velocidade, e atrás dos muros a moral cede 30% mais devagar.
+- **IA:** a guarnição reparte os atiradores pelos postos voltados para o inimigo e leva a infantaria para onde ele pode entrar; quando ele entra, vai para cima.
+- **Rotas:** passagem mais estreita que a célula de navegação agora entra nas rotas. Antes, a tropa só passava por uma escada se ela estivesse em linha reta (vale também para o cerco da campanha).
+
+### Quem desiste, e quando a batalha acaba ✅ OK
+**Objetivo:** o inimigo não larga a luta só por ver que é menor, e a batalha personalizada não fica presa em quem sobrou.
+- **Medido antes:** contra um exército maior, a força largava a luta aos 6 s, sem nenhuma baixa, e a batalha acabava em 8 s; sob um covarde, 21 de 22 saíam depois de perder 1 soldado.
+- **Agora:** quem já está na luta só sai depois de perder 45% da tropa (30% o covarde, 50% o bravo e o cruel). Numa batalha personalizada ninguém sai antes de lutar. Na campanha, um bando ainda pode evitar a luta enquanto não foi visto de perto.
+- **Fim da batalha:** a força vencida (55% de baixas, ou baixas sem ninguém no comando) que está sem lutar e a mais de 700 px de todos deixa o campo e conta como fugitiva. Quem esperava em posição e já apanhou vem terminar a luta. Cada força marcha para a tropa mais próxima dela; antes ia para o meio do exército, um ponto vazio quando as tropas estavam espalhadas.
+- **Quem não luta:** batedor e arauto rondam e fogem de quem chega perto; sozinhos, não seguram mais a batalha. Quem decidiu largar uma batalha personalizada não volta atrás ao perder o inimigo de vista.
+- **Reagrupar:** com fugitivos no campo, a vitória espera 12 s: quem se recompõe nesse tempo volta à luta.
+- **Medido depois:** contra o mais fraco, a batalha dura de 26 s a 52 s, com 3 a 9 mortos de 14 (antes, 8 s com 0 a 2); sob um covarde, de 34 s a 140 s, com 5 a 16 mortos de 22 (antes, 12 s com 1). Nenhuma batalha sem fim em 36, mas o caso que travou nunca foi capturado por inteiro: o teste agora mostra quem sobrou, se acontecer de novo.
+- **Equilíbrio:** só com jogador simulado. Mesma força, contra a muralha 3 vitórias em 4, em campo aberto 0 em 4; Paliçada 3/3, Forte da Fronteira 3/3, O Último Portão 2/3.
+
+### Tropas em missão à vista ✅ OK
+**Objetivo:** ver as tropas enviadas saírem, andarem e voltarem, em vez de sumirem do campo.
+- **No campo:** quem é enviado vira uma coluna que parte de onde estava e segue a rota até o serviço. Numa escolta, vai até a cidade de saída e continua pela estrada com a carroça. A coluna enxerga como um batalhão e volta até o Comandante.
+- **Onde acompanhar:** faixa no HUD com o que cada tropa está fazendo, diário com a tropa no mapa da rota, e marcador com o destino no Mapa do Continente.
+- **Relógio:** com tropas fora, o tempo corre no acampamento (1 dia a cada 90 s, como no treino). Antes, ficar no acampamento deixava a tropa fora para sempre.
+- **Ficou de fora:** a coluna é só desenho. A luta continua resolvida em conta, então ninguém a ataca pelo caminho e ela não enfrenta o que encontra.
+
+### Zoom mais aberto ✅ OK
+**Objetivo:** ver a batalha inteira de longe.
+- A roda do mouse vai até 25% (antes, 50%), na campanha e nas batalhas, sem perda de desempenho (154 fps na campanha, sem buracos no mapa). De tão longe, os soldados viram pontos e os nomes não se leem.
+
+### Combate em ritmo de batalha campal ✅ OK
+**Objetivo:** batalhas mais longas e fáceis de comandar, no estilo Total War, sem mudar as regras de quem vence.
+- **Ritmo:** cada golpe ou flecha causa 12% do dano antigo; a investida da cavalaria, 40%. A tropa anda a 45% da velocidade e corre a 72%; só o último trecho até o alvo é a toda. Na campanha, sem inimigo à vista, marcha-se no passo normal.
+- **Linha de batalha:** arrastar com o botão direito mostra, antes de soltar, onde cada soldado vai ficar. Risco longo deixa a linha fina; risco curto, funda. Da esquerda para a direita, a frente olha para cima. Esc cancela.
+- **Fileiras:** quem segura a posição não sai correndo atrás do inimigo; quem cai é substituído pela fileira de trás, e cada fileira extra amortece a perda de moral (8% por fileira, até 3).
+- **Passo:** dois cliques com o botão direito ou a tecla X fazem correr, e correr cansa. A tropa só sai da forma perto do alvo.
+- **Alvo que some:** a tropa vai até onde o viu por último e segura a posição, em vez de adivinhar para onde ele foi.
+- **Barra de comandos:** embaixo, com ícones de formação e de ordens, cartões dos batalhões e a lista de teclas no botão "?".
+- **Câmera lenta:** 4 segundos a 1/4 da velocidade, com 10 segundos de espera depois (botão ou Z). O tempo do jogo inteiro desacelera junto (`src/game/gameClock.ts`).
+- **Pausa tática:** P para o mundo e deixa dar ordens.
+- **Ordens diretas:** nas batalhas personalizadas, todo o exército ouve as ordens na hora (pode ser desligado no cenário); na campanha continuam valendo voz, trombeta e mensageiros.
+- **Medido:** 24 contra 24 dura de cerca de 1 a 3 minutos, contra uns 20 segundos antes. Os valores ficam no bloco `COMBAT` de `src/utils/constants.ts`. O equilíbrio ainda não foi visto em partida jogada de verdade.
+
+### Combate com profundidade ✅ OK
+**Objetivo:** cada tropa ter um papel, e posição e manobra decidirem a batalha, no espírito de um Total War.
+- **Atributos:** ataque, defesa, armadura, escudo, perfuração, bônus contra cavalo, peso, firmeza, investida, dispersão e munição (`UnitStats`). As regras são funções puras em `src/game/sim/combatRules.ts`, as mesmas para os dois lados.
+- **Tropas novas do jogador:** Lanceiros, Guarda pesada, Besteiros, Dardeiros, Cavaleiros e Arqueiros montados. Inimigos novos: lanceiro goblin, dardeiro e salteador montado, piqueiro, homem de armas, arqueiro de guerra, cavaleiro, brutamontes orc, esqueleto arqueiro e guarda de ossos.
+- **Flanco:** todo golpe tem lado. De lado ou por trás a defesa cai, o dano sobe e a moral sofre mais; a tropa percebe, avisa no feed e no cartão, e o medo passa para quem vê um vizinho fugir.
+- **Empurra-empurra:** quem está plantado na fileira ou lutando não é jogado longe; quem carrega abre caminho. A fileira assenta, sem tremer.
+- **Flechas em área:** cada salva cai numa elipse que cresce com a distância e com o tamanho da unidade que atira. Tropa fechada sofre mais que dispersa, e o que cai no corpo a corpo acerta os dois lados (fogo amigo). Escudo para flecha de frente; munição acaba e aí é lutar de perto.
+- **Investida:** empurra, derruba, abala a moral e segue em frente. Lança parada e de frente quebra a carga e devolve o golpe. A cavalaria sai do combate e volta; a investida em ciclo faz isso sozinha.
+- **Posturas:** cessar fogo, investida em ciclo e escaramuça (recuar de quem chega perto).
+- **IA:** cada tipo de tropa no próprio esquadrão; a cavalaria espera as linhas se prenderem, escolhe em quem bater, evita lança e entra em ciclo; lanças firmam quando o cavalo vem; arqueiros treinados seguram o tiro em cima dos seus; quem é pego de lado vira a frente; grande capitão guarda reserva.
+- **Testes:** `npm test` (regras, sem abrir o jogo) e `npm run test:battle` (batalhas de verdade, com `npm run dev` rodando).
+- **Medido:** ver o resultado de cada confronto em `tests/battle`. O equilíbrio ainda não foi visto em partida jogada de verdade.
+
+### Missões e expedições ✅ OK
+**Objetivo:** saber sempre de onde um serviço sai, para onde vai e o que falta, e poder mandar as tropas cumpri-lo.
+- **Passos:** cada contrato vira uma lista de passos com o lugar, a distância e a direção, e um minimapa com a rota (`src/game/data/missionGuide.ts`). A faixa do HUD mostra o passo atual.
+- **Diário de missões (J):** contrato do Comandante, tropas fora, favores da corte e as últimas notícias.
+- **Expedições:** "Enviar tropas" manda batalhões cumprirem limpezas de local, escoltas e estradas. Eles saem do campo, levam rações, recebem salário e voltam com o resultado, resolvido em conta pela força contra a dificuldade (`src/game/sim/expeditions.ts`). Quem morre não volta.
+- **Visão:** batalhões enxergam 420 px, os que atiram 620 px e o Comandante 520 px, com o alcance de percepção de quem atira do lado inimigo acompanhando.
 
 ---
 

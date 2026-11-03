@@ -1,11 +1,11 @@
 import Phaser from "phaser";
 import { Unit } from "../entities/Unit";
-import type { Gate, Rect, TownLayout } from "../world/townLayout";
-import { COLORS, SIEGE } from "../../utils/constants";
+import { wallOutward, type Gate, type Rect, type TownLayout } from "../world/townLayout";
+import { COLORS, GEO, SIEGE } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
 /** Um portão no cerco: fechado é sólido; o aríete o derruba. */
-interface SiegeGate {
+export interface SiegeGate {
   gate: Gate;
   rect: Rect;
   hp: number;
@@ -51,7 +51,7 @@ export interface SiegeChange {
 export class SiegeWorks {
   readonly gates: SiegeGate[];
   readonly ladders: Rect[] = [];
-  ram: SiegeRam | null = null;
+  ram: Unit | null = null;
   /** Surtida: os portões ficam abertos até este momento (tempo da cena). */
   sallyUntil = 0;
   private readonly gfx: Phaser.GameObjects.Graphics;
@@ -101,7 +101,9 @@ export class SiegeWorks {
       const vertical = w.h > w.w;
       const len = vertical ? w.h : w.w;
       for (let t = 40; t <= len - 40; t += 40) {
-        const p = vertical ? { x: w.x + w.w / 2, y: w.y + t } : { x: w.x + t, y: w.y + w.h / 2 };
+        // No eixo de uma célula de navegação: é por ali que as rotas passam
+        const along = (Math.floor(((vertical ? w.y : w.x) + t) / GEO.NAV_CELL) + 0.5) * GEO.NAV_CELL;
+        const p = vertical ? { x: w.x + w.w / 2, y: along } : { x: along, y: w.y + w.h / 2 };
         // Na muralha lisa: nem em cima das torres nem colada num portão
         if (!clearOfTowers(p) || l.gates.some((g) => distance(p, g) < 140)) continue;
         if (this.ladders.some((r) => distance(p, { x: r.x + r.w / 2, y: r.y + r.h / 2 }) < 120)) continue;
@@ -137,9 +139,42 @@ export class SiegeWorks {
     return best;
   }
 
-  spawnRam(at: Point): SiegeRam {
+  spawnRam(at: Point): Unit {
     this.ram = new SiegeRam(this.scene, at.x, at.y);
     return this.ram;
+  }
+
+  /** Aríete de quem assalta a muralha do bando: a tropa dele é quem o leva ao portão. */
+  takeRam(ram: Unit): void {
+    this.ram = ram;
+  }
+
+  /** Por onde se passa agora, do lado de dentro: portões caídos e escadas. */
+  get gaps(): Point[] {
+    const inside = this.ladders.map((r) => {
+      const c = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+      const out = wallOutward(this.layout, c);
+      return { x: c.x - Math.cos(out) * 120, y: c.y - Math.sin(out) * 120 };
+    });
+    return [...this.gates.filter((g) => g.broken).map((g) => g.gate.inside), ...inside];
+  }
+
+  /** Está em cima da muralha (por dentro, junto dela)? */
+  onRamparts(p: Point): boolean {
+    const b = this.layout.bounds;
+    if (p.x < b.x || p.y < b.y || p.x > b.x + b.w || p.y > b.y + b.h) return false;
+    return Math.min(p.x - b.x, b.x + b.w - p.x, p.y - b.y, b.y + b.h - p.y) <= SIEGE.RAMPART_DEPTH;
+  }
+
+  /** Golpes num portão (aríete ou machado). */
+  batter(g: SiegeGate, damage: number): void {
+    if (g.broken) return;
+    g.hp -= damage;
+    if (g.hp > 0) return;
+    g.broken = true;
+    this.draw();
+    this.onChange();
+    this.onGateDown(g.gate);
   }
 
   /** Aríete: anda até o portão e bate. */
@@ -162,12 +197,7 @@ export class SiegeWorks {
       return;
     }
     r.unitState = "IDLE";
-    g.hp -= SIEGE.RAM_DPS * dt;
-    if (g.hp > 0) return;
-    g.broken = true;
-    this.draw();
-    this.onChange();
-    this.onGateDown(g.gate);
+    this.batter(g, SIEGE.RAM_DPS * dt);
   }
 
   /** O que vai no save: as escadas de pé e os portões caídos. */

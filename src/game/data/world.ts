@@ -2,6 +2,7 @@ import type { TerrainZone } from "../world/TerrainMap";
 import type { EnemyGroupDef } from "./battleMaps";
 import { WORLD, WORLD_HEIGHT, WORLD_WIDTH, type WorldOptions } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
+import type { CultureId } from "./planet";
 
 /**
  * Tipos do mundo procedural (Marcos 7, 9 e 11). Cada campanha gera um WorldDef a partir de uma
@@ -142,8 +143,10 @@ export interface SettlementSeed {
   y: number;
   /** Id da facção dona, "FREE" (independente) ou "RUINED" (arrasado na história). */
   owner: string;
-  /** Na costa: porto (ainda sem uso; navios chegam no Marco 17). */
+  /** Na costa: porto (o cais fica na praça). */
   port?: boolean;
+  /** O luxo típico desta terra (Marco 17): quanto as oficinas daqui produzem. */
+  luxury?: number;
   /** À beira de um rio. */
   river?: boolean;
   population: number;
@@ -192,6 +195,8 @@ export interface CampDef {
 export interface WorldDef {
   seed: number;
   options: WorldOptions;
+  /** Cultura deste continente (Marco 17); sem ela, os reinos do oeste. */
+  culture?: CultureId;
   /** Regiões de largura e altura (cada uma de REGION_WIDTH×REGION_HEIGHT). */
   cols: number;
   rows: number;

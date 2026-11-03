@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
-import { BALANCE, COLORS, ENEMIES, FORMATIONS, SIEGE, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
+import { BALANCE, COLORS, ENEMIES, FORMATIONS, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 
@@ -59,8 +59,6 @@ export class Enemy extends Unit {
   provoked = false;
   /** Escolhido para ir atrás de um batedor visto (os outros ficam com o bando). */
   huntsScouts = false;
-  /** Defensor no alto da muralha (Marco 16): alcança mais, bate mais forte, apanha menos de flecha. */
-  onWall = false;
   /** Cerco: o defensor não sai por aí atrás de quem está do lado de fora dos muros. */
   keepInside: { x: number; y: number; w: number; h: number } | null = null;
   /** Reino de quem marcha em exército ou patrulha: reinos em guerra lutam de verdade na bolha. */
@@ -89,7 +87,6 @@ export class Enemy extends Unit {
     super(scene, x, y, "ENEMY", ENEMIES[kind].stats);
     this.kind = kind;
     this.bodyColor = color ?? ENEMIES[kind].color;
-    this.canCharge = kind === "MUTINEER_RIDER" || kind === "OUTRIDER" || kind === "WOLF_RIDER" || kind === "LANCER";
     this.home = { x, y };
     this.drawBody();
   }
@@ -132,19 +129,53 @@ export class Enemy extends Unit {
   }
 
   override attackRange(): number {
-    return super.attackRange() * (this.squad?.leaderPassive?.range ?? 1) * (this.onWall && this.ranged ? SIEGE.WALL_RANGE : 1);
+    return super.attackRange() * (this.squad?.leaderPassive?.range ?? 1);
+  }
+
+  override get frontFacing(): number | null {
+    return this.squad?.facing ?? null;
+  }
+
+  override shock(amount: number): void {
+    if (this.squad) this.squad.pendingShock += amount;
+  }
+
+  override get volleySize(): number {
+    return this.squad?.alive ?? 1;
+  }
+
+  override noteCharge(time: number): void {
+    this.squad?.noteImpact(time);
+  }
+
+  /** Patrulha em paz não leva flecha perdida: ninguém começa uma guerra por acidente. */
+  override get strayTarget(): boolean {
+    return this.hostile || this.friendly;
+  }
+
+  override meleeSkill(): number {
+    return this.attack + (this.squad ? FORMATIONS[this.squad.formation].attackBonus : 0);
+  }
+
+  override defenseSkill(time: number): number {
+    const base = super.defenseSkill(time);
+    return base > 0 && this.squad ? base + FORMATIONS[this.squad.formation].defenseBonus : base;
+  }
+
+  override braces(attacker: Unit): boolean {
+    return this.squad?.formation !== "LOOSE" && super.braces(attacker);
   }
 
   override outgoingDamage(target: Unit): number {
     const sq = this.squad;
-    if (!sq) return super.outgoingDamage(target) * (this.onWall ? SIEGE.WALL_DAMAGE : 1);
+    if (!sq) return super.outgoingDamage(target);
     // Na água a formação se desfaz, como para o bando do jogador
     const formation = this.inShallows ? 1 : FORMATIONS[sq.formation].damageDealt;
     return super.outgoingDamage(target) * formation * (sq.leaderPassive?.damage ?? 1);
   }
 
   override incomingMultiplier(source: Unit, kind: AttackKind): number {
-    const base = super.incomingMultiplier(source, kind) * (this.onWall && kind === "RANGED" ? SIEGE.WALL_ARROW_TAKEN : 1);
+    const base = super.incomingMultiplier(source, kind);
     const sq = this.squad;
     if (!sq) return base;
     const withPassive = base * (sq.leaderPassive?.taken ?? 1);
@@ -172,6 +203,16 @@ export class Enemy extends Unit {
       g.strokeCircle(0, 0, s);
       g.fillStyle(COLORS.OUTLINE, 1);
       g.fillRect(s - 4, -2, 4, 4);
+      return;
+    }
+    if (this.kind === "SIEGE_RAM") {
+      // Aríete: telhado de madeira e a viga saindo pela frente (olhando para +X)
+      g.fillStyle(0x4a3220, 1);
+      g.fillRect(-s * 1.4, -s * 0.7, s * 2.8, s * 1.4);
+      g.fillStyle(0x7a5a38, 1);
+      g.fillRect(-s * 0.6, -s * 0.25, s * 2.4, s * 0.5);
+      g.lineStyle(2, COLORS.OUTLINE, 1);
+      g.strokeRect(-s * 1.4, -s * 0.7, s * 2.8, s * 1.4);
       return;
     }
     if (this.kind === "CART") {
@@ -254,7 +295,9 @@ export class Enemy extends Unit {
     const perception = this.nightCreature ? Math.max(1, night) : night;
     // Nevoeiro, neve e chuva escondem o bando de todos (Marco 13)
     const aggro = (ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_AGGRO_RANGE) * perception * Enemy.weatherSight;
-    return (ally.isInForest ? Math.min(aggro, BALANCE.FOREST_DETECT_RANGE) : aggro) * ally.stealth;
+    // Quem atira de longe olha longe: a IA enxerga para o alcance que tem, como o jogador
+    const sight = this.ranged ? Math.max(aggro, this.range * BALANCE.SHOOTER_SIGHT * perception * Enemy.weatherSight) : aggro;
+    return (ally.isInForest ? Math.min(sight, BALANCE.FOREST_DETECT_RANGE) : sight) * ally.stealth;
   }
 
   /** Aliado está ao alcance da percepção? Na floresta, só bem de perto. */

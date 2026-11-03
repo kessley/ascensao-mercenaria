@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useGameStore } from "../../store/useGameStore";
+import { Button } from "./Button";
 import { AUTO_SLOT, MANUAL_SLOTS, listSaves, slotLabel, type SaveMeta } from "../../game/save/saveGame";
 import { WorldChronicle } from "./tent/RealmPanels";
 import { WAR_AI, type WarDifficulty } from "../../utils/constants";
@@ -100,6 +101,9 @@ export function GamePanel() {
   return (
     <>
       <WarDifficultyChoice />
+      <Button variant="gold" onClick={() => useGameStore.getState().setCampPanel({ kind: "SAGA" })}>
+        Livro do Bando (L)
+      </Button>
       <SavePanel />
       <WorldChronicle />
     </>
