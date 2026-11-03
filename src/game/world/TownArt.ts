@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { addCanvasTexture } from "../art/canvasTexture";
 import { LOD_SCALE, lodOf } from "../art/atlas";
 import { gridBitmap, seeded, type Bitmap } from "../art/pixel";
 import {
@@ -70,6 +71,8 @@ interface Build {
 
 interface Town {
   jobs: ArtJob[];
+  /** Peças feitas só quando a câmera chegar perto (as matas: são muitas e quase nunca vistas). */
+  make: (() => ArtJob[]) | null;
   bounds: Phaser.Geom.Rectangle;
   current: Build | null;
   next: Build | null;
@@ -125,10 +128,21 @@ export class TownArt {
     const old = this.towns.get(id);
     if (old) {
       if (old.next) this.dropBuild(old.next);
-      Object.assign(old, { jobs, bounds, next: null, stale: true });
+      Object.assign(old, { jobs, make: null, bounds, next: null, stale: true });
       return;
     }
-    this.towns.set(id, { jobs, bounds, current: null, next: null, shown: false, stale: false });
+    this.towns.set(id, { jobs, make: null, bounds, current: null, next: null, shown: false, stale: false });
+  }
+
+  /** Como `setJobs`, mas a lista só é feita quando a câmera chegar perto de `bounds`. */
+  setLazy(id: string, bounds: Phaser.Geom.Rectangle, make: () => ArtJob[]): void {
+    const old = this.towns.get(id);
+    if (old) {
+      if (old.next) this.dropBuild(old.next);
+      Object.assign(old, { jobs: [], make, bounds, next: null, stale: true });
+      return;
+    }
+    this.towns.set(id, { jobs: [], make, bounds, current: null, next: null, shown: false, stale: false });
   }
 
   remove(id: string): void {
@@ -167,6 +181,10 @@ export class TownArt {
         t.next = null;
       }
       if (Phaser.Geom.Rectangle.Overlaps(near, t.bounds) && (!t.current || t.current.scale > scale || t.stale) && !t.next) {
+        if (t.make) {
+          t.jobs = t.make();
+          t.make = null;
+        }
         t.next = this.newBuild(scale);
         t.stale = false;
       }
@@ -237,7 +255,7 @@ export class TownArt {
     const ctx = canvas.getContext("2d");
     const key = `${this.prefix}-${this.serial++}`;
     if (ctx) for (const { bitmap, slot } of b.pending) ctx.putImageData(new ImageData(bitmap.rgba, bitmap.width, bitmap.height), slot.sx, slot.sy);
-    const texture = this.scene.textures.addCanvas(key, canvas);
+    const texture = addCanvasTexture(this.scene.textures, key, canvas);
     texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
     b.keys.push(key);
     for (const { slot } of b.pending) {
@@ -266,7 +284,7 @@ export class TownArt {
           ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
         }
         const next = `${this.prefix}-${this.serial++}`;
-        this.scene.textures.addCanvas(next, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+        addCanvasTexture(this.scene.textures, next, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
         keys.push(next);
       }
       b.scale *= 2;
@@ -304,7 +322,7 @@ export function pieceImage(scene: Phaser.Scene, key: string, piece: Piece, x: nu
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     canvas.getContext("2d")?.putImageData(new ImageData(bitmap.rgba, bitmap.width, bitmap.height), 0, 0);
-    scene.textures.addCanvas(key, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    addCanvasTexture(scene.textures, key, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
   return scene.add.image(x + piece.dx, y + piece.dy, key).setOrigin(0, 0).setDepth(depthY * 1e-6);
 }

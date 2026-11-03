@@ -2,7 +2,13 @@
 
 Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel art** (já convertido) ou **greybox** (formas de código, como era). Por que pixel art, perspectiva e etapas: [PLANO_GRAFICO.md](PLANO_GRAFICO.md). Etapas no roadmap: [Fase 3](ROADMAP_FASE_3.md).
 
-**Resumo:** etapas G0 (prova), G1 (figuras em campo) e G3 (construções) ✅ OK; G2 (chão) em andamento. Todo soldado, inimigo e bicho que luta já é pixel art; de perto (zoom de 100% e 200%) o chão também; as construções também: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades. Árvores, interiores, interface e efeitos ainda são greybox.
+**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão) e G3 (construções) ✅ OK. Já são pixel art:
+- todo soldado, inimigo e bicho que luta;
+- o chão, em todos os degraus do zoom, com água que se mexe, pontes, vaus, balsas e picos;
+- as matas: árvores, moitas e pedras;
+- as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades.
+
+Interiores, interface e efeitos ainda são greybox.
 
 ## Como a arte é feita
 - **Por código, em camadas** (`src/game/art/`). Nenhuma imagem é carregada: as folhas são desenhadas na primeira vez que alguém veste aquele visual e guardadas como textura.
@@ -11,7 +17,9 @@ Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel a
   - `looks.ts`: o `Look` de cada tropa do jogador, de cada inimigo, do Comandante, do batedor e do mensageiro.
   - `atlas.ts`: cria as texturas (filtro "mais próximo" em cada uma) e escolhe o nível de detalhe pelo zoom.
   - `corpses.ts`: os corpos que ficam no chão.
-  - `ground.ts`: o filtro que passa o chão pintado para pixel art.
+  - `ground.ts`: o filtro que passa o chão pintado para pixel art (roda num worker: `groundWorker.ts`).
+  - `terrainArt.ts`: as peças do chão que vão nítidas por cima do filtro (picos, pontes, vaus e balsas).
+  - `canvasTexture.ts`: põe um canvas como textura sem o `addCanvas` do Phaser, que lê a imagem de volta da placa de vídeo e trava o quadro.
   - `buildings.ts`: as construções em vista 3/4 (casas, templos, castelos, muralhas, torres, portões, tendas, cercas e o acampamento), com o estilo de cada cultura.
   - `../world/TownArt.ts`: põe as peças de cada povoado e do acampamento em folhas de textura, montadas aos poucos perto da câmera.
 - **Trocar a origem depois:** se um artista ou um pacote substituir a arte, basta entregar folhas no mesmo formato. O motor não muda.
@@ -40,16 +48,46 @@ Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel a
 - **Marcas no chão:** anel nos pés: dourado no Comandante, prateado nos tenentes, dourado ou prateado nos oficiais inimigos e azul na guarnição do bando. A seleção do batalhão também é um anel nos pés, e o estandarte fica acima da cabeça mais alta.
 - **Medido** (navegador sem tela, mesmo combate com cerca de 1500 unidades): o desenho custa de 0 a 12 ms por quadro com figuras, contra 20 a 35 ms em greybox. O gargalo dos combates grandes agora é a simulação (25 a 60 ms), não o desenho.
 
-### Chão de perto (G2)
-- **Quando:** no zoom de 100% e 200%. De longe (25% e 50%) o chão é o de antes, sem custo novo.
-- **Como:** o chão é repintado em pedaços de 400×400 px, 1 px por px de mundo (a mesma densidade das figuras), e passa pelo filtro de `ground.ts`:
+### Chão em pixel art (G2)
+- **Quando:** em todos os degraus do zoom, em três níveis:
+  - 400 px de mundo a 100% e 200%, 1 px por px de mundo (a mesma densidade das figuras);
+  - 800 px a 50%;
+  - 1600 px a 25%.
+  - Cada pedaço é uma textura de 400×400 px, então 1 px de textura é 1 px de tela.
+- **Como:** o chão comum é pintado na escala do nível e passa pelo filtro de `ground.ts`:
   - cada ponto vira um material pela cor que o chão já pintava: grama, terra, areia, rocha, neve ou água. A borda entre dois materiais sai serrilhada;
   - manchas grandes, mais claras e mais escuras, com a borda pontilhada;
   - o desenho miúdo do material, espalhado sem repetir: tufos e folhas na grama, pedrinhas na terra, ondas na areia, rachas na pedra, reflexos na água;
   - flores em canteiros, só onde a grama é viçosa. Somem no inverno e são poucas no outono;
-  - a grama faz sombra na terra logo abaixo dela, e a água escurece embaixo da margem.
+  - a grama faz sombra na terra logo abaixo dela;
+  - na beira da água há barranco de terra (margem de cima), espuma e chão molhado (as outras) ou areia molhada (praia).
 - **Sem emenda:** tudo depende só da posição no mundo, então os pedaços vizinhos se encontram sem costura.
-- **Medido** (navegador sem tela, 1920×1080): cerca de 12 ms por pedaço. Pinta no máximo 6 ms por quadro (sempre ao menos um) e guarda 64 pedaços; a tela enche em menos de 30 quadros. Enquanto um pedaço não fica pronto, aparece o chão de longe embaixo.
+- **Fora da linha principal:** o filtro roda num worker (`groundWorker.ts`, `GroundFilter.ts`), com até 3 pedaços ao mesmo tempo. Sem worker, filtra na hora, como antes.
+- **Orçamento:** no máximo 6 ms por quadro, contando o chão comum que vem antes, e sempre ao menos um pedaço. Guarda 64 pedaços de perto, 32 a 50% e 24 a 25%. Enquanto um pedaço não fica pronto, aparece o chão comum embaixo.
+- **Medido** (navegador escondido, tempos ruidosos, 10 lugares nos 3 degraus):
+  - um pedaço custa uns 4 ms na linha principal;
+  - o chão enchendo a tela fica abaixo de 14 ms por quadro;
+  - um salto da câmera custa de 6 a 12 ms;
+  - parado, 0,1 ms.
+
+### Água, travessias e picos (G2)
+- **Água que se mexe** (`WaterGlints.ts`): reflexos descem o rio na velocidade da correnteza (16, 11 ou 8 px/s, do rio estreito ao largo), e a espuma da beira vem e vai.
+  - Cada célula de 16 px do mundo sorteia o seu ponto, então os pedaços vizinhos não repetem nem perdem um brilho.
+  - É um `Blitter` só, e só de perto. O brilho não cai em cima de ponte, cais ou pedra.
+- **Peças nítidas** (`terrainArt.ts`), desenhadas depois do filtro. Cada ponto vira coordenada local (ao longo do rio e de margem a margem), então a peça sai nítida em qualquer ângulo:
+  - pontes de tábua, com guarda-corpo, postes e cabeceiras de pedra; queimadas, sobram os postes e tocos de tábua carbonizados perto das margens;
+  - balsas, com cais nas duas margens, jangada e corda;
+  - vaus, com água rasa recortada no rio e pedras com espuma, só dentro da água;
+  - picos de pedra com neve (maior no inverno), em 48 formas guardadas (6 desenhos em 8 tamanhos).
+- **Colinas, lama e brejo:** degraus de terra nas colinas (as curvas de nível) e poças na lama e no brejo.
+- **Escondidos pela estação:** sob a cheia e o gelo, o vau some.
+
+### Matas (G2)
+- **O quê:** pinheiro, carvalho, moita, pedra e pedra grande (`trees.ts`), cada um com variações pela semente. O pé fica na base da peça, então a profundidade é a mesma das figuras.
+- **Onde:** `forestLayout.ts` espalha as peças em cada zona de mata: grade sacudida (de 42 a 58 px, conforme o bioma), mais rala na borda e com 2 ou 3 clareiras. Algumas árvores têm moita no pé. Nada nasce fora do chão de mata, nem a menos de 34 px da estrada.
+- **Estação:** a primavera põe flores nos carvalhos, o outono os pinta de amarelo, laranja e vermelho, o inverno deixa só os galhos. Onde neva, há neve nos galhos, nas copas dos pinheiros e nas pedras. O lugar das árvores nunca muda.
+- **Chão:** a mata escurece aos poucos (gradiente na última quarta parte da zona) e leva manchas de folha caída por baixo.
+- **Custo:** as peças entram nas folhas do `TownArt`. A lista de cada mata só é feita quando a câmera chega perto (`setLazy`), a montagem gasta no máximo 5 ms por quadro e, de longe, a folha é reduzida. Trocar a estação não pisca: a montagem velha fica até a nova acabar.
 
 ## Inventário
 
@@ -94,13 +132,14 @@ Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel a
 ### Chão (G2)
 | O quê | Onde no código | Estado |
 | --- | --- | --- |
-| 11 biomas | `TerrainMap`, `ground.ts` | de perto, ✅ pixel art (filtro); de longe, greybox |
-| Rios, mar e costa | `TerrainMap`, `ground.ts` | de perto, ✅ água com reflexos e margem serrilhada; falta a margem desenhada |
-| Vaus e pontes | `TerrainMap` | greybox (formas por cima do chão) |
+| 11 biomas | `TerrainMap`, `ground.ts` | ✅ pixel art (filtro) nos 3 níveis de zoom |
+| Rios, mar e costa | `TerrainMap`, `ground.ts`, `WaterGlints` | ✅ margem desenhada (barranco, espuma, areia molhada) e, de perto, água que se mexe |
+| Vaus, pontes e balsas | `terrainArt.ts` | ✅ pixel art nítida, com a ponte queimada e o vau que some na cheia e no gelo |
 | Estradas | `TerrainMap` | de perto, ✅ terra com o desenho do filtro |
-| Florestas, colinas, pântanos e lama | `TerrainMap` | de perto, o chão das zonas já tem textura; árvores, poças e curvas de nível ainda são formas de greybox |
-| Picos das montanhas | `TerrainMap` | greybox |
-| Estações (lama, neve, outono) | `TerrainMap`, `ground.ts` | de perto, ✅ a neve vira material próprio e as flores seguem a estação |
+| Árvores, moitas e pedras das matas | `ForestArt`, `trees.ts`, `forestLayout.ts` | ✅ pixel art, com profundidade, nas 4 estações e com neve |
+| Colinas, pântanos e lama | `TerrainMap` | ✅ degraus de terra nas colinas e poças na lama e no brejo |
+| Picos das montanhas | `terrainArt.ts` | ✅ pixel art nítida, com neve |
+| Estações (lama, neve, outono) | `TerrainMap`, `ground.ts` | ✅ a neve vira material próprio e as flores seguem a estação |
 | Mapas das batalhas personalizadas | `battleMaps.ts` | usam o mesmo chão |
 
 ### Construções (G3)
@@ -138,12 +177,9 @@ Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel a
 1. **G1, acabamento** (feito: chefes no dobro, corpos no chão, escala inteira da tela). Continua fraco:
    - cavalo de frente e de costas: lê como cavalo, mas ainda é a pose mais fraca;
    - estandarte e nome do batalhão ainda são greybox (ficam para o G5, com a fonte).
-2. **G2, chão (em andamento; feito o filtro de perto).** Falta:
-   - árvores, moitas e pedras como sprites, com profundidade (o soldado passa atrás da árvore), no lugar dos círculos das florestas;
-   - margem de rio e costa desenhada (autotile só na água) e água que se mexe;
-   - vaus, pontes, poças, curvas de nível das colinas e picos em pixel art;
-   - o chão de longe (25% e 50%) com o mesmo ar, sem custar mais;
-   - medir no mapa inteiro, no acampamento e nos cercos.
+2. **G2, chão ✅ OK.** Ficou para depois:
+   - a água só se mexe de perto (100% e 200%), e não há onda que corre na praia;
+   - o chão comum de baixo ainda é pintado na linha principal (barato agora: 1,5 ms por pedaço na mediana).
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22, quando ele vier;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).

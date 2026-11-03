@@ -3,8 +3,8 @@
 Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador, cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
 **Onde estamos (3 de novembro de 2026):**
-- **Feito:** a progressão dos batalhões, a pixel art das figuras (G0 e G1) e das construções (G3), as rações refeitas (mochilas e comboio) e os capitães (Marco 20 ✅ OK, no acampamento e na batalha).
-- **Próximo:** o resto do chão (G2).
+- **Feito:** a progressão dos batalhões, a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3), as rações refeitas (mochilas e comboio) e os capitães (Marco 20 ✅ OK, no acampamento e na batalha).
+- **A seguir:** a arrumação da `WorldScene` (etapa 8).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -29,7 +29,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 4 | [Rações refeitas: mochilas e comboio](#4-rações-refeitas-mochilas-e-comboio) | recurso | Pedido no meio do Marco 20: a carroça de ração em toda marcha não ficou boa | feito; falta jogar uma campanha com ele |
 | 5 | [Marco 20, parte 1: capitães no acampamento](#5-marco-20-parte-1-capitães-no-acampamento) | recurso | | ✅ OK |
 | 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
-| 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | **próximo** (o filtro de perto já está feito) |
+| 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene) | dívida | Os Marcos 21 e 22 mexem muito nela | |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | |
 | 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
@@ -209,22 +209,69 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 
 ---
 
-## 7. G2: o resto do chão
+## 7. G2: o resto do chão ✅ OK
 **Objetivo:** chão em pixel art na mesma densidade das figuras, sem desenhar mapa à mão (o continente é gerado).
 
-**Feito, o filtro de perto** (`src/game/art/ground.ts`):
-- no zoom de 100% e 200%, o chão é repintado em pedaços de 400×400 px;
+**Feito, o filtro** (`src/game/art/ground.ts`):
+- o chão é repintado em pedaços de 400×400 px de textura;
 - cada ponto vira um material pela cor (grama, terra, areia, rocha, neve, água), com manchas, desenho miúdo e flores que seguem a estação;
-- cerca de 12 ms por pedaço, com no máximo 6 ms por quadro; a tela de 1080p enche em menos de 30 quadros.
+- no máximo 6 ms por quadro, contando o chão comum que vem antes.
 
-**Falta, em ordem:**
-1. Árvores, moitas e pedras como sprites, com profundidade (o soldado passa atrás da árvore), no lugar dos círculos das florestas.
-2. Margem de rio e costa desenhadas, e água que se mexe.
-3. Vaus, pontes, poças, curvas de nível das colinas e picos.
-4. O chão de longe (25% e 50%) com o mesmo ar, sem custar mais.
-5. Medir no mapa inteiro, no acampamento e nos cercos.
+**Feito, as matas** (`src/game/art/trees.ts`, `src/game/world/ForestArt.ts` e `forestLayout.ts`):
+- cada zona de mata vira pinheiros, carvalhos, moitas e pedras em pixel art, no lugar dos círculos;
+- a profundidade sai do pé, como nas figuras e nas construções: o soldado passa atrás da árvore;
+- o lugar de cada árvore sai da semente da zona: grade sacudida, mais rala na borda, com 2 ou 3 clareiras, e nunca na água, nas casas, no acampamento ou a menos de 34 px da estrada;
+- o bioma muda a mistura: quase só pinheiro na tundra e na serra, quase só folha no brejo;
+- a estação muda só o desenho: flor na primavera, cor no outono, galho pelado no inverno e neve no frio;
+- o chão da mata não tem mais borda dura: escurece aos poucos, junto com as árvores, que rareiam;
+- as peças vão para as mesmas folhas do `TownArt`, feitas só quando a câmera chega perto e reduzidas de longe;
+- **medido** (navegador escondido, tempos ruidosos): 4677 árvores no mapa, em 53 matas; no trecho mais cheio, 12 matas e 1383 peças custam cerca de 0,5 ms por quadro a 100% e 0,8 ms a 25%; cada mata ocupa uma folha de cerca de 2048×200 px (1,6 MB);
+- 7 testes de regras (`tests/unit/forest.test.ts`).
 
-**Pronto quando:** de perto, nenhum pedaço do campo de batalha é mais greybox, e a floresta esconde quem está dentro dela.
+**Feito, a água** (`ground.ts` e `src/game/world/WaterGlints.ts`):
+- **margem desenhada**, em rio, lago e mar:
+  - barranco de terra na margem de cima;
+  - espuma e chão molhado nas outras;
+  - na praia, areia molhada no lugar do barranco;
+- **a água se mexe:** reflexos descem o rio na velocidade da correnteza (mais depressa no rio estreito), e a espuma vem e vai na beira;
+- tudo num `Blitter` só, e só de perto. O brilho não cai em cima da ponte nem das pedras do vau.
+
+**Feito, as peças nítidas** (`src/game/art/terrainArt.ts`), por cima do filtro. Cada ponto é desenhado no sentido do rio, então a peça sai nítida em qualquer ângulo:
+- **pontes:** tábuas, guarda-corpo, postes e cabeceiras de pedra, e a versão queimada;
+- **balsas:** cais nas duas margens, jangada e corda;
+- **vaus:** água rasa recortada no rio e pedras só dentro dele, com espuma;
+- **picos:** com neve maior no inverno;
+- **chão das zonas:** degraus de terra nas colinas (as curvas de nível) e poças na lama e no brejo.
+
+**Feito, o chão de longe:** os mesmos pedaços em pixel art em três níveis:
+- 400 px de mundo a 100% (e 200%), 800 px a 50% e 1600 px a 25%;
+- cada pedaço é uma textura de 400×400 px, então 1 px de textura é 1 px de tela em todos os degraus do zoom;
+- de longe há menos flores, e a água fica parada.
+
+**Feito, o custo:**
+- **o filtro roda num worker** (`groundWorker.ts` e `GroundFilter.ts`). A linha principal só pinta o chão comum e sobe a textura. O pedaço que volta do worker espera a vez dentro do orçamento do quadro;
+- **as texturas de canvas não usam mais o `addCanvas` do Phaser** (`canvasTexture.ts`). Ele lia a imagem inteira de volta da placa de vídeo e travava quadros por 40 a 70 ms. A troca vale para o chão, as construções, as matas e as figuras;
+- **os picos são 48 formas guardadas** (6 desenhos em 8 tamanhos), em vez de um desenho por pico. Um pedaço de serra tem uns 200 picos;
+- **medido** com o navegador escondido (tempos ruidosos), em 10 lugares (acampamento, forte, capital, cidade e 6 pontos sorteados) e nos 3 degraus do zoom:
+  | O quê | Agora | Antes |
+  | --- | --- | --- |
+  | Pedaço em pixel art, na linha principal | uns 4 ms | uns 19 ms |
+  | Pedaço do chão comum | 1,5 ms na mediana, 16 ms no pior | 8 ms na mediana, até 70 ms nas serras |
+  | Salto da câmera | 6 a 12 ms | 18 a 146 ms |
+  | Chão enchendo a tela | até 14 ms por quadro (um único de 22 ms em 375) | |
+  | Chão parado | 0,1 ms | |
+  | Matas e construções juntas, montando | até 6 ms por quadro | |
+- **nos cercos** o chão é o mesmo do povoado (forte, capital e cidade foram medidos), e as suítes de batalha passam;
+- **testes:** 10 de regras (`tests/unit/terrainArt.test.ts`), cobrindo os picos, as pontes, os vaus e os brilhos da água.
+
+**Ficou de fora:**
+- a água só se mexe de perto (100% e 200%);
+- onda na praia: a espuma da beira vem e vai, mas não há onda que corre;
+- o chão comum de baixo (o que aparece enquanto o pedaço em pixel art não fica pronto) ainda é pintado na linha principal. Com a correção do `addCanvas` e dos picos, ficou barato.
+
+**Pronto quando** (as duas coisas valem agora):
+- de perto, nenhum pedaço do campo de batalha é mais greybox;
+- a floresta esconde quem está dentro dela. Na tela, a árvore cobre quem passa atrás, pela profundidade do pé; na regra, quem está na mata só é visto de perto (`FOREST_DETECT_RANGE`).
 
 ## 8. Arrumação: dividir a `WorldScene`
 **Objetivo:** `WorldScene.ts` passa de 6000 linhas, e os Marcos 21 e 22 vão mexer muito nela.
@@ -444,6 +491,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 - **Equilíbrio:** nada foi ajustado jogando. Os Marcos 14 a 18, a nova progressão e as rações foram calibrados só por simulação.
 - **Saves antigos:** não foram testados com os Marcos 16, 17 e 18, com a nova progressão nem com as mochilas e os capitães.
 - **Testes de confronto:** usam 6 lutas por caso, pouco para um resultado aleatório. Passam ou falham por sorte perto do limite ("cavaleiros vencem mais lanceiros montados" ficou em 2 a 4 de 6). Precisam de mais amostras ou de limites mais largos.
+  - O mesmo vale para "nem o covarde larga a luta com a primeira baixa" (suíte `ia`): 3 lutas, cada uma com pelo menos 4 baixas. Numa rodada do G2, uma luta teve 3; sozinha, a suíte passou.
 - **Assalto sem fim:** em 2 de 16 assaltos à Paliçada com jogador simulado, a batalha passou de 10 minutos com poucos sobreviventes dos dois lados. Não voltou a acontecer nas repetições, e a causa não foi encontrada. Numa partida, o menu de pausa permite sair.
 - **Defesa que demora a acabar:** defendendo o forte, os 2 ou 3 últimos arqueiros às vezes ficam parados na muralha e os orcs, já dentro, levam minutos para chegar neles. Em 5 repetições a batalha acabou entre 113 e 230 s; na suíte completa, 2 vezes não acabou nos 276 s do teste. Não vem das figuras: a mesma demora aparece sem elas.
 - **Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.

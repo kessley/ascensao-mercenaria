@@ -23,6 +23,8 @@ const board = scoreboard();
 try {
   for (const name of names) {
     console.log(`\n== ${name}`);
+    // Uma suíte que recarrega a página (a de missões) leva o laboratório junto
+    if (!(await lab.page.evaluate(() => Boolean(window.__lab)))) await lab.page.evaluate(lab.labScript);
     await SUITES[name](lab, board);
   }
 } catch (e) {

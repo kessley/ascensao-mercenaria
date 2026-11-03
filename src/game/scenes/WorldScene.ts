@@ -28,6 +28,7 @@ import { captainName } from "../data/captains";
 import { SiegeWorks } from "../systems/SiegeWorks";
 import { HostManager, makeStaff, promoteRoster, type HostWorld, type StaffData, type WallPlan, type WarHost } from "../systems/WarHost";
 import { TerrainMap, TerrainStreamer } from "../world/TerrainMap";
+import { ForestArt } from "../world/ForestArt";
 import { NightLayer, type Light } from "../world/NightLayer";
 import { CampArea, type Interactable } from "../world/CampArea";
 import { StaticCuller } from "../world/StaticCuller";
@@ -336,6 +337,8 @@ export class WorldScene extends Phaser.Scene {
   /** Mundo gerado desta campanha. */
   private world!: WorldDef;
   private settlementLayer!: SettlementLayer;
+  /** Árvores, moitas e pedras das matas (G2). */
+  private forestArt!: ForestArt;
   /** Quando acabou o último combate (feridos na enfermaria por um dia). */
   private lastCombatDay = -Infinity;
   /** Povoado sob cerco (a guarnição luta contra o bando). */
@@ -551,6 +554,7 @@ export class WorldScene extends Phaser.Scene {
     const terrain = new TerrainMap(this.world.terrain, geoOf(this.world.geo));
     terrain.setBurned(store.burnedBridges);
     this.terrainStreamer = new TerrainStreamer(this, terrain, this.world);
+    this.forestArt = new ForestArt(this, terrain, this.world.roads);
     Unit.terrain = terrain;
     // Navegação: água funda e montanha bloqueiam; vau, lama e pântano custam; estrada é atalho
     const NAV_COST: Partial<Record<string, number>> = { SHALLOW: 3, MUD: 2, SWAMP: 2.5, FOREST: 1.4, HILL: 1.2 };
@@ -806,6 +810,7 @@ export class WorldScene extends Phaser.Scene {
     this.terrainStreamer.update(this.cameras.main);
     this.settlementLayer.updateArt(this.cameras.main);
     this.campArea.updateArt(this.cameras.main);
+    this.forestArt.update(this.cameras.main);
     this.updateNight(store.dayProgress);
     this.updateWeather(time);
     this.weatherLayer.update(this.cameras.main, this.weather, this.ended ? 0 : Math.min(delta, 50) / 1000);
@@ -1781,6 +1786,7 @@ export class WorldScene extends Phaser.Scene {
     if (!terrain) return;
     const winter = season === "WINTER";
     terrain.setSeason({ freezeBelow: winter ? SEASONS.FREEZE_BELOW : null, flood, snowBelow: winter ? SEASONS.SNOW_BELOW : null, autumn: season === "AUTUMN" });
+    this.forestArt.setSeason({ foliage: season, snowBelow: winter ? SEASONS.SNOW_BELOW : null });
     Unit.groundStamp++;
     if (first) return;
     this.terrainStreamer.invalidateAll();

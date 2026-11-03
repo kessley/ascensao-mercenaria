@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { addCanvasTexture } from "./canvasTexture";
 import { cellOf, dotOf, dotSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
 import type { Bitmap } from "./pixel";
 
@@ -37,7 +38,7 @@ function addSheet(scene: Phaser.Scene, key: string, b: Bitmap, fw: number, fh: n
   canvas.width = b.width;
   canvas.height = b.height;
   canvas.getContext("2d")?.putImageData(new ImageData(b.rgba, b.width, b.height), 0, 0);
-  const texture = scene.textures.addCanvas(key, canvas);
+  const texture = addCanvasTexture(scene.textures, key, canvas);
   if (!texture) return;
   texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
   const cols = b.width / fw;

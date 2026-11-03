@@ -7,8 +7,12 @@
  * - por cima, o desenho miúdo do material, espalhado sem repetir: tufos e folhas na grama,
  *   pedrinhas na terra, ondas na areia, rachas na pedra, reflexos na água, e flores onde a
  *   grama é viçosa (em canteiros, não por igual);
- * - a grama faz sombra na terra logo abaixo dela, e a água escurece na margem de cima.
- * Tudo depende só da posição no mundo: pedaços vizinhos se encontram sem emenda.
+ * - a grama faz sombra na terra logo abaixo dela;
+ * - na beira da água, o barranco: a terra de cima mostra a face (3 ou 4 px de terra molhada) e
+ *   faz sombra na água (na praia, só areia molhada); embaixo e dos lados, a água bate na terra
+ *   com uma linha de espuma, e a terra fica molhada.
+ * Tudo depende só da posição no mundo: pedaços vizinhos se encontram sem emenda (quem chama
+ * passa uma imagem com folga em volta, e as bordas olham os vizinhos de verdade).
  */
 
 const GRASS = 0;
@@ -35,6 +39,13 @@ const FLOWER_COLORS = [
   [196, 150, 222],
   [222, 96, 84],
 ];
+/** Códigos da beira da água (depois das flores). */
+const BANK = 20;
+const WET = 21;
+const FOAM = 22;
+const FOAM_SOFT = 23;
+const BANK_COLOR = [64, 48, 32];
+const FOAM_COLOR = [214, 234, 238];
 const JITTER = [-1, 0, 0, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 
@@ -303,15 +314,57 @@ export function pixelGround(data: Uint8ClampedArray, w: number, h: number, x0: n
     }
   }
 
-  // 4. Bordas: a grama faz sombra no chão logo abaixo; a água escurece embaixo da margem
+  // 4. Bordas: a grama faz sombra no chão logo abaixo
   for (let y = 1; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const m = mat[i];
       const above = mat[i - w];
-      if (above === m) continue;
-      if (above === GRASS && m !== WATER) code[i] = Math.min(code[i], -2);
-      else if (m === WATER) code[i] = -2;
+      if (above === m || m === WATER) continue;
+      if (above === GRASS) code[i] = Math.min(code[i], -2);
+    }
+  }
+
+  // 4b. Beira da água (vista de cima e um pouco de frente)
+  if (present & (1 << WATER)) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const m = mat[i];
+        if (m === WATER) {
+          // Sombra do barranco logo abaixo da terra; espuma onde a água encosta embaixo e dos lados
+          // (a areia da praia não faz sombra: a água bate nela com espuma)
+          const a1 = y > 0 ? mat[i - w] : WATER;
+          const a2 = y > 1 ? mat[i - 2 * w] : WATER;
+          const up1 = a1 !== WATER && a1 !== SAND;
+          if (up1 || (a2 !== WATER && a2 !== SAND)) {
+            code[i] = up1 ? -2 : Math.min(code[i], -1);
+            continue;
+          }
+          const down1 = a1 === SAND || (y < h - 1 && mat[i + w] !== WATER);
+          const side = (x > 0 && mat[i - 1] !== WATER) || (x < w - 1 && mat[i + 1] !== WATER);
+          if (down1 || side) code[i] = FOAM;
+          else if ((y < h - 2 && mat[i + 2 * w] !== WATER) || (x > 1 && mat[i - 2] !== WATER) || (x < w - 2 && mat[i + 2] !== WATER)) code[i] = FOAM_SOFT;
+          continue;
+        }
+        if (m === SNOW) continue;
+        // Terra logo acima da água: a face do barranco, de 2 ou 3 px (a altura muda aos poucos)
+        const tall = field[i] > 0.5 ? 4 : 3;
+        let bank = false;
+        for (let d = 1; d <= tall && y + d < h; d++) {
+          if (mat[i + d * w] === WATER) {
+            bank = true;
+            break;
+          }
+        }
+        if (bank) {
+          // Praia não tem barranco: a areia desce molhada até a água
+          code[i] = m === SAND ? WET : BANK;
+          continue;
+        }
+        // Terra logo abaixo ou ao lado da água: molhada
+        if ((y > 0 && mat[i - w] === WATER) || (x > 0 && mat[i - 1] === WATER) || (x < w - 1 && mat[i + 1] === WATER)) code[i] = WET;
+      }
     }
   }
 
@@ -326,6 +379,26 @@ export function pixelGround(data: Uint8ClampedArray, w: number, h: number, x0: n
       const g = data[k + 1];
       const b = data[k + 2];
       const c = code[i];
+      if (c >= BANK) {
+        const v = BAYER[row + ((x0 + x) & 3)] - 0.5;
+        if (c === BANK) {
+          // A face do barranco: terra escura e molhada, mais escura embaixo (onde a água bate)
+          const dark = mat[i + w] === WATER ? 0.78 : 1 + v * 0.08;
+          data[k] = (r * 0.25 + BANK_COLOR[0] * 0.75) * dark;
+          data[k + 1] = (g * 0.25 + BANK_COLOR[1] * 0.75) * dark;
+          data[k + 2] = (b * 0.25 + BANK_COLOR[2] * 0.75) * dark;
+        } else if (c === WET) {
+          data[k] = r * 0.8;
+          data[k + 1] = g * 0.8;
+          data[k + 2] = b * 0.84;
+        } else {
+          const t = c === FOAM ? 0.62 : 0.24;
+          data[k] = r + (FOAM_COLOR[0] - r) * t;
+          data[k + 1] = g + (FOAM_COLOR[1] - g) * t;
+          data[k + 2] = b + (FOAM_COLOR[2] - b) * t;
+        }
+        continue;
+      }
       if (c >= FLOWER) {
         // Flor só na grama viçosa; na grama seca vira só uma folha clara
         if (g - (r + b) / 2 > 40) {
@@ -344,4 +417,90 @@ export function pixelGround(data: Uint8ClampedArray, w: number, h: number, x0: n
       data[k + 2] = b * f;
     }
   }
+}
+
+/** Onde a água brilha: no meio dela (reflexo que corre) ou na beira (espuma que vem e vai). */
+export interface WaterSpot {
+  x: number;
+  y: number;
+  shore: boolean;
+}
+
+/**
+ * O brilho ainda cai na água depois das peças nítidas (ponte, cais, pedra do vau)? Olha a cor final
+ * do ponto e dos vizinhos na horizontal.
+ */
+export function stillWater(data: Uint8ClampedArray, w: number, h: number, lx: number, ly: number, reach = 3): boolean {
+  if (ly < 0 || ly >= h) return false;
+  for (let d = -reach; d <= reach; d++) {
+    const x = lx + d;
+    if (x < 0 || x >= w) return false;
+    const k = (ly * w + x) * 4;
+    const r = data[k];
+    const g = data[k + 1];
+    const b = data[k + 2];
+    // Água ou espuma (a espuma é clara, mas segue mais azul que vermelha)
+    if (!(b > r + 12 && b >= g - 14)) return false;
+  }
+  return true;
+}
+
+/** Lado da célula do mundo onde cai cada brilho, e a chance de cada célula ter um. */
+const GLINT_CELL = 16;
+const GLINT_CHANCE = 0.5;
+const FOAM_CHANCE = 0.75;
+
+/** Um ponto de espuma dentro da célula que começa em (lx, ly), ou -1 (o índice na imagem). */
+function foamIn(lx: number, ly: number, w: number, h: number, hv: number): number {
+  // Começa num ponto sorteado da célula, para a espuma não cair sempre no mesmo canto
+  const n = GLINT_CELL * GLINT_CELL;
+  const start = (hv >>> 22) % n;
+  for (let k = 0; k < n; k++) {
+    const s = (start + k) % n;
+    const px = lx + (s % GLINT_CELL);
+    const py = ly + Math.floor(s / GLINT_CELL);
+    if (px < 0 || py < 0 || px >= w || py >= h) continue;
+    if (code[py * w + px] === FOAM) return py * w + px;
+  }
+  return -1;
+}
+
+/**
+ * Os brilhos da água do último pedaço filtrado por `pixelGround` (mesma imagem: `w`×`h`, canto em
+ * (x0, y0)), só os que caem dentro de `inner` (o pedaço sem a folga). Cada célula do mundo sorteia
+ * o seu ponto: pedaços vizinhos nunca repetem nem perdem um brilho.
+ */
+export function waterSpots(w: number, h: number, x0: number, y0: number, inner: { x: number; y: number; w: number; h: number }): WaterSpot[] {
+  const out: WaterSpot[] = [];
+  const c0 = Math.floor(inner.x / GLINT_CELL);
+  const c1 = Math.floor((inner.x + inner.w - 1) / GLINT_CELL);
+  const r0 = Math.floor(inner.y / GLINT_CELL);
+  const r1 = Math.floor((inner.y + inner.h - 1) / GLINT_CELL);
+  const water = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && mat[y * w + x] === WATER;
+  for (let cy = r0; cy <= r1; cy++) {
+    for (let cx = c0; cx <= c1; cx++) {
+      const hv = hash(cx, cy, 97);
+      const wx = cx * GLINT_CELL + (hv % GLINT_CELL);
+      const wy = cy * GLINT_CELL + ((hv >>> 8) % GLINT_CELL);
+      if (wx < inner.x || wy < inner.y || wx >= inner.x + inner.w || wy >= inner.y + inner.h) continue;
+      const lx = wx - x0;
+      const ly = wy - y0;
+      const roll = ((hv >>> 16) & 1023) / 1024;
+      // Espuma: a linha da beira é fina, então procura um ponto dela na célula
+      const foam = roll < FOAM_CHANCE ? foamIn(cx * GLINT_CELL - x0, cy * GLINT_CELL - y0, w, h, hv) : -1;
+      if (foam >= 0) {
+        const fx = x0 + (foam % w);
+        const fy = y0 + Math.floor(foam / w);
+        if (fx >= inner.x && fy >= inner.y && fx < inner.x + inner.w && fy < inner.y + inner.h) out.push({ x: fx, y: fy, shore: true });
+        continue;
+      }
+      if (!water(lx, ly)) continue;
+      // Reflexo só onde cabe o traço inteiro, longe da margem
+      if (roll >= GLINT_CHANCE) continue;
+      let open = true;
+      for (let d = -4; d <= 4 && open; d++) open = water(lx + d, ly) && water(lx + d, ly - 2) && water(lx + d, ly + 2);
+      if (open) out.push({ x: wx, y: wy, shore: false });
+    }
+  }
+  return out;
 }

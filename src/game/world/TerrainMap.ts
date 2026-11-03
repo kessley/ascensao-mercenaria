@@ -1,11 +1,15 @@
 import Phaser from "phaser";
+import { addCanvasTexture } from "../art/canvasTexture";
 import { GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, type TerrainType } from "../../utils/constants";
 import type { Biome, SiteTheme, WorldDef } from "../data/world";
 import type { CalamityKind } from "../sim/realm";
 import type { GeoMap, GeoSeason } from "../worldgen/geoMap";
 import type { Point } from "../../utils/math";
 import { townSolids, wellOf, WELL_RADIUS, type Rect, type TownLayout } from "./townLayout";
-import { pixelGround } from "../art/ground";
+import { stillWater, type WaterSpot } from "../art/ground";
+import { GroundFilter } from "./GroundFilter";
+import { WaterGlints } from "./WaterGlints";
+import { blit, crossingReach, paintCrossing, peakBitmap, peakSpots, type CrossingArt, type PeakSpot } from "../art/terrainArt";
 import { CAMPFIRE, CAMP_SITES, PALISADE } from "../data/campLayout";
 
 /** Zona de terreno de superfície (elíptica). Zonas posteriores na lista têm prioridade. */
@@ -255,13 +259,52 @@ interface Chunk {
 /** Resolução da textura de cada pedaço (px de textura por lado). */
 const TEX = 512;
 /**
- * Chão em pixel art (G2): de perto, pedaços menores pintados em 1 px de textura por px de
- * mundo, por cima do pedaço comum. Quantos ficam guardados e quanto tempo por quadro se gasta
- * pintando os que faltam (o primeiro de cada quadro sai sempre).
+ * Chão em pixel art (G2), por cima do pedaço comum, em três níveis: em cada degrau do zoom, 1 px
+ * de textura é 1 px de tela, então o chão tem o mesmo ar de perto e de longe. Todo pedaço tem
+ * 400×400 px de textura: de perto cobre 400 px de mundo; a 50%, 800; a 25%, 1600. `max` é
+ * quantos ficam guardados. O tempo por quadro vale para todos (o primeiro de cada quadro sai sempre).
  */
-const DETAIL = 400;
-const DETAIL_MAX = 64;
+const PIXEL_LEVELS = [
+  { cell: 400, scale: 1, max: 64 },
+  { cell: 800, scale: 0.5, max: 32 },
+  { cell: 1600, scale: 0.25, max: 24 },
+] as const;
 const DETAIL_BUDGET_MS = 6;
+/** Quantos pedaços podem estar no filtro (no worker, ou já de volta esperando a vez) ao mesmo tempo. */
+const MAX_IN_FILTER = 3;
+/**
+ * Folga em volta de cada pedaço em pixel art (px de textura): o filtro vê os vizinhos de verdade
+ * (barranco, espuma, borda serrilhada) e a emenda some. Em px de mundo, é múltiplo da amostra do
+ * relevo em todos os níveis, para a grade não mudar.
+ */
+const DETAIL_PAD = 16;
+
+/** O nível do chão em pixel art de cada degrau do zoom. */
+const pixelLevelOf = (zoom: number) => (zoom >= 1 ? 0 : zoom >= 0.5 ? 1 : 2);
+
+interface Tile extends Chunk {
+  used: number;
+}
+
+/** Um pedaço que voltou do filtro e espera a vez de virar textura. */
+interface Filtered {
+  at: number;
+  c: number;
+  r: number;
+  generation: number;
+  data: Uint8ClampedArray;
+  spots: WaterSpot[];
+}
+
+interface PixelLevel {
+  cell: number;
+  scale: number;
+  max: number;
+  cols: number;
+  tiles: Map<number, Tile>;
+  /** Pedaços no filtro, ainda sem textura. */
+  pending: Set<number>;
+}
 /** Uma amostra de relevo a cada tantos px de mundo (depois ampliada com suavização). */
 const SAMPLE = 16;
 
@@ -270,7 +313,7 @@ const SAMPLE = 16;
  * canvas desenhada quando chega perto da câmera e apagada quando fica longe. A textura tem
  * o chão do bioma com relevo sombreado, mar, lagos, rios, vaus, pontes, estradas, picos e
  * as zonas de superfície. Tudo determinístico (o mesmo pedaço sai sempre igual).
- * Pedaços na tela carregam na hora; os da margem, alguns por quadro.
+ * Pedaços na tela carregam na hora; os da margem, um por quadro.
  */
 export class TerrainStreamer {
   private readonly size = WORLD.CHUNK_SIZE;
@@ -281,16 +324,25 @@ export class TerrainStreamer {
   private readonly loaded = new Map<number, Chunk>();
   private readonly view = new Phaser.Geom.Rectangle();
   private readonly prefix = `chao-${Math.random().toString(36).slice(2, 8)}`;
-  private readonly detailCols = Math.ceil(WORLD_WIDTH / DETAIL);
-  private readonly detailRows = Math.ceil(WORLD_HEIGHT / DETAIL);
-  private readonly detail = new Map<number, Chunk & { used: number }>();
+  private readonly levels: PixelLevel[] = PIXEL_LEVELS.map((l) => ({ ...l, cols: Math.ceil(WORLD_WIDTH / l.cell), tiles: new Map<number, Tile>(), pending: new Set<number>() }));
   private frame = 0;
+  /** O filtro do chão em pixel art (num worker). */
+  private readonly filter = new GroundFilter();
+  /** O que voltou do filtro: vira textura no quadro, dentro do orçamento, e não quando chega. */
+  private readonly ready: Filtered[] = [];
+  /** Sobe quando o chão é apagado: o que voltar do filtro depois disso é jogado fora. */
+  private generation = 0;
+  private destroyed = false;
+  /** A água que se mexe, por cima do chão de perto. */
+  private readonly water: WaterGlints;
+  private readonly lit = new Set<number>();
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly terrain: TerrainMap,
     private readonly world: WorldDef,
   ) {
+    this.water = new WaterGlints(scene, terrain.geo ? world.geo.rivers : [], WORLD_WIDTH);
     terrain.zones.forEach((z, i) => {
       const c0 = Math.max(0, Math.floor((z.x - z.rx) / this.size));
       const c1 = Math.min(this.cols - 1, Math.floor((z.x + z.rx) / this.size));
@@ -312,15 +364,23 @@ export class TerrainStreamer {
   }
 
   update(camera: Phaser.Cameras.Scene2D.Camera): void {
+    const t0 = performance.now();
     const w = camera.worldView;
     const s = this.size;
     const vc0 = Math.max(0, Math.floor(w.x / s));
     const vc1 = Math.min(this.cols - 1, Math.floor(w.right / s));
     const vr0 = Math.max(0, Math.floor(w.y / s));
     const vr1 = Math.min(this.rows - 1, Math.floor(w.bottom / s));
-    // Na tela: carrega já; na margem (1 pedaço): até 2 por quadro
-    for (let r = vr0; r <= vr1; r++) for (let c = vc0; c <= vc1; c++) if (!this.loaded.has(r * this.cols + c)) this.load(c, r);
-    let budget = 2;
+    // Na tela: carrega já; na margem (1 pedaço): um por quadro, e só se nenhum da tela carregou
+    // (cada um custa uns 9 ms)
+    let budget = 1;
+    for (let r = vr0; r <= vr1; r++) {
+      for (let c = vc0; c <= vc1; c++) {
+        if (this.loaded.has(r * this.cols + c)) continue;
+        this.load(c, r);
+        budget = 0;
+      }
+    }
     for (let r = Math.max(0, vr0 - 1); r <= Math.min(this.rows - 1, vr1 + 1) && budget > 0; r++) {
       for (let c = Math.max(0, vc0 - 1); c <= Math.min(this.cols - 1, vc1 + 1) && budget > 0; c++) {
         if (this.loaded.has(r * this.cols + c)) continue;
@@ -337,82 +397,166 @@ export class TerrainStreamer {
     const m = 200;
     this.view.setTo(w.x - m, w.y - m, w.width + m * 2, w.height + m * 2);
     for (const chunk of this.loaded.values()) chunk.image.setVisible(Phaser.Geom.Rectangle.Overlaps(this.view, chunk.bounds));
-    this.updateDetail(camera);
+    this.updateDetail(camera, t0);
   }
 
   /** Quantos pedaços em pixel art estão guardados agora (para testes). */
   get detailCount(): number {
-    return this.detail.size;
+    return this.levels.reduce((n, l) => n + l.tiles.size, 0);
   }
 
-  /** De perto (zoom de 100% ou mais), o chão em pixel art por cima; de longe, só o comum. */
-  private updateDetail(camera: Phaser.Cameras.Scene2D.Camera): void {
+  /** Quantos pedaços em pixel art cada nível guarda agora (de perto, a 50%, a 25%). */
+  get tileCounts(): number[] {
+    return this.levels.map((l) => l.tiles.size);
+  }
+
+  /**
+   * O chão em pixel art do degrau do zoom por cima do comum; os outros níveis ficam guardados,
+   * escondidos. O orçamento conta desde `t0`, o começo do quadro do chão (o comum vem antes).
+   */
+  private updateDetail(camera: Phaser.Cameras.Scene2D.Camera, t0: number): void {
     this.frame++;
-    if (camera.zoom < 1) {
-      for (const d of this.detail.values()) d.image.setVisible(false);
-      return;
-    }
+    this.lit.clear();
+    const at = pixelLevelOf(camera.zoom);
+    this.levels.forEach((l, i) => {
+      if (i !== at) for (const t of l.tiles.values()) if (t.image.visible) t.image.setVisible(false);
+    });
+    const level = this.levels[at];
     const w = camera.worldView;
-    const s = DETAIL;
+    const s = level.cell;
     const c0 = Math.max(0, Math.floor(w.x / s));
-    const c1 = Math.min(this.detailCols - 1, Math.floor(w.right / s));
+    const c1 = Math.min(level.cols - 1, Math.floor(w.right / s));
     const r0 = Math.max(0, Math.floor(w.y / s));
-    const r1 = Math.min(this.detailRows - 1, Math.floor(w.bottom / s));
-    const t0 = performance.now();
+    const r1 = Math.min(Math.ceil(WORLD_HEIGHT / s) - 1, Math.floor(w.bottom / s));
+    // Primeiro termina o que voltou do filtro (pelo menos um por quadro), depois pede mais
+    for (let first = true; this.ready.length > 0 && (first || performance.now() - t0 < DETAIL_BUDGET_MS); first = false) {
+      this.finishTile(this.ready.shift()!);
+    }
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        const index = r * this.detailCols + c;
-        let d = this.detail.get(index);
-        if (!d) {
-          if (performance.now() - t0 > DETAIL_BUDGET_MS) continue;
-          d = this.paintDetail(c, r) ?? undefined;
-          if (!d) continue;
+        const index = r * level.cols + c;
+        const t = level.tiles.get(index);
+        if (!t) {
+          if (level.pending.has(index) || this.filter.pending + this.ready.length >= MAX_IN_FILTER || performance.now() - t0 > DETAIL_BUDGET_MS) continue;
+          this.paintTile(at, c, r);
+          continue;
         }
-        d.used = this.frame;
+        t.used = this.frame;
       }
     }
-    for (const d of this.detail.values()) d.image.setVisible(d.used === this.frame);
+    for (const [index, t] of level.tiles) {
+      t.image.setVisible(t.used === this.frame);
+      // A água só se mexe de perto
+      if (at === 0 && t.used === this.frame) this.lit.add(index);
+    }
+    this.water.update(this.scene.time.now, this.lit);
     // Guardados demais: vão embora os que saíram da tela há mais tempo
-    if (this.detail.size > DETAIL_MAX) {
-      const old = [...this.detail].filter(([, d]) => d.used !== this.frame).sort((a, b) => a[1].used - b[1].used);
-      for (const [index, d] of old.slice(0, this.detail.size - DETAIL_MAX)) this.dropDetail(index, d);
+    if (level.tiles.size > level.max) {
+      const old = [...level.tiles].filter(([, t]) => t.used !== this.frame).sort((a, b) => a[1].used - b[1].used);
+      for (const [index, t] of old.slice(0, level.tiles.size - level.max)) this.dropTile(at, index, t);
     }
   }
 
-  private paintDetail(c: number, r: number): (Chunk & { used: number }) | null {
-    const s = DETAIL;
-    const x0 = c * s;
-    const y0 = r * s;
-    const canvas = document.createElement("canvas");
-    canvas.width = s;
-    canvas.height = s;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return null;
-    const chunk = Math.floor(y0 / this.size) * this.cols + Math.floor(x0 / this.size);
-    paintGround(ctx, this.world, this.terrain, x0, y0, s, s, this.zonesByChunk.get(chunk) ?? [], true);
-    const img = ctx.getImageData(0, 0, s, s);
-    const season = this.terrain.season;
-    pixelGround(img.data, s, s, x0, y0, season.snowBelow !== null ? 0 : season.autumn ? 0.3 : 1);
-    ctx.putImageData(img, 0, 0);
-    const key = `${this.prefix}-d-${c}-${r}`;
-    if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-    this.scene.textures.addCanvas(key, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    const image = this.scene.add.image(x0, y0, key).setOrigin(0, 0).setDepth(-9.9);
-    const d = { image, key, bounds: new Phaser.Geom.Rectangle(x0, y0, s, s), used: this.frame };
-    this.detail.set(r * this.detailCols + c, d);
-    return d;
+  /** Zonas que tocam um retângulo (as dos pedaços comuns em volta dele). */
+  private zonesAround(x: number, y: number, w: number, h: number): number[] {
+    const out = new Set<number>();
+    const c0 = Math.max(0, Math.floor(x / this.size));
+    const c1 = Math.min(this.cols - 1, Math.floor((x + w) / this.size));
+    const r0 = Math.max(0, Math.floor(y / this.size));
+    const r1 = Math.min(this.rows - 1, Math.floor((y + h) / this.size));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) for (const i of this.zonesByChunk.get(r * this.cols + c) ?? []) out.add(i);
+    return [...out].sort((a, b) => a - b);
   }
 
-  private dropDetail(index: number, d: Chunk): void {
-    d.image.destroy();
-    if (this.scene.textures.exists(d.key)) this.scene.textures.remove(d.key);
-    this.detail.delete(index);
+  /**
+   * Começa um pedaço em pixel art no nível dado: o chão comum na escala do nível (com folga em
+   * volta) e o filtro, que roda no worker em px de textura (a semente de cada ponto é o px do
+   * nível, então os vizinhos se encontram). O resto vem em `finishTile`.
+   */
+  private paintTile(at: number, c: number, r: number): void {
+    const level = this.levels[at];
+    const s = level.cell;
+    const k = level.scale;
+    const x0 = c * s;
+    const y0 = r * s;
+    const p = DETAIL_PAD;
+    const pw = p / k;
+    const big = Math.round(s * k) + p * 2;
+    const work = document.createElement("canvas");
+    work.width = big;
+    work.height = big;
+    const wctx = work.getContext("2d", { willReadFrequently: true });
+    if (!wctx) return;
+    paintGround(wctx, this.world, this.terrain, x0 - pw, y0 - pw, s + pw * 2, big, this.zonesAround(x0 - pw, y0 - pw, s + pw * 2, s + pw * 2), true);
+    const img = wctx.getImageData(0, 0, big, big);
+    const season = this.terrain.season;
+    // De longe as flores são menos (cada ponto de flor cobriria um canteiro inteiro)
+    const flowers = (season.snowBelow !== null ? 0 : season.autumn ? 0.3 : 1) * (k >= 1 ? 1 : 0.4);
+    const index = r * level.cols + c;
+    const generation = this.generation;
+    level.pending.add(index);
+    this.filter.run(
+      { data: img.data, w: big, h: big, x0: Math.round((x0 - pw) * k), y0: Math.round((y0 - pw) * k), flowers, inner: at === 0 ? { x: x0, y: y0, w: s, h: s } : null },
+      (data, spots) => this.ready.push({ at, c, r, generation, data, spots }),
+      () => level.pending.delete(index),
+    );
+  }
+
+  /** O filtro voltou: as peças nítidas, os brilhos da água (de perto) e a textura do pedaço. */
+  private finishTile({ at, c, r, generation, data, spots }: Filtered): void {
+    if (this.destroyed || generation !== this.generation) return;
+    const level = this.levels[at];
+    const index = r * level.cols + c;
+    level.pending.delete(index);
+    const s = level.cell;
+    const k = level.scale;
+    const x0 = c * s;
+    const y0 = r * s;
+    const p = DETAIL_PAD;
+    const tex = Math.round(s * k);
+    const big = tex + p * 2;
+    paintSharp(data, big, x0 - p / k, y0 - p / k, k, this.world, this.terrain);
+    const canvas = document.createElement("canvas");
+    canvas.width = tex;
+    canvas.height = tex;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.putImageData(new ImageData(data as Uint8ClampedArray<ArrayBuffer>, big, big), -p, -p);
+    if (at === 0) this.water.add(index, spots.filter((q) => stillWater(data, big, big, q.x - x0 + p, q.y - y0 + p, q.shore ? 0 : 3)));
+    const key = `${this.prefix}-d${at}-${c}-${r}`;
+    if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    addCanvasTexture(this.scene.textures, key, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    // Aparece no próximo quadro, se ainda estiver na tela
+    const image = this.scene.add.image(x0, y0, key).setOrigin(0, 0).setScale(1 / k).setDepth(-9.9).setVisible(false);
+    level.tiles.set(index, { image, key, bounds: new Phaser.Geom.Rectangle(x0, y0, s, s), used: -1 });
+  }
+
+  private dropTile(at: number, index: number, t: Chunk): void {
+    if (at === 0) this.water.remove(index);
+    t.image.destroy();
+    if (this.scene.textures.exists(t.key)) this.scene.textures.remove(t.key);
+    this.levels[at].tiles.delete(index);
+  }
+
+  /** Apaga os pedaços em pixel art de todos os níveis que tocam a área (ou todos, sem área). */
+  private dropTiles(area?: { x: number; y: number; r: number }): void {
+    // O que está no filtro foi pintado com o chão de antes: volta e é jogado fora
+    this.generation++;
+    this.ready.length = 0;
+    this.levels.forEach((l, at) => {
+      l.pending.clear();
+      for (const [index, t] of l.tiles) {
+        const b = t.bounds;
+        if (area && (area.x + area.r < b.x || area.x - area.r > b.right || area.y + area.r < b.y || area.y - area.r > b.bottom)) continue;
+        this.dropTile(at, index, t);
+      }
+    });
   }
 
   /** Redesenha tudo (a estação mudou: neve, gelo, cheia, cores do outono). */
   invalidateAll(): void {
     for (const [index, chunk] of this.loaded) this.unload(index, chunk);
-    for (const [index, d] of this.detail) this.dropDetail(index, d);
+    this.dropTiles();
   }
 
   /** Redesenha os pedaços em volta de um ponto (ponte queimada ou reconstruída). */
@@ -422,16 +566,15 @@ export class TerrainStreamer {
       if (p.x + radius < b.x || p.x - radius > b.right || p.y + radius < b.y || p.y - radius > b.bottom) continue;
       this.unload(index, chunk);
     }
-    for (const [index, d] of this.detail) {
-      const b = d.bounds;
-      if (p.x + radius < b.x || p.x - radius > b.right || p.y + radius < b.y || p.y - radius > b.bottom) continue;
-      this.dropDetail(index, d);
-    }
+    this.dropTiles({ x: p.x, y: p.y, r: radius });
   }
 
   destroy(): void {
     for (const [index, chunk] of this.loaded) this.unload(index, chunk);
-    for (const [index, d] of this.detail) this.dropDetail(index, d);
+    this.dropTiles();
+    this.destroyed = true;
+    this.filter.destroy();
+    this.water.destroy();
   }
 
   private unload(index: number, chunk: Chunk): void {
@@ -455,7 +598,7 @@ export class TerrainStreamer {
     // 512 é potência de 2: sem isto o WebGL repete a textura, e o filtro mistura a borda com a do
     // lado oposto (virava uma linha de grama no chão da cidade, na emenda dos pedaços)
     const clamp = Phaser.Textures.WrapMode.CLAMP_TO_EDGE;
-    this.scene.textures.addCanvas(key, canvas)?.setWrap(clamp, clamp);
+    addCanvasTexture(this.scene.textures, key, canvas)?.setWrap(clamp, clamp);
     const image = this.scene.add.image(x0, y0, key).setOrigin(0, 0).setScale(s / TEX).setDepth(-10);
     this.loaded.set(r * this.cols + c, { image, key, bounds: new Phaser.Geom.Rectangle(x0, y0, s, s) });
   }
@@ -585,7 +728,7 @@ function paintGround(
   }
 
   // 3. Zonas de superfície (cada uma com a própria semente)
-  for (const i of zones) drawZone(ctx, terrain.zones[i], new Phaser.Math.RandomDataGenerator([`zona-${i}`]), terrain.season.autumn);
+  for (const i of zones) drawZone(ctx, terrain.zones[i], new Phaser.Math.RandomDataGenerator([`zona-${i}`]), terrain.season.autumn, detail);
 
   // 3b. Neve do inverno por cima do chão e das zonas (onde é frio: norte e montanhas)
   const snowBelow = terrain.season.snowBelow;
@@ -629,28 +772,13 @@ function paintGround(
     ctx.stroke();
   }
 
-  // 4. Picos nas montanhas
-  if (geo) {
-    const rnd = new Phaser.Math.RandomDataGenerator([`picos-${x0}-${y0}`]);
-    for (let y = y0 + 60; y < y0 + size; y += 170) {
-      for (let x = x0 + 60; x < x0 + size; x += 170) {
-        const px = x + rnd.between(-50, 50);
-        const py = y + rnd.between(-50, 50);
-        if (geo.heightAt(px, py) <= geo.def.mountainLevel + 0.01 || geo.inPass(px, py)) continue;
-        const sz = rnd.between(50, 85);
-        ctx.fillStyle = "#5e5850";
-        ctx.beginPath();
-        ctx.moveTo(px - sz * 0.6, py + sz * 0.4);
-        ctx.lineTo(px, py - sz * 0.6);
-        ctx.lineTo(px + sz * 0.6, py + sz * 0.4);
-        ctx.fill();
-        ctx.fillStyle = "#e8e8e8";
-        ctx.beginPath();
-        ctx.moveTo(px - sz * 0.2, py - sz * 0.27);
-        ctx.lineTo(px, py - sz * 0.6);
-        ctx.lineTo(px + sz * 0.2, py - sz * 0.27);
-        ctx.fill();
-      }
+  // 4. Picos nas montanhas (de perto, vão nítidos por cima do filtro: `paintSharp`)
+  if (geo && !detail) {
+    const winter = terrain.season.snowBelow !== null;
+    ctx.imageSmoothingEnabled = true;
+    for (const p of peakSpots(x0, y0, size, size, (x, y) => isPeakGround(geo, x, y))) {
+      const { canvas, ax, ay } = peakCanvas(p, winter);
+      ctx.drawImage(canvas, p.x - ax, p.y - ay);
     }
   }
 
@@ -689,7 +817,8 @@ function paintGround(
     if (inChunk(c.x - WILD_REACH, c.y - WILD_REACH, c.x + WILD_REACH, c.y + WILD_REACH, 0)) paintWild(ctx, lair.kind, c, lair.id);
   }
 
-  // 6. Rios: margem escura e água por cima (trecho a trecho, com a largura de cada um)
+  // 6. Rios: margem e água por cima (trecho a trecho, com a largura de cada um). De perto, a
+  // margem é de terra: o filtro faz dela o barranco, a lama e a espuma
   if (geo) {
     for (const river of world.geo.rivers) {
       const pts = river.points;
@@ -704,8 +833,8 @@ function paintGround(
           const frozen = freeze !== null && geo.temperatureAt((a.x + b.x) / 2, (a.y + b.y) / 2) < freeze;
           const flood = terrain.season.flood && !shallow;
           ctx.strokeStyle =
-            pass === 0 ? (frozen ? "rgba(150,170,180,0.6)" : "rgba(48,60,40,0.55)") : frozen ? "#cfe2ee" : flood ? "#4a6f86" : shallow ? "#5f9cb8" : "#3a74a4";
-          ctx.lineWidth = pass === 0 ? w + 14 : w;
+            pass === 0 ? (frozen ? "rgba(150,170,180,0.6)" : detail ? "#7d6847" : "rgba(48,60,40,0.55)") : frozen ? "#cfe2ee" : flood ? "#4a6f86" : shallow ? "#5f9cb8" : "#3a74a4";
+          ctx.lineWidth = pass === 0 ? w + (detail && !frozen ? 10 : 14) : w;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
@@ -721,6 +850,10 @@ function paintGround(
       ctx.translate(c.x, c.y);
       ctx.rotate(c.angle);
       const across = c.width + 80;
+      if (detail && c.kind !== "FORD") {
+        ctx.restore();
+        continue;
+      }
       if (c.kind === "FERRY") {
         // Cais nas duas margens, a corda de margem a margem e a balsa no meio do rio
         ctx.fillStyle = "#6b4a2b";
@@ -752,6 +885,29 @@ function paintGround(
           continue;
         }
         const len = GEO.FORD_LENGTH;
+        if (detail) {
+          // De perto: o raso só onde é rio, numa mancha redonda em volta da travessia (as pedras
+          // vêm depois do filtro, no paintSharp)
+          ctx.beginPath();
+          ctx.ellipse(0, 0, len / 2, across / 2, 0, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.rotate(-c.angle);
+          ctx.translate(-c.x, -c.y);
+          const river = world.geo.rivers.find((r) => r.id === c.riverId);
+          ctx.strokeStyle = "rgb(124,176,190)";
+          for (let k = 1; river && k < river.points.length; k++) {
+            const a = river.points[k - 1];
+            const b = river.points[k];
+            if (Math.min(a.x, b.x) > c.x + 300 || Math.max(a.x, b.x) < c.x - 300 || Math.min(a.y, b.y) > c.y + 300 || Math.max(a.y, b.y) < c.y - 300) continue;
+            ctx.lineWidth = (river.widths[k - 1] + river.widths[k]) / 2;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+          ctx.restore();
+          continue;
+        }
         ctx.fillStyle = "rgba(150,196,206,0.9)";
         ctx.fillRect(-len / 2, -across / 2, len, across);
         const rnd = new Phaser.Math.RandomDataGenerator([c.id]);
@@ -789,6 +945,58 @@ function paintGround(
     }
   }
   ctx.restore();
+}
+
+/** Pé de pico: montanha alta, fora dos passos. */
+function isPeakGround(geo: GeoMap, x: number, y: number): boolean {
+  return geo.heightAt(x, y) > geo.def.mountainLevel + 0.01 && !geo.inPass(x, y);
+}
+
+const peakCanvases = new Map<string, { canvas: HTMLCanvasElement; ax: number; ay: number }>();
+
+/** O pico em canvas, para o chão de longe (guardado: são poucas formas, e todo pedaço repete). */
+function peakCanvas(p: PeakSpot, winter: boolean): { canvas: HTMLCanvasElement; ax: number; ay: number } {
+  const key = `${p.seed}|${p.size}|${winter}`;
+  let hit = peakCanvases.get(key);
+  if (!hit) {
+    const { bitmap, ax, ay } = peakBitmap(p, winter);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")?.putImageData(new ImageData(bitmap.rgba, bitmap.width, bitmap.height), 0, 0);
+    hit = { canvas, ax, ay };
+    peakCanvases.set(key, hit);
+  }
+  return hit;
+}
+
+/** Comprimento da travessia ao longo do rio. */
+const crossingLength = (kind: CrossingArt["kind"]) => (kind === "BRIDGE" ? GEO.BRIDGE_LENGTH : kind === "FORD" ? GEO.FORD_LENGTH : 120);
+
+/**
+ * Chão em pixel art, depois do filtro: o que tem de sair nítido (picos, pontes, balsas, as pedras
+ * do vau). A imagem é quadrada (`size` px de lado, `scale` px por px de mundo), com o canto no
+ * ponto (x0, y0) do mundo.
+ */
+function paintSharp(data: Uint8ClampedArray, size: number, x0: number, y0: number, scale: number, world: WorldDef, terrain: TerrainMap): void {
+  const geo = terrain.geo;
+  if (!geo) return;
+  const winter = terrain.season.snowBelow !== null;
+  const span = size / scale;
+  for (const p of peakSpots(x0, y0, span, span, (x, y) => isPeakGround(geo, x, y))) {
+    const { bitmap, ax, ay } = peakBitmap(p, winter, scale);
+    blit(data, size, size, Math.round((p.x - x0) * scale) - ax, Math.round((p.y - y0) * scale) - ay, bitmap);
+  }
+  const freeze = terrain.season.freezeBelow;
+  for (const c of world.geo.crossings) {
+    const length = crossingLength(c.kind);
+    const reach = crossingReach(c, length);
+    if (c.x + reach < x0 || c.x - reach > x0 + span || c.y + reach < y0 || c.y - reach > y0 + span) continue;
+    const frozen = freeze !== null && geo.temperatureAt(c.x, c.y) < freeze;
+    const hidden = c.kind === "FORD" && (frozen || (terrain.season.flood && c.width > 50));
+    const inRiver = (x: number, y: number) => geo.riverAt(x, y) !== null;
+    paintCrossing(data, size, size, x0, y0, { ...c, burned: c.kind === "BRIDGE" && terrain.isBurned(c.id), hidden, inRiver }, length, scale);
+  }
 }
 
 /** Até onde vai o chão de um local de contrato ou de um covil, a partir do centro. */
@@ -970,18 +1178,58 @@ function randomPointIn(z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator, sca
   return { x: z.x + Math.cos(a) * z.rx * r, y: z.y + Math.sin(a) * z.ry * r };
 }
 
-/** Desenho greybox de uma zona: elipse e detalhes do tipo (curvas de nível, poças, árvores). */
-function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator, autumn = false): void {
+/** Uma cor "#rrggbb" clareada ou escurecida. */
+function toneHex(hex: string, f: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (s: number) => Math.max(0, Math.min(255, Math.round(((n >> s) & 255) * f)));
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+
+/**
+ * Desenho de uma zona: elipse e detalhes do tipo (curvas de nível, poças, o chão da mata). De
+ * perto (`detail`), a colina vira degraus, cada um com a face escura embaixo, e as poças da lama e
+ * do pântano têm cor de água, para o filtro fazer delas água de verdade (barranco, espuma, brilho).
+ */
+function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator, autumn = false, detail = false): void {
   const c = autumn && z.type === "FOREST" ? AUTUMN_FOREST : autumn && z.type === "HILL" ? AUTUMN_HILL : ZONE_COLORS[z.type];
   const ellipse = (x: number, y: number, rx: number, ry: number) => {
     ctx.beginPath();
     ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
   };
-  ctx.fillStyle = c.base;
-  ellipse(z.x, z.y, z.rx, z.ry);
-  ctx.fill();
+  if (z.type === "FOREST") {
+    // A mata não tem borda: o chão escurece aos poucos, junto com as árvores, que rareiam
+    ctx.save();
+    ctx.translate(z.x, z.y);
+    ctx.scale(1, z.ry / z.rx);
+    const fade = ctx.createRadialGradient(0, 0, z.rx * 0.72, 0, 0, z.rx);
+    fade.addColorStop(0, c.base);
+    fade.addColorStop(1, `${c.base}00`);
+    ctx.fillStyle = fade;
+    ellipse(0, 0, z.rx, z.rx);
+    ctx.fill();
+    ctx.restore();
+  } else {
+    ctx.fillStyle = c.base;
+    ellipse(z.x, z.y, z.rx, z.ry);
+    ctx.fill();
+  }
   switch (z.type) {
     case "HILL":
+      if (detail) {
+        // Degraus: cada um sobe um pouco (vista de cima e de frente) e mostra a face embaixo
+        // A face é de terra (o filtro põe pedrinhas nela e a sombra da grama logo em cima)
+        const steps = [0.74, 0.5, 0.27];
+        steps.forEach((k, level) => {
+          const lift = (level + 1) * 8;
+          ctx.fillStyle = "rgb(118,96,62)";
+          ellipse(z.x, z.y - lift + 7, z.rx * k, z.ry * k);
+          ctx.fill();
+          ctx.fillStyle = toneHex(c.base, 1.05 + level * 0.07);
+          ellipse(z.x, z.y - lift, z.rx * k, z.ry * k);
+          ctx.fill();
+        });
+        break;
+      }
       ctx.strokeStyle = c.detail;
       ctx.lineWidth = 3;
       for (const k of [0.75, 0.5, 0.25]) {
@@ -990,7 +1238,7 @@ function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Mat
       }
       break;
     case "MUD":
-      ctx.fillStyle = c.detail;
+      ctx.fillStyle = detail ? "rgb(84,100,110)" : c.detail;
       for (let i = 0; i < 14; i++) {
         const p = randomPointIn(z, rnd, 0.85);
         ellipse(p.x, p.y, rnd.between(10, 25), rnd.between(5, 12));
@@ -998,7 +1246,7 @@ function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Mat
       }
       break;
     case "SWAMP":
-      ctx.fillStyle = c.detail;
+      ctx.fillStyle = detail ? "rgb(64,90,92)" : c.detail;
       for (let i = 0; i < 10; i++) {
         const p = randomPointIn(z, rnd, 0.8);
         ellipse(p.x, p.y, rnd.between(20, 45), rnd.between(10, 20));
@@ -1006,14 +1254,16 @@ function drawZone(ctx: CanvasRenderingContext2D, z: TerrainZone, rnd: Phaser.Mat
       }
       break;
     case "FOREST": {
+      // Só o chão: folhas caídas e sombra do mato. As árvores são sprites (ForestArt)
       ctx.fillStyle = c.detail;
-      const trees = Math.round((z.rx * z.ry) / 1400);
-      for (let i = 0; i < trees; i++) {
-        const p = randomPointIn(z, rnd, 0.92);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, rnd.between(8, 15), 0, Math.PI * 2);
+      ctx.globalAlpha = 0.45;
+      const patches = Math.round((z.rx * z.ry) / 5000);
+      for (let i = 0; i < patches; i++) {
+        const p = randomPointIn(z, rnd, 0.7);
+        ellipse(p.x, p.y, rnd.between(18, 42), rnd.between(8, 18));
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
       break;
     }
   }
