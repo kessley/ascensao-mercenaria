@@ -1,10 +1,12 @@
 import { ai } from "./ai.mjs";
+import { companies } from "./companies.mjs";
 import { archery } from "./archery.mjs";
 import { openLab, scoreboard } from "./lab.mjs";
 import { matchups } from "./matchups.mjs";
 import { legacy } from "./legacy.mjs";
 import { mechanics } from "./mechanics.mjs";
 import { missions } from "./missions.mjs";
+import { progression } from "./progression.mjs";
 import { sea } from "./sea.mjs";
 import { sieges } from "./sieges.mjs";
 
@@ -12,7 +14,7 @@ import { sieges } from "./sieges.mjs";
  * Batalhas de verdade, medidas no jogo: `npm run test:battle` (com `npm run dev` rodando).
  * Para rodar só parte: `npm run test:battle -- arquearia`.
  */
-const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, cercos: sieges, mar: sea, lendas: legacy };
+const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, cercos: sieges, mar: sea, lendas: legacy, progressao: progression };
 
 const chosen = process.argv.slice(2);
 const names = chosen.length > 0 ? chosen : Object.keys(SUITES);
@@ -21,6 +23,8 @@ const board = scoreboard();
 try {
   for (const name of names) {
     console.log(`\n== ${name}`);
+    // Uma suíte que recarrega a página (a de missões) leva o laboratório junto
+    if (!(await lab.page.evaluate(() => Boolean(window.__lab)))) await lab.page.evaluate(lab.labScript);
     await SUITES[name](lab, board);
   }
 } catch (e) {

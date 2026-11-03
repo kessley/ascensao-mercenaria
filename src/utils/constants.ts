@@ -1,4 +1,4 @@
-/** Resolução lógica do jogo (o Phaser escala para caber na janela). */
+/** Tela de referência do jogo: a escala inteira (screen.ts) só amplia quando o monitor tem bem mais que isso. */
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
@@ -75,6 +75,8 @@ export const COLORS = {
   ENEMY_ARCHER: 0xe8735f,
   MUTINEER: 0x8e44ad,
   LIEUTENANT: 0xdfe3ee,
+  /** Anel e estandarte do capitão (Marco 20). */
+  CAPTAIN: 0xe8b84a,
   SCOUT: 0x3f8f6b,
   MESSENGER: 0x4a6fa8,
   PENNANT: 0xf1c40f,
@@ -82,10 +84,11 @@ export const COLORS = {
   FOG: 0x0a0d0a,
   OUTLINE: 0x0b0b0b,
   SHIELD: 0xb8b8b8,
-  HP: 0x3ccf4e,
   HP_BG: 0x1b1b1b,
   MORALE: 0xf1c40f,
   PANIC: 0xff4d4d,
+  /** Tinta (multiplicada) da figura em pixel art de quem está em pânico. */
+  PANIC_TINT: 0xff9c8c,
   ORDER_MOVE: 0xffffff,
   ORDER_ATTACK: 0xff6b6b,
   SLASH: 0xfff3c4,
@@ -727,7 +730,7 @@ export const MUTINEER_OF: Record<TroopFamily, EnemyKind> = {
 export const PROGRESSION = {
   MAX_LEVEL: 5,
   /** XP para sair do nível N = XP_PER_LEVEL × N. */
-  XP_PER_LEVEL: 100,
+  XP_PER_LEVEL: 150,
   XP_PER_KILL: 12,
   /** XP por sobreviver à batalha; vitória soma o bônus. */
   XP_PARTICIPATION: 15,
@@ -744,7 +747,14 @@ export const PROGRESSION = {
    */
   TRAINING_CAMP_DAY_SECONDS: 90,
   TRAINING_XP: 80,
+  /** Por nível do batalhão. */
   TRAINING_COST: 15,
+  /** Acima disso, só a guerra ensina. */
+  TRAINING_MAX_LEVEL: 3,
+  /** Nível a partir do qual a tropa pode ser promovida. */
+  PROMOTION_LEVEL: 3,
+  PROMOTION_MIN_GOLD: 60,
+  PROMOTION_IRON: 8,
 
   MAX_EQUIPMENT_TIER: 3,
   WEAPON_DAMAGE_PER_TIER: 0.12,
@@ -769,8 +779,9 @@ export const CAMERA = {
   /** Distância da borda da tela (px) que faz a câmera rolar quando solta. */
   EDGE_PX: 14,
   MIN_ZOOM: 0.25,
-  MAX_ZOOM: 1.25,
-  ZOOM_STEP: 0.1,
+  MAX_ZOOM: 2,
+  /** Degraus do zoom: em escala quebrada os pixels da arte tremem. */
+  ZOOM_STEPS: [0.25, 0.5, 1, 2],
 } as const;
 
 /** Névoa de guerra, raio de comando, mensageiros e batedores (Marco 6). */
@@ -940,6 +951,42 @@ export const LIEUTENANTS = {
     UNASSIGNED_AMBITIOUS: -8,
   },
   HISTORY_SIZE: 12,
+} as const;
+
+/** Capitães e companhias (Marco 20). */
+export const CAPTAINS = {
+  MAX_HIRED: 3,
+  CANDIDATES: 2,
+  /** O capitão em campo em relação a um soldado da guarda dele. */
+  HP_MULT: 3.5,
+  DAMAGE_MULT: 1.8,
+  EXTRA_RADIUS: 4,
+  /** Golpe de moral em cada batalhão da companhia quando ele cai. */
+  DEATH_MORALE_HIT: 25,
+  /** Perto dele, a companhia perde menos moral: 6% a menos por ponto de comando. */
+  AURA_RADIUS: 420,
+  AURA_PER_COMMAND: 0.06,
+  /** Até onde ele passa uma ordem aos batalhões dele na hora (mais longe, vai por mensageiro). */
+  RELAY_RADIUS: 650,
+  /** Pensa a cada tanto; até onde enxerga briga, conforme o temperamento. */
+  THINK_MS: 900,
+  ENGAGE: { AGGRESSIVE: 750, STEADY: 480, PATIENT: 300 } as Record<"AGGRESSIVE" | "STEADY" | "PATIENT", number>,
+  /** Segurar o terreno: raio em volta do ponto que a companhia defende. */
+  HOLD_RADIUS: 380,
+  PURSUE_RADIUS: 900,
+  LOYALTY_DESERT_AT: 15,
+  LOYALTY: {
+    PAYDAY_MISSED: -12,
+    /** Ambição 4 ou 5 com companhia de 3 ou mais: quer a própria bandeira. */
+    AMBITION_WEEKLY: -3,
+    VICTORY: 3,
+    MISSION_DONE: 4,
+    MISSION_FAILED: -3,
+  },
+  /** Missões: cada ponto de tática acima de 3 soma isto na chance (e abaixo, tira). */
+  TACTICS_CHANCE: 0.05,
+  /** E tira isto das baixas por ponto acima de 3. */
+  TACTICS_LOSSES: 0.08,
 } as const;
 
 /** Economia do acampamento (Marco 3). */
@@ -1694,8 +1741,13 @@ export const FATIGUE = {
 
 /** Trem de carroças e forragem (Marco 13). */
 export const SUPPLY = {
-  /** Mochilas: o que a tropa carrega sem carroças; cada carroça leva mais isto. */
-  PACK_CAPACITY: 20,
+  /**
+   * Rações (refeitas na Fase 3): cada batalhão leva a própria comida na mochila, para tantos
+   * dias. As carroças ficam no acampamento, a não ser que o Comandante as leve ou mande um comboio.
+   */
+  PACK_DAYS: 5,
+  /** A bolsa do Comandante e do estado-maior (o que marcha fora das mochilas, sem carroças). */
+  PACK_CAPACITY: 8,
   WAGON_CAPACITY: 60,
   START_WAGONS: 2,
   MAX_WAGONS: 6,
@@ -1717,6 +1769,21 @@ export const SUPPLY = {
   /** Forragear nas terras de um reino irrita o dono. */
   FORAGE_RELATION: -4,
   FORAGE_OWNER_RADIUS: 5000,
+  /** Comboio de suprimentos: as carroças saem do acampamento carregadas e alcançam o exército. */
+  CONVOY: {
+    /** Fração da marcha do exército que as carroças fazem por dia. */
+    SPEED: 0.8,
+    MIN_DAYS: 0.25,
+    /** Chance por dia de estrada de salteadores caírem sobre um comboio sem escolta. */
+    RAID_PER_DAY: 0.14,
+    /** Cada soldado de escolta tira isto da chance (até ESCORT_MAX). */
+    ESCORT_PER_SOLDIER: 0.07,
+    ESCORT_MAX: 0.9,
+    /** Num ataque sem escolta, a parte da carga que se perde (de/até). Com escolta, metade do mínimo. */
+    RAID_LOSS: [0.3, 0.6] as readonly [number, number],
+    /** Baixas da escolta que repele um ataque (fração do batalhão, em média). */
+    ESCORT_LOSSES: 0.15,
+  },
 } as const;
 
 /** Feridos, enfermaria e doenças (Marco 13). */

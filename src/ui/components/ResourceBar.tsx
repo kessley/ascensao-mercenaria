@@ -1,5 +1,7 @@
 import { useGameStore } from "../../store/useGameStore";
-import { cargoCapacity, dailyRations } from "../../utils/economy";
+import { cargoCapacity } from "../../utils/economy";
+import { wagonsWithArmy } from "../../store/useGameStore";
+import { useFieldFood } from "./SupplyPanel";
 import { freightOf, freightWeight } from "../../game/sim/trade";
 import { GOODS, GOOD_LIST } from "../../utils/constants";
 
@@ -8,13 +10,13 @@ export function ResourceBar() {
   const rations = useGameStore((s) => s.rations);
   const iron = useGameStore((s) => s.iron);
   const cargo = useGameStore((s) => s.cargo);
-  const wagons = useGameStore((s) => s.wagons.length);
+  const wagons = useGameStore((s) => wagonsWithArmy(s));
   const away = useGameStore((s) => s.exposure.away);
   const packed = useGameStore((s) => s.campPacked);
-  const battalions = useGameStore((s) => s.battalions);
   const freight = useGameStore((s) => s.freight);
-  // Em campo o exército come das carroças: quantos dias de comida elas levam
-  const days = away && !packed ? Math.floor(cargo / Math.max(1, dailyRations(battalions))) : null;
+  // Em campo cada batalhão come da mochila: quantos dias de comida o exército leva
+  const field = useFieldFood();
+  const days = away && !packed ? Math.floor(field.days) : null;
   const goods = freightWeight(freight);
   const fieldCargo = away && !packed ? cargo : 0;
   const carried = GOOD_LIST.map((g) => ({ g, n: freightOf(freight, g) })).filter((x) => x.n > 0);
@@ -30,15 +32,20 @@ export function ResourceBar() {
         title={
           packed
             ? "Acampamento levantado: o depósito inteiro vai nas carroças"
-            : "Depósito do acampamento · carga das carroças / capacidade (em campo, o exército come o que as carroças levam)"
+            : "Depósito do acampamento · comida que marcha com o exército (mochilas, bolsa e carroças) e os dias que ela dura"
         }
       >
         Rações: {rations}
-        {(away || cargo > 0 || goods > 0) && !packed && (
+        {away && !packed && (
           <span className={days !== null && days <= 1 ? "text-red-400" : "text-orange-200"}>
             {" "}
-            · 🛒 {fieldCargo + goods}/{cargoCapacity(wagons)}
-            {days !== null && ` (${days}d)`}
+            · 🎒 {Math.floor(field.food)} ({days}d)
+          </span>
+        )}
+        {wagons > 0 && !packed && (fieldCargo > 0 || goods > 0) && (
+          <span className="text-orange-200">
+            {" "}
+            · 🛒 {Math.round(fieldCargo + goods)}/{cargoCapacity(wagons)}
           </span>
         )}
         {packed && <span className="text-amber-200"> · nas carroças</span>}

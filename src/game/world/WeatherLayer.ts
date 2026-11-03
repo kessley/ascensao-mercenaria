@@ -35,7 +35,8 @@ export class WeatherLayer {
     if (weather === "CLEAR") return;
     this.t += dt;
     const v = camera.worldView;
-    const unit = v.width / 1280;
+    // Traços do mesmo tamanho na tela em qualquer zoom
+    const unit = 1 / camera.zoom;
     if (weather === "FOG") {
       g.fillStyle(0xdde4e8, 0.3);
       g.fillRect(v.x, v.y, v.width, v.height);

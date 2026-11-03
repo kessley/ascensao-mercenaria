@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { Soldier } from "./Soldier";
 import type { Unit } from "./Unit";
 import type { Commander } from "./Commander";
-import { BALANCE, COLORS, COMBAT, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import { BALANCE, CAPTAINS, COLORS, COMBAT, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import type { CaptainData } from "../data/captains";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
 import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
@@ -90,6 +91,13 @@ export class Battalion {
   private lieutenantUnit: Soldier | null = null;
   lieutenantDied = false;
   lieutenantKills = 0;
+  /** Capitão que marcha com este batalhão (a guarda da companhia), se houver (Marco 20). */
+  readonly captain: CaptainData | null;
+  private captainUnit: Soldier | null = null;
+  captainDied = false;
+  captainKills = 0;
+  /** Perto do capitão vivo, a moral cai menos (< 1); a cena atualiza a cada quadro. */
+  captainAura = 1;
 
   constructor(
     scene: Phaser.Scene,
@@ -98,8 +106,10 @@ export class Battalion {
     y: number,
     leader: Commander,
     lieutenant: LieutenantData | null = null,
+    captain: CaptainData | null = null,
   ) {
     this.lieutenant = lieutenant;
+    this.captain = captain;
     this.id = data.id;
     this.name = data.name;
     this.troopType = data.troopType;
@@ -131,12 +141,26 @@ export class Battalion {
         radius: stats.radius + L.EXTRA_RADIUS,
       };
       const slot = this.slotFor(data.soldiers, data.soldiers + 1, { x, y });
-      this.lieutenantUnit = new Soldier(scene, slot.x, slot.y, data.troopType, this, leaderStats, true);
+      this.lieutenantUnit = new Soldier(scene, slot.x, slot.y, data.troopType, this, leaderStats, "LIEUTENANT");
       this.soldiers.push(this.lieutenantUnit);
     }
 
-    // ★ = batalhão comandado por um tenente (o nome aparece no card do HUD)
-    const title = `${data.name} · Nv ${data.level}${lieutenant ? " ★" : ""}`;
+    // O capitão marcha com a guarda, atrás de tudo (de onde vê a companhia)
+    if (captain) {
+      const C = CAPTAINS;
+      const captainStats = {
+        ...stats,
+        hp: Math.round(stats.hp * C.HP_MULT),
+        damage: stats.damage * C.DAMAGE_MULT,
+        radius: stats.radius + C.EXTRA_RADIUS,
+      };
+      const slot = this.slotFor(this.soldiers.length, this.soldiers.length + 1, { x, y });
+      this.captainUnit = new Soldier(scene, slot.x, slot.y, data.troopType, this, captainStats, "CAPTAIN");
+      this.soldiers.push(this.captainUnit);
+    }
+
+    // ★ = batalhão comandado por um tenente; ⚑ = a guarda do capitão (os nomes aparecem no card do HUD)
+    const title = `${captain ? "⚑ " : ""}${data.name} · Nv ${data.level}${lieutenant ? " ★" : ""}`;
     this.label = scene.add
       .text(x, y, title, { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
       .setOrigin(0.5, 1)
@@ -149,14 +173,23 @@ export class Battalion {
     return centroid(this.soldiers);
   }
 
-  /** Soldados (sem o tenente) vivos neste instante (a lista só é podada no próximo `update`). */
+  /** Soldados (sem tenente e capitão) vivos neste instante (a lista só é podada no próximo `update`). */
   get aliveCount(): number {
-    return this.soldiers.filter((s) => s.isAlive && !s.isLieutenant).length;
+    return this.soldiers.filter((s) => s.isAlive && !s.isOfficer).length;
   }
 
-  /** Dizimado: não sobrou nenhum soldado (um tenente sozinho deixa o campo). */
+  /** Dizimado: não sobrou nenhum soldado (tenente e capitão sozinhos deixam o campo). */
   get isDestroyed(): boolean {
-    return this.soldiers.every((s) => s.isLieutenant);
+    return this.soldiers.every((s) => s.isOfficer);
+  }
+
+  get captainAlive(): boolean {
+    return !!this.captain && !this.captainDied;
+  }
+
+  /** Onde o capitão está (null sem capitão vivo em campo). */
+  get captainAt(): Point | null {
+    return this.captainUnit?.isAlive ? { x: this.captainUnit.x, y: this.captainUnit.y } : null;
   }
 
   /** Passiva do tenente — só vale enquanto ele estiver vivo em campo. */
@@ -220,7 +253,11 @@ export class Battalion {
     if (this.formation === "WEDGE") return 1;
     const count = this.soldiers.length;
     const ranks = Math.ceil(count / frontOf(this.formation, count, this.width));
-    return 1 - Math.min(ranks - 1, COMBAT.MAX_SUPPORT_RANKS) * COMBAT.RANK_SUPPORT;
+    return 1 - Math.min(ranks - 1, COMBAT.MAX_SUPPORT_RANKS) * COMBAT.RANK_SUPPORT * this.mods.rankSupport;
+  }
+
+  get panicFloor(): number {
+    return this.mods.panicBelow;
   }
 
   /** true se o ponto cai sobre algum soldado (com folga de `pad` px). */
@@ -263,13 +300,13 @@ export class Battalion {
     if (this.formation === "WEDGE") return;
     const fx = Math.cos(this.facing);
     const fy = Math.sin(this.facing);
-    const troops = this.soldiers.filter((s) => !s.isLieutenant).sort((a, b) => b.x * fx + b.y * fy - (a.x * fx + a.y * fy));
+    const troops = this.soldiers.filter((s) => !s.isOfficer).sort((a, b) => b.x * fx + b.y * fy - (a.x * fx + a.y * fy));
     const cols = frontOf(this.formation, this.soldiers.length, this.width);
     const ordered: Soldier[] = [];
     for (let i = 0; i < troops.length; i += cols) {
       ordered.push(...troops.slice(i, i + cols).sort((a, b) => -a.x * fy + a.y * fx - (-b.x * fy + b.y * fx)));
     }
-    this.soldiers = [...ordered, ...this.soldiers.filter((s) => s.isLieutenant)];
+    this.soldiers = [...ordered, ...this.soldiers.filter((s) => s.isOfficer)];
   }
 
   orderAttack(target: Unit): boolean {
@@ -346,7 +383,7 @@ export class Battalion {
 
   /** `enemies` = só os inimigos visíveis (os ocultos na floresta não podem ser alvejados). */
   update(dt: number, enemies: readonly Unit[]): void {
-    const before = this.soldiers.filter((s) => !s.isLieutenant).length;
+    const before = this.soldiers.filter((s) => !s.isOfficer).length;
     this.soldiers = this.soldiers.filter((s) => s.isAlive);
     this.pendingDeaths += before - this.aliveCount;
 
@@ -356,15 +393,22 @@ export class Battalion {
       this.lieutenantUnit = null;
       this.morale = Math.max(0, this.morale - LIEUTENANTS.DEATH_MORALE_HIT);
     }
+    // Capitão tombou: o golpe na companhia inteira é da cena (ver Companies)
+    if (this.captainUnit && !this.captainUnit.isAlive && !this.captainDied) {
+      this.captainDied = true;
+      this.captainUnit = null;
+    }
 
     if (this.isDestroyed) {
-      // Sem soldados, o tenente sobrevivente deixa o campo
-      if (this.lieutenantUnit) {
-        this.lieutenantUnit.unitState = "DEAD"; // sai dos alvos inimigos
-        this.lieutenantUnit.destroy();
-        this.lieutenantUnit = null;
-        this.soldiers = [];
+      // Sem soldados, os oficiais sobreviventes deixam o campo
+      for (const officer of [this.lieutenantUnit, this.captainUnit]) {
+        if (!officer) continue;
+        officer.unitState = "DEAD"; // sai dos alvos inimigos
+        officer.destroy();
       }
+      if (this.lieutenantUnit || this.captainUnit) this.soldiers = [];
+      this.lieutenantUnit = null;
+      this.captainUnit = null;
       this.selected = false;
       this.label.setVisible(false);
       this.bannerGfx.clear();
@@ -407,11 +451,13 @@ export class Battalion {
     this.soldiers.forEach((s, i) => {
       if (s.carryMomentum(dt, now)) return;
       const slot = this.slotFor(i, count, anchor);
-      if (engaging) this.pickTarget(s, anchor, slot, enemies);
+      // Tiro em Marcha: quem atira segue andando, e o alvo é só para quem está ao alcance
+      const shootsOnTheMove = !engaging && this.mods.moveFire && s.ranged;
+      if (engaging || shootsOnTheMove) this.pickTarget(s, anchor, slot, enemies);
       else s.target = null;
       if (this.restDriver && !s.target && this.restDriver(s, i, dt)) return;
 
-      if (s.target && s.inRange(s.target)) {
+      if (engaging && s.target && s.inRange(s.target)) {
         s.unitState = "ATTACKING";
         s.setFacing(angleTo(s, s.target));
         return;
@@ -420,7 +466,7 @@ export class Battalion {
       const formed = attacking && !!s.target && distance(s, s.target) > COMBAT.CHARGE_RANGE;
       // Parede de Escudos não quebra a fileira para perseguir: espera o inimigo chegar
       const planted = holding && s.canBrace;
-      if (s.target && !formed && !planted && this.formation !== "SHIELD_WALL") {
+      if (engaging && s.target && !formed && !planted && this.formation !== "SHIELD_WALL") {
         s.moveTowards(s.target.x, s.target.y, dt);
         s.unitState = "MOVING";
         return;
@@ -444,7 +490,7 @@ export class Battalion {
 
   /** Investida em ciclo: depois do choque, sai correndo, ganha distância e volta à carga. */
   private stepCycle(now: number, enemies: readonly Unit[]): void {
-    const step = cycleStep(this.cycleState, now, this.order.type !== "MOVE");
+    const step = cycleStep(this.cycleState, now, this.order.type !== "MOVE", COMBAT.CYCLE_HIT_MS * this.mods.cycleHit);
     const idle = this.cycleState.phase === "IN" && this.order.type === "HOLD";
     if (step === "WITHDRAW") {
       const c = this.center;
@@ -513,7 +559,8 @@ export class Battalion {
     // Segurando a posição, cada um cuida do que está diante do próprio lugar na fileira
     const holding = this.order.type === "HOLD" && !this.restDriver;
     // Descansando no acampamento, cada um reage ao inimigo perto de si (e não do alojamento)
-    const anchor = this.restDriver ? s : holding ? slot : anchorPoint;
+    // Em marcha o ponto da ordem é o destino: quem atira andando olha em volta de si
+    const anchor = this.restDriver || this.order.type === "MOVE" ? s : holding ? slot : anchorPoint;
     // Arqueiros engajam até o próprio alcance além do raio padrão
     const radius = Math.max(holding ? COMBAT.HOLD_LEASH : BALANCE.ENGAGE_RADIUS * (this.restDriver ? 1.6 : 1), s.attackRange() + 40);
     if (this.order.type === "ATTACK" && this.order.target.isAlive && this.order.target.revealed && !s.target) {
@@ -598,7 +645,8 @@ export class Battalion {
 
   drawBanner(): void {
     const c = this.center;
-    const top = Math.min(...this.soldiers.map((s) => s.y)) - 22;
+    // Acima da cabeça da figura mais alta (muda com o zoom: o mini-sprite é mais baixo)
+    const top = Math.min(...this.soldiers.map((s) => s.y + s.headY)) - 8;
     const w = 60;
 
     this.label.setPosition(c.x, top - 2);
@@ -615,7 +663,11 @@ export class Battalion {
     sel.clear();
     if (this.selected) {
       sel.lineStyle(2, COLORS.SELECTION, 0.95);
-      for (const s of this.soldiers) sel.strokeCircle(s.x, s.y, s.radius + 4);
+      for (const s of this.soldiers) {
+        // Com figura, o anel fica no chão, nos pés
+        if (s.hasFigure) sel.strokeEllipse(s.x, s.y + s.feetY, s.radius * 2 + 8, s.radius + 6);
+        else sel.strokeCircle(s.x, s.y, s.radius + 4);
+      }
     }
   }
 }

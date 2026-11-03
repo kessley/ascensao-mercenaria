@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { addCanvasTexture } from "../art/canvasTexture";
 import { courtChoice, courtName, gateTalk, nobleTalk } from "../data/courtTalk";
 import { townGossip, type Talk } from "../data/interiors";
 import { registerDialogHandler } from "../interiorBridge";
@@ -325,7 +326,7 @@ export class CapitalScene extends Phaser.Scene {
     paintCapitalChunk(ctx, this.layout, c * CHUNK, r * CHUNK, CHUNK, TEX, this.owner === "PLAYER" ? COLORS.ALLY : (def?.color ?? 0xc0a040));
     const key = `${this.prefix}-${c}-${r}`;
     if (this.textures.exists(key)) this.textures.remove(key);
-    this.textures.addCanvas(key, canvas);
+    addCanvasTexture(this.textures, key, canvas);
     const image = this.add.image(c * CHUNK, r * CHUNK, key).setOrigin(0, 0).setScale(CHUNK / TEX).setDepth(0);
     this.loaded.set(index, { image, key });
   }

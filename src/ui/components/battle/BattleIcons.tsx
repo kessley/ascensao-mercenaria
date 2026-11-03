@@ -18,7 +18,7 @@ const Dots = ({ at }: { at: readonly (readonly [number, number])[] }) => (
   </>
 );
 
-export type CommandIconId = "ADVANCE" | "HALT" | "CHARGE" | "RETREAT" | "RALLY" | "RUN" | "CRY" | "PAUSE" | "SLOW" | "FORCED" | "FORAGE" | "HELP" | "CYCLE" | "HOLD_FIRE" | "KITE";
+export type CommandIconId = "ADVANCE" | "HALT" | "CHARGE" | "RETREAT" | "RALLY" | "RUN" | "CRY" | "PAUSE" | "SLOW" | "FORCED" | "FORAGE" | "HELP" | "CYCLE" | "HOLD_FIRE" | "KITE" | "WAGON";
 
 const COMMAND_PATHS: Record<CommandIconId, ReactNode> = {
   ADVANCE: <path d="M12 20V5M6 11l6-6 6 6" />,
@@ -36,6 +36,7 @@ const COMMAND_PATHS: Record<CommandIconId, ReactNode> = {
   CYCLE: <path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5" />,
   HOLD_FIRE: <path d="M4 20L18 6M13 6h5v5M5 5l14 14" />,
   KITE: <path d="M12 4v11M7 10l5-6 5 6M6 20h12" />,
+  WAGON: <path d="M3 8h12v7H3zM15 10h3l3 3v2h-6M7 18.5a1.5 1.5 0 1 0 0-.01M17 18.5a1.5 1.5 0 1 0 0-.01" />,
 };
 
 export function CommandIcon({ id }: { id: CommandIconId }) {

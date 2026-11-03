@@ -259,14 +259,18 @@ export async function sea({ page, ev, labScript }, { check }) {
   const sold = await ev(({ qty }) => {
     const st = window.__store;
     const s = st.getState();
-    const t = s.settlements.find((x) => x.port && x.owner !== "RUINED");
+    // Quem atravessa o mar com luxo vende no porto que paga melhor, não no primeiro da lista
+    const open = s.settlements.filter((x) => x.port && x.owner !== "RUINED" && !s.factions.some((f) => f.id === x.owner && f.atWar));
+    const t = open.reduce((a, b) => (b.econ.price.LUXURY > a.econ.price.LUXURY ? b : a));
     const gold = s.gold;
     const n = Math.min(qty, s.freight.filter((l) => l.good === "LUXURY").reduce((m, l) => m + l.qty, 0));
     const why = st.getState().tradeGood(t.id, "LUXURY", -n);
     return { why, n, revenue: st.getState().gold - gold, price: Math.round(t.econ.price.LUXURY) };
   }, bought);
   console.log("   venda:", JSON.stringify(sold), "custou", bought.cost);
-  check("vender em casa dá lucro", sold.why === null && sold.revenue > bought.cost * 1.3, `${sold.revenue} contra ${bought.cost}`);
+  // Por peça: os piratas podem ter levado parte da carga no caminho
+  const each = { sold: sold.revenue / Math.max(1, sold.n), paid: bought.cost / Math.max(1, bought.qty) };
+  check("vender em casa dá lucro", sold.why === null && each.sold > each.paid * 1.3, `${Math.round(each.sold)} contra ${Math.round(each.paid)} por peça`);
   check("quem ficou no cais volta ao bando", returned.battalions.includes(stayId) && returned.field === returned.battalions.length, JSON.stringify(returned));
   check("a terra que ficou para trás é guardada", returned.parked.includes(landed.continent));
 

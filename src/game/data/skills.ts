@@ -12,7 +12,19 @@ export type SkillId =
   | "GALLOP"
   | "CHARGE_LANCES"
   | "DEVASTATING_CHARGE"
-  | "VETERAN_RIDERS";
+  | "VETERAN_RIDERS"
+  | "CLOSE_RANKS"
+  | "FLANKERS"
+  | "LAST_STAND"
+  | "SHOCK_TROOPS"
+  | "TIGHT_VOLLEY"
+  | "MARCHING_FIRE"
+  | "FEAR_ARROWS"
+  | "DEEP_QUIVER"
+  | "BREAK_THROUGH"
+  | "QUICK_TURN"
+  | "TERROR"
+  | "RUN_DOWN";
 
 /**
  * Modificadores que uma habilidade aplica ao batalhão (multiplicadores; 1 = sem efeito).
@@ -34,6 +46,30 @@ export interface SkillMods {
   chargeDistance?: number;
   /** Multiplica o empurrão da investida. */
   knockback?: number;
+  /** Multiplica o quanto as fileiras de trás seguram a moral. */
+  rankSupport?: number;
+  /** Dano em quem é pego de lado ou por trás. */
+  flankDamage?: number;
+  /** Só entra em pânico abaixo disto. */
+  panicBelow?: number;
+  /** Cada golpe corpo a corpo abala a tropa de quem apanha. */
+  meleeShock?: number;
+  /** Multiplica o espalhamento da salva. */
+  spread?: number;
+  /** Multiplica a munição. */
+  ammo?: number;
+  /** Multiplica o abalo de cada flecha. */
+  arrowShock?: number;
+  /** Atira sem parar de andar. */
+  moveFire?: boolean;
+  /** Multiplica o tempo atravessando a linha depois da investida. */
+  breakThrough?: number;
+  /** Multiplica o tempo no choque antes de sair, na investida em ciclo. */
+  cycleHit?: number;
+  /** Multiplica o abalo da investida. */
+  chargeShock?: number;
+  /** Dano em quem foge ou atira. */
+  huntDamage?: number;
 }
 
 export interface SkillDef {
@@ -41,12 +77,22 @@ export interface SkillDef {
   troopType: TroopFamily;
   label: string;
   description: string;
-  /** Habilidade exigida antes desta (ramo da árvore). */
-  requires?: SkillId;
   mods: SkillMods;
 }
 
 export const SKILLS: Record<SkillId, SkillDef> = {
+  CLOSE_RANKS: { id: "CLOSE_RANKS", troopType: "INFANTRY", label: "Fileiras Cerradas", description: "As fileiras de trás seguram a moral duas vezes mais. Forme fundo.", mods: { rankSupport: 2 } },
+  FLANKERS: { id: "FLANKERS", troopType: "INFANTRY", label: "Caçadores de Flanco", description: "+30% de dano em quem é pego de lado ou por trás.", mods: { flankDamage: 1.3 } },
+  LAST_STAND: { id: "LAST_STAND", troopType: "INFANTRY", label: "Último Reduto", description: "Só entra em pânico com a moral abaixo de 10.", mods: { panicBelow: 10 } },
+  SHOCK_TROOPS: { id: "SHOCK_TROOPS", troopType: "INFANTRY", label: "Tropa de Choque", description: "Cada golpe abala a tropa de quem apanha: o inimigo quebra mais cedo.", mods: { meleeShock: 0.8 } },
+  TIGHT_VOLLEY: { id: "TIGHT_VOLLEY", troopType: "ARCHERS", label: "Salva Cerrada", description: "As flechas caem 35% mais juntas: acerta mais, e mais perto dos seus.", mods: { spread: 0.65 } },
+  MARCHING_FIRE: { id: "MARCHING_FIRE", troopType: "ARCHERS", label: "Tiro em Marcha", description: "Atira enquanto anda, sem parar para formar.", mods: { moveFire: true } },
+  FEAR_ARROWS: { id: "FEAR_ARROWS", troopType: "ARCHERS", label: "Flechas de Medo", description: "Cada flecha abala a moral três vezes mais.", mods: { arrowShock: 3 } },
+  DEEP_QUIVER: { id: "DEEP_QUIVER", troopType: "ARCHERS", label: "Aljavas Fundas", description: "+60% de munição.", mods: { ammo: 1.6 } },
+  BREAK_THROUGH: { id: "BREAK_THROUGH", troopType: "CAVALRY", label: "Atravessar a Linha", description: "Depois do choque, segue em frente pelo dobro do tempo.", mods: { breakThrough: 2 } },
+  QUICK_TURN: { id: "QUICK_TURN", troopType: "CAVALRY", label: "Meia-Volta", description: "Na investida em ciclo, sai do choque na metade do tempo.", mods: { cycleHit: 0.5 } },
+  TERROR: { id: "TERROR", troopType: "CAVALRY", label: "Terror", description: "A investida abala a moral 2,5 vezes mais.", mods: { chargeShock: 2.5 } },
+  RUN_DOWN: { id: "RUN_DOWN", troopType: "CAVALRY", label: "Caçar Fugitivos", description: "+50% de dano em quem foge e em quem atira.", mods: { huntDamage: 1.5 } },
   // Infantaria — ramo defensivo
   REINFORCED_SHIELDS: {
     id: "REINFORCED_SHIELDS",
@@ -60,7 +106,6 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     troopType: "INFANTRY",
     label: "Muralha Viva",
     description: "Parede de Escudos protege num arco maior (inclui flancos) e anda mais rápido.",
-    requires: "REINFORCED_SHIELDS",
     mods: {},
   },
   // Infantaria — ramo de moral/ataque
@@ -76,7 +121,6 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     troopType: "INFANTRY",
     label: "Contra-ataque",
     description: "+20% de dano.",
-    requires: "IRON_DISCIPLINE",
     mods: { damage: 1.2 },
   },
 
@@ -93,7 +137,6 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     troopType: "ARCHERS",
     label: "Flechas Perfurantes",
     description: "+25% de dano.",
-    requires: "EAGLE_EYE",
     mods: { damage: 1.25 },
   },
   // Arqueiros — ramo de mobilidade
@@ -109,7 +152,6 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     troopType: "ARCHERS",
     label: "Escaramuçadores",
     description: "+15% de velocidade e −20% de dano corpo a corpo recebido.",
-    requires: "RAPID_FIRE",
     mods: { speed: 1.15, meleeTaken: 0.8 },
   },
 
@@ -126,7 +168,6 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     troopType: "CAVALRY",
     label: "Investida Devastadora",
     description: "Investida precisa de 40% menos corrida e empurra o dobro.",
-    requires: "CHARGE_LANCES",
     mods: { chargeDistance: 0.6, knockback: 2 },
   },
   // Cavalaria — ramo de resistência
@@ -142,23 +183,31 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     troopType: "CAVALRY",
     label: "Cavaleiros Veteranos",
     description: "+20% de vida.",
-    requires: "GALLOP",
     mods: { hp: 1.2 },
   },
 };
 
-/** Árvore de cada família de tropa: dois ramos de [base, avançada]. */
+/**
+ * Cada nível traz uma escolha entre duas habilidades, e a outra se perde: dois batalhões veteranos
+ * da mesma tropa podem lutar de jeitos bem diferentes. A linha k pede o nível k + 2.
+ */
 export const SKILL_TREE: Record<TroopFamily, [SkillId, SkillId][]> = {
   INFANTRY: [
-    ["REINFORCED_SHIELDS", "LIVING_WALL"],
-    ["IRON_DISCIPLINE", "COUNTERATTACK"],
+    ["REINFORCED_SHIELDS", "IRON_DISCIPLINE"],
+    ["LIVING_WALL", "COUNTERATTACK"],
+    ["CLOSE_RANKS", "FLANKERS"],
+    ["LAST_STAND", "SHOCK_TROOPS"],
   ],
   ARCHERS: [
-    ["EAGLE_EYE", "PIERCING_ARROWS"],
-    ["RAPID_FIRE", "SKIRMISHERS"],
+    ["EAGLE_EYE", "RAPID_FIRE"],
+    ["PIERCING_ARROWS", "SKIRMISHERS"],
+    ["TIGHT_VOLLEY", "MARCHING_FIRE"],
+    ["FEAR_ARROWS", "DEEP_QUIVER"],
   ],
   CAVALRY: [
-    ["CHARGE_LANCES", "DEVASTATING_CHARGE"],
-    ["GALLOP", "VETERAN_RIDERS"],
+    ["CHARGE_LANCES", "GALLOP"],
+    ["DEVASTATING_CHARGE", "VETERAN_RIDERS"],
+    ["BREAK_THROUGH", "QUICK_TURN"],
+    ["TERROR", "RUN_DOWN"],
   ],
 };

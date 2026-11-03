@@ -118,8 +118,9 @@ export function MenuBackdrop() {
       phase: Math.random() * 6.3,
     });
     const resize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      // Janela ainda sem tamanho (aba escondida): tela de 0 px quebraria o drawImage
+      const w = Math.max(1, window.innerWidth);
+      const h = Math.max(1, window.innerHeight);
       canvas.width = w;
       canvas.height = h;
       scene.width = w;

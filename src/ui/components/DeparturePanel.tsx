@@ -1,5 +1,5 @@
 import { useGameStore } from "../../store/useGameStore";
-import { TROOPS } from "../../utils/constants";
+import { SUPPLY, TROOPS } from "../../utils/constants";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 const LOADS = [
@@ -22,6 +22,9 @@ export function DeparturePanel() {
   const setCampPanel = useGameStore((s) => s.setCampPanel);
   const load = useGameStore((s) => s.rationLoad ?? 1);
   const setRationLoad = useGameStore((s) => s.setRationLoad);
+  const takeWagons = useGameStore((s) => s.takeWagons);
+  const setTakeWagons = useGameStore((s) => s.setTakeWagons);
+  const train = useGameStore((s) => s.train);
   const busy = new Set(training.map((t) => t.battalionId));
   const toggle = (id: string) => setCampStay(stay.includes(id) ? stay.filter((x) => x !== id) : [...stay, id]);
   const going = battalions.filter((b) => !stay.includes(b.id) && !busy.has(b.id));
@@ -55,10 +58,20 @@ export function DeparturePanel() {
       </div>
       <p className="text-xs text-neutral-400">
         {going.length === 0
-          ? `O Comandante sai sozinho, só com a mochila. As ${wagons} carroças ficam no acampamento.`
-          : `Saem ${going.length} batalhão(ões) com as ${wagons} carroças.`}
+          ? `O Comandante sai sozinho, só com a bolsa. As ${wagons} carroças ficam no acampamento.`
+          : `Saem ${going.length} batalhão(ões), cada um com ${SUPPLY.PACK_DAYS} dias de comida na mochila${takeWagons && wagons > 0 ? `, e as ${wagons} carroças` : "; as carroças ficam"}.`}
       </p>
       <div className="flex flex-col gap-1">
+        <h3 className={sectionTitle}>Carroças</h3>
+        <label className={`flex items-center gap-2 text-sm ${wagons === 0 || train === "ROAD" ? "text-neutral-500" : ""}`}>
+          <input type="checkbox" disabled={wagons === 0 || train === "ROAD"} checked={takeWagons} onChange={() => setTakeWagons(!takeWagons)} />
+          Levar as carroças com o exército
+        </label>
+        <p className="text-xs text-neutral-400">
+          Sem elas, a coluna anda mais depressa e não tem o que os saqueadores mais querem. Com elas, leva comida para mais dias e mercadoria. Ficando, saem depois como comboio, com escolta, quando a comida apertar (botão Suprimentos).
+        </p>
+      </div>
+      <div className={`flex flex-col gap-1 ${takeWagons ? "" : "hidden"}`}>
         <h3 className={sectionTitle}>Comida nas carroças</h3>
         <p className="text-xs text-neutral-400">Carroças cheias de comida vão mais longe; com espaço livre, dá para comprar mercadoria no caminho.</p>
         <div className="flex gap-2 text-xs">

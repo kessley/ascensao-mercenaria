@@ -6,6 +6,9 @@ import { BattalionList, RecruitPanel } from "../components/tent/ArmyPanel";
 import { PrisonersPanel } from "../components/tent/PrisonersPanel";
 import { BattalionDetail, ForgePanel, IronTrader, TrainingPanel } from "../components/tent/ProgressionPanels";
 import { LieutenantCandidates, LieutenantRoster, LieutenantSheet } from "../components/tent/LieutenantPanels";
+import { CaptainCandidates, CaptainSheet, CommandBoard } from "../components/tent/CaptainPanels";
+import { captainName } from "../../game/data/captains";
+import { SupplyPanel } from "../components/SupplyPanel";
 import { CampLog } from "../components/tent/CampLog";
 import { CampStatus } from "../components/tent/CampStatus";
 import { ContractBoard } from "../components/tent/ContractBoard";
@@ -34,6 +37,8 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   FORGE: "Ferraria",
   BATTALION: "Alojamento",
   LIEUTENANT: "Tenente",
+  CAPTAIN: "Capitão",
+  SUPPLY: "Suprimentos",
   STABLE: "Estábulo",
   TOWN: "Povoado",
   GAME: "Jogo",
@@ -52,7 +57,7 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
 };
 
 /** Painéis fora do acampamento (ou sobre um assunto só): sem o resumo do acampamento em cima. */
-const NO_STATUS = new Set<CampPanel["kind"]>(["MISSIONS", "DOCK", "SAGA", "TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE", "NOBILITY"]);
+const NO_STATUS = new Set<CampPanel["kind"]>(["SUPPLY", "MISSIONS", "DOCK", "SAGA", "TOWN", "GAME", "BRIDGE", "FERRY", "GUILD", "TAVERN", "TEMPLE", "PRICE_BOOK", "DEPARTURE", "NOBILITY"]);
 
 /** Atalhos da mesa da Tenda: Livro de Preços (Marco 14) e Livro da Nobreza (Marco 15). */
 function BookButton() {
@@ -109,6 +114,7 @@ function PanelContent({ panel }: { panel: CampPanel }) {
   const lieutenant = useGameStore((s) =>
     panel.kind === "LIEUTENANT" ? s.lieutenants.find((l) => l.id === panel.lieutenantId) : undefined,
   );
+  const captain = useGameStore((s) => (panel.kind === "CAPTAIN" ? s.captains.find((c) => c.id === panel.captainId) : undefined));
 
   switch (panel.kind) {
     case "MISSIONS":
@@ -120,6 +126,7 @@ function PanelContent({ panel }: { panel: CampPanel }) {
           <BookButton />
           <PrisonersPanel />
           <DiplomacyPanel />
+          <CommandBoard />
           <LieutenantRoster />
           <FollowersPanel />
           <InfirmaryPanel />
@@ -142,6 +149,7 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return (
         <>
           <RecruitPanel />
+          <CaptainCandidates />
           <LieutenantCandidates />
         </>
       );
@@ -166,6 +174,10 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       ) : (
         <p className="text-sm text-neutral-400">Este tenente não está mais no bando.</p>
       );
+    case "SUPPLY":
+      return <SupplyPanel />;
+    case "CAPTAIN":
+      return captain ? <CaptainSheet captain={captain} /> : <p className="text-sm text-neutral-400">Este capitão não está no acampamento.</p>;
     case "TOWN":
       return <SettlementPanel settlementId={panel.settlementId} at={panel.at} />;
     case "GAME":
@@ -207,6 +219,10 @@ export function PlacePanelView() {
     if (panel?.kind === "LIEUTENANT") {
       const l = s.lieutenants.find((x) => x.id === panel.lieutenantId);
       return l ? fullName(l) : undefined;
+    }
+    if (panel?.kind === "CAPTAIN") {
+      const c = s.captains.find((x) => x.id === panel.captainId);
+      return c ? captainName(c) : undefined;
     }
     if (panel?.kind === "TOWN" || panel?.kind === "DOCK" || panel?.kind === "GUILD" || panel?.kind === "TAVERN" || panel?.kind === "TEMPLE") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
     return undefined;

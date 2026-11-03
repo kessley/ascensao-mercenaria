@@ -1,15 +1,15 @@
 # Roadmap — Ascensão Mercenária
 
-Desenvolvimento em **greybox**: só primitivas gráficas (círculos = aliados, quadrados = inimigos), UI em React + Tailwind. Cada marco precisa ser jogável de ponta a ponta antes de seguir para o próximo. Referência de design: [GDD.md](GDD.md); as propostas da Fase 2 estão na seção 8 do GDD.
+Desenvolvido em **greybox** (formas de código, UI em React + Tailwind) e agora migrando para **pixel art**, etapa por etapa: as figuras em campo já são sprites, o chão de perto também, e as construções também (G3: povoados, acampamento, locais de contrato e covis); árvores, interiores, interface e o resto ainda são greybox ([ARTE.md](ARTE.md)). Cada marco precisa ser jogável de ponta a ponta antes de seguir para o próximo. Referência de design: [GDD.md](GDD.md); as propostas da Fase 2 estão na seção 8 do GDD.
 
 O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 - [Fase 1 — O bando](ROADMAP_FASE_1.md): Marcos 1 a 9 — ✅ OK, fase concluída.
 - [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md): Marcos 10 a 18 — ✅ OK, fase concluída.
-- Fase 3 — O arcano: Marco 19, neste arquivo (abaixo), até a fase começar.
+- [Fase 3 — O arcano](ROADMAP_FASE_3.md): pixel art, rações refeitas, Marcos 19 a 23 (magia, capitães, duelos, acampamento construído, cultura e religião) e as pendências das fases anteriores, numa fila só que alterna arte e recursos — em andamento.
 
-**OK** = marco concluído e jogável em greybox.
+**OK** = marco concluído e jogável.
 
-O que ficou de fora e a avaliação das mecânicas: [PENDENCIAS.md](PENDENCIAS.md). Plano dos gráficos: [PLANO_GRAFICO.md](PLANO_GRAFICO.md).
+O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendências das Fases 1 e 2"](ROADMAP_FASE_3.md#pendências-das-fases-1-e-2). Gráficos: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que já é pixel art e o que falta).
 
 ## Visão geral
 
@@ -32,7 +32,19 @@ O que ficou de fora e a avaliação das mecânicas: [PENDENCIAS.md](PENDENCIAS.m
 | | 16 | Guerra de verdade: inimigos que pensam, cercos e prisioneiros | ✅ OK |
 | | 17 | Mares e continentes (o novo Mapa Múndi) | ✅ OK |
 | | 18 | Legado e Lendas | ✅ OK |
-| 3 — O arcano (abaixo) | 19 | Magia do Comandante (era o Marco 8) | ⏭ próximo |
+| [3 — O arcano](ROADMAP_FASE_3.md) | — | Progressão de batalhões refeita | ✅ OK |
+| | G0 / G1 | Pixel art: prova e figuras em campo | ✅ OK |
+| | G3 | Pixel art: construções (povoados, muralhas, acampamento, locais e covis) | ✅ OK |
+| | — | Rações refeitas: mochilas por batalhão e comboio de carroças | feito, falta jogar uma campanha |
+| | 20 | Capitães: a cadeia de comando | ✅ OK |
+| | G2 | Pixel art: chão | ✅ OK |
+| | 21 | Duelos no meio da batalha | |
+| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | |
+| | 22 | Acampamento construído pelo bando (e construir nas vilas) | |
+| | G5 | Pixel art: interface | |
+| | 23 | Cultura, religião e língua | |
+| | G6 | Pixel art: atmosfera | |
+| | 19 | Magia do Comandante (era o Marco 8, continua por último) | |
 
 **Regras para todos os marcos novos** (detalhes no GDD, seção 8.1):
 - toda mecânica cria uma decisão com custo e conta uma história no diário;
@@ -40,20 +52,6 @@ O que ficou de fora e a avaliação das mecânicas: [PENDENCIAS.md](PENDENCIAS.m
 - a IA segue as mesmas regras do jogador;
 - perdas parciais são preferíveis ao tudo-ou-nada;
 - o jogo alterna tensão e respiro.
-
----
-
-# Fase 3 — O arcano
-
-## Marco 19 — Magia do Comandante (era o Marco 8, deixado por último)
-**Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14.
-- **Dano em área (AoE)** e **suporte/controle**, como previsto desde o início.
-- **Aprendizado pelo mundo:** grimórios e artefatos em ruínas antigas, magos da corte capturados e mestres de outro continente.
-- **Custo:** recurso arcano, reação política (cortes e templos: −Honra, +Temor) e marcas no corpo do Comandante.
-- **Magias que mexem nos sistemas:** congelar um rio, chamar nevoeiro, apagar tochas, curar feridos, quebrar a moral de um exército.
-- **Calamidades mágicas** com fraquezas e respostas mágicas.
-
-**Pronto quando:** uma magia bem usada vira uma batalha difícil, mas usá-la tem um preço político e pessoal.
 
 ---
 

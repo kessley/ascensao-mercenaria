@@ -98,7 +98,7 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
     setHeir: (id) => {
       const s = get();
       set({ heirId: id });
-      const l = s.lieutenants.find((x) => x.id === id);
+      const l = s.captains.find((x) => x.id === id) ?? s.lieutenants.find((x) => x.id === id);
       if (l) links.note(`${s.leader.name} escreveu o testamento: ${l.name} herdará o estandarte.`);
     },
 
@@ -130,9 +130,13 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
       const old = s.leader;
       const age = leaderAge(old, s.day);
       const former: FormerLeader = { name: old.name, generation: old.generation, from: old.since, to: s.day, age, cause, origin: old.origin };
-      const heir = chooseHeir(s.lieutenants, s.heirId);
-      const unit = heir && s.battalions.find((b) => b.id === heir.battalionId);
-      const origin = heir ? (unit ? `tenente de ${unit.name}` : "tenente do bando") : "veterano escolhido pela tropa";
+      // Capitães (Marco 20) entram na sucessão como os tenentes: sem testamento, herda o mais leal
+      const heir = chooseHeir<{ id: string; loyalty: number; name: string; traits: Leader["traits"] }>([...s.captains, ...s.lieutenants], s.heirId);
+      const captain = heir ? s.captains.find((c) => c.id === heir.id) : undefined;
+      const unitId = captain ? captain.battalionIds[0] : s.lieutenants.find((l) => l.id === heir?.id)?.battalionId;
+      const unit = unitId ? s.battalions.find((b) => b.id === unitId) : undefined;
+      const rank = captain ? "capitão" : "tenente";
+      const origin = heir ? (unit ? `${rank} de ${unit.name}` : `${rank} do bando`) : "veterano escolhido pela tropa";
       const leader: Leader = {
         name: heir ? heir.name : links.heirName(),
         age: links.heirAge(),
@@ -146,7 +150,8 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
         leader,
         formerLeaders: [...s.formerLeaders, former],
         heirId: null,
-        lieutenants: s.lieutenants.filter((l) => l !== heir).map((l) => ({ ...l, loyalty: Math.max(0, l.loyalty - griefOf(l.traits)) })),
+        lieutenants: s.lieutenants.filter((l) => l.id !== heir?.id).map((l) => ({ ...l, loyalty: Math.max(0, l.loyalty - griefOf(l.traits)) })),
+        captains: s.captains.filter((c) => c.id !== heir?.id).map((c) => ({ ...c, loyalty: Math.max(0, c.loyalty - griefOf(c.traits)) })),
         fame: Math.round(s.fame * LEGACY.FAME_KEPT),
         honor: Math.round(s.honor + (50 - s.honor) * LEGACY.HONOR_FADE),
         campMood: Math.max(-100, s.campMood - LEGACY.MOURNING),
@@ -168,7 +173,7 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
       }
       const s = get();
       // O jogo só acaba quando o bando acaba
-      if (!s.epilogue && !s.scenario && s.battalions.length === 0 && s.lieutenants.length === 0 && s.expeditions.length === 0 && s.gold < LEGACY.BROKE) {
+      if (!s.epilogue && !s.scenario && s.battalions.length === 0 && s.lieutenants.length === 0 && s.captains.length === 0 && s.expeditions.length === 0 && s.gold < LEGACY.BROKE) {
         return get().endSaga("O bando acabou: sem tropas, sem tenentes e sem ouro para recrutar.");
       }
       if (s.ambitions.length === 0) return;

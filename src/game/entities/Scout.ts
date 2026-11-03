@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
 import { drawRiderShape } from "./shapes";
+import { scoutLook } from "../art/looks";
 import type { Commander } from "./Commander";
 import type { Enemy } from "./Enemy";
 import { COLORS, SUPPORT } from "../../utils/constants";
@@ -128,11 +129,13 @@ export class Scout extends Unit {
     this.report = emptyReport(this.vision);
     this.selectionGfx = scene.add.graphics();
     this.addAt(this.selectionGfx, 0);
+    this.wear(scoutLook());
     this.drawBody();
   }
 
   protected drawBody(): void {
-    drawRiderShape(this.bodyGfx, COLORS.SCOUT, this.radius, COLORS.SELECTION);
+    if (this.sprite) this.bodyGfx.clear();
+    else drawRiderShape(this.bodyGfx, COLORS.SCOUT, this.radius, COLORS.SELECTION);
   }
 
   get rank(): number {
@@ -554,7 +557,6 @@ export class Scout extends Unit {
       const caught = S.CAUGHT_CHANCE * (1 - this.evasion) * Math.min(2, met.size / 8);
       if (Math.random() > caught) continue;
       this.hp = Math.max(0, this.hp - this.maxHp * S.CAUGHT_DAMAGE);
-      this.redrawBars();
       if (this.hp <= 0) {
         this.die();
         return "DEAD";

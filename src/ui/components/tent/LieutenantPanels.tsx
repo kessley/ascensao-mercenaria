@@ -2,11 +2,13 @@ import { useGameStore } from "../../../store/useGameStore";
 import { bondOf, relationLabel } from "../../../game/sim/campEvents";
 import { fullName, opinionOn, PASSIVES, TRAITS, type LieutenantData } from "../../../game/data/lieutenants";
 import type { Contract } from "../../../game/data/contracts";
-import { LIEUTENANTS } from "../../../utils/constants";
+import { CAPTAINS, LIEUTENANTS } from "../../../utils/constants";
+import { promotionBlock } from "../../../game/data/captains";
+import { allCaptains } from "../../../store/captainSlice";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
-function LoyaltyBar({ value }: { value: number }) {
+export function LoyaltyBar({ value }: { value: number }) {
   const tone = value <= 30 ? "bg-red-500" : value <= 50 ? "bg-yellow-500" : "bg-emerald-500";
   return (
     <div className="flex items-center gap-2 text-xs text-neutral-400">
@@ -69,7 +71,11 @@ export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData 
   const dismissLieutenant = useGameStore((s) => s.dismissLieutenant);
   const heirId = useGameStore((s) => s.heirId);
   const setHeir = useGameStore((s) => s.setHeir);
+  const promote = useGameStore((s) => s.promoteToCaptain);
+  const captainsFull = useGameStore((s) => allCaptains(s).length >= CAPTAINS.MAX_HIRED);
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
   const commanded = battalions.find((b) => b.id === l.battalionId);
+  const block = captainsFull ? `O bando já tem ${CAPTAINS.MAX_HIRED} capitães.` : promotionBlock(l, commanded ? commanded.level : null);
 
   return (
     <div className="flex flex-col gap-3">
@@ -130,6 +136,21 @@ export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData 
         {!commanded && l.traits.includes("AMBITIOUS") && (
           <p className="text-xs text-yellow-400">Ambicioso sem batalhão: perde lealdade a cada semana.</p>
         )}
+      </section>
+
+      <section className="flex flex-col gap-1">
+        <h3 className={sectionTitle}>Promoção</h3>
+        <button
+          type="button"
+          disabled={!!block}
+          onClick={() => {
+            if (!promote(l.id)) setCampPanel({ kind: "CAPTAIN", captainId: l.id });
+          }}
+          className="self-start rounded border border-amber-400 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/40 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Promover a capitão
+        </button>
+        <p className="text-xs text-neutral-400">{block ?? `Vira capitão e ${commanded?.name ?? "o batalhão dele"} vira a guarda da companhia; o batalhão fica sem tenente.`}</p>
       </section>
 
       <section className="flex flex-col gap-1">

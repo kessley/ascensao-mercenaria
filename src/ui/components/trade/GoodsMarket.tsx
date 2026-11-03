@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGameStore } from "../../../store/useGameStore";
+import { useGameStore, wagonsWithArmy } from "../../../store/useGameStore";
 import { INDUSTRIES, industriesOf, quote, strata } from "../../../game/sim/market";
 import { freightOf, freightWeight, isContraband } from "../../../game/sim/trade";
 import type { Settlement } from "../../../game/sim/realm";
@@ -18,7 +18,7 @@ const small = "rounded border px-1.5 py-0.5 text-[11px] font-semibold disabled:o
 export function GoodsMarket({ t }: { t: Settlement }) {
   const gold = useGameStore((s) => s.gold);
   const freight = useGameStore((s) => s.freight);
-  const wagons = useGameStore((s) => s.wagons.length);
+  const wagons = useGameStore((s) => (s.exposure.away ? wagonsWithArmy(s) : s.wagons.length));
   const cargo = useGameStore((s) => (s.exposure.away && !s.campPacked ? s.cargo : 0));
   const near = useGameStore((s) => s.battleHud?.wagonsNear ?? true);
   const post = useGameStore((s) => s.posts.includes(t.id));

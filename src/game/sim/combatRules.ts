@@ -99,7 +99,7 @@ export interface CycleState {
  * O próximo passo da investida em ciclo (vale para o batalhão e o esquadrão inimigo): bate, fica
  * um pouco no choque, sai para longe e, ao chegar, volta à carga.
  */
-export function cycleStep(state: CycleState, now: number, arrived: boolean): "WITHDRAW" | "CHARGE" | "WAIT" {
-  if (state.phase === "IN") return state.hitAt !== null && now - state.hitAt >= COMBAT.CYCLE_HIT_MS ? "WITHDRAW" : "WAIT";
+export function cycleStep(state: CycleState, now: number, arrived: boolean, hitMs: number = COMBAT.CYCLE_HIT_MS): "WITHDRAW" | "CHARGE" | "WAIT" {
+  if (state.phase === "IN") return state.hitAt !== null && now - state.hitAt >= hitMs ? "WITHDRAW" : "WAIT";
   return arrived ? "CHARGE" : "WAIT";
 }

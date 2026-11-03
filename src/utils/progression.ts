@@ -1,5 +1,5 @@
-import { BALANCE, FORMATIONS, PROGRESSION, TROOPS, type UnitStats } from "./constants";
-import { SKILLS, type SkillId, type SkillMods } from "../game/data/skills";
+import { BALANCE, FORMATIONS, PROGRESSION, TROOPS, type TroopType, type UnitStats } from "./constants";
+import { SKILLS, SKILL_TREE, type SkillId, type SkillMods } from "../game/data/skills";
 import type { BattalionData } from "../store/useGameStore";
 
 export type EquipmentSlot = "weapon" | "armor";
@@ -29,9 +29,43 @@ export function canLearn(b: BattalionData, id: SkillId): string | null {
   const skill = SKILLS[id];
   if (skill.troopType !== TROOPS[b.troopType].family) return "Habilidade de outra tropa.";
   if (b.skills.includes(id)) return "Já aprendida.";
-  if (skill.requires && !b.skills.includes(skill.requires)) return `Requer ${SKILLS[skill.requires].label}.`;
+  const tree = SKILL_TREE[skill.troopType];
+  const line = tree.findIndex((pair) => pair.includes(id));
+  const taken = tree[line].find((x) => b.skills.includes(x));
+  if (taken) return `${SKILLS[id].label} se perdeu: a escolha foi ${SKILLS[taken].label}.`;
+  if (b.level < line + 2) return `Pede o nível ${line + 2}.`;
+  if (line > 0 && !tree[line - 1].some((x) => b.skills.includes(x))) return "Escolha a linha de cima primeiro.";
   if (b.skillPoints <= 0) return "Sem pontos de habilidade.";
   return null;
+}
+
+/** Quem pode virar quem: a tropa aprende um ofício novo, e isso custa. */
+export const PROMOTIONS: Partial<Record<TroopType, readonly TroopType[]>> = {
+  INFANTRY: ["HEAVY", "SPEARMEN"],
+  SPEARMEN: ["HEAVY"],
+  ARCHERS: ["CROSSBOW", "HORSE_ARCHERS"],
+  JAVELINS: ["ARCHERS"],
+  CAVALRY: ["KNIGHTS", "HORSE_ARCHERS"],
+};
+
+export function promotionCost(from: TroopType, to: TroopType): { gold: number; iron: number } {
+  return { gold: Math.max(PROGRESSION.PROMOTION_MIN_GOLD, Math.round((TROOPS[to].cost - TROOPS[from].cost) * 1.5)), iron: PROGRESSION.PROMOTION_IRON };
+}
+
+/** Pode ser promovido a esta tropa? Retorna o motivo se não puder. */
+export function canPromote(b: Pick<BattalionData, "troopType" | "level">, to: TroopType): string | null {
+  if (!PROMOTIONS[b.troopType]?.includes(to)) return "Esta tropa não vira aquela.";
+  if (b.level < PROGRESSION.PROMOTION_LEVEL) return `Pede o nível ${PROGRESSION.PROMOTION_LEVEL}.`;
+  return null;
+}
+
+/** Custo do treino: quanto mais veterano, mais caro ensinar. */
+export function trainingCost(level: number): number {
+  return PROGRESSION.TRAINING_COST * level;
+}
+
+export function canTrain(level: number): boolean {
+  return level < PROGRESSION.TRAINING_MAX_LEVEL;
 }
 
 export function forgeCost(currentTier: number, smith = false): { gold: number; iron: number } {
@@ -41,8 +75,20 @@ export function forgeCost(currentTier: number, smith = false): { gold: number; i
 }
 
 /** Modificadores finais do batalhão: nível × habilidades × equipamento. */
-export interface BattalionMods extends Required<Omit<SkillMods, "chargeBonus">> {
+export interface BattalionMods extends Required<Pick<SkillMods, "hp" | "damage" | "range" | "cooldown" | "speed" | "meleeTaken" | "rangedTaken" | "moraleLoss" | "chargeDistance" | "knockback">> {
   chargeBonus: number;
+  rankSupport: number;
+  flankDamage: number;
+  panicBelow: number;
+  meleeShock: number;
+  spread: number;
+  ammo: number;
+  arrowShock: number;
+  moveFire: boolean;
+  breakThrough: number;
+  cycleHit: number;
+  chargeShock: number;
+  huntDamage: number;
   /** Arco de proteção e velocidade da Parede de Escudos (Muralha Viva melhora). */
   shieldWallArc: number;
   shieldWallSpeed: number;
@@ -62,6 +108,18 @@ export function battalionMods(b: BattalionData): BattalionMods {
     chargeBonus: 0,
     chargeDistance: 1,
     knockback: 1,
+    rankSupport: 1,
+    flankDamage: 1,
+    panicBelow: BALANCE.MORALE.PANIC_BELOW,
+    meleeShock: 0,
+    spread: 1,
+    ammo: 1,
+    arrowShock: 1,
+    moveFire: false,
+    breakThrough: 1,
+    cycleHit: 1,
+    chargeShock: 1,
+    huntDamage: 1,
     shieldWallArc: FORMATIONS.SHIELD_WALL.frontArc ?? Math.PI / 3,
     shieldWallSpeed: FORMATIONS.SHIELD_WALL.speed,
   };
@@ -78,6 +136,18 @@ export function battalionMods(b: BattalionData): BattalionMods {
     mods.chargeBonus += m.chargeBonus ?? 0;
     mods.chargeDistance *= m.chargeDistance ?? 1;
     mods.knockback *= m.knockback ?? 1;
+    mods.rankSupport *= m.rankSupport ?? 1;
+    mods.flankDamage *= m.flankDamage ?? 1;
+    mods.panicBelow = Math.min(mods.panicBelow, m.panicBelow ?? Infinity);
+    mods.meleeShock += m.meleeShock ?? 0;
+    mods.spread *= m.spread ?? 1;
+    mods.ammo *= m.ammo ?? 1;
+    mods.arrowShock *= m.arrowShock ?? 1;
+    mods.moveFire ||= !!m.moveFire;
+    mods.breakThrough *= m.breakThrough ?? 1;
+    mods.cycleHit *= m.cycleHit ?? 1;
+    mods.chargeShock *= m.chargeShock ?? 1;
+    mods.huntDamage *= m.huntDamage ?? 1;
   }
   if (b.skills.includes("LIVING_WALL")) {
     mods.shieldWallArc = Math.PI * 0.6; // ~108°: cobre boa parte dos flancos
@@ -96,6 +166,8 @@ export function soldierStats(b: BattalionData, mods: BattalionMods): UnitStats {
     range: base.range * mods.range,
     cooldown: base.cooldown * mods.cooldown,
     speed: base.speed * mods.speed,
+    ...(base.ranged ? { spread: (base.spread ?? 1) * mods.spread } : {}),
+    ...(base.ammo === undefined ? {} : { ammo: Math.round(base.ammo * mods.ammo) }),
   };
 }
 
@@ -113,5 +185,19 @@ export function describeMods(b: BattalionData): string[] {
   if (m.rangedTaken !== 1) lines.push(`Dano de flechas recebido ${pct(m.rangedTaken)}`);
   if (m.moraleLoss !== 1) lines.push(`Perda de moral ${pct(m.moraleLoss)}`);
   if (m.chargeBonus) lines.push(`Investida ${BALANCE.CHARGE_MULTIPLIER + m.chargeBonus}x`);
+  if (m.rankSupport !== 1) lines.push(`Apoio das fileiras ${pct(m.rankSupport)}`);
+  if (m.flankDamage !== 1) lines.push(`Dano pelo flanco ${pct(m.flankDamage)}`);
+  if (m.panicBelow !== BALANCE.MORALE.PANIC_BELOW) lines.push(`Pânico só com moral abaixo de ${m.panicBelow}`);
+  if (m.meleeShock) lines.push(`Golpes abalam a moral do alvo`);
+  if (m.spread !== 1) lines.push(`Dispersão das flechas ${pct(m.spread)}`);
+  if (m.ammo !== 1) lines.push(`Munição ${pct(m.ammo)}`);
+  if (m.arrowShock !== 1) lines.push(`Abalo das flechas ${pct(m.arrowShock)}`);
+  if (m.moveFire) lines.push("Atira enquanto anda");
+  if (m.breakThrough !== 1) lines.push(`Passagem pela linha inimiga ${pct(m.breakThrough)}`);
+  if (m.cycleHit !== 1) lines.push(`Tempo no choque ${pct(m.cycleHit)}`);
+  if (m.chargeShock !== 1) lines.push(`Abalo da investida ${pct(m.chargeShock)}`);
+  if (m.huntDamage !== 1) lines.push(`Dano em quem foge e em quem atira ${pct(m.huntDamage)}`);
+  if (m.chargeDistance !== 1) lines.push(`Distância para a investida ${pct(m.chargeDistance)}`);
+  if (m.knockback !== 1) lines.push(`Empurrão da investida ${pct(m.knockback)}`);
   return lines;
 }

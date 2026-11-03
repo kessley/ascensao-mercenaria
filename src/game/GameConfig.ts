@@ -4,17 +4,21 @@ import { WorldScene } from "./scenes/WorldScene";
 import { InteriorScene } from "./scenes/InteriorScene";
 import { CapitalScene } from "./scenes/CapitalScene";
 import { DuelScene } from "./scenes/DuelScene";
-import { COLORS, GAME_HEIGHT, GAME_WIDTH } from "../utils/constants";
+import { COLORS } from "../utils/constants";
+import { screenFit } from "./screen";
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
+  // Escala inteira (ver screen.ts): o tamanho acompanha o contêiner, sem esticar
+  const fit = screenFit(parent.clientWidth, parent.clientHeight, window.devicePixelRatio || 1);
   return {
     type: Phaser.AUTO,
     parent,
-    width: GAME_WIDTH,
-    height: GAME_HEIGHT,
+    width: fit.width,
+    height: fit.height,
     backgroundColor: COLORS.BACKGROUND,
     scale: {
-      mode: Phaser.Scale.FIT,
+      mode: Phaser.Scale.NONE,
+      zoom: fit.zoom,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     // O interior de um prédio (Marco 14) é uma cena à parte: o mundo dorme enquanto isso

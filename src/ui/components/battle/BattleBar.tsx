@@ -4,6 +4,8 @@ import { SICKNESS_LABEL } from "../../../game/sim/logistics";
 import { COMBAT, FATIGUE, FORMATIONS, TERRAIN, TROOPS, type Formation } from "../../../utils/constants";
 import { troopFacts } from "../../../game/data/troopFacts";
 import { CommandIcon, FormationIcon, TroopIcon, type CommandIconId } from "./BattleIcons";
+import { useFieldFood } from "../SupplyPanel";
+import type { CompanyHud, CompanyStance } from "../../../game/sim/companies";
 
 const STATUS_LABEL: Record<BattalionStatus, string> = {
   READY: "Em posição",
@@ -157,6 +159,47 @@ function UnitCard({ b, fatigue, faltering }: { b: HudBattalion; fatigue: number;
   );
 }
 
+const STANCES: { stance: CompanyStance; short: string; hint: string }[] = [
+  { stance: "FREE", short: "Livre", hint: "Obedece as suas ordens; longe da sua voz, o capitão decide sozinho" },
+  { stance: "HOLD", short: "Segurar", hint: "Defende o lugar onde está e volta para ele depois de cada briga" },
+  { stance: "PURSUE", short: "Perseguir", hint: "Vai atrás de quem estiver perto, até de quem foge" },
+];
+
+/** Companhia (Marco 20): o nome seleciona os batalhões dela; os botões mandam a postura ao capitão. */
+function CompanyBox({ c }: { c: CompanyHud }) {
+  const send = useGameStore((s) => s.sendBattleCommand);
+  return (
+    <div className="flex h-11 w-40 flex-col justify-between rounded border border-amber-700/70 bg-neutral-900/80 px-1 py-0.5">
+      <button
+        type="button"
+        onClick={() => send({ type: "SELECT", ids: c.battalionIds, additive: false })}
+        className="truncate text-left text-[11px] font-bold text-amber-200 outline-none hover:text-amber-100 focus-visible:ring-1 focus-visible:ring-amber-300"
+        title={c.fallen ? `O capitão ${c.captain} caiu; quem manda é o tenente ${c.leader}` : `Companhia de ${c.captain}: clique para selecionar os batalhões`}
+      >
+        ⚑ {c.leader}
+        <span className="ml-1 font-normal text-neutral-400">{c.plan ?? (c.fallen ? "sem capitão" : "")}</span>
+      </button>
+      <span className="flex gap-0.5">
+        {STANCES.map((s) => (
+          <button
+            key={s.stance}
+            type="button"
+            title={s.hint}
+            aria-pressed={c.stance === s.stance}
+            aria-label={`${s.short}: companhia de ${c.leader}`}
+            onClick={() => send({ type: "COMPANY", ids: [c.id], stance: s.stance })}
+            className={`flex-1 rounded px-0.5 text-[10px] outline-none focus-visible:ring-1 focus-visible:ring-amber-300 ${
+              c.stance === s.stance ? "bg-amber-700 text-white" : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+            }`}
+          >
+            {s.short}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 /** Botão da câmera lenta: mostra os segundos que faltam e a recarga. */
 function SlowButton({ hud }: { hud: BattleHud }) {
   const send = useGameStore((s) => s.sendBattleCommand);
@@ -183,6 +226,10 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
   const send = useGameStore((s) => s.sendBattleCommand);
   const scenario = useGameStore((s) => s.scenario !== null);
   const [help, setHelp] = useState(false);
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  const food = useFieldFood();
+  // Rações refeitas: o 🛒 só conta as carroças que andam com o exército
+  const wagonsHere = useGameStore((s) => s.train === "ARMY" || s.campPacked);
   if (!hud) return null;
 
   const standing = hud.battalions.filter((b) => b.status !== "DESTROYED");
@@ -271,9 +318,24 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
             </Group>
           )}
           {!scenario && (
-            <Group title={`Marcha · 🛒 ${hud.wagonsAlive}`}>
+            <Group title={wagonsHere && hud.wagonsAlive > 0 ? `Marcha · 🛒 ${hud.wagonsAlive}` : "Marcha"}>
               <Command icon={<CommandIcon id="FORCED" />} label="Marcha forçada" hint="O dia rende mais caminho e a tropa anda mais depressa, mas cansa muito mais" keyName="V" active={hud.forced} onClick={() => send({ type: "FORCED_MARCH", ids: [] })} />
               <Command icon={<CommandIcon id="FORAGE" />} label="Forragear" hint={hud.forageBlocked ?? "Um quarto de dia coletando comida da região"} keyName="G" disabled={!!hud.forageBlocked} onClick={() => send({ type: "FORAGE", ids: [] })} />
+              <Command
+                icon={<CommandIcon id="WAGON" />}
+                label="Suprimentos"
+                hint={`${food.days.toFixed(1)} dia(s) de comida nas mochilas. Mandar um comboio do acampamento ou devolver as carroças`}
+                badge={String(Math.floor(food.days))}
+                tone={food.days <= 1.5 ? "border-red-600 text-red-200 hover:border-red-400" : undefined}
+                onClick={() => setCampPanel({ kind: "SUPPLY" })}
+              />
+            </Group>
+          )}
+          {hud.companies.length > 0 && (
+            <Group title="Companhias">
+              {hud.companies.map((c) => (
+                <CompanyBox key={c.id} c={c} />
+              ))}
             </Group>
           )}
           <Group title="Tempo">
