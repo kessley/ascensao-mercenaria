@@ -33,6 +33,8 @@ import { CampArea, type Interactable } from "../world/CampArea";
 import { StaticCuller } from "../world/StaticCuller";
 import { SettlementLayer, ownerColor } from "../world/Settlements";
 import { NavGrid } from "../systems/NavGrid";
+import { Companies } from "../systems/Companies";
+import { STANCE_LABEL } from "../sim/companies";
 import { TOWN_SIZE, insideTown, nearestGate, specialHouses, wallOutward, wallPosts, type Rect, type TownLayout } from "../world/townLayout";
 import { kingdomsAtWar } from "../sim/realm";
 import { nobleName } from "../sim/nobility";
@@ -360,6 +362,10 @@ export class WorldScene extends Phaser.Scene {
   private warbands!: WarbandManager;
   /** Comando inimigo em campo (Marco 16). */
   private hosts!: HostManager;
+  /** Companhias em campo (Marco 20): aura, abalo e a cabeça de cada capitão. */
+  private companies!: Companies;
+  /** Parada de um mensageiro que leva a ordem ao capitão: os batalhões que ela cobre. */
+  private relayStops = new WeakMap<MissionStop, Battalion[]>();
   /** Obras do cerco em curso: portões, escadas e aríete. */
   private works: SiegeWorks | null = null;
   /** Tropas em expedição à vista no mapa. */
@@ -618,6 +624,12 @@ export class WorldScene extends Phaser.Scene {
         return s.day + s.dayProgress;
       },
     );
+
+    this.companies = new Companies({
+      commander: () => this.commander,
+      feed: (text) => this.pushFeed(text),
+      inVoice: (p) => !!this.run?.def.directOrders || distance(p, this.commander) <= SUPPORT.COMMAND_RADIUS,
+    });
 
     // Marco 16: bando que entra na bolha ganha comando em campo
     this.hosts = new HostManager({
@@ -881,6 +893,8 @@ export class WorldScene extends Phaser.Scene {
     Unit.pace = this.forced && !this.engagement && !this.inCamp ? FATIGUE.FORCED_SPEED : 1;
     // Na campanha, sem inimigo à vista, marcha-se no passo normal; em batalha, em ordem
     Battalion.calm = !this.run && !this.engagement && visibleEnemies.length === 0;
+    // Marco 20: a aura do capitão vale neste quadro; fora da voz do Comandante, ele decide
+    this.companies.update(time, store.captains, this.battalions, visibleEnemies);
     for (const b of this.battalions) b.update(dt, visibleEnemies);
     Wagon.load = this.loadPace();
     this.updateWagons(dt);
@@ -4814,7 +4828,15 @@ export class WorldScene extends Phaser.Scene {
    * - MENSAGEIRO: ordens complexas (ponto, alvo, foco, arranjo) ou quando nada mais alcança.
    *   Ele cavalga até ficar ao alcance do próprio sinal — não precisa encostar na tropa.
    */
-  private dispatch(recipient: OrderRecipient, order: string, apply: () => void, channel: OrderChannel = "COMPLEX"): boolean {
+  private dispatch(recipient: OrderRecipient, order: string, apply: () => void, channel: OrderChannel = "COMPLEX", direct = true): boolean {
+    // Ordem direta a um batalhão de companhia (Marco 20): por um tempo, vale mais que a do capitão
+    if (direct && recipient instanceof Battalion) {
+      const inner = apply;
+      apply = () => {
+        inner();
+        this.companies.playerOrdered(recipient, this.time.now);
+      };
+    }
     const name = this.recipientName(recipient);
     const reach = this.reachOf(recipient, channel);
     // Batalhão destacado muito longe: a harpia leva a ordem ao batedor que está perto dele
@@ -4910,6 +4932,7 @@ export class WorldScene extends Phaser.Scene {
    * com essa ordem; sem nenhum mensageiro livre, a ordem não sai.
    */
   private sendMessengers(order: string, deliveries: PendingDelivery[]): boolean {
+    deliveries = this.relayThroughCaptains(order, deliveries);
     const groups: PendingDelivery[][] = [];
     for (const d of deliveries) {
       const p = d.stop.position();
@@ -4934,11 +4957,53 @@ export class WorldScene extends Phaser.Scene {
         sent = true;
         this.pushFeed(`Sem outro mensageiro: ${carrier.rider.name} também levará "${order}" a ${names}.`);
       } else {
-        for (const d of group) if (d.recipient instanceof Battalion) d.recipient.pendingOrder = null;
+        for (const d of group) {
+          if (d.recipient instanceof Battalion) d.recipient.pendingOrder = null;
+          for (const b of this.relayStops.get(d.stop) ?? []) b.pendingOrder = null;
+        }
         this.pushFeed(`Sem mensageiro livre: "${order}" não chegou a ${names}.`);
       }
     }
     return sent;
+  }
+
+  /**
+   * Marco 20: ordens para dois ou mais batalhões da mesma companhia, perto do capitão, viram
+   * UMA parada do mensageiro, no capitão, que passa a ordem adiante na hora. É a vantagem de delegar.
+   */
+  private relayThroughCaptains(order: string, deliveries: PendingDelivery[]): PendingDelivery[] {
+    const byCompany = new Map<string, { lead: { id: string; name: string; at: () => Point }; list: PendingDelivery[] }>();
+    const out: PendingDelivery[] = [];
+    for (const d of deliveries) {
+      const lead = d.recipient instanceof Battalion ? this.companies.leaderFor(d.recipient, this.battalions) : null;
+      if (!lead) {
+        out.push(d);
+        continue;
+      }
+      const entry = byCompany.get(lead.id) ?? { lead, list: [] };
+      entry.list.push(d);
+      byCompany.set(lead.id, entry);
+    }
+    for (const { lead, list } of byCompany.values()) {
+      if (list.length < 2) {
+        out.push(...list);
+        continue;
+      }
+      const names = list.map((d) => d.stop.recipient).join(", ");
+      const covered = list.flatMap((d) => (d.recipient instanceof Battalion ? [d.recipient] : []));
+      const stop: MissionStop = {
+        recipient: `companhia de ${lead.name}`,
+        position: lead.at,
+        gone: () => list.every((d) => d.stop.gone()),
+        deliver: (m) => {
+          for (const d of list) if (!d.stop.gone()) d.stop.deliver(m);
+          this.pushFeed(`⚑ ${lead.name} passou "${order}" a ${names}.`);
+        },
+      };
+      this.relayStops.set(stop, covered);
+      out.push({ order, stop, recipient: list[0].recipient });
+    }
+    return out;
   }
 
   private updateMessengers(dt: number): void {
@@ -4964,6 +5029,7 @@ export class WorldScene extends Phaser.Scene {
         const names = m.mission.stops.map((s) => s.recipient);
         this.pushFeed(`${m.rider.name} foi interceptado! A ordem "${m.mission.order}" para ${names.join(", ")} se perdeu.`);
         for (const b of this.battalions) if (names.includes(b.name)) b.pendingOrder = null;
+        for (const s of m.mission.stops) for (const b of this.relayStops.get(s) ?? []) b.pendingOrder = null;
         m.mission = null;
       } else {
         this.pushFeed(`O mensageiro ${m.rider.name} caiu.`);
@@ -5578,6 +5644,15 @@ export class WorldScene extends Phaser.Scene {
           if (cmd.action === "TOGGLE") this.setCameraLocked(!this.cameraLocked);
           else this.centerOnCommander();
           break;
+        case "COMPANY": {
+          const id = cmd.ids[0];
+          const lead = id ? this.companies.leaderBattalion(id, this.battalions) : null;
+          if (!lead) break;
+          const stance = cmd.stance;
+          // A ordem é larga, mas é uma ordem: perto, vai pela voz; longe, por mensageiro
+          this.dispatch(lead, `Postura: ${STANCE_LABEL[stance]}`, () => this.companies.setStance(id, stance, this.battalions), "COMPLEX", false);
+          break;
+        }
         case "TRUMPET": {
           // Sem seleção, o toque vale para todo o exército
           const targets = picked.length > 0 ? picked : this.battalions.filter((b) => !b.isDestroyed);
@@ -6111,6 +6186,7 @@ export class WorldScene extends Phaser.Scene {
         state: m.isAlive ? m.riderState : "DEAD",
       })),
       feed: this.feed,
+      companies: this.companies.hud(this.battalions),
       foes: this.hosts.hosts
         .filter((h) => h.members.some((m) => m.revealed && m.hostile))
         .map((h) => ({ key: h.key, name: h.name, trait: h.staff.traits[0] ?? null, status: h.status, morale: Math.round(h.morale), count: h.members.filter((m) => m.revealed).length })),

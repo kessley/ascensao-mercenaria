@@ -151,9 +151,9 @@ export function makeStaff(kinds: readonly EnemyKind[], base: number, chief?: { n
 }
 
 /** Quanto vale em combate: vida atrás da armadura vezes o que ele bate. */
-const unitPower = (u: Unit) => Math.sqrt((Math.max(1, u.hp) / (1 - u.armor * 0.8)) * Math.max(0.5, (u.damage * 1000) / Math.max(200, u.cooldown)));
+export const unitPower = (u: Unit) => Math.sqrt((Math.max(1, u.hp) / (1 - u.armor * 0.8)) * Math.max(0.5, (u.damage * 1000) / Math.max(200, u.cooldown)));
 
-function contactKind(u: Unit): ContactView["kind"] {
+export function contactKind(u: Unit): ContactView["kind"] {
   if (u.role === "HERO") return "HERO";
   if (u.role === "SCOUT") return "SCOUT";
   if (u.role === "COURIER") return "COURIER";

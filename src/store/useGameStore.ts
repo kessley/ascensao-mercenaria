@@ -80,6 +80,7 @@ import { CONTINENT_KEYS, INITIAL_SEA, seaSlice, type ContinentKey, type SeaActio
 import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
 import { INITIAL_CAPTAINS, allCaptains, captainSlice, captainsWeek, desertions, freshCaptains, pruneCompanies, shiftLoyalty, type CaptainActions, type CaptainState } from "./captainSlice";
 import { captainName, type CaptainData } from "../game/data/captains";
+import type { CompanyHud, CompanyStance } from "../game/sim/companies";
 import { SCENARIO_TOWN, buildScenarioWorld, noteResult, scenarioDay, scenarioProgress, type BattleScenario, type ScenarioHud, type ScenarioResult } from "../game/data/scenarios";
 import {
   GUILD_BUILDINGS,
@@ -305,6 +306,8 @@ export interface BattleHud {
   messengers: { id: string; name: string; level: number; state: "IDLE" | "OUTBOUND" | "RETURNING" | "DEAD" }[];
   /** Últimos acontecimentos (mensageiros, interceptações...). */
   feed: string[];
+  /** Companhias em campo (Marco 20): quem manda, a postura e o plano que o capitão escolheu. */
+  companies: CompanyHud[];
   /** Comandantes inimigos à vista (Marco 16): quem são e como estão. */
   foes: { key: string; name: string; trait: NobleTrait | null; status: string; morale: number; count: number }[];
   /** Situação de batedores/mensageiros (usada também no recuo). */
@@ -568,6 +571,8 @@ export type BattleCommand =
   /** Postura furtiva liga/desliga; soltar a harpia com o relatório. */
   | { type: "SCOUT_STEALTH" | "HARPY_SEND"; ids: string[] }
   | { type: "CAMERA"; ids: string[]; action: "TOGGLE" | "CENTER" }
+  /** Ordem larga a uma companhia (Marco 20): `ids` = [id do capitão]. */
+  | { type: "COMPANY"; ids: string[]; stance: CompanyStance }
   /** Toque de trombeta pré-combinado para os batalhões `ids` (vazio = todo o exército). */
   | { type: "TRUMPET"; ids: string[]; call: TrumpetCall }
   | { type: "WAR_CRY"; ids: string[] }

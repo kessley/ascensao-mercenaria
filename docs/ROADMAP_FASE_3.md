@@ -3,9 +3,8 @@
 Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador, cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
 **Onde estamos (3 de novembro de 2026):**
-- **Feito:** a progressão dos batalhões, a pixel art das figuras (G0 e G1) e das construções (G3), as rações refeitas (mochilas e comboio) e os capitães no acampamento (Marco 20, parte 1).
-- **Próximo:** os capitães na batalha (Marco 20, parte 2).
-- **Em andamento, sem pressa:** o chão (G2).
+- **Feito:** a progressão dos batalhões, a pixel art das figuras (G0 e G1) e das construções (G3), as rações refeitas (mochilas e comboio) e os capitães (Marco 20 ✅ OK, no acampamento e na batalha).
+- **Próximo:** o resto do chão (G2).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -28,9 +27,9 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 2 | [G0 e G1: prova e figuras em campo](#2-g0-e-g1-prova-e-figuras-em-campo--ok) | arte | Tudo o mais desenha em cima das figuras | ✅ OK |
 | 3 | [G3: construções](#3-g3-construções--ok) | arte | As peças servem depois ao Marco 22 | ✅ OK |
 | 4 | [Rações refeitas: mochilas e comboio](#4-rações-refeitas-mochilas-e-comboio) | recurso | Pedido no meio do Marco 20: a carroça de ração em toda marcha não ficou boa | feito; falta jogar uma campanha com ele |
-| 5 | [Marco 20, parte 1: capitães no acampamento](#5-marco-20-parte-1-capitães-no-acampamento) | recurso | | feito |
-| 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | **próximo** |
-| 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | em andamento |
+| 5 | [Marco 20, parte 1: capitães no acampamento](#5-marco-20-parte-1-capitães-no-acampamento) | recurso | | ✅ OK |
+| 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
+| 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | **próximo** (o filtro de perto já está feito) |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene) | dívida | Os Marcos 21 e 22 mexem muito nela | |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | |
 | 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
@@ -132,12 +131,12 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 
 ---
 
-## Marco 20 — Capitães: a cadeia de comando
+## Marco 20 — Capitães: a cadeia de comando ✅ OK
 **Objetivo:** o bando passa do tamanho que o Comandante consegue conduzir sozinho. Um capitão comanda uma **companhia** de batalhões; abaixo dele, cada tenente comanda um batalhão. Missões só se delegam a capitães.
 
 - **Hierarquia:** Comandante → capitães → tenentes → batalhões.
 - **A decisão:** controlar tudo (lento, com um mensageiro para cada batalhão) ou confiar no capitão (rápido, mas ele decide do jeito dele).
-- O marco foi dividido em duas partes: o acampamento (feito) e a batalha (próximo).
+- O marco foi dividido em duas partes: o acampamento e a batalha.
 
 ### 5. Marco 20, parte 1: capitães no acampamento
 **Feito:**
@@ -173,26 +172,39 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - testes de unidade só dos capitães (lealdade, deserção, promoção).
 
 ### 6. Marco 20, parte 2: capitães na batalha
-**O que falta fazer, em ordem:**
-1. **Companhias na cena** (`src/game/systems/Companies.ts`, novo):
-   - **aura:** batalhão a até 420 px do capitão perde 6% menos moral por ponto de Comando (a regra já está em `MoraleSystem`; falta quem a ligue a cada quadro);
-   - **capitão morto:** cada batalhão da companhia perde 25 de moral, e o tenente mais antigo assume, pior.
-2. **Um mensageiro por companhia:** ordens para vários batalhões da mesma companhia vão num só mensageiro até o capitão, que as passa na hora para quem está a até 650 px dele. É a vantagem de delegar.
-3. **Ordens largas:** cada companhia tem uma postura, escolhida num chip da interface de batalha:
-   - **livre:** obedece a última ordem;
-   - **segurar:** defende um ponto, num raio de 380 px;
-   - **perseguir:** vai atrás de quem fugir, até 900 px.
-4. **O capitão pensa sozinho** quando o mensageiro não chega ou a postura manda:
-   - usa os mesmos 8 planos da IA inimiga (Marco 16), vendo só o que a companhia vê (`src/game/sim/companies.ts` já monta essa visão);
-   - pensa a cada 0,9 s, e o temperamento diz até onde ele procura briga: o agressivo a 750 px, o firme a 480 e o paciente a 300;
-   - com Tática 3 ou mais, a companhia anda com a cavalaria nos flancos.
-5. **Do outro lado:** os exércitos dos reinos ganham capitães com nome e nível, e não só o chefe da força. Dá para capturar e pedir resgate. É o que o Marco 21 precisa para duelar.
-6. **Testes:**
-   - atualizar `tests/battle/missions.mjs`: o seletor de missão agora pede um capitão, e o botão virou "Enviar a companhia";
-   - em batalha de verdade: a ordem para uma companhia sai com um mensageiro só; o capitão age sozinho fora do alcance; a morte dele abala a companhia.
+**Feito:**
+1. **Companhias na cena** (`src/game/systems/Companies.ts`):
+   - **aura:** batalhão a até 420 px do capitão perde 6% menos moral por ponto de Comando (com Comando 4, 24% menos);
+   - **capitão morto:** cada batalhão da companhia perde 25 de moral. O tenente mais antigo (o primeiro da companhia com tenente de pé) assume, com 2 pontos a menos de Tática e sem a aura. Sem tenente, os batalhões voltam a esperar as ordens do Comandante.
+2. **Um mensageiro por companhia:** ordens para dois ou mais batalhões da mesma companhia, a até 650 px do capitão, viram uma parada só do mensageiro, no capitão, que passa a ordem adiante na hora. Interceptado o mensageiro, a ordem se perde para todos.
+3. **Ordens largas:** o grupo **Companhias** da barra de batalha tem uma caixa por companhia, com quem manda e o plano do momento.
+   - **Livre:** obedece as suas ordens; longe da sua voz, o capitão decide sozinho.
+   - **Segurar:** a companhia guarda o lugar onde estava quando a ordem chegou, briga num raio de 380 px e depois volta para ele.
+   - **Perseguir:** vai atrás de quem estiver a até 900 px, inclusive de quem foge.
+   - A postura é uma ordem: perto do Comandante vai pela voz; longe, por mensageiro até o capitão. Clicar no nome seleciona os batalhões da companhia.
+4. **O capitão pensa sozinho** (a cada 0,9 s), com os mesmos planos da IA inimiga (`choosePlan`), vendo só os inimigos que o bando enxerga perto da companhia:
+   - **ataque:** cada batalhão no inimigo mais perto, e a cavalaria escolhe a presa (arqueiros e carroças primeiro);
+   - **linha e flanco:** quem está mais perto segura a frente, e os outros entram pelas pontas;
+   - **golpe na retaguarda:** a cavalaria (ou o segundo corpo a corpo) vai nos arqueiros;
+   - **resistir:** todos seguram o lugar;
+   - **retirada:** a companhia volta para junto do Comandante (segurando, volta ao ponto que guarda).
+   - O temperamento diz até onde ele procura briga quando livre: o agressivo a 750 px, o firme a 480 e o paciente a 300.
+   - **Quem manda é o jogador:** livre, o capitão só decide fora do alcance da voz e só com quem está parado ou seguindo. Uma ordem direta a um batalhão da companhia vale 15 s antes de o capitão voltar a mexer nele.
+5. **Testes:**
+   - 13 de regras (`tests/unit/captains.test.ts`): tamanho da companhia, temperamento, promoção, lealdade, deserção e a tradução dos planos em ordens;
+   - a suíte de batalha `companhias` (`npm run test:battle -- companhias`), com 15 verificações: a aura, o mensageiro único, o capitão decidindo longe do Comandante e calado perto dele, a postura pela interface, a companhia voltando ao lugar e o abalo da morte dele;
+   - a suíte `missoes` atualizada para o seletor de capitão (28 verificações).
 
-**Pronto quando:**
-- uma companhia sai para um contrato só com o capitão, aparece no mapa e volta com um relatório (feito na parte 1);
+**Ficou de fora:**
+- capitães inimigos com nome e nível, capturar, pedir resgate e recrutar quem muda de lado: foram para o Marco 21, que precisa deles para duelar;
+- a companhia marchando com a cavalaria nos flancos (`companyArrangement` existe, mas não está ligado);
+- o estandarte do capitão à frente da coluna no mapa (G4);
+- emboscada e recuo fingido: o capitão não usa (sem terreno marcado, e o recuo fingido vira ataque);
+- capitães nas batalhas personalizadas;
+- jogado só nos testes, não numa campanha.
+
+**Pronto quando** (as duas coisas valem agora):
+- uma companhia sai para um contrato só com o capitão, aparece no mapa e volta com um relatório;
 - em batalha, as ordens por companhia funcionam, e o capitão age sozinho quando o mensageiro não chega.
 
 ---
@@ -224,6 +236,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 ## 9. Marco 21: duelos no meio da batalha
 **Objetivo:** quando um herói inimigo de nível alto chega ao Comandante, a batalha em volta para e os dois lutam sozinhos, como nos duelos de *Total War: Three Kingdoms*. A diferença: **ninguém aceita nem recusa, o Comandante é puxado**. É uma luta de ação no chão, com esquiva e bloqueio, curta e perigosa, sem nada de fantasia.
 
+- **Antes, os capitães do outro lado** (vieram do Marco 20): os exércitos dos reinos ganham capitães com nome, nível e Duelo, e não só o chefe da força. Dá para capturar, pedir resgate e recrutar quem muda de lado.
 - **Quem puxa para o duelo:**
   - capitães e chefes inimigos de nível alto (Duelo 3 ou mais);
   - temperamento que procura briga (bravo, orgulhoso, cruel);
@@ -449,6 +462,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 | Legado | **Promissor** | Testamento, traços e cicatrizes criam decisão, mas falta tempo de jogo para saber |
 | Contratos | **Médio** | 10 tipos, mas cada um é um serviço solto. Quase nada encadeia um contrato no outro |
 | Tenentes | **Médio** | Têm história, mas a passiva é sorteada e não muda. Agora podem virar capitães |
+| Capitães | **Bom no papel** | Companhia, um mensageiro por companhia, posturas e um capitão que decide com os planos da IA. A decisão de delegar existe; falta jogar para saber se ela pesa |
 | Expedições | **Médio** | Agora vão com um capitão: a Tática, o temperamento e a lealdade dele pesam, e ele escreve o relatório. A luta ainda é um cálculo |
 | Corte e nobreza | **Amplo, sem prova** | 6 tipos de favor, tramas e duelos. É o sistema mais longe do que o jogador faz no dia a dia |
 | Reino | **Raso** | 11 construções são uma lista de efeitos. Rei com 4 povoados é cedo, e governar é abrir um menu |

@@ -36,7 +36,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | G0 / G1 | Pixel art: prova e figuras em campo | ✅ OK |
 | | G3 | Pixel art: construções (povoados, muralhas, acampamento, locais e covis) | ✅ OK |
 | | — | Rações refeitas: mochilas por batalhão e comboio de carroças | feito, falta jogar uma campanha |
-| | 20 | Capitães: a cadeia de comando | parte 1 (acampamento) feita; parte 2 (batalha) em andamento |
+| | 20 | Capitães: a cadeia de comando | ✅ OK |
 | | G2 | Pixel art: chão | em andamento |
 | | 21 | Duelos no meio da batalha | |
 | | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | |

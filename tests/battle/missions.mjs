@@ -34,7 +34,11 @@ export async function missions({ page, ev }, { check }) {
       targetId: to.id,
     };
     st.setState({ contracts: [offer, ...s.contracts.filter((c) => c.kind !== "ESCORT")] });
-    return { from: from.name, to: to.name };
+    // Marco 20: missão só com capitão. Um contratado, com o primeiro batalhão na companhia
+    const cand = st.getState().captainCandidates[0];
+    const hired = st.getState().hireCaptain(cand.id);
+    const joined = st.getState().setCompany(s.battalions[0].id, cand.id);
+    return { from: from.name, to: to.name, captainId: cand.id, hired, joined };
   });
 
   // A mesa de contratos mostra de onde sai e para onde vai
@@ -48,26 +52,28 @@ export async function missions({ page, ev }, { check }) {
   check("a oferta oferece Enviar tropas", (await card.locator("button:has-text('Enviar tropas')").count()) === 1);
   await page.screenshot({ path: "tests/battle/.shots-mesa.png" });
 
-  // Enviar tropas
+  // Enviar tropas: escolhe-se o capitão, e vai a companhia dele
+  check("o capitão foi contratado e ganhou a companhia", setup.hired === null && setup.joined === null, JSON.stringify(setup));
   await card.locator("button:has-text('Enviar tropas')").click();
-  await page.waitForSelector("text=Quem vai?");
-  check("sem ninguém marcado, não dá para enviar", await card.locator("button:has-text('Enviar tropas')").isDisabled());
-  await card.locator("input[type=checkbox]").first().check();
+  await page.waitForSelector("text=Quem leva a companhia?");
+  check("sem capitão marcado, não dá para enviar", await card.locator("button:has-text('Enviar a companhia')").isDisabled());
+  await card.locator("input[type=radio]").first().check();
   await page.waitForSelector("text=Chance de cumprir");
   await page.screenshot({ path: "tests/battle/.shots-envio.png" });
   const before = await ev(() => {
     const s = window.__store.getState();
     return { gold: s.gold, rations: s.rations, battalions: s.battalions.length };
   });
-  await card.locator("button:has-text('Enviar tropas')").click();
+  await card.locator("button:has-text('Enviar a companhia')").click();
   await page.waitForTimeout(200);
   // Com o painel aberto o mundo está parado: o campo acerta as contas ao fechar
   await ev(() => window.__store.getState().setCampPanel(null));
   await page.waitForTimeout(500);
   const sent = await ev(() => {
     const s = window.__store.getState();
-    return { gold: s.gold, rations: s.rations, battalions: s.battalions.length, away: s.expeditions.length, returnDay: s.expeditions[0]?.returnDay, field: window.__world.battalions.length, offered: s.contracts.some((c) => c.id === "teste-escolta") };
+    return { gold: s.gold, rations: s.rations, battalions: s.battalions.length, away: s.expeditions.length, returnDay: s.expeditions[0]?.returnDay, field: window.__world.battalions.length, offered: s.contracts.some((c) => c.id === "teste-escolta"), captain: s.expeditions[0]?.captain?.id ?? null, captainsHome: s.captains.length };
   });
+  check("o capitão vai com a companhia", sent.captain === setup.captainId && sent.captainsHome === 0, JSON.stringify(sent));
   check("as tropas saem do campo", sent.battalions === before.battalions - 1 && sent.field === sent.battalions && sent.away === 1, JSON.stringify(sent));
   check("paga o adiantamento e gasta rações", sent.gold === before.gold + 25 && sent.rations < before.rations, JSON.stringify(sent));
   check("o contrato sai da mesa", !sent.offered);
@@ -118,10 +124,12 @@ export async function missions({ page, ev }, { check }) {
   await page.waitForTimeout(500);
   const back = await ev(() => {
     const s = window.__store.getState();
-    return { away: s.expeditions.length, reports: s.expeditionReports, battalions: s.battalions.length, field: window.__world.battalions.length };
+    return { away: s.expeditions.length, reports: s.expeditionReports, battalions: s.battalions.length, field: window.__world.battalions.length, captains: s.captains.map((c) => c.id) };
   });
   const r = back.reports[0];
   check("a expedição volta e presta contas", back.away === 0 && !!r, JSON.stringify(back));
+  check("o relatório vem assinado pelo capitão", !!r?.captain, JSON.stringify(r));
+  check("o capitão volta ao bando (ou morreu com a companhia inteira)", back.captains.includes(setup.captainId) || (r && r.lost.length > 0), JSON.stringify(back));
   check("quem sobreviveu volta ao campo", r && (r.lost.length > 0 || (back.battalions === before.battalions && back.field === back.battalions)), JSON.stringify(back));
 
   // Contrato do Comandante: passos na faixa do HUD

@@ -3,7 +3,7 @@ import type { Point } from "../../utils/math";
 import type { TraitId } from "../data/lieutenants";
 import { temperOf, type CaptainData } from "../data/captains";
 import type { NobleTrait } from "./nobility";
-import type { BattleView, ContactView, PlanKind, SquadView } from "./warMind";
+import { choosePrey, foeCenter, type BattleView, type ContactView, type PlanKind, type SquadView } from "./warMind";
 
 /**
  * A cabeça do capitão em campo (Marco 20). Ele usa a mesma escolha de plano dos comandantes
@@ -92,3 +92,84 @@ export function companyView(s: CompanySight): BattleView {
 
 /** Planos que só se tentam uma vez por batalha. */
 export const ONE_SHOT: readonly PlanKind[] = ["FEINT", "AMBUSH"];
+
+/** Uma companhia na interface de batalha. */
+export interface CompanyHud {
+  id: string;
+  /** Quem manda agora: o capitão ou o tenente que assumiu. */
+  leader: string;
+  captain: string;
+  fallen: boolean;
+  stance: CompanyStance;
+  plan: string | null;
+  battalionIds: string[];
+}
+
+/** O que cada batalhão da companhia faz no plano escolhido. `foe` é o índice em `foes`. */
+export type CompanyIntent = { kind: "ATTACK"; foe: number } | { kind: "HOLD" } | { kind: "FALL_BACK" };
+
+export interface CompanySquad {
+  role: SquadView["role"];
+  center: Point;
+}
+
+function nearestFoe(foes: readonly ContactView[], from: Point): number {
+  let best = -1;
+  let bestD = Infinity;
+  foes.forEach((f, i) => {
+    const d = Math.hypot(f.x - from.x, f.y - from.y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  return best;
+}
+
+/**
+ * O plano vira uma tarefa para cada batalhão, com as mesmas ideias dos planos inimigos:
+ * - ataque: cada um no inimigo mais perto (a cavalaria escolhe a presa);
+ * - linha e flanco: o primeiro corpo a corpo segura a frente e os outros entram pelas pontas;
+ * - golpe na retaguarda: a cavalaria (ou o segundo corpo a corpo) vai nos arqueiros e carroças;
+ * - resistir: todos seguram o lugar e deixam o inimigo vir;
+ * - retirada: todos recuam (para junto do Comandante, ou para o ponto que a companhia guarda).
+ */
+export function companyIntents(plan: PlanKind, squads: readonly CompanySquad[], foes: readonly ContactView[], tactics: number): CompanyIntent[] {
+  if (plan === "RETREAT") return squads.map(() => ({ kind: "FALL_BACK" }));
+  if (plan === "HOLD" || foes.length === 0) return squads.map(() => ({ kind: "HOLD" }));
+  const prey = (from: Point): number => {
+    const p = choosePrey(foes, from, tactics);
+    return p ? foes.indexOf(p) : nearestFoe(foes, from);
+  };
+  const intents: CompanyIntent[] = squads.map((s) => ({ kind: "ATTACK", foe: s.role === "RIDERS" ? prey(s.center) : nearestFoe(foes, s.center) }));
+  const melee = squads.map((s, i) => ({ s, i })).filter(({ s }) => s.role === "MELEE");
+  const foe = foeCenter(foes);
+  if (plan === "FLANK" && foe && melee.length >= 2) {
+    // Quem está mais perto do inimigo segura a frente; os outros entram pelas pontas, um de cada lado
+    const own = { x: squads.reduce((n, s) => n + s.center.x, 0) / squads.length, y: squads.reduce((n, s) => n + s.center.y, 0) / squads.length };
+    const dir = Math.atan2(foe.y - own.y, foe.x - own.x);
+    const side = (f: ContactView) => -(f.x - foe.x) * Math.sin(dir) + (f.y - foe.y) * Math.cos(dir);
+    const byDistance = [...melee].sort((a, b) => Math.hypot(a.s.center.x - foe.x, a.s.center.y - foe.y) - Math.hypot(b.s.center.x - foe.x, b.s.center.y - foe.y));
+    byDistance.slice(1).forEach(({ i }, k) => {
+      const sign = k % 2 === 0 ? 1 : -1;
+      let best = -1;
+      let bestSide = -Infinity;
+      foes.forEach((f, j) => {
+        if (f.kind === "SCOUT" || f.kind === "COURIER") return;
+        const v = side(f) * sign;
+        if (v > bestSide) {
+          bestSide = v;
+          best = j;
+        }
+      });
+      if (best >= 0) intents[i] = { kind: "ATTACK", foe: best };
+    });
+  }
+  if (plan === "REAR_STRIKE") {
+    // Sem cavalaria, o segundo corpo a corpo dá a volta
+    const striker = squads.findIndex((s) => s.role === "RIDERS");
+    const who = striker >= 0 ? striker : (melee[1]?.i ?? -1);
+    if (who >= 0) intents[who] = { kind: "ATTACK", foe: prey(squads[who].center) };
+  }
+  return intents;
+}
