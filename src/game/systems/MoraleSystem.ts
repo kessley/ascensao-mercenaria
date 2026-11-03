@@ -20,6 +20,8 @@ export interface MoraleGroup {
   readonly mods: { moraleLoss: number };
   /** Fileiras atrás seguram quem está na frente (< 1 = perde menos moral). */
   readonly rankSupport?: number;
+  /** Limite de pânico próprio da tropa (habilidade). */
+  readonly panicFloor?: number;
   /** Quantos começaram: baixa dói igual em tropa grande e pequena. */
   readonly startingCount: number;
   /** Bravura da tropa (< 1 = perde menos moral). */
@@ -31,6 +33,8 @@ export interface MoraleGroup {
   /** Quando levou o último choque de ser pega pelo lado. */
   flankShockAt: number;
   readonly leaderPassive: { moraleLoss?: number; recovery?: number; panicBelow?: number } | null;
+  /** Perto do capitão da companhia (< 1 = perde menos moral; Marco 20). */
+  readonly captainAura?: number;
   readonly fatigueRecovery: number;
   panic(): void;
   rally(): void;
@@ -90,7 +94,7 @@ export function updateMorale(
   }
   // Disciplina (habilidade) e um tenente Inabalável amortecem todas as perdas
   const passive = battalion.leaderPassive;
-  delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1) * (battalion.rankSupport ?? 1) * (battalion.steadiness ?? 1);
+  delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1) * (battalion.rankSupport ?? 1) * (battalion.steadiness ?? 1) * (delta < 0 ? (battalion.captainAura ?? 1) : 1);
   // Estandarte à vista: os soldados seguem e protegem a bandeira do seu senhor
   if (banner.seen && !banner.faltering) {
     delta *= SUPPORT.BANNER_MORALE_LOSS;
@@ -107,7 +111,7 @@ export function updateMorale(
 
   battalion.morale = clamp(battalion.morale + delta, 0, M.MAX);
 
-  const panicBelow = passive?.panicBelow ?? M.PANIC_BELOW;
+  const panicBelow = Math.min(passive?.panicBelow ?? M.PANIC_BELOW, battalion.panicFloor ?? M.PANIC_BELOW);
   if (!battalion.panicking && battalion.morale < panicBelow) battalion.panic();
   else if (battalion.panicking && battalion.morale >= M.RALLY_ABOVE) battalion.rally();
 }

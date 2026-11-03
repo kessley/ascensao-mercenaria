@@ -1,9 +1,12 @@
 import Phaser from "phaser";
 import { GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, type TerrainType } from "../../utils/constants";
-import type { Biome, WorldDef } from "../data/world";
+import type { Biome, SiteTheme, WorldDef } from "../data/world";
+import type { CalamityKind } from "../sim/realm";
 import type { GeoMap, GeoSeason } from "../worldgen/geoMap";
 import type { Point } from "../../utils/math";
-import { townSolids, type Rect, type TownLayout } from "./townLayout";
+import { townSolids, wellOf, WELL_RADIUS, type Rect, type TownLayout } from "./townLayout";
+import { pixelGround } from "../art/ground";
+import { CAMPFIRE, CAMP_SITES, PALISADE } from "../data/campLayout";
 
 /** Zona de terreno de superfície (elíptica). Zonas posteriores na lista têm prioridade. */
 export interface TerrainZone {
@@ -45,6 +48,19 @@ export interface SeasonState extends GeoSeason {
   /** Neve no chão abaixo desta temperatura (só no inverno). */
   snowBelow: number | null;
   autumn: boolean;
+}
+
+/** Chão do acampamento do bando montado (o canto do layout no mundo; a paliçada reforçada tem aterro). */
+export interface CampGround {
+  origin: Point;
+  reinforced: boolean;
+}
+
+/** Chão de um covil de calamidade (pintado enquanto o líder vive). */
+export interface LairGround {
+  id: string;
+  kind: CalamityKind;
+  at: Point;
 }
 
 /** Fosso elíptico em volta da paliçada, com a passagem do portão. */
@@ -110,14 +126,26 @@ export class TerrainMap {
     this.indexSolids();
   }
 
+  /** Plantas dos povoados (o chão deles é pintado junto com o resto do chão). */
+  get townLayouts(): readonly TownLayout[] {
+    return this.towns;
+  }
+
   /** Outros sólidos do mundo (paliçada, barracas e estruturas do acampamento do bando). */
   setExtraSolids(solids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[]): void {
     this.extraSolids = solids;
     this.indexSolids();
   }
 
+  /** Construções dos ermos (G3): barracas e choupanas dos locais de contrato, muros caídos, covis. */
+  setWildSolids(solids: readonly Rect[]): void {
+    this.wildSolids = solids.map((rect) => ({ rect, type: "BUILDING" as const }));
+    this.indexSolids();
+  }
+
   private towns: readonly TownLayout[] = [];
   private extraSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
+  private wildSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
   /** Cerco (Marco 16): portões fechados (sólidos) e escadas (passagens na muralha). */
   private siegeSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
   private breaches: readonly Rect[] = [];
@@ -136,7 +164,7 @@ export class TerrainMap {
   private indexSolids(): void {
     const buckets = new Map<number, { rect: Rect; type: "WALL" | "BUILDING" }[]>();
     const stride = 100000;
-    for (const group of [...this.towns.map((l) => townSolids(l)), this.extraSolids, this.siegeSolids]) {
+    for (const group of [...this.towns.map((l) => townSolids(l)), this.extraSolids, this.wildSolids, this.siegeSolids]) {
       for (const solid of group) {
         const r = solid.rect;
         for (let by = Math.floor(r.y / TOWN_BUCKET); by <= Math.floor((r.y + r.h) / TOWN_BUCKET); by++) {
@@ -164,6 +192,11 @@ export class TerrainMap {
   setDitch(ditch: Ditch | null): void {
     this.ditch = ditch;
   }
+
+  /** Terra batida e trilhas do acampamento (pintadas com o chão; nada quando ele está levantado). */
+  campGround: CampGround | null = null;
+  /** Covis das calamidades vivas (o chão morto do necromante, a terra pisada dos orcs). */
+  lairGrounds: readonly LairGround[] = [];
 
   /** Está no anel do fosso? */
   get ditchShape(): Ditch | null {
@@ -221,6 +254,14 @@ interface Chunk {
 
 /** Resolução da textura de cada pedaço (px de textura por lado). */
 const TEX = 512;
+/**
+ * Chão em pixel art (G2): de perto, pedaços menores pintados em 1 px de textura por px de
+ * mundo, por cima do pedaço comum. Quantos ficam guardados e quanto tempo por quadro se gasta
+ * pintando os que faltam (o primeiro de cada quadro sai sempre).
+ */
+const DETAIL = 400;
+const DETAIL_MAX = 64;
+const DETAIL_BUDGET_MS = 6;
 /** Uma amostra de relevo a cada tantos px de mundo (depois ampliada com suavização). */
 const SAMPLE = 16;
 
@@ -240,6 +281,10 @@ export class TerrainStreamer {
   private readonly loaded = new Map<number, Chunk>();
   private readonly view = new Phaser.Geom.Rectangle();
   private readonly prefix = `chao-${Math.random().toString(36).slice(2, 8)}`;
+  private readonly detailCols = Math.ceil(WORLD_WIDTH / DETAIL);
+  private readonly detailRows = Math.ceil(WORLD_HEIGHT / DETAIL);
+  private readonly detail = new Map<number, Chunk & { used: number }>();
+  private frame = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -292,11 +337,82 @@ export class TerrainStreamer {
     const m = 200;
     this.view.setTo(w.x - m, w.y - m, w.width + m * 2, w.height + m * 2);
     for (const chunk of this.loaded.values()) chunk.image.setVisible(Phaser.Geom.Rectangle.Overlaps(this.view, chunk.bounds));
+    this.updateDetail(camera);
+  }
+
+  /** Quantos pedaços em pixel art estão guardados agora (para testes). */
+  get detailCount(): number {
+    return this.detail.size;
+  }
+
+  /** De perto (zoom de 100% ou mais), o chão em pixel art por cima; de longe, só o comum. */
+  private updateDetail(camera: Phaser.Cameras.Scene2D.Camera): void {
+    this.frame++;
+    if (camera.zoom < 1) {
+      for (const d of this.detail.values()) d.image.setVisible(false);
+      return;
+    }
+    const w = camera.worldView;
+    const s = DETAIL;
+    const c0 = Math.max(0, Math.floor(w.x / s));
+    const c1 = Math.min(this.detailCols - 1, Math.floor(w.right / s));
+    const r0 = Math.max(0, Math.floor(w.y / s));
+    const r1 = Math.min(this.detailRows - 1, Math.floor(w.bottom / s));
+    const t0 = performance.now();
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) {
+        const index = r * this.detailCols + c;
+        let d = this.detail.get(index);
+        if (!d) {
+          if (performance.now() - t0 > DETAIL_BUDGET_MS) continue;
+          d = this.paintDetail(c, r) ?? undefined;
+          if (!d) continue;
+        }
+        d.used = this.frame;
+      }
+    }
+    for (const d of this.detail.values()) d.image.setVisible(d.used === this.frame);
+    // Guardados demais: vão embora os que saíram da tela há mais tempo
+    if (this.detail.size > DETAIL_MAX) {
+      const old = [...this.detail].filter(([, d]) => d.used !== this.frame).sort((a, b) => a[1].used - b[1].used);
+      for (const [index, d] of old.slice(0, this.detail.size - DETAIL_MAX)) this.dropDetail(index, d);
+    }
+  }
+
+  private paintDetail(c: number, r: number): (Chunk & { used: number }) | null {
+    const s = DETAIL;
+    const x0 = c * s;
+    const y0 = r * s;
+    const canvas = document.createElement("canvas");
+    canvas.width = s;
+    canvas.height = s;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    const chunk = Math.floor(y0 / this.size) * this.cols + Math.floor(x0 / this.size);
+    paintGround(ctx, this.world, this.terrain, x0, y0, s, s, this.zonesByChunk.get(chunk) ?? [], true);
+    const img = ctx.getImageData(0, 0, s, s);
+    const season = this.terrain.season;
+    pixelGround(img.data, s, s, x0, y0, season.snowBelow !== null ? 0 : season.autumn ? 0.3 : 1);
+    ctx.putImageData(img, 0, 0);
+    const key = `${this.prefix}-d-${c}-${r}`;
+    if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    this.scene.textures.addCanvas(key, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    const image = this.scene.add.image(x0, y0, key).setOrigin(0, 0).setDepth(-9.9);
+    const d = { image, key, bounds: new Phaser.Geom.Rectangle(x0, y0, s, s), used: this.frame };
+    this.detail.set(r * this.detailCols + c, d);
+    return d;
+  }
+
+  private dropDetail(index: number, d: Chunk): void {
+    d.image.destroy();
+    if (this.scene.textures.exists(d.key)) this.scene.textures.remove(d.key);
+    this.detail.delete(index);
   }
 
   /** Redesenha tudo (a estação mudou: neve, gelo, cheia, cores do outono). */
   invalidateAll(): void {
     for (const [index, chunk] of this.loaded) this.unload(index, chunk);
+    for (const [index, d] of this.detail) this.dropDetail(index, d);
   }
 
   /** Redesenha os pedaços em volta de um ponto (ponte queimada ou reconstruída). */
@@ -306,10 +422,16 @@ export class TerrainStreamer {
       if (p.x + radius < b.x || p.x - radius > b.right || p.y + radius < b.y || p.y - radius > b.bottom) continue;
       this.unload(index, chunk);
     }
+    for (const [index, d] of this.detail) {
+      const b = d.bounds;
+      if (p.x + radius < b.x || p.x - radius > b.right || p.y + radius < b.y || p.y - radius > b.bottom) continue;
+      this.dropDetail(index, d);
+    }
   }
 
   destroy(): void {
     for (const [index, chunk] of this.loaded) this.unload(index, chunk);
+    for (const [index, d] of this.detail) this.dropDetail(index, d);
   }
 
   private unload(index: number, chunk: Chunk): void {
@@ -330,7 +452,10 @@ export class TerrainStreamer {
     paintGround(ctx, this.world, this.terrain, x0, y0, s, TEX, this.zonesByChunk.get(r * this.cols + c) ?? []);
     const key = `${this.prefix}-${c}-${r}`;
     if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-    this.scene.textures.addCanvas(key, canvas);
+    // 512 é potência de 2: sem isto o WebGL repete a textura, e o filtro mistura a borda com a do
+    // lado oposto (virava uma linha de grama no chão da cidade, na emenda dos pedaços)
+    const clamp = Phaser.Textures.WrapMode.CLAMP_TO_EDGE;
+    this.scene.textures.addCanvas(key, canvas)?.setWrap(clamp, clamp);
     const image = this.scene.add.image(x0, y0, key).setOrigin(0, 0).setScale(s / TEX).setDepth(-10);
     this.loaded.set(r * this.cols + c, { image, key, bounds: new Phaser.Geom.Rectangle(x0, y0, s, s) });
   }
@@ -400,6 +525,8 @@ function paintGround(
   size: number,
   tex: number,
   zones: readonly number[],
+  /** Para o chão em pixel art: sem a grade e com estradas de terra cheia (o filtro lê a cor). */
+  detail = false,
 ): void {
   const geo = terrain.geo;
   const scale = tex / size;
@@ -441,19 +568,21 @@ function paintGround(
   const inChunk = (minX: number, minY: number, maxX: number, maxY: number, pad: number) =>
     maxX + pad >= x0 && minX - pad <= x0 + size && maxY + pad >= y0 && minY - pad <= y0 + size;
 
-  // 2. Grade discreta (referência de movimento)
-  ctx.strokeStyle = "rgba(0,0,0,0.08)";
-  ctx.lineWidth = 1 / scale;
-  ctx.beginPath();
-  for (let x = x0; x <= x0 + size; x += 100) {
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, y0 + size);
+  // 2. Grade discreta (referência de movimento; de perto, a textura do chão faz esse papel)
+  if (!detail) {
+    ctx.strokeStyle = "rgba(0,0,0,0.08)";
+    ctx.lineWidth = 1 / scale;
+    ctx.beginPath();
+    for (let x = x0; x <= x0 + size; x += 100) {
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, y0 + size);
+    }
+    for (let y = y0; y <= y0 + size; y += 100) {
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x0 + size, y);
+    }
+    ctx.stroke();
   }
-  for (let y = y0; y <= y0 + size; y += 100) {
-    ctx.moveTo(x0, y);
-    ctx.lineTo(x0 + size, y);
-  }
-  ctx.stroke();
 
   // 3. Zonas de superfície (cada uma com a própria semente)
   for (const i of zones) drawZone(ctx, terrain.zones[i], new Phaser.Math.RandomDataGenerator([`zona-${i}`]), terrain.season.autumn);
@@ -528,7 +657,7 @@ function paintGround(
   // 5. Estradas
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.strokeStyle = "rgba(141,123,82,0.6)";
+  ctx.strokeStyle = detail ? "#85744f" : "rgba(141,123,82,0.6)";
   ctx.lineWidth = 34;
   for (const road of world.roads) {
     const xs = road.map((p) => p.x);
@@ -537,6 +666,27 @@ function paintGround(
     ctx.beginPath();
     road.forEach((p, k) => (k === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.stroke();
+  }
+
+  // 5b. Chão dos povoados: lavouras, terra batida, ruas, praça e o pátio da guarnição
+  for (const town of terrain.townLayouts) {
+    const b = town.bounds;
+    if (!inChunk(b.x - 900, b.y - 900, b.x + b.w + 900, b.y + b.h + 900, 0)) continue;
+    paintTown(ctx, town, geo, detail);
+  }
+
+  // 5c. Acampamento do bando: terra batida, trilhas da fogueira até cada local e o aterro da paliçada
+  const camp = terrain.campGround;
+  if (camp && inChunk(camp.origin.x, camp.origin.y, camp.origin.x + PALISADE.x * 2, camp.origin.y + PALISADE.y * 2, 60)) paintCamp(ctx, camp);
+
+  // 5d. Locais de contrato e covis: terra pisada, o piso velho das ruínas, o chão morto do necromante
+  for (const site of world.sites) {
+    const c = site.center;
+    if (inChunk(c.x - WILD_REACH, c.y - WILD_REACH, c.x + WILD_REACH, c.y + WILD_REACH, 0)) paintWild(ctx, site.theme, c, site.id);
+  }
+  for (const lair of terrain.lairGrounds) {
+    const c = lair.at;
+    if (inChunk(c.x - WILD_REACH, c.y - WILD_REACH, c.x + WILD_REACH, c.y + WILD_REACH, 0)) paintWild(ctx, lair.kind, c, lair.id);
   }
 
   // 6. Rios: margem escura e água por cima (trecho a trecho, com a largura de cada um)
@@ -639,6 +789,179 @@ function paintGround(
     }
   }
   ctx.restore();
+}
+
+/** Até onde vai o chão de um local de contrato ou de um covil, a partir do centro. */
+const WILD_REACH = 340;
+
+/**
+ * Chão de um local de contrato ou de um covil: manchas de borda irregular (sempre as mesmas
+ * para o mesmo lugar, em qualquer pedaço). As cores caem nos materiais do filtro do chão:
+ * terra pisada, o piso de pedra quebrado das ruínas, o chão roxo e rachado do necromante.
+ */
+function paintWild(ctx: CanvasRenderingContext2D, kind: SiteTheme | CalamityKind, c: Point, id: string): void {
+  const rnd = new Phaser.Math.RandomDataGenerator([`ermo-${id}`]);
+  // Borda ondulada: três ondas de fases ao acaso somadas (sem pontas)
+  const blob = (cx: number, cy: number, r: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    const n = 48;
+    const phase = [rnd.realInRange(0, 6.3), rnd.realInRange(0, 6.3), rnd.realInRange(0, 6.3)];
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      const wob = 1 + 0.09 * Math.sin(2 * a + phase[0]) + 0.06 * Math.sin(3 * a + phase[1]) + 0.04 * Math.sin(5 * a + phase[2]);
+      const x = cx + Math.cos(a) * r * wob;
+      const y = cy + Math.sin(a) * r * 0.86 * wob;
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  };
+  const spots = (n: number, reach: number, r: number, color: string) => {
+    for (let k = 0; k < n; k++) {
+      const a = rnd.realInRange(0, Math.PI * 2);
+      const d = rnd.realInRange(0, reach);
+      blob(c.x + Math.cos(a) * d, c.y + Math.sin(a) * d, r * rnd.realInRange(0.6, 1.2), color);
+    }
+  };
+  switch (kind) {
+    case "BANDIT_CAMP":
+      blob(c.x, c.y, 250, "#7a6a45");
+      spots(5, 160, 50, "#86754d");
+      break;
+    case "GOBLIN_NEST":
+      blob(c.x, c.y, 240, "#6e5e3c");
+      spots(6, 180, 40, "#5a4a30");
+      break;
+    case "HAUNTED_RUINS": {
+      blob(c.x, c.y, 230, "#5d584a");
+      // Piso velho de lajes, com metade das lajes arrancadas
+      const T = 22;
+      for (let y = -140; y < 140; y += T) {
+        for (let x = -200; x < 200; x += T) {
+          const keep = rnd.frac() < 0.55 - Math.hypot(x / 200, y / 140) * 0.35;
+          if (!keep) continue;
+          ctx.fillStyle = rnd.frac() < 0.5 ? "#7d776c" : "#736d62";
+          ctx.fillRect(c.x + x + (Math.round((y + 140) / T) % 2 ? T / 2 : 0), c.y + y, T - 3, T - 3);
+        }
+      }
+      break;
+    }
+    case "SWAMP_FORD":
+      spots(4, 200, 46, "#5f5236");
+      break;
+    case "NECROMANCER":
+      blob(c.x, c.y, 290, "#5e4450");
+      spots(7, 220, 50, "#4c3842");
+      // Trilha da torre até o meio
+      ctx.fillStyle = "#4c3842";
+      ctx.fillRect(c.x - 14, c.y - 110, 28, 110);
+      break;
+    case "ORC_HORDE":
+      blob(c.x, c.y, 285, "#6a5232");
+      spots(6, 200, 60, "#5f4a2c");
+      break;
+  }
+}
+
+/** Terra batida do acampamento do bando, as trilhas da fogueira até cada local e o aterro da paliçada reforçada. */
+function paintCamp(ctx: CanvasRenderingContext2D, camp: CampGround): void {
+  const o = camp.origin;
+  const c = { x: o.x + PALISADE.x, y: o.y + PALISADE.y };
+  const gate0 = PALISADE.gateAngle + PALISADE.gateHalfWidth;
+  const gate1 = PALISADE.gateAngle - PALISADE.gateHalfWidth + Math.PI * 2;
+  if (camp.reinforced) {
+    ctx.strokeStyle = "#6a5232";
+    ctx.lineWidth = 22;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, PALISADE.rx + 12, PALISADE.ry + 12, 0, gate0, gate1);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#7a6a45";
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, PALISADE.rx - 20, PALISADE.ry - 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#86754d";
+  ctx.lineWidth = 26;
+  const fire = { x: o.x + CAMPFIRE.x, y: o.y + CAMPFIRE.y };
+  for (const to of [...CAMP_SITES.map((s) => s.door), { x: PALISADE.x - PALISADE.rx, y: PALISADE.y }]) {
+    ctx.beginPath();
+    ctx.moveTo(fire.x, fire.y);
+    ctx.lineTo(o.x + to.x, o.y + to.y);
+    ctx.stroke();
+  }
+}
+
+/**
+ * Chão de um povoado (as construções são sprites, em TownArt). De perto (`detail`), as ruas e a
+ * praça ganham pedras e as lavouras, fileiras de plantas: o filtro do chão lê essas cores.
+ */
+function paintTown(ctx: CanvasRenderingContext2D, town: TownLayout, geo: TerrainMap["geo"], detail: boolean): void {
+  const ruined = town.ruined;
+  const rnd = new Phaser.Math.RandomDataGenerator([`chao-cidade-${town.cx}-${town.cy}`]);
+  const land = (x: number, y: number) => !geo || geo.isOpenLand({ x, y });
+  for (const f of town.fields) {
+    if (!land(f.x + f.w / 2, f.y + f.h / 2) || !land(f.x, f.y) || !land(f.x + f.w, f.y + f.h)) continue;
+    const vertical = f.w < f.h;
+    ctx.fillStyle = ruined ? "#56552f" : "#7a6236";
+    ctx.fillRect(f.x, f.y, f.w, f.h);
+    // Fileiras de plantas (de perto, uma a cada 8 px; de longe, as faixas de sempre)
+    const step = detail ? 8 : 34;
+    ctx.fillStyle = ruined ? "#4a4a2a" : detail ? "#6e8a34" : "#8f7f3c";
+    for (let k = detail ? 3 : 30; k < (vertical ? f.w : f.h) - 4; k += step) {
+      if (vertical) ctx.fillRect(f.x + k, f.y + 6, detail ? 4 : 3, f.h - 12);
+      else ctx.fillRect(f.x + 6, f.y + k, f.w - 12, detail ? 4 : 3);
+    }
+    ctx.strokeStyle = "#4d3b20";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(f.x, f.y, f.w, f.h);
+  }
+  const b = town.bounds;
+  const t = town.wallThickness;
+  ctx.fillStyle = ruined ? "#5d584a" : "#7d6f50";
+  ctx.fillRect(b.x + t, b.y + t, b.w - t * 2, b.h - t * 2);
+  ctx.fillStyle = ruined ? "#6a6454" : "#998a63";
+  for (const s of town.streets) ctx.fillRect(s.x, s.y, s.w, s.h);
+  const sq = town.square;
+  ctx.fillStyle = ruined ? "#6f6a5c" : "#a89f86";
+  ctx.fillRect(sq.x, sq.y, sq.w, sq.h);
+  if (detail) {
+    // Calçamento da praça: pedras em fiadas desencontradas
+    ctx.fillStyle = ruined ? "#5e5a50" : "#8c8578";
+    ctx.fillRect(sq.x, sq.y, sq.w, sq.h);
+    ctx.fillStyle = ruined ? "#77726a" : "#a8a090";
+    for (let y = sq.y + 1, row = 0; y < sq.y + sq.h - 4; y += 7, row++) {
+      for (let x = sq.x + (row % 2) * 5 + 1; x < sq.x + sq.w - 8; x += 10) ctx.fillRect(x, y, 8 + rnd.between(-1, 0), 5);
+    }
+  }
+  ctx.strokeStyle = "#6b6250";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(sq.x, sq.y, sq.w, sq.h);
+  // Chão molhado em volta do poço (o poço em pé vem da arte do povoado)
+  const well = wellOf(sq);
+  ctx.fillStyle = ruined ? "#6a665e" : "#8a8476";
+  ctx.beginPath();
+  ctx.arc(well.x, well.y, WELL_RADIUS + 8, 0, Math.PI * 2);
+  ctx.fill();
+  // Pátio da guarnição: terra pisada
+  for (const c of town.camps) {
+    const r = c.rect;
+    ctx.fillStyle = "#86744a";
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+    for (let k = 0; k < 10; k++) {
+      ctx.fillStyle = rnd.pick(["#7a6942", "#917f55", "#6f6040"]);
+      ctx.beginPath();
+      ctx.ellipse(r.x + rnd.between(20, r.w - 20), r.y + rnd.between(20, r.h - 20), rnd.between(15, 35), rnd.between(8, 18), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (town.inner) {
+    const r = town.inner.rect;
+    ctx.fillStyle = ruined ? "#4e4b45" : "#6d6452";
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
 }
 
 function randomPointIn(z: TerrainZone, rnd: Phaser.Math.RandomDataGenerator, scale: number) {

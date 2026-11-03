@@ -2,6 +2,7 @@ import { useGameStore, type Expedition } from "../../../store/useGameStore";
 import { MissionMap } from "./MissionMap";
 import { MissionSteps, useArmyAt, useExpeditionNow, useMissionPlan } from "./MissionParts";
 import { TROOPS } from "../../../utils/constants";
+import { captainName } from "../../../game/data/captains";
 
 const title = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -51,7 +52,10 @@ function ExpeditionRow({ e }: { e: Expedition }) {
         <b>{e.contract.title}</b>
         <span className="text-xs text-sky-200">{left > 0 ? `volta em ${left} dia(s)` : "volta hoje"}</span>
       </div>
-      <div className="text-xs text-neutral-400">{e.battalions.map((b) => `${b.name} (${TROOPS[b.troopType].label})`).join(", ")}</div>
+      <div className="text-xs text-neutral-400">
+        {e.captain && <span className="text-amber-200">Capitão {captainName(e.captain)} · </span>}
+        {e.battalions.map((b) => `${b.name} (${TROOPS[b.troopType].label})`).join(", ")}
+      </div>
       <div className="text-xs text-sky-200 first-letter:uppercase">{line}</div>
       {plan && world && <MissionMap world={world} plan={plan} army={at} who="A tropa" />}
       <div className="h-1 overflow-hidden rounded bg-neutral-700">
@@ -78,7 +82,7 @@ export function MissionJournal() {
       <section className="flex flex-col gap-2">
         <h2 className={title}>Tropas em missão</h2>
         {expeditions.length === 0 ? (
-          <p className="text-sm text-neutral-500">Ninguém fora. Na mesa de contratos, "Enviar tropas" manda batalhões cumprirem um serviço sem você.</p>
+          <p className="text-sm text-neutral-500">Ninguém fora. Na mesa de contratos, "Enviar tropas" manda um capitão e a companhia dele cumprirem um serviço sem você.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {expeditions.map((e) => (
@@ -116,6 +120,16 @@ export function MissionJournal() {
                   {r.success ? `${r.gold} de ouro · ` : ""}
                   {r.casualties} baixa(s){r.lost.length > 0 ? ` · perdidos: ${r.lost.join(", ")}` : ""}
                 </span>
+                {r.captain && r.lines && (
+                  <blockquote className="mt-1 border-l-2 border-amber-600/70 pl-2 text-xs italic text-neutral-200">
+                    {r.lines.map((l) => (
+                      <span key={l} className="block">
+                        {l}
+                      </span>
+                    ))}
+                    <span className="block not-italic text-amber-200">— {r.captain}</span>
+                  </blockquote>
+                )}
               </li>
             ))}
           </ul>

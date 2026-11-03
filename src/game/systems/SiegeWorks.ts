@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { Unit } from "../entities/Unit";
 import { wallOutward, type Gate, type Rect, type TownLayout } from "../world/townLayout";
+import { gateBarPiece, gateDebrisPiece, gateDoorPiece, type Culture } from "../art/buildings";
+import { pieceImage } from "../world/TownArt";
 import { COLORS, GEO, SIEGE } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 
@@ -37,6 +39,10 @@ export class SiegeRam extends Unit {
   }
 }
 
+/** Trechos da porta fechada nos portões L e O (como a muralha na vertical). */
+const BAR = 48;
+let serial = 0;
+
 /** O que a cena precisa saber das obras do cerco. */
 export interface SiegeChange {
   /** Portões de pé (sólidos) e passagens abertas nos muros (escadas). */
@@ -55,10 +61,14 @@ export class SiegeWorks {
   /** Surtida: os portões ficam abertos até este momento (tempo da cena). */
   sallyUntil = 0;
   private readonly gfx: Phaser.GameObjects.Graphics;
+  /** As folhas fechadas de cada portão (somem na surtida e quando ele cai) e os destroços dos que caíram. */
+  private readonly doors: Phaser.GameObjects.Image[][];
+  private readonly debris: (Phaser.GameObjects.Image | null)[];
 
   constructor(
     private readonly scene: Phaser.Scene,
     readonly layout: TownLayout,
+    private readonly culture: Culture,
     /** Índice do portão mais fraco (o batedor descobre qual é). */
     weakGate: number,
     private readonly onChange: () => void,
@@ -72,8 +82,53 @@ export class SiegeWorks {
       const maxHp = (stone ? SIEGE.GATE_HP.STONE : SIEGE.GATE_HP.PALISADE) * (i === weakGate ? SIEGE.WEAK_GATE : 1);
       return { gate, rect, hp: maxHp, maxHp, broken: false };
     });
+    this.doors = layout.gates.map((gate) => this.makeDoor(gate));
+    this.debris = layout.gates.map(() => null);
     this.gfx = scene.add.graphics().setDepth(4);
     this.draw();
+  }
+
+  /** Folhas fechadas por cima do portão aberto da arte do povoado (o mesmo pé, um tico na frente). */
+  private makeDoor(gate: Gate): Phaser.GameObjects.Image[] {
+    const b = this.layout.bounds;
+    const t = this.layout.wallThickness;
+    const stone = this.layout.wallKind === "STONE";
+    const key = `siege-door-${serial++}`;
+    if (gate.side === "N" || gate.side === "S") {
+      const y = gate.side === "N" ? b.y : b.y + b.h - t;
+      return [pieceImage(this.scene, key, gateDoorPiece(Math.round(gate.width), Math.round(t), stone, this.culture), gate.x - gate.width / 2, y, y + t + 0.01)];
+    }
+    const top = gate.y - gate.width / 2;
+    const end = gate.y + gate.width / 2;
+    const out: Phaser.GameObjects.Image[] = [];
+    for (let y = top; y < end; y += BAR) {
+      const len = Math.round(Math.min(BAR, end - y));
+      out.push(pieceImage(this.scene, `${key}-${out.length}`, gateBarPiece(len, Math.round(t), this.culture, y + BAR >= end), gate.x - t / 2, y, y + len));
+    }
+    return out;
+  }
+
+  /** O vão do portão caído, com as tábuas no chão (embaixo de quem passa). */
+  private makeDebris(gate: Gate, i: number): Phaser.GameObjects.Image {
+    const b = this.layout.bounds;
+    const t = Math.round(this.layout.wallThickness);
+    const w = Math.round(gate.width);
+    const key = `siege-debris-${serial++}`;
+    const seed = Math.round(gate.x * 31 + gate.y * 17) + i;
+    if (gate.side === "N" || gate.side === "S") {
+      const y = gate.side === "N" ? b.y : b.y + b.h - t;
+      return pieceImage(this.scene, key, gateDebrisPiece(w, t, this.culture, seed), gate.x - w / 2, y, y);
+    }
+    const y = gate.y - w / 2;
+    return pieceImage(this.scene, key, gateDebrisPiece(t, w, this.culture, seed), gate.x - t / 2, y, y);
+  }
+
+  /** Folhas à mostra só nos portões de pé e fora da surtida. */
+  private showDoors(): void {
+    const shut = this.scene.time.now >= this.sallyUntil;
+    this.gates.forEach((s, i) => {
+      for (const img of this.doors[i]) img.setVisible(shut && !s.broken);
+    });
   }
 
   /** Portões de pé agora (na surtida, abertos). */
@@ -215,22 +270,22 @@ export class SiegeWorks {
   /** Surtida: abre os portões por um tempo (a guarnição sai para queimar as obras). */
   sally(ms: number): void {
     this.sallyUntil = this.scene.time.now + ms;
+    this.showDoors();
     this.onChange();
     this.scene.time.delayedCall(ms + 50, () => {
-      if (this.gfx.active) this.onChange();
+      if (!this.gfx.active) return;
+      this.showDoors();
+      this.onChange();
     });
   }
 
   private draw(): void {
     const g = this.gfx;
     g.clear();
-    for (const s of this.gates) {
-      const r = s.rect;
-      g.fillStyle(s.broken ? 0x2a2015 : 0x5a3e24, s.broken ? 0.5 : 1);
-      g.fillRect(r.x, r.y, r.w, r.h);
-      g.lineStyle(2, COLORS.OUTLINE, 0.9);
-      g.strokeRect(r.x, r.y, r.w, r.h);
-    }
+    this.gates.forEach((s, i) => {
+      if (s.broken && !this.debris[i]) this.debris[i] = this.makeDebris(s.gate, i);
+    });
+    this.showDoors();
     // Escadas: dois banzos e os degraus sobre a muralha
     for (const r of this.ladders) {
       g.fillStyle(0xb08a5a, 1);
@@ -245,6 +300,12 @@ export class SiegeWorks {
 
   destroy(): void {
     this.gfx.destroy();
+    for (const img of [...this.doors.flat(), ...this.debris]) {
+      if (!img) continue;
+      const key = img.texture.key;
+      img.destroy();
+      if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    }
     if (this.ram?.isAlive) this.ram.destroy();
     this.ram = null;
   }

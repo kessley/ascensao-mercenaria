@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { createGameConfig } from "../game/GameConfig";
 import { installGameClock } from "../game/gameClock";
+import { fitScreen } from "../game/screen";
 
 /**
  * Hospeda a instância do Phaser.Game dentro do React.
@@ -15,10 +16,13 @@ export function GameEngine() {
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
 
-    gameRef.current = new Phaser.Game(createGameConfig(containerRef.current));
+    const parent = containerRef.current;
+    gameRef.current = new Phaser.Game(createGameConfig(parent));
     installGameClock(gameRef.current);
+    const unfit = fitScreen(gameRef.current, parent);
 
     return () => {
+      unfit();
       // true = remove o canvas do DOM
       gameRef.current?.destroy(true);
       gameRef.current = null;

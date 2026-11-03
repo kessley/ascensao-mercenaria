@@ -17,11 +17,12 @@ export function WagonPanel() {
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400">Trem de carroças</h2>
       <p className="text-xs text-neutral-400">
-        Em campo, o exército come o que as carroças levam: ao sair, elas carregam o que cabe do depósito (deixando {SUPPLY.CAMP_RESERVE_DAYS} dias para
-        quem fica). São lentas na lama e na neve e são o alvo preferido dos saqueadores.
+        Em campo, cada batalhão come da mochila ({SUPPLY.PACK_DAYS} dias de comida). As carroças ficam aqui, a não ser que o Comandante as leve (Portão) ou mande um comboio
+        quando a comida apertar (Suprimentos), com ou sem escolta. Carregam o que cabe do depósito, deixando {SUPPLY.CAMP_RESERVE_DAYS} dias para quem fica; são lentas
+        na lama e na neve e são o alvo preferido dos saqueadores.
       </p>
       <div className="text-sm text-neutral-200">
-        {wagons.length} carroça(s) · levam até <b>{cap}</b> rações ({Math.floor(cap / Math.max(1, need))} dias de marcha para o exército de hoje) ·
+        {wagons.length} carroça(s) · levam até <b>{cap - SUPPLY.PACK_CAPACITY}</b> rações ({Math.floor((cap - SUPPLY.PACK_CAPACITY) / Math.max(1, need))} dias a mais para o exército de hoje) ·
         depósito: {rations}
       </div>
       <div className="flex flex-wrap gap-1 text-xs">

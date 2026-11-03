@@ -331,7 +331,7 @@ export class EnemySquad implements MoraleGroup {
     const seen = this.soldiers.filter((s) => s.revealed);
     if (seen.length === 0 || this.mods.moraleLoss === 0) return;
     const c = centroid(seen);
-    const top = Math.min(...seen.map((s) => s.y)) - 20;
+    const top = Math.min(...seen.map((s) => s.y + s.headY)) - 6;
     const w = 44;
     g.fillStyle(COLORS.HP_BG, 0.85);
     g.fillRect(c.x - w / 2, top, w, 3);

@@ -25,11 +25,11 @@ function chargeImpact(unit: Unit, target: Unit, units: readonly Unit[], time: nu
   sfx.charge(target);
   target.shove(a, push);
   target.stunnedUntil = time + COMBAT.CHARGE_STUN_MS;
-  target.shock(COMBAT.CHARGE_SHOCK);
+  target.shock(COMBAT.CHARGE_SHOCK * unit.chargeShock);
   for (const other of units) {
     if (other === target || !other.isAlive || other.team === unit.team || distance(other, target) > COMBAT.CHARGE_SPLASH) continue;
     other.shove(angleTo(unit, other), push * 0.5);
-    other.shock(COMBAT.CHARGE_SHOCK * 0.15);
+    other.shock(COMBAT.CHARGE_SHOCK * unit.chargeShock * 0.15);
   }
   unit.chargeDistance = 0;
   unit.rideThrough(a, time);
@@ -62,6 +62,7 @@ export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time
       continue;
     }
     target.takeDamage(unit.outgoingDamage(target), unit, time, "MELEE");
+    if (unit.meleeShock > 0) target.shock(unit.meleeShock);
     sfx.clash(target);
     if (charging) chargeImpact(unit, target, units, time);
   }

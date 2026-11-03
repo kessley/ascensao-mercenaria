@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useGameStore, type BattalionData } from "../../../store/useGameStore";
 import { SKILL_TREE, SKILLS } from "../../../game/data/skills";
 import { PROGRESSION, TROOPS } from "../../../utils/constants";
-import { canLearn, describeMods, forgeCost, type EquipmentSlot } from "../../../utils/progression";
+import { PROMOTIONS, canLearn, canPromote, canTrain, describeMods, forgeCost, promotionCost, trainingCost, type EquipmentSlot } from "../../../utils/progression";
 import { Button } from "../Button";
 import { BattalionCard } from "./ArmyPanel";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
-/** Árvore de habilidades do batalhão: dois ramos, a habilidade avançada exige a base. */
+/** Uma escolha por nível: pegar uma habilidade perde a outra da mesma linha, para sempre. */
 export function SkillTree({ battalion: b }: { battalion: BattalionData }) {
   const learnSkill = useGameStore((s) => s.learnSkill);
 
@@ -17,42 +17,71 @@ export function SkillTree({ battalion: b }: { battalion: BattalionData }) {
       <h3 className={sectionTitle}>
         Habilidades <span className="font-normal normal-case text-neutral-500">· {b.skillPoints} ponto(s)</span>
       </h3>
-      <div className="grid grid-cols-2 gap-2">
-        {SKILL_TREE[TROOPS[b.troopType].family].map((branch) => (
-          <div key={branch[0]} className="flex flex-col items-stretch gap-1">
-            {branch.map((id, tier) => {
+      <p className="text-xs text-neutral-400">Cada nível traz uma escolha, e a outra opção se perde.</p>
+      {SKILL_TREE[TROOPS[b.troopType].family].map((pair, line) => (
+        <div key={pair[0]} className="flex flex-col gap-1">
+          <span className="text-xs text-neutral-500">Nível {line + 2}</span>
+          <div className="grid grid-cols-2 gap-2">
+            {pair.map((id) => {
               const skill = SKILLS[id];
               const learned = b.skills.includes(id);
               const blocked = canLearn(b, id);
+              const lost = pair.some((x) => x !== id && b.skills.includes(x));
               return (
-                <div key={id} className="flex flex-col items-stretch">
-                  {tier > 0 && <div className="mx-auto h-3 w-0.5 bg-neutral-600" />}
-                  <button
-                    type="button"
-                    disabled={learned || blocked !== null}
-                    onClick={() => learnSkill(b.id, id)}
-                    title={blocked && !learned ? blocked : undefined}
-                    className={`flex flex-col gap-0.5 rounded border p-2 text-left text-xs ${
-                      learned
-                        ? "border-lime-500 bg-lime-900/40"
+                <button
+                  key={id}
+                  type="button"
+                  disabled={learned || blocked !== null}
+                  onClick={() => learnSkill(b.id, id)}
+                  title={blocked && !learned ? blocked : undefined}
+                  className={`flex flex-col gap-0.5 rounded border p-2 text-left text-xs ${
+                    learned
+                      ? "border-lime-500 bg-lime-900/40"
+                      : lost
+                        ? "cursor-not-allowed border-neutral-800 bg-neutral-900 line-through opacity-40"
                         : blocked
                           ? "cursor-not-allowed border-neutral-700 bg-neutral-800 opacity-60"
                           : "border-amber-400 bg-neutral-800 hover:bg-neutral-700"
-                    }`}
-                  >
-                    <span className="font-semibold text-neutral-100">
-                      {learned ? "✓ " : ""}
-                      {skill.label}
-                    </span>
-                    <span className="text-neutral-400">{skill.description}</span>
-                    {!learned && blocked === null && <span className="text-amber-300">Aprender (1 ponto)</span>}
-                  </button>
-                </div>
+                  }`}
+                >
+                  <span className="font-semibold text-neutral-100">
+                    {learned ? "✓ " : ""}
+                    {skill.label}
+                  </span>
+                  <span className="text-neutral-400">{skill.description}</span>
+                  {!learned && blocked === null && <span className="text-amber-300">Escolher</span>}
+                </button>
               );
             })}
           </div>
-        ))}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/** Mudar de ofício: veteranos podem virar outra tropa, pagando o equipamento novo. */
+export function PromotionPanel({ battalion: b }: { battalion: BattalionData }) {
+  const promote = useGameStore((s) => s.promoteBattalion);
+  const [why, setWhy] = useState<string | null>(null);
+  const options = PROMOTIONS[b.troopType] ?? [];
+  if (options.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className={sectionTitle}>Promoção</h3>
+      <p className="text-xs text-neutral-400">Pede o nível {PROGRESSION.PROMOTION_LEVEL}. Mudar de família devolve os pontos de habilidade.</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((to) => {
+          const blocked = canPromote(b, to);
+          const price = promotionCost(b.troopType, to);
+          return (
+            <button key={to} type="button" disabled={!!blocked} title={blocked ?? TROOPS[to].hint} onClick={() => setWhy(promote(b.id, to))} className="rounded border border-neutral-600 px-2 py-1 text-left text-xs text-neutral-200 hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
+              Virar {TROOPS[to].label} ({price.gold} de ouro, {price.iron} de ferro)
+            </button>
+          );
+        })}
       </div>
+      {why && <p className="text-xs text-red-300">{why}</p>}
     </section>
   );
 }
@@ -76,6 +105,7 @@ export function BattalionDetail({ battalion: b }: { battalion: BattalionData }) 
         </section>
       )}
       <SkillTree battalion={b} />
+      <PromotionPanel battalion={b} />
       <p className="text-xs text-neutral-500">
         Equipamento é forjado na Ferraria; experiência vem de batalhas e do Campo de Treino.
       </p>
@@ -95,10 +125,10 @@ export function TrainingPanel() {
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
   const setCampPanel = useGameStore((s) => s.setCampPanel);
   const busy = new Set(training.map((t) => t.battalionId));
-  const eligible = battalions.filter((b) => b.level < PROGRESSION.MAX_LEVEL && !busy.has(b.id));
+  const eligible = battalions.filter((b) => canTrain(b.level) && !busy.has(b.id));
   const [chosen, setChosen] = useState<string[]>([]);
   const picked = chosen.filter((id) => eligible.some((b) => b.id === id));
-  const cost = picked.length * PROGRESSION.TRAINING_COST;
+  const cost = eligible.filter((b) => picked.includes(b.id)).reduce((n, b) => n + trainingCost(b.level), 0);
   const left = Math.max(0, ...training.map((t) => t.until - now));
 
   const toggle = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
@@ -109,7 +139,7 @@ export function TrainingPanel() {
       <p className="text-sm text-neutral-300">
         Os batalhões vão ao Campo de Treino e treinam de verdade por <b>{PROGRESSION.TRAINING_DAYS} dias</b>: fileiras diante dos bonecos e
         duelos de pares. No fim, cada um ganha <b>{PROGRESSION.TRAINING_XP} XP</b>. Custa <b>{PROGRESSION.TRAINING_COST} de ouro</b> por
-        batalhão; os dias correm (rações e pagamento). Enquanto alguém treina, o tempo passa no acampamento (um dia a cada{" "}
+        nível do batalhão, e só ensina até o nível {PROGRESSION.TRAINING_MAX_LEVEL}: daí em diante, só a guerra. Os dias correm (rações e pagamento). Enquanto alguém treina, o tempo passa no acampamento (um dia a cada{" "}
         {PROGRESSION.TRAINING_CAMP_DAY_SECONDS} s). Quem treina não sai com o Comandante.
       </p>
 

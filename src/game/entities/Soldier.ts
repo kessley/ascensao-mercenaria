@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { Unit } from "./Unit";
 import type { Battalion } from "./Battalion";
 import { drawTroopShape } from "./shapes";
+import { troopLook } from "../art/looks";
 import { BALANCE, COLORS, COMBAT, FORMATIONS, type AttackKind, type TroopType, type UnitStats } from "../../utils/constants";
 import { angleDiff, angleTo, distance } from "../../utils/math";
 
@@ -15,6 +16,8 @@ export class Soldier extends Unit {
   readonly battalion: Battalion;
   /** Tenente que comanda o batalhão (anel prateado, mais forte, morte permanente). */
   readonly isLieutenant: boolean;
+  /** Capitão da companhia, que marcha com a guarda (anel dourado; Marco 20). */
+  readonly isCaptain: boolean;
   private panicked = false;
 
   constructor(
@@ -24,29 +27,51 @@ export class Soldier extends Unit {
     troopType: TroopType,
     battalion: Battalion,
     stats: UnitStats,
-    isLieutenant = false,
+    officer: "LIEUTENANT" | "CAPTAIN" | null = null,
   ) {
     super(scene, x, y, "ALLY", stats);
     this.townAccess = "ARMY";
     this.troopType = troopType;
     this.battalion = battalion;
-    this.isLieutenant = isLieutenant;
+    this.isLieutenant = officer === "LIEUTENANT";
+    this.isCaptain = officer === "CAPTAIN";
     const m = battalion.mods;
     this.chargeMultiplier = BALANCE.CHARGE_MULTIPLIER + m.chargeBonus;
     this.chargeMinDistance = BALANCE.CHARGE_MIN_DISTANCE * m.chargeDistance;
     this.chargeKnockback = BALANCE.CHARGE_KNOCKBACK * m.knockback;
+    this.arrowShock = m.arrowShock;
+    this.chargeShock = m.chargeShock;
+    this.meleeShock = m.meleeShock;
+    this.breakThrough = m.breakThrough;
+    this.wear(troopLook(troopType));
     this.drawBody();
   }
 
   protected drawBody(): void {
+    if (this.sprite) {
+      // A figura já diz a tropa; no chão fica só o anel do tenente
+      const g = this.bodyGfx;
+      g.clear();
+      if (this.isOfficer) {
+        g.lineStyle(2, this.isCaptain ? COLORS.CAPTAIN : COLORS.LIEUTENANT, 1);
+        g.strokeEllipse(0, this.feetY, this.radius * 2 + 8, this.radius + 4);
+      }
+      this.restoreTint();
+      return;
+    }
     drawTroopShape(this.bodyGfx, this.troopType, this.radius, {
       panicked: this.panicked,
       shieldWall: this.battalion.formation === "SHIELD_WALL",
     });
-    if (this.isLieutenant) {
-      this.bodyGfx.lineStyle(3, COLORS.LIEUTENANT, 1);
+    if (this.isOfficer) {
+      this.bodyGfx.lineStyle(3, this.isCaptain ? COLORS.CAPTAIN : COLORS.LIEUTENANT, 1);
       this.bodyGfx.strokeCircle(0, 0, this.radius + 5);
     }
+  }
+
+  /** Tenente ou capitão: não conta como soldado do batalhão. */
+  get isOfficer(): boolean {
+    return this.isLieutenant || this.isCaptain;
   }
 
   /** Redesenha o corpo (após mudar formação ou estado de pânico). */
@@ -60,10 +85,17 @@ export class Soldier extends Unit {
     this.drawBody();
   }
 
+  /** Em pânico, a figura fica avermelhada. */
+  protected override restoreTint(): void {
+    super.restoreTint();
+    if (this.panicked) this.sprite?.setTint(COLORS.PANIC_TINT);
+  }
+
   /** Abate conta para o batalhão (vira XP no fim da batalha). */
   override onKill(): void {
     this.battalion.kills++;
     if (this.isLieutenant) this.battalion.lieutenantKills++;
+    if (this.isCaptain) this.battalion.captainKills++;
   }
 
   override speedMultiplier(): number {
@@ -113,7 +145,10 @@ export class Soldier extends Unit {
   override outgoingDamage(target: Unit): number {
     // Na água a formação se desfaz: a Cunha não empurra
     const formation = this.inShallows ? 1 : FORMATIONS[this.battalion.formation].damageDealt;
-    return super.outgoingDamage(target) * formation * (this.battalion.leaderPassive?.damage ?? 1) * this.battalion.fatigueDamage;
+    const m = this.battalion.mods;
+    const flank = m.flankDamage !== 1 && target.approachOf(this) !== "FRONT" ? m.flankDamage : 1;
+    const hunt = m.huntDamage !== 1 && (target.ranged || target.unitState === "FLEEING") ? m.huntDamage : 1;
+    return super.outgoingDamage(target) * formation * (this.battalion.leaderPassive?.damage ?? 1) * this.battalion.fatigueDamage * flank * hunt;
   }
 
   override incomingMultiplier(source: Unit, kind: AttackKind): number {

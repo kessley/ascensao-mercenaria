@@ -1,4 +1,5 @@
-import { useGameStore } from "../../store/useGameStore";
+import { marchingIds, useGameStore, wagonsWithArmy } from "../../store/useGameStore";
+import { packCapacity, packOf } from "../../game/sim/logistics";
 import { RESOURCE_LABEL, SETTLEMENT_KIND_LABEL } from "../../game/data/world";
 import {
   garrisonCap,
@@ -38,10 +39,15 @@ function Market({ t }: { t: Settlement }) {
   const day = useGameStore((s) => s.day);
   const away = useGameStore((s) => s.exposure.away && !s.campPacked);
   const cargo = useGameStore((s) => s.cargo);
-  const wagons = useGameStore((s) => s.wagons.length);
+  const wagons = useGameStore((s) => wagonsWithArmy(s));
   const goods = useGameStore((s) => freightWeight(s.freight));
+  // Em campo, o que se compra enche as mochilas e o resto vai na bolsa ou nas carroças
+  const packRoom = useGameStore((s) => {
+    const going = marchingIds(s);
+    return s.battalions.filter((b) => going.has(b.id)).reduce((n, b) => n + Math.max(0, packCapacity(b) - packOf(b)), 0);
+  });
   const prices = townPrices(t, day);
-  const room = away ? cargoCapacity(wagons) - cargo - goods : Infinity;
+  const room = away ? packRoom + cargoCapacity(wagons) - cargo - goods : Infinity;
   const food = foodGood(t.econ);
   const packs = Math.floor(t.econ.stock[food]);
   return (

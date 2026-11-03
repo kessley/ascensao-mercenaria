@@ -3,6 +3,7 @@ import { Unit } from "./Unit";
 import { BALANCE, COLORS, ENEMIES, FORMATIONS, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
+import { enemyLook } from "../art/looks";
 
 /**
  * Goblin: quadrado vermelho. IA simples de aggro → perseguição → ataque, com coleira.
@@ -88,6 +89,7 @@ export class Enemy extends Unit {
     this.kind = kind;
     this.bodyColor = color ?? ENEMIES[kind].color;
     this.home = { x, y };
+    this.wear(enemyLook(kind, this.bodyColor));
     this.drawBody();
   }
 
@@ -96,7 +98,7 @@ export class Enemy extends Unit {
     this.titleText?.destroy();
     this.titleText = null;
     if (!title) return;
-    this.titleText = this.scene.add.text(0, -this.radius - 20, title, { fontFamily: "monospace", fontSize: "11px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
+    this.titleText = this.scene.add.text(0, this.sprite ? Math.round(this.headY) - 16 : -this.radius - 20, title, { fontFamily: "monospace", fontSize: "11px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
     this.add(this.titleText);
   }
 
@@ -196,6 +198,16 @@ export class Enemy extends Unit {
     const g = this.bodyGfx;
     const s = this.radius;
     g.clear();
+    if (this.sprite) {
+      // A figura diz quem é; no chão, o anel de quem manda e o da guarnição do bando
+      const officer = ENEMIES[this.kind].officer;
+      const ring = this.isBoss || officer === "CHIEF" ? 0xf1c40f : officer ? COLORS.LIEUTENANT : this.friendly ? COLORS.ALLY : null;
+      if (ring !== null) {
+        g.lineStyle(this.isBoss ? 3 : 2, ring, 1);
+        g.strokeEllipse(0, this.feetY, s * 2 + 8, s + 4);
+      }
+      return;
+    }
     if (this.friendly) {
       g.fillStyle(this.bodyColor, 1);
       g.fillCircle(0, 0, s);

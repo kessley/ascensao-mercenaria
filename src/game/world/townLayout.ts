@@ -73,6 +73,8 @@ export interface House {
 
 export interface TownLayout {
   kind: SettlementKind;
+  /** Em ruínas: muros com brechas, casas destruídas, sem guarnição. */
+  ruined: boolean;
   cx: number;
   cy: number;
   /** Retângulo externo da muralha. */
@@ -257,7 +259,8 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
       const n = Math.floor(len / spec.towerEvery);
       for (let k = 1; k < n; k++) {
         const at = (k * len) / n;
-        if (gate && Math.abs(at - len / 2) < GATE_WIDTH / 2 + spec.tower) continue;
+        // Longe das duas torres do portão (colada nelas, virava torre dupla)
+        if (gate && Math.abs(at - len / 2) < GATE_WIDTH / 2 + spec.tower * 2.5) continue;
         const c = horizontal ? { x: sd.from.x + at, y: sd.from.y + t / 2 } : { x: sd.from.x + t / 2, y: sd.from.y + at };
         towers.push({ x: c.x - spec.tower / 2, y: c.y - spec.tower / 2, w: spec.tower, h: spec.tower });
       }
@@ -427,6 +430,7 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
 
   return {
     kind,
+    ruined,
     cx,
     cy,
     bounds,
@@ -717,6 +721,12 @@ export function insideTown(layout: TownLayout, p: Point, pad = 0): boolean {
   return p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad;
 }
 
+
+/** O poço da praça (o chão em volta é pintado no terreno; o poço em pé é da arte do povoado). */
+export const WELL_RADIUS = 18;
+export function wellOf(square: Rect): Point {
+  return { x: square.x + square.w * 0.25, y: square.y + square.h * 0.3 };
+}
 
 /**
  * Casas com função (Marco 14): a taverna é a casa mais perto da praça; a Casa dos Mercadores,

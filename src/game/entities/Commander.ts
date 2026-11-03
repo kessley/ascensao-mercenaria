@@ -3,6 +3,7 @@ import { Unit } from "./Unit";
 import { sfx } from "../../audio/sounds";
 import { BALANCE, COLORS, COMBAT } from "../../utils/constants";
 import { angleDiff, angleTo, nearest } from "../../utils/math";
+import { commanderLook } from "../art/looks";
 
 export interface CommanderKeys {
   W: Phaser.Input.Keyboard.Key;
@@ -29,6 +30,7 @@ export class Commander extends Unit {
     this.autoAttack = false;
     this.isHero = true;
     this.role = "HERO";
+    this.wear(commanderLook());
     this.drawBody();
   }
 
@@ -36,6 +38,12 @@ export class Commander extends Unit {
     const g = this.bodyGfx;
     const r = this.radius;
     g.clear();
+    if (this.sprite) {
+      // Penacho e capa já o distinguem; o anel dourado no chão o acha no meio da tropa
+      g.lineStyle(2, COLORS.COMMANDER_OUTLINE, 1);
+      g.strokeEllipse(0, this.feetY, r * 2 + 10, r + 6);
+      return;
+    }
     g.fillStyle(COLORS.ALLY, 1);
     g.fillCircle(0, 0, r);
     g.lineStyle(3, COLORS.COMMANDER_OUTLINE, 1);

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
 import { drawRiderShape } from "./shapes";
+import { messengerLook } from "../art/looks";
 import type { Commander } from "./Commander";
 import { COLORS, SUPPORT } from "../../utils/constants";
 import { centroid, distance, nearest, type Point } from "../../utils/math";
@@ -65,11 +66,13 @@ export class Messenger extends Unit {
     this.role = "COURIER";
     this.canCharge = true; // terreno afeta como cavalaria
     this.evasion = profile.evasion;
+    this.wear(messengerLook());
     this.drawBody();
   }
 
   protected drawBody(): void {
-    drawRiderShape(this.bodyGfx, COLORS.MESSENGER, this.radius, COLORS.PENNANT);
+    if (this.sprite) this.bodyGfx.clear();
+    else drawRiderShape(this.bodyGfx, COLORS.MESSENGER, this.radius, COLORS.PENNANT);
   }
 
   get available(): boolean {

@@ -9,6 +9,25 @@ import { mutinyLeader, type BattalionData, type CampPanel, type GameState } from
 import { COLORS, type CampWork } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 import type { Rect } from "./townLayout";
+import { TownArt, type ArtJob } from "./TownArt";
+import {
+  bannerPiece,
+  bonfirePiece,
+  campPropPiece,
+  fencePiece,
+  forgeGlow,
+  forgePiece,
+  propPiece,
+  stablePiece,
+  stakesPiece,
+  tablePiece,
+  tentPiece,
+  towerPiece,
+  wagonPiece,
+  wellPiece,
+  type Culture,
+  type Piece,
+} from "../art/buildings";
 
 /** Torres da obra "Torres de vigia" (coordenadas locais). */
 const EXTRA_TOWERS: Point[] = [
@@ -21,6 +40,10 @@ const EXTRA_TOWERS: Point[] = [
 const FIRE_RADIUS = 34;
 /** A paliçada tem esta folga por dentro (estacas). */
 const PALISADE_INSET = 30;
+/** Estacas da paliçada: uma a cada STAKE px da elipse, em grupos de STAKE_GROUP (cada grupo com a própria profundidade). */
+const STAKE = 6;
+const STAKE_GROUP = 6;
+const ART_ID = "acampamento";
 
 /** Ponto de interação no mundo: um local do acampamento, um alojamento, um tenente ou uma cidade. */
 export interface Interactable {
@@ -74,6 +97,10 @@ export class CampArea {
   private readonly center: Point;
   /** Canto do layout do acampamento no mundo (gerado com o mundo). */
   private readonly origin: Point;
+  /** Pixel art (G3): as peças fixas e as dos alojamentos (refeitas quando o exército muda). */
+  private readonly art: TownArt;
+  private readonly artJobs: ArtJob[] = [];
+  private quarterJobs: ArtJob[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -81,15 +108,18 @@ export class CampArea {
     /** Acampamento levantado (Marco 13): nada no chão, tudo nas carroças. */
     readonly packed = false,
     works: readonly CampWork[] = [],
+    private readonly culture: Culture = "REALMS",
   ) {
     this.origin = camp.origin;
     this.campfire = this.at(CAMPFIRE);
     this.center = this.at(PALISADE);
+    this.art = new TownArt(scene);
     if (packed) return;
     this.drawGround(works.includes("PALISADE"));
     this.drawCampfire();
     for (const site of CAMP_SITES) this.drawSite(site);
     this.drawProps(works.includes("TOWERS"));
+    this.publishArt();
     // Portão (Marco 14): ali se escolhe quem sai com o Comandante e quem fica de guarda
     const gate = { x: PALISADE.x + Math.cos(PALISADE.gateAngle) * (PALISADE.rx - 70), y: PALISADE.y + Math.sin(PALISADE.gateAngle) * (PALISADE.ry - 70) };
     this.interactables.push({
@@ -140,101 +170,68 @@ export class CampArea {
 
   /** Enfeites do acampamento: torres de vigia no portão, poço, lenha, barris, feno e tochas. */
   private drawProps(towers: boolean): void {
-    const g = this.gfx(-2.2);
-    const rnd = new Phaser.Math.RandomDataGenerator(["acampamento-enfeites"]);
+    const c = this.culture;
+    const jobs = this.artJobs;
     // Obra: torres de vigia altas nos quatro cantos da paliçada (sólidas)
     if (towers) {
       for (const p of EXTRA_TOWERS) {
-        g.fillStyle(0x4a321c, 1);
-        g.fillRect(p.x - 30, p.y - 30, 60, 60);
-        g.lineStyle(3, COLORS.OUTLINE, 1);
-        g.strokeRect(p.x - 30, p.y - 30, 60, 60);
-        g.fillStyle(0x6b4a2b, 1);
-        g.fillRect(p.x - 22, p.y - 22, 44, 44);
-        g.fillStyle(CAMP_COLORS.FIRE, 1);
-        g.fillCircle(p.x, p.y, 5);
+        this.artFoot(jobs, p.x - 30, p.y - 30, 60, () => towerPiece(60, false, c, p.x * 7 + p.y, false));
         this.obstacles.push(this.solid(p.x - 30, p.y - 30, 60, 60));
         this.torches.push(this.at(p));
       }
     }
     // Torres de vigia dos dois lados do portão (sólidas)
     for (const [tx, ty] of [[205, 535], [205, 765]]) {
-      g.fillStyle(0x5c3f24, 1);
-      g.fillRect(tx - 26, ty - 26, 52, 52);
-      g.lineStyle(3, COLORS.OUTLINE, 1);
-      g.strokeRect(tx - 26, ty - 26, 52, 52);
-      g.fillStyle(0x4a321c, 1);
-      g.fillRect(tx - 16, ty - 16, 32, 32);
-      g.lineStyle(2, 0x2b1d0e, 1);
-      g.lineBetween(tx - 26, ty - 26, tx + 26, ty + 26);
-      g.lineBetween(tx + 26, ty - 26, tx - 26, ty + 26);
+      this.artFoot(jobs, tx - 26, ty - 26, 52, () => towerPiece(52, false, c, tx + ty, false));
       this.obstacles.push(this.solid(tx - 26, ty - 26, 52, 52));
     }
     // Poço de pedra (sólido)
     const well = { x: 1100, y: 870 };
-    g.fillStyle(CAMP_COLORS.STONE, 1);
-    g.fillCircle(well.x, well.y, 22);
-    g.fillStyle(0x2b4a6b, 1);
-    g.fillCircle(well.x, well.y, 12);
-    g.lineStyle(3, CAMP_COLORS.WOOD, 1);
-    g.lineBetween(well.x - 24, well.y - 18, well.x + 24, well.y - 18);
+    this.artFoot(jobs, well.x - 20, well.y - 20, 40, () => wellPiece(20, c, 11, false));
     this.obstacles.push(this.solid(well.x - 22, well.y - 22, 44, 44));
     // Lenha empilhada junto à Intendência (sólida)
-    g.fillStyle(CAMP_COLORS.WOOD, 1);
-    for (let k = 0; k < 4; k++) g.fillRect(442, 550 + k * 6, 58, 5);
-    g.lineStyle(1, COLORS.OUTLINE, 0.7);
-    g.strokeRect(442, 550, 58, 24);
+    this.artFoot(jobs, 442, 550, 24, () => campPropPiece("WOODPILE", c, 12, 58, 24));
     this.obstacles.push(this.solid(442, 550, 58, 24));
     // Barris e caixotes (só desenho)
-    for (const [bx, by] of [[505, 690], [524, 700], [1288, 700], [1320, 905]]) {
-      g.fillStyle(0x6b4a2b, 1);
-      g.fillCircle(bx, by, 9);
-      g.lineStyle(1.5, COLORS.OUTLINE, 0.8);
-      g.strokeCircle(bx, by, 9);
-    }
-    g.fillStyle(0xb08850, 1);
-    for (const [cx, cy] of [[492, 712], [1430, 760]]) {
-      g.fillRect(cx, cy, 18, 18);
-      g.strokeRect(cx, cy, 18, 18);
-    }
+    for (const [bx, by] of [[505, 690], [524, 700], [1288, 700], [1320, 905]]) this.artAt(jobs, bx, by + 6, () => propPiece("BARREL", c, bx));
+    for (const [cx, cy] of [[492, 712], [1430, 760]]) this.artFoot(jobs, cx, cy, 10, () => propPiece("CRATE", c, cx));
     // Feno do estábulo
-    g.fillStyle(0xd8c06a, 1);
-    for (const [hx, hy] of [[1250, 455], [1250, 485]]) {
-      g.fillRect(hx, hy, 30, 20);
-      g.lineStyle(1, 0x9a8540, 1);
-      g.strokeRect(hx, hy, 30, 20);
-    }
+    for (const [hx, hy] of [[1250, 455], [1250, 485]]) this.artFoot(jobs, hx, hy, 20, () => campPropPiece("HAY", c, hy, 30, 20));
     // Tochas ao longo dos caminhos
     for (const [px, py] of [[700, 650], [430, 650], [900, 520], [1070, 650], [740, 760], [1110, 760]]) {
-      g.lineStyle(3, CAMP_COLORS.WOOD, 1);
-      g.lineBetween(px, py, px, py - 18);
-      g.fillStyle(CAMP_COLORS.FIRE, 1);
-      g.fillCircle(px, py - 20, 5);
+      this.artAt(jobs, px, py, () => campPropPiece("TORCH", c, px));
       this.torches.push(this.at({ x: px, y: py - 20 }));
     }
     // Estandartes no portão
-    for (const fy of [580, 720]) {
-      g.lineStyle(3, CAMP_COLORS.WOOD, 1);
-      g.lineBetween(150, fy, 150, fy - 44);
-      g.fillStyle(COLORS.ALLY, 1);
-      g.fillRect(150, fy - 44, 26, 16);
-    }
-    // Chão: manchas mais escuras e tufos de capim
-    const ground = this.gfx(-8.5);
-    for (let k = 0; k < 60; k++) {
-      const a = rnd.frac() * Math.PI * 2;
-      const r = Math.sqrt(rnd.frac()) * 0.9;
-      const x = PALISADE.x + Math.cos(a) * PALISADE.rx * r;
-      const y = PALISADE.y + Math.sin(a) * PALISADE.ry * r;
-      if (k < 30) {
-        ground.fillStyle(rnd.pick([0x6f6040, 0x857450, 0x6a5a3a]), 0.7);
-        ground.fillEllipse(x, y, rnd.between(40, 110), rnd.between(20, 50));
-      } else {
-        ground.lineStyle(2, 0x4f7a2c, 0.9);
-        for (let b = -1; b <= 1; b++) ground.lineBetween(x, y, x + b * 5, y - 9);
-      }
-    }
+    for (const fy of [580, 720]) this.artAt(jobs, 150, fy, () => bannerPiece(COLORS.ALLY, false));
     this.onSolidsChanged?.();
+  }
+
+  /** Peça com o canto do pé em (x, y), local, e o pé descendo h: a profundidade é a linha de baixo. */
+  private artFoot(list: ArtJob[], x: number, y: number, h: number, make: () => Piece): void {
+    const o = this.origin;
+    list.push({ x: Math.round(o.x + x), y: Math.round(o.y + y), depth: Math.round(o.y + y + h), make });
+  }
+
+  /** Peça com a âncora no ponto local (o pé de um mastro, de um boneco, de uma tocha). */
+  private artAt(list: ArtJob[], x: number, y: number, make: () => Piece): void {
+    const o = this.origin;
+    list.push({ x: Math.round(o.x + x), y: Math.round(o.y + y), depth: Math.round(o.y + y), make });
+  }
+
+  /** Manda as peças para a montagem (a antiga fica na tela até a nova acabar). */
+  private publishArt(): void {
+    this.art.setJobs(ART_ID, [...this.artJobs, ...this.quarterJobs]);
+  }
+
+  /** Monta e mostra as peças perto da câmera (chamado a cada quadro). */
+  updateArt(camera: Phaser.Cameras.Scene2D.Camera): void {
+    this.art.update(camera);
+  }
+
+  /** Quantas peças do acampamento estão de pé (para testes). */
+  get artPieces(): number {
+    return this.art.pieceCount;
   }
 
   /** Ponto do layout local (campLayout.ts) no mundo. */
@@ -336,61 +333,49 @@ export class CampArea {
     return best;
   }
 
-  // --- Desenho (só primitivas). Os gráficos ficam na origem do acampamento e usam as coordenadas locais do layout. ---
+  // --- Desenho: peças de pixel art (G3) nas coordenadas locais do layout, levadas para o mundo. ---
 
-  private gfx(depth: number): Phaser.GameObjects.Graphics {
-    return this.scene.add.graphics({ x: this.origin.x, y: this.origin.y }).setDepth(depth);
-  }
-
+  /**
+   * A terra batida e as trilhas são pintadas com o chão (TerrainMap). Aqui, a paliçada: estacas
+   * ao longo da elipse, com um portão a oeste, em grupos curtos (cada um com a própria profundidade).
+   */
   private drawGround(reinforced: boolean): void {
-    const g = this.gfx(-8.6);
-    g.fillStyle(CAMP_COLORS.DIRT, 1);
-    g.fillEllipse(PALISADE.x, PALISADE.y, PALISADE.rx * 2 - 40, PALISADE.ry * 2 - 40, 96);
-
-    // Trilhas da fogueira até cada local
-    g.lineStyle(26, CAMP_COLORS.PATH, 0.6);
-    for (const site of CAMP_SITES) g.lineBetween(CAMPFIRE.x, CAMPFIRE.y, site.door.x, site.door.y);
-    g.lineBetween(CAMPFIRE.x, CAMPFIRE.y, PALISADE.x - PALISADE.rx, PALISADE.y); // até o portão
-
-    // Paliçada: estacas ao longo da elipse, com um portão a oeste
-    const posts = this.gfx(-6);
-    const n = 140;
+    const { rx, ry } = PALISADE;
+    const n = Math.round((2 * Math.PI * Math.sqrt((rx * rx + ry * ry) / 2)) / STAKE);
+    let group: Point[] = [];
+    const flush = () => {
+      if (group.length === 0) return;
+      const x0 = Math.min(...group.map((p) => p.x));
+      const y0 = Math.min(...group.map((p) => p.y));
+      const y1 = Math.max(...group.map((p) => p.y));
+      const pts = group.map((p) => ({ x: p.x - x0, y: p.y - y0 }));
+      const seed = Math.round(x0 * 31 + y0);
+      this.artFoot(this.artJobs, x0, y0, y1 - y0, () => stakesPiece(pts, this.culture, seed, reinforced));
+      group = [];
+    };
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const gateDiff = Math.abs(Math.atan2(Math.sin(a - PALISADE.gateAngle), Math.cos(a - PALISADE.gateAngle)));
-      if (gateDiff < PALISADE.gateHalfWidth) continue;
-      const x = PALISADE.x + Math.cos(a) * PALISADE.rx;
-      const y = PALISADE.y + Math.sin(a) * PALISADE.ry;
-      // Obra: paliçada reforçada (estacas grossas com escora de terra por fora)
-      if (reinforced) {
-        posts.fillStyle(0x6a5232, 1);
-        posts.fillCircle(PALISADE.x + Math.cos(a) * (PALISADE.rx + 12), PALISADE.y + Math.sin(a) * (PALISADE.ry + 12), 11);
+      if (gateDiff < PALISADE.gateHalfWidth) {
+        flush();
+        continue;
       }
-      posts.fillStyle(CAMP_COLORS.POST, 1);
-      posts.fillCircle(x, y, reinforced ? 12 : 9);
-      posts.lineStyle(2, COLORS.OUTLINE, 0.8);
-      posts.strokeCircle(x, y, reinforced ? 12 : 9);
+      group.push({ x: PALISADE.x + Math.cos(a) * rx, y: PALISADE.y + Math.sin(a) * ry });
+      if (group.length >= STAKE_GROUP) flush();
     }
+    flush();
     worldLabel(this.scene, this.origin.x + PALISADE.x - PALISADE.rx - 70, this.origin.y + PALISADE.y - 40, "ACAMPAMENTO", "#ffe9b0");
   }
 
   private drawCampfire(): void {
-    const g = this.gfx(-4);
-    // Pedras e lenha
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      g.fillStyle(CAMP_COLORS.STONE, 1);
-      g.fillCircle(CAMPFIRE.x + Math.cos(a) * 28, CAMPFIRE.y + Math.sin(a) * 28, 7);
-    }
-    g.lineStyle(7, CAMP_COLORS.WOOD, 1);
-    g.lineBetween(CAMPFIRE.x - 18, CAMPFIRE.y - 10, CAMPFIRE.x + 18, CAMPFIRE.y + 10);
-    g.lineBetween(CAMPFIRE.x - 18, CAMPFIRE.y + 10, CAMPFIRE.x + 18, CAMPFIRE.y - 10);
-
-    const flame = this.scene.add.graphics({ x: this.campfire.x, y: this.campfire.y }).setDepth(-3);
+    const r = 28;
+    this.artFoot(this.artJobs, CAMPFIRE.x - r, CAMPFIRE.y - r, 2 * r, () => bonfirePiece(r, 5));
+    // A chama (ainda forma simples, pisca) por cima da lenha: quem está atrás da fogueira some atrás dela
+    const flame = this.scene.add.graphics({ x: this.campfire.x, y: this.campfire.y - 6 }).setDepth((this.campfire.y + r) * 1e-6 + 1e-7);
     flame.fillStyle(CAMP_COLORS.FIRE, 0.9);
-    flame.fillCircle(0, 0, 15);
+    flame.fillCircle(0, 0, 11);
     flame.fillStyle(CAMP_COLORS.FIRE_CORE, 1);
-    flame.fillCircle(0, 0, 7);
+    flame.fillCircle(0, 2, 5);
     this.scene.tweens.add({ targets: flame, scale: 1.25, alpha: 0.75, duration: 280, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
   }
 
@@ -399,93 +384,58 @@ export class CampArea {
   }
 
   private drawSite(site: CampSite): void {
-    const g = this.gfx(-2);
     const { x, y, w, h } = site;
     const solid = this.solid(x - w / 2, y - h / 2, w, h);
+    const c = this.culture;
+    const jobs = this.artJobs;
+    const foot = (make: () => Piece) => this.artFoot(jobs, x - w / 2, y - h / 2, h, make);
 
     switch (site.kind) {
       case "TENT":
-        drawTentShape(g, x, y, w, h, CAMP_COLORS.COMMAND_TENT);
-        // Estandarte do Comandante
-        g.lineStyle(3, CAMP_COLORS.WOOD, 1);
-        g.lineBetween(x + w / 2 + 14, y - h / 2 - 20, x + w / 2 + 14, y + 10);
-        g.fillStyle(CAMP_COLORS.BANNER, 1);
-        g.fillTriangle(x + w / 2 + 14, y - h / 2 - 20, x + w / 2 + 44, y - h / 2 - 10, x + w / 2 + 14, y - h / 2);
+        // Pavilhão listrado e o estandarte do Comandante
+        foot(() => tentPiece(w, h, CAMP_COLORS.COMMAND_TENT, 0xb8902c, 41));
+        this.artAt(jobs, x + w / 2 + 14, y + 10, () => bannerPiece(CAMP_COLORS.BANNER, true, 74));
         this.obstacles.push(solid);
         break;
       case "QUARTERMASTER":
-        // Carroça com caixotes
-        g.fillStyle(CAMP_COLORS.WOOD, 1);
-        g.fillRect(x - w / 2, y - h / 2, w, h);
-        g.lineStyle(2, COLORS.OUTLINE, 1);
-        g.strokeRect(x - w / 2, y - h / 2, w, h);
-        g.fillStyle(0x2b2b2b, 1);
-        for (const [wx, wy] of [[-w / 2 + 16, -h / 2], [w / 2 - 16, -h / 2], [-w / 2 + 16, h / 2], [w / 2 - 16, h / 2]]) {
-          g.fillCircle(x + wx, y + wy, 10);
-        }
-        g.fillStyle(0xb08850, 1);
-        for (let i = 0; i < 3; i++) g.fillRect(x - w / 2 + 10 + i * 32, y - 14, 26, 26);
+        foot(() => wagonPiece(w, h, c, 42));
         this.obstacles.push(solid);
         break;
       case "RECRUIT":
-        // Mesa de alistamento + bandeira
-        g.fillStyle(CAMP_COLORS.WOOD, 1);
-        g.fillRect(x - w / 2, y - h / 2, w, h);
-        g.lineStyle(2, COLORS.OUTLINE, 1);
-        g.strokeRect(x - w / 2, y - h / 2, w, h);
-        g.fillStyle(0xf5f0e0, 1);
-        g.fillRect(x - 20, y - 10, 30, 20); // pergaminho
-        g.lineStyle(3, CAMP_COLORS.WOOD, 1);
-        g.lineBetween(x + w / 2 + 12, y - 60, x + w / 2 + 12, y + 10);
-        g.fillStyle(COLORS.ALLY, 1);
-        g.fillRect(x + w / 2 + 12, y - 60, 30, 20);
+        foot(() => tablePiece(w, h, c));
+        this.artAt(jobs, x + w / 2 + 12, y + 10, () => bannerPiece(COLORS.ALLY, false, 70));
         this.obstacles.push(solid);
         break;
       case "TRAINING": {
-        // Cercado com bonecos de treino (área caminhável)
-        g.lineStyle(4, CAMP_COLORS.WOOD, 1);
-        g.strokeRect(x - w / 2, y - h / 2, w, h);
-        for (let i = 0; i <= 6; i++) {
-          g.fillStyle(CAMP_COLORS.POST, 1);
-          g.fillCircle(x - w / 2 + (i * w) / 6, y - h / 2, 5);
-          g.fillCircle(x - w / 2 + (i * w) / 6, y + h / 2, 5);
+        // Cercado com bonecos de treino (área caminhável): aberto do lado da porta (leste)
+        const x0 = x - w / 2;
+        const y0 = y - h / 2;
+        this.artFoot(jobs, x0, y0, 0, () => fencePiece(w, true, [], c));
+        this.artFoot(jobs, x0, y0 + h, 0, () => fencePiece(w, true, [], c));
+        for (const [fx, open] of [[x0, false], [x0 + w, true]] as const) {
+          for (let d = 0; d < h; d += 44) {
+            const len = Math.min(44, h - d);
+            const mid = d + len / 2;
+            const gaps: [number, number][] = open && Math.abs(mid - h / 2) < h * 0.22 ? [[0, len]] : [];
+            this.artFoot(jobs, fx, y0 + d, len, () => fencePiece(len, false, gaps, c));
+          }
         }
-        for (const [dx, dy] of [[-60, -30], [0, -30], [60, -30], [-30, 30], [30, 30]]) {
-          g.lineStyle(4, CAMP_COLORS.WOOD, 1);
-          g.lineBetween(x + dx - 12, y + dy, x + dx + 12, y + dy);
-          g.lineBetween(x + dx, y + dy - 14, x + dx, y + dy + 14);
-          g.fillStyle(0xd8c39a, 1);
-          g.fillCircle(x + dx, y + dy - 14, 6);
-        }
+        for (const [dx, dy] of [[-60, -30], [0, -30], [60, -30], [-30, 30], [30, 30]]) this.artAt(jobs, x + dx, y + dy + 14, () => propPiece("DUMMY", c, dx * 3 + dy));
         break;
       }
-      case "STABLE": {
-        // Cercado de cavalos com cocho (batedores e mensageiros descansam por perto)
-        g.fillStyle(0x6e5a36, 1);
-        g.fillRect(x - w / 2, y - h / 2, w, h);
-        g.lineStyle(4, CAMP_COLORS.WOOD, 1);
-        g.strokeRect(x - w / 2, y - h / 2, w, h);
-        for (let i = 0; i <= 6; i++) {
-          g.fillStyle(CAMP_COLORS.POST, 1);
-          g.fillCircle(x - w / 2 + (i * w) / 6, y - h / 2, 5);
-          g.fillCircle(x - w / 2 + (i * w) / 6, y + h / 2, 5);
-        }
-        g.fillStyle(0x3b2a17, 1);
-        g.fillRect(x - w / 2 + 8, y - h / 2 + 8, 40, 10); // cocho
+      case "STABLE":
+        // Alpendre e curral com cocho (batedores e mensageiros descansam por perto)
+        foot(() => stablePiece(w, h, c, 43));
         this.obstacles.push(solid);
         break;
-      }
       case "FORGE": {
-        g.fillStyle(CAMP_COLORS.STONE, 1);
-        g.fillRect(x - w / 2, y - h / 2, w, h);
-        g.lineStyle(2, COLORS.OUTLINE, 1);
-        g.strokeRect(x - w / 2, y - h / 2, w, h);
-        g.fillStyle(0x2b2b2b, 1);
-        g.fillRect(x - 30, y + 8, 30, 14); // bigorna
-        const glow = this.scene.add.graphics({ x: this.origin.x + x + 18, y: this.origin.y + y - 14 }).setDepth(-1);
-        glow.fillStyle(CAMP_COLORS.FIRE, 1);
-        glow.fillCircle(0, 0, 12);
-        this.scene.tweens.add({ targets: glow, alpha: 0.5, duration: 500, yoyo: true, repeat: -1 });
+        foot(() => forgePiece(w, h, c, 44));
+        // A brasa do fogão pisca (por cima da ferraria, que fica atrás de quem passa na frente)
+        const at = forgeGlow(w);
+        const glow = this.scene.add.graphics({ x: this.origin.x + x - w / 2 + at.x, y: this.origin.y + y - h / 2 + at.y }).setDepth((this.origin.y + y + h / 2) * 1e-6 + 1e-7);
+        glow.fillStyle(CAMP_COLORS.FIRE, 0.55);
+        glow.fillCircle(0, 0, 7);
+        this.scene.tweens.add({ targets: glow, alpha: 0.25, duration: 500, yoyo: true, repeat: -1 });
         this.obstacles.push(solid);
         break;
       }
@@ -520,6 +470,7 @@ export class CampArea {
     );
     this.obstacles = this.obstacles.filter((r) => !this.quarterRects.includes(r));
     this.quarterRects = [];
+    this.quarterJobs = [];
 
     const { battalions, pendingMutiny, lieutenants } = state;
     const rebel = pendingMutiny ? mutinyLeader(battalions) : null;
@@ -540,6 +491,7 @@ export class CampArea {
         this.addLieutenantSpot(l, this.at({ x: CAMPFIRE.x + Math.cos(a) * 70, y: CAMPFIRE.y + Math.sin(a) * 60 }), true);
       }
     }
+    this.publishArt();
     this.onSolidsChanged?.();
   }
 
@@ -564,14 +516,10 @@ export class CampArea {
 
   private buildQuarter(b: BattalionData, slot: Point, mutinous: boolean, away: boolean): void {
     const tentY = slot.y - 55;
-    const g = this.gfx(-2);
-    drawTentShape(g, slot.x, tentY, 80, 56, mutinous ? COLORS.MUTINEER : CAMP_COLORS.CANVAS);
-    // Estandarte com a cor da tropa
-    g.lineStyle(3, CAMP_COLORS.WOOD, 1);
-    g.lineBetween(slot.x + 56, tentY - 30, slot.x + 56, tentY + 30);
-    g.fillStyle(mutinous ? COLORS.MUTINEER : COLORS.ALLY, 1);
-    g.fillRect(slot.x + 56, tentY - 30, 22, 16);
-    this.quarterObjects.push(g);
+    // Barraca e o estandarte com a cor da tropa (roxos no motim)
+    const canvas = mutinous ? COLORS.MUTINEER : CAMP_COLORS.CANVAS;
+    this.artFoot(this.quarterJobs, slot.x - 40, tentY - 28, 56, () => tentPiece(80, 56, canvas, null, slot.x));
+    this.artAt(this.quarterJobs, slot.x + 56, tentY + 30, () => bannerPiece(mutinous ? COLORS.MUTINEER : COLORS.ALLY, false, 60));
 
     const tentRect = this.solid(slot.x - 40, tentY - 28, 80, 56);
     this.quarterRects.push(tentRect);
@@ -596,16 +544,3 @@ export class CampArea {
   }
 }
 
-/** Barraca vista de cima: lona com cumeeira e a porta voltada para o sul. */
-export function drawTentShape(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, color: number): void {
-  g.fillStyle(color, 1);
-  g.fillRect(x - w / 2, y - h / 2, w, h);
-  g.fillStyle(0x000000, 0.18);
-  g.fillRect(x, y - h / 2, w / 2, h); // metade sombreada
-  g.lineStyle(3, COLORS.OUTLINE, 1);
-  g.strokeRect(x - w / 2, y - h / 2, w, h);
-  g.lineStyle(3, 0x000000, 0.5);
-  g.lineBetween(x, y - h / 2, x, y + h / 2); // cumeeira
-  g.fillStyle(0x1b1b1b, 1);
-  g.fillTriangle(x - 14, y + h / 2, x + 14, y + h / 2, x, y + h / 2 - 22); // porta
-}

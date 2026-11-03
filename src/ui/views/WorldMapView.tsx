@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { missionPlan } from "../../game/data/missionGuide";
 import { expeditionStage } from "../../game/sim/expeditions";
 import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
+import { fieldFood } from "../components/SupplyPanel";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
 import { PALISADE } from "../../game/data/campLayout";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
@@ -426,8 +427,8 @@ export function WorldMapView() {
   const campPacked = useGameStore((s) => s.campPacked);
   const away = useGameStore((s) => s.expeditions);
   const clock = useGameStore((s) => s.day + s.dayProgress);
-  // Em campo, o exército só come o que as carroças levam
-  const rations = useGameStore((s) => (s.exposure.away && !s.campPacked ? s.cargo : s.rations));
+  // Em campo, o exército só come o que leva (mochilas, bolsa e carroças junto)
+  const rations = useGameStore((s) => (s.exposure.away && !s.campPacked ? Math.floor(fieldFood(s).food) : s.rations));
   const engaged = useGameStore((s) => s.battleHud?.engaged ?? false);
   const setWorldMapOpen = useGameStore((s) => s.setWorldMapOpen);
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);

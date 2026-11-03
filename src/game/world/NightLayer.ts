@@ -35,7 +35,7 @@ export class NightLayer {
         tex.refresh();
       }
     }
-    // Cobre a maior área que a câmera mostra (zoom mínimo)
+    // Cobre a maior área que a câmera mostra (zoom mínimo); tela maior que a de referência amplia em update
     const w = Math.ceil((GAME_WIDTH / CAMERA.MIN_ZOOM) * RES);
     const h = Math.ceil((GAME_HEIGHT / CAMERA.MIN_ZOOM) * RES);
     this.rt = scene.add.renderTexture(0, 0, w, h).setOrigin(0, 0).setScale(1 / RES).setDepth(14).setVisible(false);
@@ -49,6 +49,9 @@ export class NightLayer {
       return;
     }
     const view = camera.worldView;
+    const w = Math.ceil(view.width * RES) + 2;
+    const h = Math.ceil(view.height * RES) + 2;
+    if (w > rt.width || h > rt.height) rt.resize(Math.max(w, rt.width), Math.max(h, rt.height));
     rt.setVisible(true).setPosition(view.x, view.y);
     rt.clear();
     rt.fill(TIME.DARKNESS_COLOR, TIME.DARKNESS_ALPHA * darkness, 0, 0, view.width * RES + 2, view.height * RES + 2);

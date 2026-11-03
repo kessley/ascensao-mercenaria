@@ -4,6 +4,7 @@ import {
   BALANCE,
   ECONOMY,
   LIEUTENANTS,
+  CAPTAINS,
   EXPEDITION,
   MUTINEER_OF,
   PROGRESSION,
@@ -77,6 +78,8 @@ import { rememberSaga, type SagaRecord } from "../game/data/sagas";
 import { personName } from "../game/worldgen/names";
 import { CONTINENT_KEYS, INITIAL_SEA, seaSlice, type ContinentKey, type SeaActions, type SeaState } from "./seaSlice";
 import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
+import { INITIAL_CAPTAINS, allCaptains, captainSlice, captainsWeek, desertions, freshCaptains, pruneCompanies, shiftLoyalty, type CaptainActions, type CaptainState } from "./captainSlice";
+import { captainName, type CaptainData } from "../game/data/captains";
 import { SCENARIO_TOWN, buildScenarioWorld, noteResult, scenarioDay, scenarioProgress, type BattleScenario, type ScenarioHud, type ScenarioResult } from "../game/data/scenarios";
 import {
   GUILD_BUILDINGS,
@@ -117,10 +120,10 @@ import { resourcesAround } from "../game/worldgen/resources";
 import { geoOf } from "../game/worldgen/geoMap";
 import { distance, type Point } from "../utils/math";
 import { battalionWage, cargoCapacity, dailyRations, reinforceCostPerSoldier, weeklyWages } from "../utils/economy";
-import { NO_EXPOSURE, eatDay, healthDay, loadAmount, woundedOf, type Exposure, type Sickness } from "../game/sim/logistics";
+import { NO_EXPOSURE, convoyDays, convoyFate, eatDay, fillPacks, healthDay, loadAmount, packCapacity, packOf, packsTotal, takeFieldFood, woundedOf, type Exposure, type Sickness } from "../game/sim/logistics";
 import { campDefAt } from "../game/data/campLayout";
 import { seasonOf } from "../utils/season";
-import { canLearn, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
+import { canPromote, canTrain, promotionCost, trainingCost, canLearn, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
 import { SKILLS, type SkillId } from "../game/data/skills";
 import { fullName, generateLieutenant, opinionOn, PASSIVES, type LieutenantData } from "../game/data/lieutenants";
 import {
@@ -137,7 +140,7 @@ import type { NobleTrait } from "../game/sim/nobility";
 import type { Doctrine } from "../game/systems/WarHost";
 import type { HarpyState } from "../game/entities/Harpy";
 import { newId } from "../utils/id";
-import { canDelegate, expeditionDays, expeditionRations, resolveExpedition } from "../game/sim/expeditions";
+import { canDelegate, captainReport, expeditionDays, expeditionRations, resolveExpedition } from "../game/sim/expeditions";
 
 /** Um batalhão no Campo de Treino: treina de verdade até `until` (dia + fração do dia). */
 export interface TrainingOrder {
@@ -152,6 +155,9 @@ export type CampPanel =
   | { kind: "PEDDLER" }
   | { kind: "BATTALION"; battalionId: string }
   | { kind: "LIEUTENANT"; lieutenantId: string }
+  | { kind: "CAPTAIN"; captainId: string }
+  /** Comida em campo, carroças e comboio de suprimentos (rações refeitas na Fase 3). */
+  | { kind: "SUPPLY" }
   | { kind: "STABLE" }
   /** Povoado: aberto pela praça, pelo paço, pelo acampamento da guarnição ou pelo portão (só ali se ataca). */
   | { kind: "TOWN"; settlementId: string; at?: "MARKET" | "HALL" | "CAMP" | "GATE" }
@@ -198,6 +204,8 @@ export interface BattalionData {
   /** Fora das fileiras (Marco 13): feridos na enfermaria e doentes (não lutam, mas comem e voltam). */
   wounded?: number;
   sick?: number;
+  /** Comida na mochila (rações refeitas na Fase 3): ver `packCapacity`. */
+  pack?: number;
   sickness?: Sickness;
 }
 
@@ -213,6 +221,27 @@ export const PEDDLER_ITEMS: Record<PeddlerItem, { label: string; gold: number; e
 export interface WagonData {
   id: string;
   hp: number;
+}
+
+/**
+ * Onde as carroças estão (rações refeitas na Fase 3): paradas no acampamento (o normal: cada
+ * batalhão leva a própria comida), andando com o exército ou na estrada, num comboio.
+ */
+export type WagonTrain = "CAMP" | "ARMY" | "ROAD";
+
+/** Comboio de suprimentos a caminho do exército (ou voltando ao acampamento). */
+export interface SupplyConvoy {
+  id: string;
+  departAt: number;
+  arriveAt: number;
+  /** De onde saiu (o acampamento, ou onde o exército estava, na volta). */
+  from: { x: number; y: number };
+  /** Rações que leva. */
+  load: number;
+  /** Quem escolta (sai do acampamento com o comboio e fica com o exército). */
+  escort: BattalionData[];
+  /** Voltando para o acampamento, com o que sobrou. */
+  returning: boolean;
 }
 
 export type BattalionStatus = "READY" | "MOVING" | "ENGAGED" | "FLEEING" | "DESTROYED";
@@ -367,6 +396,10 @@ export interface BattalionSurvivors {
   /** Destino do tenente que comandava o batalhão (se havia um). */
   lieutenantAlive?: boolean;
   lieutenantKills?: number;
+  /** O capitão que marchou com este batalhão (Marco 20). */
+  captainId?: string;
+  captainAlive?: boolean;
+  captainKills?: number;
 }
 
 /** O que aconteceu com batedores e mensageiros numa batalha. */
@@ -401,6 +434,8 @@ export interface Expedition {
   path?: Point[];
   /** Ponto da rota em que o serviço começa. */
   meet?: number;
+  /** Quem conduz a companhia (Marco 20); fica fora da lista de capitães até voltar. */
+  captain?: CaptainData;
 }
 
 /** No que deu uma expedição (fica no diário). */
@@ -412,6 +447,9 @@ export interface ExpeditionReport {
   casualties: number;
   lost: string[];
   day: number;
+  /** O capitão e o relatório dele, na voz dele (Marco 20). */
+  captain?: string;
+  lines?: string[];
 }
 
 /** Motim em curso: os rebeldes pegaram em armas dentro do acampamento. */
@@ -567,7 +605,7 @@ export interface BattalionContextMenu {
   y: number;
 }
 
-export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions {
+export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions, CaptainState, CaptainActions {
   /** Mesma semente, séculos depois de uma saga terminada. */
   revisitSaga: (saga: SagaRecord) => void;
   /** Tela de criação do mundo ou campanha em andamento. */
@@ -618,8 +656,8 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   /** Tropas fora, cumprindo contratos por conta própria. */
   expeditions: Expedition[];
   expeditionReports: ExpeditionReport[];
-  /** Manda batalhões cumprirem uma oferta sem o Comandante; devolve o motivo se não der. */
-  sendExpedition: (contractId: string, battalionIds: string[]) => string | null;
+  /** Manda um capitão e a companhia dele cumprirem uma oferta sem o Comandante; devolve o motivo se não der. */
+  sendExpedition: (contractId: string, captainId: string) => string | null;
   /** Quem já cumpriu o tempo fora volta e presta contas. */
   returnExpeditions: () => void;
   mutiny: MutinyState | null;
@@ -657,7 +695,19 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   // --- Estações e logística (Marco 13) ---
   /** Trem de carroças e as rações que ele leva (o resto, `rations`, fica no depósito do acampamento). */
   wagons: WagonData[];
+  /** Rações que marcham fora das mochilas: a bolsa do Comandante e, com o exército, as carroças. */
   cargo: number;
+  train: WagonTrain;
+  convoy: SupplyConvoy | null;
+  /** Ao sair do acampamento, as carroças vão junto (escolha do Portão). */
+  takeWagons: boolean;
+  setTakeWagons: (take: boolean) => void;
+  /** Manda as carroças do acampamento ao exército, carregadas, com a escolta escolhida; devolve o motivo se não der. */
+  sendSupplies: (escortIds: string[]) => string | null;
+  /** As carroças que andam com o exército voltam ao acampamento com o que sobrou. */
+  sendWagonsHome: () => string | null;
+  /** O comboio chegou (a cena chama quando o relógio manda). */
+  convoyArrives: () => void;
   /** Onde o exército está e o que o expõe (fome, pântano, frio, febre): a cena informa. */
   exposure: Exposure;
   /** Esgotamento da forragem por região ("col,row" → 0..1). */
@@ -891,6 +941,8 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   finishTraining: () => string[];
   cancelTraining: (battalionId: string) => void;
   learnSkill: (battalionId: string, skill: SkillId) => boolean;
+  /** Muda o ofício do batalhão; devolve o motivo se não der. */
+  promoteBattalion: (battalionId: string, to: TroopType) => string | null;
   /** Forja o próximo tier de arma ou armadura (ouro + ferro). */
   forgeEquipment: (battalionId: string, slot: EquipmentSlot) => boolean;
   tradeIron: (amount: number) => boolean;
@@ -1060,12 +1112,14 @@ type DayState = Pick<
   | "battalions"
   | "expeditions"
   | "lieutenants"
+  | "captains"
   | "scouts"
   | "messengers"
   | "followers"
   | "campMood"
   | "bonds"
   | "cargo"
+  | "train"
   | "exposure"
   | "training"
   | "campPacked"
@@ -1126,9 +1180,11 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     // treina ou ficou guardando o acampamento (Marco 14) come do depósito
     const training = new Set([...s.training.map((t) => t.battalionId), ...(s.exposure.away ? s.campStay : [])]);
     // Grão e carne viram rações quando elas acabam: nas carroças, em campo; no depósito, no acampamento
-    const fieldNeed = s.exposure.away && !s.campPacked ? dailyRations(s.battalions.filter((b) => !training.has(b.id)), []) : 0;
+    // A mercadoria anda nas carroças: só dá para moer o que está com o exército
+    const fieldNeed = s.exposure.away && !s.campPacked && s.train === "ARMY" ? dailyRations(s.battalions.filter((b) => !training.has(b.id)), []) : 0;
+    const packed = packsTotal(s.battalions.filter((b) => !training.has(b.id)));
     let milled = 0;
-    while (s.cargo < fieldNeed) {
+    while (s.cargo + packed < fieldNeed) {
       const food = (["GRAIN", "MEAT"] as Good[]).find((g) => freightOf(s.freight, g) > 0);
       if (!food) break;
       s.freight = takeLots(s.freight, food, 1).lots;
@@ -1147,10 +1203,14 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked);
     s.rations = meal.rations;
     s.cargo = meal.cargo;
+    s.battalions = meal.battalions;
     // Harpias comem da carne do bando (sem comida, caçam sozinhas)
     const birds = s.scouts.filter((x) => x.harpy).length * SUPPORT.HARPY.RATIONS;
-    if (s.exposure.away && !s.campPacked) s.cargo = Math.max(0, s.cargo - birds);
-    else s.rations = Math.max(0, s.rations - birds);
+    if (s.exposure.away && !s.campPacked) {
+      const fed = takeFieldFood(s.battalions, s.cargo, birds, (b) => !training.has(b.id));
+      s.battalions = fed.battalions;
+      s.cargo = fed.cargo;
+    } else s.rations = Math.max(0, s.rations - birds);
     // Enfermaria e doenças
     const health = healthDay(s.battalions, training, s.exposure, hasFollower(s.followers, "HEALER"), meal.hungry);
     s.battalions = health.battalions;
@@ -1164,7 +1224,7 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
         entry(
           s.day,
           s.exposure.away && !s.campPacked
-            ? `As carroças estão vazias! ${s.hungryDays} dia(s) de fome em campo: a moral vai despencar.`
+            ? `As mochilas estão vazias${meal.starving.length > 0 ? ` (${meal.starving.join(", ")})` : ""}! ${s.hungryDays} dia(s) de fome em campo: a moral vai despencar. Mande buscar comida no acampamento.`
             : `Sem rações! ${s.hungryDays} dia(s) de fome: a moral vai despencar.`,
           "bad",
         ),
@@ -1217,10 +1277,20 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
 
     // Quem está fora em expedição também recebe
     const away = s.expeditions.flatMap((e) => e.battalions);
-    const wages = weeklyWages([...s.battalions, ...away], s.lieutenants) + supportWages(s.scouts.length, s.messengers.length);
+    const captainWages = allCaptains(s).reduce((sum, c) => sum + c.wage, 0);
+    const wages = weeklyWages([...s.battalions, ...away], s.lieutenants) + supportWages(s.scouts.length, s.messengers.length) + captainWages;
     if (wages === 0) continue;
     const due = wages + s.debt;
-    if (s.gold >= due) {
+    const paid = s.gold >= due;
+    // Capitães (Marco 20): a ambição pesa toda semana; o atraso, quando falta ouro
+    const gone = desertions(captainsWeek(s.captains, paid, s.day), s.battalions);
+    if (gone.log.length > 0) {
+      s.captains = gone.captains;
+      s.battalions = gone.battalions;
+      s.lieutenants = unassignMissing(s.lieutenants, [...s.battalions, ...away]);
+      for (const l of gone.log) log.push(entry(s.day, l.text, l.tone));
+    } else s.captains = gone.captains;
+    if (paid) {
       s.gold -= due;
       log.push(
         entry(s.day, `Dia de pagamento: ${due} de ouro${s.debt > 0 ? " (incluindo atrasados)" : ""}.`, "good"),
@@ -1240,12 +1310,12 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
       b.soldiers = Math.max(0, b.soldiers - lost);
       deserted.push(`${b.name} −${lost}`);
     }
-    const gone = s.battalions.filter((b) => b.soldiers === 0).map((b) => b.name);
+    const emptied = s.battalions.filter((b) => b.soldiers === 0).map((b) => b.name);
     s.battalions = s.battalions.filter((b) => b.soldiers > 0);
     log.push(
       entry(s.day, `Salários atrasados (dívida: ${s.debt}). Deserções: ${deserted.join(", ")}.`, "bad"),
     );
-    if (gone.length) log.push(entry(s.day, `${gone.join(", ")} desertou por completo.`, "bad"));
+    if (emptied.length) log.push(entry(s.day, `${emptied.join(", ")} desertou por completo.`, "bad"));
     s.lieutenants = unassignMissing(s.lieutenants, [...s.battalions, ...away]);
 
     const unpaid = applyLoyalty(
@@ -1278,12 +1348,14 @@ function dayState(s: GameState): DayState {
     battalions: s.battalions,
     expeditions: s.expeditions,
     lieutenants: s.lieutenants,
+    captains: s.captains,
     scouts: s.scouts,
     messengers: s.messengers,
     followers: s.followers,
     campMood: s.campMood,
     bonds: s.bonds,
     cargo: s.cargo,
+    train: s.train,
     exposure: s.exposure,
     training: s.training,
     campPacked: s.campPacked,
@@ -1343,15 +1415,26 @@ export function horseDeal(
   return { ok: true, cost, fromStable, apply };
 }
 
+/** Carroças que andam com o exército (todas, com o acampamento levantado; nenhuma, se ficaram ou estão na estrada). */
+export function wagonsWithArmy(s: Pick<GameState, "train" | "campPacked" | "wagons">): number {
+  return s.campPacked || s.train === "ARMY" ? s.wagons.length : 0;
+}
+
 /** O bando leva a carga nas carroças (perto do Comandante) ou só na bolsa dele. */
 function carryCapacity(s: GameState): number {
   const wagonsNear = s.battleHud?.wagonsNear ?? true;
-  return wagonsNear ? cargoCapacity(s.wagons.length) : TRADE.PURSE_CAPACITY;
+  return wagonsNear ? cargoCapacity(s.exposure.away ? wagonsWithArmy(s) : s.wagons.length) : TRADE.PURSE_CAPACITY;
 }
 
 /** Peso que o bando leva agora: rações nas carroças (em campo) e mercadorias. */
 function carriedWeight(s: GameState): number {
   return (s.exposure.away && !s.campPacked ? s.cargo : 0) + freightWeight(s.freight);
+}
+
+/** Batalhões que marcham com o Comandante (fora quem treina e quem ficou de guarda). */
+export function marchingIds(s: Pick<GameState, "battalions" | "training" | "campStay">): Set<string> {
+  const home = new Set([...s.training.map((t) => t.battalionId), ...s.campStay]);
+  return new Set(s.battalions.filter((b) => !home.has(b.id)).map((b) => b.id));
 }
 
 /** Batalhão que lidera o motim: o maior (mais soldados insatisfeitos). */
@@ -1486,6 +1569,9 @@ function campaignState(world: WorldDef | null): CampaignState {
     townIntel: {},
     wagons: Array.from({ length: SUPPLY.START_WAGONS }, () => ({ id: newId(), hp: SUPPLY.WAGON.hp })),
     cargo: 0,
+    train: "CAMP",
+    convoy: null,
+    takeWagons: false,
     exposure: NO_EXPOSURE,
     forage: {},
     campAt: null,
@@ -1511,6 +1597,8 @@ function campaignState(world: WorldDef | null): CampaignState {
     ...INITIAL_WAR,
     ...INITIAL_SEA,
     ...INITIAL_LEGACY,
+    ...INITIAL_CAPTAINS,
+    captainCandidates: freshCaptains(1),
     leader: { ...FOUNDER, name: personName(r), age: r.int(LEGACY.START_AGE[0], LEGACY.START_AGE[1]) },
     planet: world ? generatePlanet(world) : null,
     nobles: world ? generateNobles(world, settlements) : [],
@@ -1555,6 +1643,10 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     battalions,
     lieutenants,
     lieutenantCandidates: [],
+    captains: [],
+    captainCandidates: [],
+    // O exército do cenário já está em campo, com o que tem
+    train: "ARMY",
     scouts: Array.from({ length: scenario.army.scouts }, newScout),
     messengers: Array.from({ length: scenario.army.messengers }, newMessenger),
     wagons: Array.from({ length: scenario.army.wagons }, () => ({ id: newId(), hp: SUPPLY.WAGON.hp })),
@@ -1586,6 +1678,7 @@ function contractClosing(s: GameState, c: Contract, success: boolean, text: stri
     }),
     nobles: rivalRuler ? s.nobles.map((n) => (n.id === rivalRuler.id ? { ...n, opinion: Math.max(-100, n.opinion - 12), memory: [...n.memory, { day: s.day, text: `o bando trabalhou contra o reino: ${c.title}`, delta: -12 }].slice(-8) } : n)) : s.nobles,
     lieutenantCandidates: success ? Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)) : s.lieutenantCandidates,
+    captainCandidates: success ? freshCaptains(s.day) : s.captainCandidates,
     log: appendLog(s.log, [entry(s.day, text, success ? "good" : "bad")]),
   };
 }
@@ -1663,6 +1756,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       ...campaignState(world),
       ...loaded,
+      train: loaded.train ?? (loaded.exposure?.away || loaded.campPacked ? "ARMY" : "CAMP"),
       world,
       phase: "PLAYING",
       pendingField: file.field,
@@ -1803,15 +1897,17 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return true;
   },
 
-  sendExpedition: (contractId, battalionIds) => {
+  sendExpedition: (contractId, captainId) => {
     const s = get();
     const contract = s.contracts.find((c) => c.id === contractId);
     if (!contract) return "Esse contrato não está mais na mesa.";
     if (!canDelegate(contract)) return "Este serviço pede o Comandante em pessoa.";
     if (s.pendingMutiny || s.mutiny) return "Com um motim no acampamento, ninguém sai.";
-    const party = s.battalions.filter((b) => battalionIds.includes(b.id));
-    if (party.length === 0) return "Escolha quem vai.";
-    if (party.some((b) => s.training.some((t) => t.battalionId === b.id))) return "Quem está em treino não pode sair.";
+    const captain = s.captains.find((c) => c.id === captainId);
+    if (!captain) return "Escolha um capitão: só eles levam uma companhia sem o Comandante.";
+    // Quem está em treino fica: o resto da companhia vai
+    const party = s.battalions.filter((b) => captain.battalionIds.includes(b.id) && !s.training.some((t) => t.battalionId === b.id));
+    if (party.length === 0) return `A companhia de ${captainName(captain)} não tem ninguém pronto para sair.`;
     const days = expeditionDays(contract);
     const food = expeditionRations(party, days);
     if (food > s.rations) return `Faltam rações: a viagem pede ${food}.`;
@@ -1820,10 +1916,11 @@ export const useGameStore = create<GameState>()((set, get) => ({
       gold: s.gold + contract.advance,
       rations: s.rations - food,
       battalions: s.battalions.filter((b) => !away.has(b.id)),
+      captains: s.captains.filter((c) => c.id !== captainId),
       contracts: [...s.contracts.filter((c) => c.id !== contractId), freshContract(s)].filter((c): c is Contract => c !== null),
-      expeditions: [...s.expeditions, { id: newId(), contract, battalions: party, departDay: s.day, departAt: s.day + s.dayProgress, returnDay: s.day + days }],
+      expeditions: [...s.expeditions, { id: newId(), contract, battalions: party, captain, departDay: s.day, departAt: s.day + s.dayProgress, returnDay: s.day + days }],
       campStay: s.campStay.filter((id) => !away.has(id)),
-      log: appendLog(s.log, [entry(s.day, `${party.map((b) => b.name).join(", ")} partiu para "${contract.title}". Adiantamento: ${contract.advance}. Volta prevista: dia ${s.day + days}.`)]),
+      log: appendLog(s.log, [entry(s.day, `${captainName(captain)} partiu com ${party.map((b) => b.name).join(", ")} para "${contract.title}". Adiantamento: ${contract.advance}. Volta prevista: dia ${s.day + days}.`)]),
     });
     return null;
   },
@@ -1835,18 +1932,26 @@ export const useGameStore = create<GameState>()((set, get) => ({
     for (const e of due) {
       const now = get();
       const led = (b: BattalionData) => now.lieutenants.some((l) => l.battalionId === b.id);
-      const r = resolveExpedition(e.battalions, e.contract, led);
+      const r = resolveExpedition(e.battalions, e.contract, led, Math.random, e.captain?.tactics);
       const c = e.contract;
       const lostNote = r.lost.length > 0 ? ` ${r.lost.join(", ")} não voltou.` : "";
+      // O capitão volta com quem sobrou; se ninguém sobrou, ele caiu junto
+      const cap = e.captain;
+      const lines = cap ? captainReport(cap, c, e.battalions, r) : undefined;
+      const capBack = cap && r.battalions.length > 0
+        ? shiftLoyalty({ ...cap, battles: cap.battles + 1 }, r.success ? CAPTAINS.LOYALTY.MISSION_DONE : CAPTAINS.LOYALTY.MISSION_FAILED, now.day, `${r.success ? "cumpriu" : "fracassou em"} "${c.title}"`)
+        : null;
+      const capNote = cap && !capBack ? ` ${captainName(cap)} caiu com a companhia.` : "";
       const text = r.success
-        ? `Chegou notícia: "${c.title}" foi cumprido sem o Comandante. ${c.client} pagou ${c.reward} de ouro, ao preço de ${r.casualties} baixa(s).${lostNote}`
-        : `Chegou notícia: "${c.title}" fracassou. Foram ${r.casualties} baixa(s).${lostNote}`;
+        ? `Chegou notícia: "${c.title}" foi cumprido sem o Comandante. ${c.client} pagou ${c.reward} de ouro, ao preço de ${r.casualties} baixa(s).${lostNote}${capNote}`
+        : `Chegou notícia: "${c.title}" fracassou. Foram ${r.casualties} baixa(s).${lostNote}${capNote}`;
       set({
         ...contractClosing(now, c, r.success, text),
         battalions: [...now.battalions, ...r.battalions],
+        captains: capBack ? [...now.captains, capBack] : now.captains,
         lieutenants: unassignMissing(now.lieutenants, [...now.battalions, ...r.battalions, ...now.expeditions.filter((x) => x !== e).flatMap((x) => x.battalions)]),
         expeditions: now.expeditions.filter((x) => x !== e),
-        expeditionReports: [{ id: e.id, title: c.title, success: r.success, gold: r.success ? c.reward : 0, casualties: r.casualties, lost: r.lost, day: now.day }, ...now.expeditionReports].slice(0, EXPEDITION.REPORTS),
+        expeditionReports: [{ id: e.id, title: c.title, success: r.success, gold: r.success ? c.reward : 0, casualties: r.casualties, lost: r.lost, day: now.day, captain: cap ? captainName(cap) : undefined, lines }, ...now.expeditionReports].slice(0, EXPEDITION.REPORTS),
       });
     }
   },
@@ -2141,6 +2246,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   ...courtSlice((partial) => set(partial), get),
   ...warSlice(set, get),
+  ...captainSlice(set, get, {
+    note: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
+  }),
   ...legacySlice(set, get, {
     note: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
     heirName: () => personName(createRng(randomSeed())),
@@ -2362,14 +2470,18 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (s.gold < cost) return false;
     const amount = packs * ECONOMY.RATION_PACK_SIZE;
     const settlements = s.settlements.map((x) => (x.id === t.id ? { ...x, econ: applyTrade(x.econ, g, packs, "BUY") } : x));
-    // Em campo, o que se compra vai nas carroças (até onde couber); com o acampamento levantado, vai junto
+    // Em campo, o que se compra vai nas mochilas e, o que sobrar, nas carroças ou na bolsa (até onde couber)
     if (s.exposure.away && !s.campPacked) {
-      if (s.cargo + freightWeight(s.freight) + amount > carryCapacity(s)) return false;
+      const going = marchingIds(s);
+      const filled = fillPacks(s.battalions, amount, (b) => going.has(b.id));
+      const rest = amount - filled.used;
+      if (rest > 0 && s.cargo + freightWeight(s.freight) + rest > carryCapacity(s)) return false;
       set({
         gold: s.gold - cost,
-        cargo: s.cargo + amount,
+        cargo: s.cargo + rest,
+        battalions: filled.battalions,
         settlements,
-        log: appendLog(s.log, [entry(s.day, `Compradas ${amount} rações em ${t.name} por ${cost} de ouro (nas carroças).`)]),
+        log: appendLog(s.log, [entry(s.day, `Compradas ${amount} rações em ${t.name} por ${cost} de ouro (nas mochilas${rest > 0 ? " e nas carroças" : ""}).`)]),
       });
       return true;
     }
@@ -2805,6 +2917,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     let activeContract = s.activeContract;
     let mutiny = s.mutiny;
     let lieutenantCandidates = s.lieutenantCandidates;
+    let captainCandidates = s.captainCandidates;
     let factions = s.factions;
     notes.push(...(info.notes ?? []));
 
@@ -2843,6 +2956,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       activeContract = null;
       // A notícia corre: novos aventureiros procuram o bando
       lieutenantCandidates = Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day));
+      captainCandidates = freshCaptains(s.day);
     } else if (activeContract && result === "DEFEAT") {
       notes.push(`O contrato "${activeContract.contract.title}" continua de pé até o dia ${activeContract.deadline}.`);
     }
@@ -2923,6 +3037,25 @@ export const useGameStore = create<GameState>()((set, get) => ({
     lieutenants = morale.lieutenants;
     logEntries.push(...morale.log);
 
+    // --- Capitães (Marco 20): quem marchou com a companhia volta com a crônica; quem caiu, não ---
+    const captains: CaptainData[] = [];
+    for (const c of s.captains) {
+      const report = survivors.find((r) => r.captainId === c.id);
+      if (!report) {
+        captains.push(c);
+        continue;
+      }
+      if (report.captainAlive === false) {
+        notes.push(`O capitão ${captainName(c)} morreu em combate.`);
+        logEntries.push(entry(s.day, `O capitão ${captainName(c)} tombou em "${title}". A companhia volta às ordens do Comandante.`, "bad"));
+        continue;
+      }
+      const ck = report.captainKills ?? 0;
+      let next: CaptainData = { ...c, kills: c.kills + ck, battles: c.battles + 1, history: addHistory(c.history, `Dia ${s.day}: conduziu a companhia em "${title}" (${outcome}${ck ? `, ${ck} abate${ck === 1 ? "" : "s"}` : ""}).`) };
+      if (result === "VICTORY") next = shiftLoyalty(next, CAPTAINS.LOYALTY.VICTORY, s.day, `vitória em "${title}"`);
+      captains.push(next);
+    }
+
     // --- Batedores e mensageiros: baixas, missões e nível de comando ---
     const scouts = s.scouts
       .filter((x) => {
@@ -2959,11 +3092,13 @@ export const useGameStore = create<GameState>()((set, get) => ({
       arrearsWeeks,
       battalions: remaining,
       lieutenants,
+      captains,
       scouts,
       messengers,
       activeContract,
       mutiny,
       lieutenantCandidates,
+      captainCandidates,
       factions,
       bonds: result === "VICTORY" ? shareVictory(s.bonds, together) : s.bonds,
       lastVictoryDay: result === "VICTORY" && !info.mutinyOver ? s.day : s.lastVictoryDay,
@@ -3081,19 +3216,33 @@ export const useGameStore = create<GameState>()((set, get) => ({
   loadWagons: () => {
     const s = get();
     // Quem treina e quem fica guardando o acampamento (Marco 14) come do depósito
-    const home = new Set([...s.training.map((t) => t.battalionId), ...s.campStay]);
-    const marching = s.battalions.some((b) => !home.has(b.id));
-    // Acampamento levantado: o depósito inteiro já vai junto. O Comandante sozinho leva só a mochila
-    const amount = s.campPacked
-      ? 0
-      : marching
-        ? Math.min(
-            loadAmount(s.rations, s.cargo + freightWeight(s.freight), s.wagons.length, s.battalions, s.followers, home),
-            // A parte das carroças que o Comandante reservou para a comida
-            Math.max(0, Math.floor(cargoCapacity(s.wagons.length) * (s.rationLoad ?? 1)) - s.cargo),
-          )
-        : Math.min(s.rations, Math.max(0, 6 - s.cargo));
-    set({ rations: s.rations - amount, cargo: s.cargo + amount, exposure: { ...s.exposure, away: true } });
+    const going = marchingIds(s);
+    const home = new Set(s.battalions.filter((b) => !going.has(b.id)).map((b) => b.id));
+    if (s.campPacked) {
+      // Acampamento levantado: o depósito inteiro já vai junto, nas carroças
+      set({ train: "ARMY", exposure: { ...s.exposure, away: true } });
+      return;
+    }
+    // Cada batalhão sai com a mochila cheia (sem tirar a reserva de quem fica)
+    const reserve = Math.max(0, dailyRations(s.battalions.filter((b) => home.has(b.id)), s.followers) - 1) * SUPPLY.CAMP_RESERVE_DAYS;
+    const packs = fillPacks(s.battalions, Math.max(0, s.rations - reserve), (b) => going.has(b.id));
+    let rations = s.rations - packs.used;
+    // A bolsa do Comandante
+    const bag = Math.min(Math.max(0, rations - reserve), Math.max(0, SUPPLY.PACK_CAPACITY - s.cargo));
+    rations -= bag;
+    let cargo = s.cargo + bag;
+    // As carroças só vão se o Comandante quis levá-las (e se alguém marcha com ele)
+    const take = s.takeWagons && going.size > 0 && s.wagons.length > 0 && s.train === "CAMP";
+    if (take) {
+      const load = Math.min(
+        loadAmount(rations, cargo + freightWeight(s.freight), s.wagons.length, packs.battalions, s.followers, home),
+        // A parte das carroças que o Comandante reservou para a comida
+        Math.max(0, Math.floor(cargoCapacity(s.wagons.length) * (s.rationLoad ?? 1)) - cargo),
+      );
+      rations -= load;
+      cargo += load;
+    }
+    set({ rations, cargo, battalions: packs.battalions, train: take ? "ARMY" : s.train, exposure: { ...s.exposure, away: true } });
   },
 
   unloadWagons: () => {
@@ -3109,16 +3258,126 @@ export const useGameStore = create<GameState>()((set, get) => ({
       depot: horses > 0 ? { ...s.depot, HORSES: (s.depot.HORSES ?? 0) + horses } : s.depot,
       freight,
       wagons: s.wagons.map((w) => ({ ...w, hp: SUPPLY.WAGON.hp })),
+      // As carroças que andavam com o exército estacionam; um comboio na estrada volta sozinho
+      train: s.train === "ROAD" ? "ROAD" : "CAMP",
       exposure: { ...NO_EXPOSURE },
     });
+  },
+
+  setTakeWagons: (take) => set({ takeWagons: take }),
+
+  sendSupplies: (escortIds) => {
+    const s = get();
+    if (!s.exposure.away) return "O exército está no acampamento: come do depósito.";
+    if (s.campPacked) return "Com o acampamento levantado, o depósito já anda com o exército.";
+    if (s.train === "ARMY") return "As carroças já estão com o exército.";
+    if (s.convoy) return "Já há um comboio na estrada.";
+    if (s.wagons.length === 0) return "O bando não tem carroças: compre uma na Intendência.";
+    const army = s.battleHud?.position;
+    const camp = s.world?.camp.center;
+    if (!army || !camp) return "Ninguém sabe onde o exército está.";
+    // Quem fica no acampamento come do depósito: o comboio não leva a reserva deles
+    const home = s.battalions.filter((b) => !marchingIds(s).has(b.id));
+    const escort = home.filter((b) => escortIds.includes(b.id) && !s.training.some((t) => t.battalionId === b.id));
+    const staying = home.filter((b) => !escort.includes(b));
+    const reserve = Math.max(0, dailyRations(staying, s.followers) - 1) * SUPPLY.CAMP_RESERVE_DAYS;
+    const load = Math.min(s.wagons.length * SUPPLY.WAGON_CAPACITY, Math.max(0, s.rations - reserve));
+    if (load <= 0 && escort.length === 0) return "O depósito está vazio: não há o que mandar.";
+    // A escolta sai com a mochila cheia
+    const packs = fillPacks(s.battalions, Math.max(0, s.rations - reserve - load), (b) => escort.includes(b));
+    const leaving = new Set(escort.map((b) => b.id));
+    const now = s.day + s.dayProgress;
+    const days = convoyDays(distance(camp, army));
+    set({
+      rations: s.rations - load - packs.used,
+      battalions: packs.battalions.filter((b) => !leaving.has(b.id)),
+      campStay: s.campStay.filter((id) => !leaving.has(id)),
+      train: "ROAD",
+      convoy: { id: newId(), departAt: now, arriveAt: now + days, from: { x: camp.x, y: camp.y }, load, escort: packs.battalions.filter((b) => leaving.has(b.id)), returning: false },
+      campPanel: null,
+      log: appendLog(s.log, [
+        entry(
+          s.day,
+          `Saiu do acampamento um comboio com ${Math.floor(load)} rações${escort.length > 0 ? `, escoltado por ${escort.map((b) => b.name).join(" e ")}` : ", sem escolta"}. Chega em cerca de ${Math.max(1, Math.round(days * 24))} hora(s).`,
+        ),
+      ]),
+    });
+    return null;
+  },
+
+  sendWagonsHome: () => {
+    const s = get();
+    if (s.train !== "ARMY" || s.campPacked) return "As carroças não estão com o exército.";
+    const army = s.battleHud?.position;
+    const camp = s.world?.camp.center;
+    if (!army || !camp) return "Ninguém sabe o caminho de volta.";
+    // A bolsa do Comandante fica; o resto da comida das carroças volta para o depósito
+    const load = Math.max(0, s.cargo - SUPPLY.PACK_CAPACITY);
+    const now = s.day + s.dayProgress;
+    const days = convoyDays(distance(camp, army));
+    set({
+      cargo: s.cargo - load,
+      train: "ROAD",
+      convoy: { id: newId(), departAt: now, arriveAt: now + days, from: { x: army.x, y: army.y }, load, escort: [], returning: true },
+      campPanel: null,
+      log: appendLog(s.log, [entry(s.day, `As carroças voltam ao acampamento${load >= 1 ? ` com ${Math.floor(load)} rações` : ""}.`)]),
+    });
+    return null;
+  },
+
+  convoyArrives: () => {
+    const s = get();
+    const c = s.convoy;
+    if (!c) return;
+    const fate = convoyFate(c.load, s.wagons.length, c.escort, Math.max(0, c.arriveAt - c.departAt));
+    const lines: LogEntry[] = [];
+    if (fate.raided) {
+      lines.push(
+        entry(
+          s.day,
+          c.escort.length > 0
+            ? `Salteadores caíram sobre o comboio; a escolta os repeliu (${fate.escortLost} baixa(s)) e quase tudo chegou.`
+            : `Salteadores caíram sobre o comboio sem escolta: levaram ${Math.round(c.load - fate.load)} rações${fate.wagonsLost > 0 ? " e uma carroça" : ""}.`,
+          "bad",
+        ),
+      );
+    }
+    const wagons = s.wagons.slice(0, Math.max(0, s.wagons.length - fate.wagonsLost));
+    // Voltou ao acampamento (ou o exército já estava lá): a carga entra no depósito
+    if (c.returning || !s.exposure.away) {
+      lines.push(entry(s.day, `O comboio chegou ao acampamento${fate.load >= 1 ? ` com ${Math.floor(fate.load)} rações` : ""}.`, "good"));
+      set({
+        rations: s.rations + fate.load,
+        wagons,
+        battalions: [...s.battalions, ...fate.escort],
+        campStay: [...s.campStay, ...fate.escort.map((b) => b.id)],
+        train: "CAMP",
+        convoy: null,
+        log: appendLog(s.log, lines),
+      });
+      return;
+    }
+    // Chegou ao exército: as mochilas enchem e o resto fica nas carroças, que passam a andar com ele
+    const battalions = [...s.battalions, ...fate.escort];
+    const going = marchingIds({ ...s, battalions });
+    const packs = fillPacks(battalions, fate.load, (b) => going.has(b.id));
+    const rest = fate.load - packs.used;
+    lines.push(
+      entry(
+        s.day,
+        `O comboio alcançou o exército: ${[packs.used >= 1 ? `${Math.round(packs.used)} rações encheram as mochilas` : "", rest >= 1 ? `${Math.round(rest)} ficam nas carroças` : ""].filter(Boolean).join(", ") || "as carroças chegaram vazias"}${fate.escort.length > 0 ? `. ${fate.escort.map((b) => b.name).join(" e ")} se junta ao exército` : ""}.`,
+        "good",
+      ),
+    );
+    set({ battalions: packs.battalions, cargo: s.cargo + rest, wagons, train: "ARMY", convoy: null, log: appendLog(s.log, lines) });
   },
 
   loseWagon: (id, by) => {
     const s = get();
     if (!s.wagons.some((w) => w.id === id)) return;
     const cap = cargoCapacity(s.wagons.length);
-    // A carga é de todas juntas: some a parte que cabia nesta carroça
-    const lost = Math.round(s.cargo * (SUPPLY.WAGON_CAPACITY / cap));
+    // A carga é de todas juntas: some a parte que cabia nesta carroça (paradas no acampamento, vazias)
+    const lost = s.train === "ARMY" ? Math.round(s.cargo * (SUPPLY.WAGON_CAPACITY / cap)) : 0;
     const depot = s.campPacked ? Math.round(s.rations / s.wagons.length) : 0;
     set({
       wagons: s.wagons.filter((w) => w.id !== id),
@@ -3144,13 +3403,15 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const gained = Math.round(
       soldiers * SUPPLY.FORAGE_PER_SOLDIER * SUPPLY.FORAGE_SEASON[seasonOf(s.day)] * (SUPPLY.FORAGE_BIOME[biome] ?? 0.8) * (1 - depleted),
     );
-    const room = s.campPacked ? Infinity : cargoCapacity(s.wagons.length) - s.cargo;
+    const going = marchingIds(s);
+    const packRoom = s.battalions.filter((b) => going.has(b.id)).reduce((n, b) => n + Math.max(0, packCapacity(b) - packOf(b)), 0);
+    const room = s.campPacked ? Infinity : packRoom + Math.max(0, cargoCapacity(wagonsWithArmy(s)) - s.cargo - freightWeight(s.freight));
     const got = Math.max(0, Math.min(gained, room));
     const lines = [
       entry(
         s.day,
         got > 0
-          ? `O bando forrageou ${got} rações${got < gained ? " (as carroças não levam mais)" : ""}${depleted > 0.3 ? "; a região já está rapada" : ""}.`
+          ? `O bando forrageou ${got} rações${got < gained ? " (as mochilas não levam mais)" : ""}${depleted > 0.3 ? "; a região já está rapada" : ""}.`
           : "O bando forrageou e quase nada achou: a região está rapada (ou é inverno).",
         got > 0 ? "good" : "bad",
       ),
@@ -3164,8 +3425,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
       });
       lines.push(entry(s.day, `O ${owner.name} não gostou de ver o bando rapando os campos dos seus camponeses.`, "bad"));
     }
+    const filled = fillPacks(s.battalions, s.campPacked ? 0 : got, (b) => going.has(b.id));
     set({
-      ...(s.campPacked ? { rations: s.rations + got } : { cargo: s.cargo + got }),
+      ...(s.campPacked ? { rations: s.rations + got } : { cargo: s.cargo + got - filled.used, battalions: filled.battalions }),
       forage: { ...s.forage, [region]: Math.min(1, depleted + SUPPLY.FORAGE_DEPLETION) },
       factions,
       log: appendLog(s.log, lines),
@@ -3218,8 +3480,10 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (s.campPacked) return "O acampamento já está levantado.";
     if (s.mutiny || s.pendingMutiny) return "Motim no acampamento.";
     if (s.training.length > 0) return "Há batalhões no Campo de Treino.";
+    if (s.convoy) return "Espere o comboio voltar: as carroças estão na estrada.";
     set({
       campPacked: true,
+      train: "ARMY",
       campWorks: [],
       campPanel: null,
       log: appendLog(s.log, [
@@ -3334,6 +3598,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: restock(x.econ, { [c.good as Good]: c.qty }), prosperity: Math.min(100, x.prosperity + 5) } : x)),
       activeContract: null,
       lieutenantCandidates: Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)),
+      captainCandidates: freshCaptains(s.day),
       log: appendLog(s.log, [entry(s.day, `Contrato cumprido: "${c.title}". ${t.name} pagou ${c.reward} de ouro.`, "good")]),
     });
     return null;
@@ -3675,9 +3940,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
   trainBattalions: (ids) => {
     const s = get();
     const trainees = s.battalions.filter(
-      (b) => ids.includes(b.id) && b.level < PROGRESSION.MAX_LEVEL && !s.training.some((t) => t.battalionId === b.id),
+      (b) => ids.includes(b.id) && canTrain(b.level) && !s.training.some((t) => t.battalionId === b.id),
     );
-    const cost = trainees.length * PROGRESSION.TRAINING_COST;
+    const cost = trainees.reduce((n, b) => n + trainingCost(b.level), 0);
     if (trainees.length === 0 || s.gold < cost || s.pendingMutiny) return false;
     // O treino acontece de verdade no Campo de Treino; o tempo corre (rações, pagamento) e o XP vem no fim
     const until = s.day + s.dayProgress + PROGRESSION.TRAINING_DAYS;
@@ -3717,6 +3982,36 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   cancelTraining: (battalionId) => set((s) => ({ training: s.training.filter((t) => t.battalionId !== battalionId) })),
+
+  promoteBattalion: (battalionId, to) => {
+    const s = get();
+    const b = s.battalions.find((x) => x.id === battalionId);
+    if (!b) return "Batalhão não encontrado.";
+    const why = canPromote(b, to);
+    if (why) return why;
+    if (s.training.some((t) => t.battalionId === b.id)) return "Está em treino.";
+    const price = promotionCost(b.troopType, to);
+    // Quem passa a montar precisa de cavalo (Marco 14)
+    const mounts = TROOPS[to].family === "CAVALRY" && TROOPS[b.troopType].family !== "CAVALRY";
+    const horses = mounts ? horseDeal(s, b.soldiers * TRADE.HORSES_PER_RIDER) : null;
+    if (horses && !horses.ok) return "Faltam cavalos.";
+    const gold = price.gold + (horses?.cost ?? 0);
+    if (s.gold < gold) return `Falta ouro: custa ${gold}.`;
+    if (s.iron < price.iron) return `Falta ferro: custa ${price.iron}.`;
+    // Outro ofício, outras habilidades: os pontos voltam para a escolha
+    const sameCraft = TROOPS[to].family === TROOPS[b.troopType].family;
+    const formation = TROOPS[to].formations.includes(b.formation) ? b.formation : TROOPS[to].formations[0];
+    set({
+      ...(horses?.apply ?? {}),
+      gold: s.gold - gold,
+      iron: s.iron - price.iron,
+      battalions: s.battalions.map((x) =>
+        x.id === b.id ? { ...x, troopType: to, formation, skills: sameCraft ? x.skills : [], skillPoints: sameCraft ? x.skillPoints : x.skillPoints + x.skills.length } : x,
+      ),
+      log: appendLog(s.log, [entry(s.day, `${b.name} agora serve como ${TROOPS[to].label} (${gold} de ouro e ${price.iron} de ferro).`, "good")]),
+    });
+    return null;
+  },
 
   learnSkill: (battalionId, skill) => {
     const s = get();
@@ -3835,16 +4130,24 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
 // A crônica nunca se perde: o diário é curto, as Lendas guardam tudo (Marco 18)
 useGameStore.subscribe((s, prev) => {
-  if (s.log === prev.log && s.lieutenants === prev.lieutenants) return;
+  if (s.log === prev.log && s.lieutenants === prev.lieutenants && s.captains === prev.captains) return;
   const last = s.annals[s.annals.length - 1]?.id ?? 0;
   const fresh = s.log.filter((e) => e.id > last);
-  const unseen = s.lieutenants.filter((l) => s.roll[l.id]?.history.length !== l.history.length);
+  const unseen = [...s.lieutenants, ...s.captains].filter((l) => s.roll[l.id]?.history.length !== l.history.length);
   if (fresh.length === 0 && unseen.length === 0) return;
   const land = s.world?.name ?? "";
   useGameStore.setState({
     annals: fresh.length > 0 ? trimAnnals([...s.annals, ...fresh.map((e) => ({ id: e.id, day: e.day, text: e.text, tone: e.tone, land }))], LEGACY.ANNALS_MAX) : s.annals,
     roll: unseen.length > 0 ? { ...s.roll, ...Object.fromEntries(unseen.map((l) => [l.id, { name: l.name, history: l.history }])) } : s.roll,
   });
+});
+
+// Companhia não guarda batalhão que deixou de existir (morreu, desertou, ficou noutra terra)
+useGameStore.subscribe((s, prev) => {
+  if (s.battalions === prev.battalions && s.expeditions === prev.expeditions && s.captains === prev.captains) return;
+  const ids = new Set([...s.battalions, ...s.expeditions.flatMap((e) => e.battalions)].map((b) => b.id));
+  const captains = pruneCompanies(s.captains, (id) => ids.has(id));
+  if (captains !== s.captains) useGameStore.setState({ captains });
 });
 
 // Acesso para depuração/testes automatizados (somente em dev)

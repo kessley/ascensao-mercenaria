@@ -19,13 +19,17 @@ export class ExpeditionParty extends Phaser.GameObjects.Container {
   private readonly label: Phaser.GameObjects.Text;
   private readonly dots: number;
   private cart = false;
+  /** Com capitão (Marco 20), o estandarte dele vai à frente, dourado. */
+  private readonly captain: boolean;
 
-  constructor(scene: Phaser.Scene, at: Point, soldiers: number, name: string) {
+  /** `tag` vai depois do nome ("em missão"); o comboio de suprimentos não leva nenhum. */
+  constructor(scene: Phaser.Scene, at: Point, soldiers: number, name: string, captain = false, tag: string | null = "em missão") {
     super(scene, at.x, at.y);
     this.dots = Math.min(MAX_DOTS, soldiers);
+    this.captain = captain;
     this.column = scene.add.graphics();
     this.label = scene.add
-      .text(0, -46, `${name} · em missão`, { fontFamily: "monospace", fontSize: "12px", color: "#bfe3ff", stroke: "#10202e", strokeThickness: 3 })
+      .text(0, -46, tag ? `${name} · ${tag}` : name, { fontFamily: "monospace", fontSize: "12px", color: "#bfe3ff", stroke: "#10202e", strokeThickness: 3 })
       .setOrigin(0.5, 1);
     this.add([this.column, this.label]);
     this.setDepth(6);
@@ -39,8 +43,12 @@ export class ExpeditionParty extends Phaser.GameObjects.Container {
     g.clear();
     g.fillStyle(COLORS.OUTLINE, 1);
     g.fillRect(GAP - 2, -22, 3, 24);
-    g.fillStyle(0x38bdf8, 1);
+    g.fillStyle(this.captain ? 0xe8b84a : 0x38bdf8, 1);
     g.fillTriangle(GAP + 1, -22, GAP + 18, -16, GAP + 1, -10);
+    if (this.captain) {
+      g.fillStyle(0x7a1f1f, 1);
+      g.fillRect(GAP + 1, -10, 12, 3);
+    }
     for (let i = 0; i < this.dots; i++) {
       const x = -Math.floor(i / FILE) * GAP;
       const y = ((i % FILE) - (FILE - 1) / 2) * GAP;

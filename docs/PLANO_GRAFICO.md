@@ -1,19 +1,19 @@
 # Plano gráfico: pixel art
 
-Proposta para trocar o greybox por pixel art. Os números de tamanho e de frames são estimativas; a Etapa 0 existe para confirmá-los antes de produzir arte em volume.
+Por que e como trocar o greybox por pixel art. **Estado:** decidido e em andamento; G0 (prova) e G1 (figuras em campo) ✅ OK; G2 (chão) em andamento. O que já foi convertido e o que falta: [ARTE.md](ARTE.md). Etapas no roadmap: [Fase 3](ROADMAP_FASE_3.md).
 
-## Como o jogo desenha hoje
-- **Nenhuma textura:** tudo é desenhado por código, com `Graphics`. Não há imagem carregada nem atlas.
-- **Soldado:** um contêiner com dois `Graphics`, que gira livremente para onde olha. É parte do que limita os batalhões grandes.
+## Como o jogo desenhava antes da pixel art
+- **Nenhuma textura:** tudo era desenhado por código, com `Graphics`. Não havia imagem carregada nem atlas.
+- **Soldado:** um contêiner com dois `Graphics`, que girava livremente para onde olhava. Era parte do que limitava os batalhões grandes.
 - **Chão:** pedaços de 1600×1600 px pintados por código a partir do bioma. O continente é gerado, então não dá para desenhar mapa à mão.
 - **Povoados:** a planta é gerada, e cada povoado é desenhado de uma vez, no chão, sem sprites separados.
 - **Câmera:** zoom livre de 25% a 125%, em passos de 10%, numa tela de 1280×720 esticada para caber.
 - **Interface:** React, separada do jogo. Pode mudar sem mexer no motor.
 
 ## O que a pixel art muda
-- **Bom:** sprites saem num atlas, desenhados em lote. Trocar `Graphics` por sprites deve ser o maior ganho para os batalhões grandes, e por isso as duas frentes viram uma só.
-- **Girar acaba:** pixel art não gira. O soldado passa a ter direções desenhadas.
-- **O zoom precisa de degraus:** com escala quebrada, os pixels tremem. Proposta: 25%, 50%, 100% e 200%.
+- **Bom:** sprites saem em folhas, desenhados em lote. Trocar `Graphics` por sprites foi o maior ganho para os batalhões grandes: com cerca de 1500 unidades, o desenho caiu de 20–35 ms para 0–12 ms por quadro.
+- **Girar acaba:** pixel art não gira. O soldado passou a ter direções desenhadas.
+- **O zoom precisa de degraus:** com escala quebrada, os pixels tremem. Feito no G1: 25%, 50%, 100% e 200%.
 - **Tela esticada:** em monitor 1080p a escala é 1,5×, que também treme. Precisa de um filtro de escala ou de uma tela interna maior.
 - **Quatro culturas multiplicam o trabalho:** por isso a arte precisa ser em camadas, com troca de cores.
 
@@ -36,12 +36,12 @@ Proposta para trocar o greybox por pixel art. Os números de tamanho e de frames
 | 24×32 | Personalidade | Pesa no zoom aberto e dobra o trabalho |
 | 32×48 | Personagens | Inviável com 100 soldados por batalhão |
 
-**Recomendação: 16×24 a pé e 24×24 a cavalo.** O tamanho combina com o corpo atual e com batalhões grandes.
+**Decidido: 16×24 a pé e cerca de 24×30 a cavalo.** O tamanho combina com o corpo do greybox e com batalhões grandes.
 
 Com três níveis de detalhe por zoom:
 - **100% ou mais:** sprite animado.
-- **50%:** mini-sprite de 8×12, com 2 quadros.
-- **25%:** estandarte e bloco na cor da tropa, que resolve o problema de os soldados virarem pontos.
+- **50%:** mini-sprite de 10×14, com 2 quadros.
+- **25%:** bloquinho na cor da tropa, que resolve o problema de os soldados virarem pontos. O estandarte visível de longe ainda falta.
 
 ### 3. De onde vem a arte
 | Origem | A favor | Contra |
@@ -51,7 +51,7 @@ Com três níveis de detalhe por zoom:
 | Gerada por IA e limpa à mão | Rápido para explorar | Grade de pixels irregular, estilo inconsistente, direitos a verificar |
 | Gerada por código | Sem custo, coerente, já funciona agora | Resultado simples: serve de base, não de arte final |
 
-**Recomendação: começar por código** para fechar motor e tamanho, e decidir a arte final com a prova na tela. Os arquivos têm o mesmo formato, então trocar a origem depois não muda o motor.
+**Decidido: gerada por código** (`src/game/art/`), em camadas. Se um artista ou um pacote vier depois, basta entregar folhas no mesmo formato: o motor não muda.
 
 ## Quanta arte é (estimativa)
 - **Corpos:** 8 bases (humano a pé, a cavalo, goblin, orc, esqueleto, lobo, carroça, aríete).
@@ -63,14 +63,15 @@ Com três níveis de detalhe por zoom:
 - **Outros:** 2 navios para o convés, interiores, retratos e ícones.
 
 **Chão:** autotile completo entre 11 biomas seria caro. Proposta: variações de ladrilho, transição pontilhada entre biomas, enfeites espalhados e autotile só na água. Tudo pintado nos pedaços que já existem.
+- **Feito no G2:** em vez de ladrilhos fixos, um filtro sobre o chão já pintado. Ele lê o material pela cor e espalha o desenho de cada material pela posição no mundo, sem repetir. A transição entre biomas sai do próprio filtro, serrilhada e pontilhada. Só de perto; de longe fica o chão de antes.
 
 **Fonte:** precisa ter acentos do português. Conferir antes de escolher.
 
 ## Etapas
-1. **G0, prova:** uma batalha na grama, com 2 tropas, em 16×24 e 24×32, nos três níveis de zoom. Decide perspectiva e tamanho vendo na tela. Sem isso não vale produzir mais nada.
-2. **G1, motor de sprites:** atlas, soldado como sprite, direções, animação pelo estado, ordem de profundidade e níveis de detalhe. Medir 1600 soldados. Daqui saem os batalhões grandes.
-3. **G2, chão:** biomas, rios, costa, estradas e estações.
-4. **G3, construções:** povoados, muralhas e acampamento como sprites, com as 4 culturas. É a etapa mais trabalhosa.
+1. **G0, prova ✅ OK:** uma batalha na grama, com 2 tropas, em 16×24 e 24×32, nos três níveis de zoom. Decide perspectiva e tamanho vendo na tela. Sem isso não vale produzir mais nada.
+2. **G1, motor de sprites ✅ OK:** atlas, soldado como sprite, direções, animação pelo estado, ordem de profundidade e níveis de detalhe. Medir 1600 soldados. Daqui saem os batalhões grandes.
+3. **G2, chão (em andamento):** biomas, rios, costa, estradas e estações. Feito o filtro de perto; faltam árvores e pedras como sprites, a margem da água e o chão de longe.
+4. **G3, construções ✅ OK:** povoados, muralhas, acampamento, locais de contrato e covis como sprites, com as 4 culturas.
 5. **G4, resto do elenco:** monstros, navios, convés, interiores e a Cidade Alta.
 6. **G5, interface:** fonte, molduras, ícones e retratos.
 7. **G6, atmosfera:** noite, clima e efeitos.

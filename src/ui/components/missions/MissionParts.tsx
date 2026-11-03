@@ -5,6 +5,7 @@ import { canDelegate, expectedLosses, expeditionDays, expeditionLine, expedition
 import { useGameStore, type BattalionData, type Expedition } from "../../../store/useGameStore";
 import { freightOf } from "../../../game/sim/trade";
 import { TROOPS } from "../../../utils/constants";
+import { captainName, temperOf, TEMPER_LABEL, type CaptainData } from "../../../game/data/captains";
 import type { Point } from "../../../utils/math";
 
 /** Onde o bando está agora (no acampamento, antes de o HUD publicar, é o próprio acampamento). */
@@ -55,44 +56,55 @@ function percent(v: number): string {
   return `${Math.round(v * 100)}%`;
 }
 
-/** Escolher quem vai cumprir o contrato no lugar do Comandante. */
+/** Escolher o capitão que leva a companhia dele para cumprir o contrato no lugar do Comandante. */
 export function ExpeditionPicker({ contract, onClose }: { contract: Contract; onClose: () => void }) {
   const battalions = useGameStore((s) => s.battalions);
   const lieutenants = useGameStore((s) => s.lieutenants);
+  const captains = useGameStore((s) => s.captains);
   const training = useGameStore((s) => s.training);
   const rations = useGameStore((s) => s.rations);
   const send = useGameStore((s) => s.sendExpedition);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const led = (b: BattalionData) => lieutenants.some((l) => l.battalionId === b.id);
   const busy = (b: BattalionData) => training.some((t) => t.battalionId === b.id);
-  const party = battalions.filter((b) => picked.includes(b.id));
+  const companyOf = (c: CaptainData) => battalions.filter((b) => c.battalionIds.includes(b.id) && !busy(b));
+  const captain = captains.find((c) => c.id === picked) ?? null;
+  const party = captain ? companyOf(captain) : [];
   const days = expeditionDays(contract);
   const food = expeditionRations(party, days);
   const own = partyStrength(party, led);
   const foe = foeStrength(contract);
-  const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  const tactics = captain?.tactics ?? 3;
+  const chance = successChance(own, foe, tactics);
 
   return (
     <div className="flex flex-col gap-2 rounded border border-sky-700 bg-sky-950/40 p-2 text-sm">
-      <h4 className="font-semibold text-sky-200">Quem vai?</h4>
+      <h4 className="font-semibold text-sky-200">Quem leva a companhia?</h4>
+      {captains.length === 0 && <p className="text-xs text-amber-200">Sem capitães no acampamento. Promova um tenente veterano na Tenda ou contrate um no Posto de Recrutamento.</p>}
       <div className="flex flex-col gap-1">
-        {battalions.map((b) => (
-          <label key={b.id} className={`flex items-center gap-2 text-xs ${busy(b) ? "text-neutral-500" : "text-neutral-200"}`}>
-            <input type="checkbox" disabled={busy(b)} checked={picked.includes(b.id)} onChange={() => toggle(b.id)} className="accent-sky-400" />
-            <b>{b.name}</b> {TROOPS[b.troopType].label} · {b.soldiers} soldados · nível {b.level}
-            {led(b) ? " · com tenente" : ""}
-            {busy(b) ? " · em treino" : ""}
-          </label>
-        ))}
+        {captains.map((c) => {
+          const company = companyOf(c);
+          return (
+            <label key={c.id} className={`flex items-start gap-2 text-xs ${company.length === 0 ? "text-neutral-500" : "text-neutral-200"}`}>
+              <input type="radio" name="captain" disabled={company.length === 0} checked={picked === c.id} onChange={() => setPicked(c.id)} className="mt-0.5 accent-sky-400" />
+              <span>
+                <b>{captainName(c)}</b> · tática {c.tactics} · {TEMPER_LABEL[temperOf(c)].split(":")[0]}
+                <span className="block text-neutral-400">
+                  {company.length > 0 ? company.map((b) => `${b.name} (${TROOPS[b.troopType].label}, ${b.soldiers}${led(b) ? ", com tenente" : ""})`).join(" · ") : "companhia vazia ou em treino"}
+                </span>
+              </span>
+            </label>
+          );
+        })}
       </div>
       {party.length > 0 && (
         <p className="text-xs text-neutral-200">
-          Chance de cumprir: <b className={successChance(own, foe) >= 0.6 ? "text-emerald-300" : "text-red-300"}>{percent(successChance(own, foe))}</b> · baixas: cerca de {percent(expectedLosses(own, foe, true))} se der certo, {percent(expectedLosses(own, foe, false))} se der errado · fora por {days} dia(s) ·{" "}
+          Chance de cumprir: <b className={chance >= 0.6 ? "text-emerald-300" : "text-red-300"}>{percent(chance)}</b> · baixas: cerca de {percent(expectedLosses(own, foe, true, tactics))} se der certo, {percent(expectedLosses(own, foe, false, tactics))} se der errado · fora por {days} dia(s) ·{" "}
           <span className={food > rations ? "text-red-300" : ""}>{food} rações</span>
         </p>
       )}
-      <p className="text-xs text-neutral-400">Longe do Comandante eles lutam sozinhos: você não comanda essa luta, só fica sabendo no que deu.</p>
+      <p className="text-xs text-neutral-400">Longe do Comandante, o capitão decide sozinho: você só fica sabendo no que deu, pelo relatório dele.</p>
       {problem && <p className="text-xs text-red-300">{problem}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded border border-neutral-600 px-2 py-1 text-xs hover:border-neutral-400">
@@ -102,13 +114,13 @@ export function ExpeditionPicker({ contract, onClose }: { contract: Contract; on
           type="button"
           disabled={party.length === 0}
           onClick={() => {
-            const why = send(contract.id, picked);
+            const why = picked ? send(contract.id, picked) : "Escolha um capitão.";
             if (why) setProblem(why);
             else onClose();
           }}
           className="rounded border border-sky-400 bg-sky-700 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Enviar tropas
+          Enviar a companhia
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { RANSOM_OF, nobleName, remember } from "../game/sim/nobility";
 import type { RealmState } from "../game/sim/realm";
 import type { GameState } from "./useGameStore";
 import { newId } from "../utils/id";
+import { takeFieldFood } from "../game/sim/logistics";
 
 /**
  * Prisioneiros e o preço da vitória (Marco 16): quem se rende, oficiais capturados e o Comandante
@@ -250,7 +251,9 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
           return { ...g, count: n };
         })
         .filter((g) => g.count > 0);
-      set({ captives, cargo: away ? Math.max(0, s.cargo - eat) : s.cargo, rations: away ? s.rations : Math.max(0, s.rations - eat) });
+      // Em campo, os presos comem da comida que marcha com o exército (bolsa, carroças, mochilas)
+      const fed = away ? takeFieldFood(s.battalions, s.cargo, eat) : null;
+      set({ captives, cargo: fed ? fed.cargo : s.cargo, battalions: fed ? fed.battalions : s.battalions, rations: away ? s.rations : Math.max(0, s.rations - eat) });
     },
 
     lordDown: (armyId) => {

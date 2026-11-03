@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fullName } from "../../../game/data/lieutenants";
+import { captainName } from "../../../game/data/captains";
 import { AMBITIONS, AMBITION_IDS, AMBITION_SLOTS } from "../../../game/sim/ambitions";
 import { LEADER_TRAITS, fallDeathChance, leaderAge } from "../../../game/sim/legacy";
 import { useGameStore } from "../../../store/useGameStore";
@@ -14,6 +15,7 @@ export function SagaPanel() {
   const day = useGameStore((s) => s.day);
   const former = useGameStore((s) => s.formerLeaders);
   const lieutenants = useGameStore((s) => s.lieutenants);
+  const captains = useGameStore((s) => s.captains);
   const heirId = useGameStore((s) => s.heirId);
   const ambitions = useGameStore((s) => s.ambitions);
   const done = useGameStore((s) => s.ambitionsDone);
@@ -43,14 +45,14 @@ export function SagaPanel() {
 
       <section className="flex flex-col gap-2">
         <h3 className={sectionTitle}>Testamento</h3>
-        {lieutenants.length === 0 ? (
-          <p className="text-xs text-neutral-400">Sem tenentes: se o Comandante cair, a tropa escolhe um veterano.</p>
+        {lieutenants.length + captains.length === 0 ? (
+          <p className="text-xs text-neutral-400">Sem capitães nem tenentes: se o Comandante cair, a tropa escolhe um veterano.</p>
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
-            {lieutenants.map((l) => (
+            {[...captains.map((c) => ({ id: c.id, name: `Capitão ${captainName(c)}`, loyalty: c.loyalty })), ...lieutenants.map((l) => ({ id: l.id, name: fullName(l), loyalty: l.loyalty }))].map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-2 rounded bg-neutral-800 px-2 py-1">
                 <span>
-                  {fullName(l)} <span className="text-xs text-neutral-400">· lealdade {Math.round(l.loyalty)}</span>
+                  {l.name} <span className="text-xs text-neutral-400">· lealdade {Math.round(l.loyalty)}</span>
                 </span>
                 <button type="button" onClick={() => setHeir(l.id === heirId ? null : l.id)} className={`rounded border px-2 py-0.5 text-xs ${l.id === heirId ? "border-amber-400 text-amber-200" : "border-neutral-600 text-neutral-200"}`}>
                   {l.id === heirId ? "Herdeiro" : "Nomear"}
@@ -59,7 +61,7 @@ export function SagaPanel() {
             ))}
           </ul>
         )}
-        <p className="text-xs text-neutral-400">Sem testamento, herda o tenente mais leal.</p>
+        <p className="text-xs text-neutral-400">Sem testamento, herda o capitão ou tenente mais leal.</p>
       </section>
 
       <section className="flex flex-col gap-2">

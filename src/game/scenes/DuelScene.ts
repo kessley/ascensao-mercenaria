@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { tournamentRival } from "../data/courtTalk";
 import { useGameStore } from "../../store/useGameStore";
-import { COLORS } from "../../utils/constants";
+import { COLORS, GAME_HEIGHT, GAME_WIDTH } from "../../utils/constants";
 import { angleTo, distance } from "../../utils/math";
 
 type Stance = "IDLE" | "WINDUP" | "RECOVER" | "BLOCK" | "STAGGER";
@@ -62,7 +62,8 @@ export class DuelScene extends Phaser.Scene {
     this.think = 1;
     this.skill = duel.skill;
     this.aggressive = duel.aggressive;
-    this.cameras.main.setBackgroundColor(0x2a2418).fadeIn(220, 0, 0, 0);
+    // O quadro da arena (1280×720) fica no meio de qualquer tamanho de tela
+    this.cameras.main.setBackgroundColor(0x2a2418).centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2).fadeIn(220, 0, 0, 0);
     const g = this.add.graphics();
     g.fillStyle(0xd8c070, 1);
     g.fillCircle(CX, CY, ARENA_R);

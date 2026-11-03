@@ -4,6 +4,7 @@ import { SICKNESS_LABEL } from "../../../game/sim/logistics";
 import { COMBAT, FATIGUE, FORMATIONS, TERRAIN, TROOPS, type Formation } from "../../../utils/constants";
 import { troopFacts } from "../../../game/data/troopFacts";
 import { CommandIcon, FormationIcon, TroopIcon, type CommandIconId } from "./BattleIcons";
+import { useFieldFood } from "../SupplyPanel";
 
 const STATUS_LABEL: Record<BattalionStatus, string> = {
   READY: "Em posição",
@@ -183,6 +184,10 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
   const send = useGameStore((s) => s.sendBattleCommand);
   const scenario = useGameStore((s) => s.scenario !== null);
   const [help, setHelp] = useState(false);
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  const food = useFieldFood();
+  // Rações refeitas: o 🛒 só conta as carroças que andam com o exército
+  const wagonsHere = useGameStore((s) => s.train === "ARMY" || s.campPacked);
   if (!hud) return null;
 
   const standing = hud.battalions.filter((b) => b.status !== "DESTROYED");
@@ -271,9 +276,17 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
             </Group>
           )}
           {!scenario && (
-            <Group title={`Marcha · 🛒 ${hud.wagonsAlive}`}>
+            <Group title={wagonsHere && hud.wagonsAlive > 0 ? `Marcha · 🛒 ${hud.wagonsAlive}` : "Marcha"}>
               <Command icon={<CommandIcon id="FORCED" />} label="Marcha forçada" hint="O dia rende mais caminho e a tropa anda mais depressa, mas cansa muito mais" keyName="V" active={hud.forced} onClick={() => send({ type: "FORCED_MARCH", ids: [] })} />
               <Command icon={<CommandIcon id="FORAGE" />} label="Forragear" hint={hud.forageBlocked ?? "Um quarto de dia coletando comida da região"} keyName="G" disabled={!!hud.forageBlocked} onClick={() => send({ type: "FORAGE", ids: [] })} />
+              <Command
+                icon={<CommandIcon id="WAGON" />}
+                label="Suprimentos"
+                hint={`${food.days.toFixed(1)} dia(s) de comida nas mochilas. Mandar um comboio do acampamento ou devolver as carroças`}
+                badge={String(Math.floor(food.days))}
+                tone={food.days <= 1.5 ? "border-red-600 text-red-200 hover:border-red-400" : undefined}
+                onClick={() => setCampPanel({ kind: "SUPPLY" })}
+              />
             </Group>
           )}
           <Group title="Tempo">

@@ -1,10 +1,13 @@
 import Phaser from "phaser";
-import { BALANCE, COLORS, COMBAT, GEO, SIEGE, TERRAIN, TIME, WEATHER, type AttackKind, type TerrainType, type UnitStats, type Weather } from "../../utils/constants";
+import { BALANCE, COMBAT, GEO, SIEGE, TERRAIN, TIME, WEATHER, type AttackKind, type TerrainType, type UnitStats, type Weather } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/combatRules";
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
+import { LOD_SCALE, skinOf, type Lod, type Skin } from "../art/atlas";
+import { ANIM, FRAMES, type Look } from "../art/figures";
+import type { Corpses } from "../art/corpses";
 
 export type Team = "ALLY" | "ENEMY";
 /** Quem passa pelos portões: todos (inimigos, gente do mundo), tropa do bando ou gente avulsa do bando. */
@@ -14,8 +17,10 @@ export type UnitState = "IDLE" | "MOVING" | "ATTACKING" | "FLEEING" | "DEAD";
 export type UnitRole = "TROOP" | "HERO" | "SCOUT" | "COURIER" | "WAGON";
 
 /**
- * Base de toda unidade em campo. Desenhada só com primitivas:
- * `bodyGfx` (forma, gira com `facing`) e `barsGfx` (barra de HP, não gira).
+ * Base de toda unidade em campo. Quem veste uma figura (`wear`) aparece em pixel art, com
+ * direção e animação; quem não veste segue em greybox: `bodyGfx` (forma, gira com `facing`).
+ * Com figura, o `bodyGfx` só leva as marcas no chão. Sem barra de vida em cima de ninguém: a
+ * vida aparece na interface.
  *
  * Subclasses devem chamar `this.drawBody()` ao fim do próprio construtor
  * (depois de inicializar os campos que o desenho usa).
@@ -44,6 +49,25 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   static pace = 1;
   /** Flecha caiu sobre gente do próprio lado (a cena conta e avisa). */
   static onFriendlyFire: ((victim: Unit, shooter: Unit) => void) | null = null;
+  /** Nível de detalhe das figuras (a cena troca junto com o zoom). */
+  static lod: Lod = "FULL";
+  /** Onde os mortos ficam caídos (a cena do mundo liga; sem ela, quem morre some). */
+  static corpses: Corpses | null = null;
+  /** Todas as unidades em cena: a animação passa por elas uma vez por quadro. */
+  private static readonly live = new Set<Unit>();
+
+  /** Troca o nível de detalhe de todas as figuras de uma vez. */
+  static setLod(lod: Lod): void {
+    if (Unit.lod === lod) return;
+    Unit.lod = lod;
+    for (const u of Unit.live) u.applyLod();
+    Unit.corpses?.setLod(lod);
+  }
+
+  /** Um passo da animação de todas as figuras; quem está fora da tela só atualiza a profundidade. */
+  static animateAll(now: number, view: Phaser.Geom.Rectangle): void {
+    for (const u of Unit.live) u.animate(now, view);
+  }
 
   readonly team: Team;
   readonly radius: number;
@@ -61,6 +85,11 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   facing = 0;
   /** false = só ataca por comando explícito (ex.: Comandante). */
   autoAttack = true;
+  /** Abalos que esta unidade causa, além dos normais (habilidades do batalhão). */
+  arrowShock = 1;
+  chargeShock = 1;
+  meleeShock = 0;
+  breakThrough = 1;
   /** No alto da muralha: alcança mais, bate mais forte, apanha menos de flecha. */
   onWall = false;
   /** Perícia, defesa, armadura e escudo (ver `UnitStats`). */
@@ -128,7 +157,22 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   private pose: "STAND" | "SIT" | "SLEEP" = "STAND";
 
   protected readonly bodyGfx: Phaser.GameObjects.Graphics;
-  protected readonly barsGfx: Phaser.GameObjects.Graphics;
+  /** Figura em pixel art (null = greybox). */
+  protected sprite: Phaser.GameObjects.Image | null = null;
+  private skin: Skin | null = null;
+  private shownLod: Lod | null = null;
+  private shownFrame = -1;
+  /** 0 = de frente, 1 = de lado (espelhado para a esquerda), 2 = de costas. */
+  private dirRow = 0;
+  private flipped = false;
+  /** Chão percorrido: o passo da animação acompanha o andar, sem patinar. */
+  private walked = 0;
+  private lastX = NaN;
+  private lastY = NaN;
+  private lastMoveAt = -Infinity;
+  private diedAt = NaN;
+  /** Cada um respira num tempo, para a tropa parada não piscar junta. */
+  private readonly phase = Math.random() * 1200;
 
   constructor(scene: Phaser.Scene, x: number, y: number, team: Team, stats: UnitStats) {
     super(scene, x, y);
@@ -163,15 +207,99 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.canCharge = this.mounted && !this.ranged;
 
     this.bodyGfx = scene.add.graphics();
-    this.barsGfx = scene.add.graphics();
-    this.add([this.bodyGfx, this.barsGfx]);
+    this.add(this.bodyGfx);
     scene.add.existing(this);
-
-    this.redrawBars();
+    Unit.live.add(this);
+    this.once(Phaser.GameObjects.Events.DESTROY, () => Unit.live.delete(this));
   }
 
   /** Desenha a forma da unidade em `bodyGfx`, centrada em (0,0) e olhando para +X. */
   protected abstract drawBody(): void;
+
+  /** Veste a figura em pixel art (null = fica em greybox). */
+  protected wear(look: Look | null): void {
+    this.sprite?.destroy();
+    this.sprite = null;
+    this.skin = null;
+    if (!look) return;
+    this.skin = skinOf(this.scene, look);
+    this.sprite = new Phaser.GameObjects.Image(this.scene, 0, this.feetY, this.skin.full, 0);
+    this.addAt(this.sprite, this.getIndex(this.bodyGfx) + 1);
+    this.bodyGfx.rotation = 0;
+    this.shownLod = null;
+    this.setFacing(this.facing);
+    this.applyLod();
+  }
+
+  /** Veste uma figura em pixel art (false = greybox). */
+  get hasFigure(): boolean {
+    return this.sprite !== null;
+  }
+
+  /** Os pés da figura, abaixo do centro do círculo de colisão (o corpo sobe a partir dali). */
+  get feetY(): number {
+    return Math.round(this.radius * 0.5);
+  }
+
+  /** Topo da figura (ou do círculo, em greybox), em relação ao centro: nomes e avisos ficam em cima. */
+  get headY(): number {
+    const s = this.skin;
+    if (!s) return -this.radius;
+    const lod = Unit.lod;
+    return this.feetY - (lod === "FULL" ? s.height : (lod === "MINI" ? s.mini2.h : s.dot2.h) * LOD_SCALE[lod]);
+  }
+
+  private applyLod(): void {
+    const s = this.skin;
+    const img = this.sprite;
+    if (!s || !img || this.shownLod === Unit.lod) return;
+    const lod = (this.shownLod = Unit.lod);
+    if (lod === "FULL") img.setTexture(s.full, 0).setOrigin(s.cell.feetX / s.cell.w, s.cell.feetY / s.cell.h);
+    else if (lod === "MINI") img.setTexture(s.mini, 0).setOrigin(0.5, (s.mini2.h - 1) / s.mini2.h);
+    else img.setTexture(s.dot, 0).setOrigin(0.5, 1);
+    img.setScale(LOD_SCALE[lod] * (this.pose === "SIT" ? 0.85 : 1));
+    this.shownFrame = -1;
+  }
+
+  /** Quadro da figura: parada, andando (pelo chão percorrido), atacando ou caindo; e a ordem de desenho pela altura na tela. */
+  private animate(now: number, view: Phaser.Geom.Rectangle): void {
+    const img = this.sprite;
+    const s = this.skin;
+    if (!img || !s) return;
+    const moved = Number.isNaN(this.lastX) ? 0 : Math.hypot(this.x - this.lastX, this.y - this.lastY);
+    this.lastX = this.x;
+    this.lastY = this.y;
+    if (moved > 0.25) {
+      this.walked += moved;
+      this.lastMoveAt = now;
+    }
+    // Quem está mais embaixo na tela passa na frente
+    this.setDepth(this.y * 1e-6);
+    if (this.x < view.x - 64 || this.x > view.right + 64 || this.y < view.y - 64 || this.y > view.bottom + 96) return;
+    const walking = now - this.lastMoveAt < 140;
+    let frame: number;
+    if (Unit.lod === "FULL") {
+      let col: number;
+      if (!this.isAlive) {
+        // O relógio da animação é o da cena (o mesmo do último golpe): a queda conta dele
+        if (Number.isNaN(this.diedAt)) this.diedAt = now;
+        col = ANIM.DIE + Math.min(2, Math.floor((now - this.diedAt) / 110));
+      }
+      else if (this.pose === "SLEEP") col = ANIM.DIE + 2;
+      else if (now - this.lastAttackAt < 330) col = ANIM.ATTACK + Math.min(2, Math.floor((now - this.lastAttackAt) / 110));
+      else if (walking) col = ANIM.WALK + (Math.floor(this.walked / (s.rides ? 18 : 11)) % 4);
+      else col = ANIM.IDLE + (Math.floor((now + this.phase) / 650) % 2);
+      frame = this.dirRow * FRAMES + col;
+      img.setFlipX(this.dirRow === 1 && this.flipped);
+    } else {
+      frame = Unit.lod === "MINI" && walking && this.isAlive ? Math.floor(this.walked / 14) % 2 : 0;
+      img.setFlipX(Unit.lod === "MINI" && Math.cos(this.facing) < 0);
+    }
+    if (frame !== this.shownFrame) {
+      img.setFrame(frame);
+      this.shownFrame = frame;
+    }
+  }
 
   get isAlive(): boolean {
     return this.unitState !== "DEAD";
@@ -280,7 +408,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
 
   /** Bateu e segue em frente com o embalo. */
   rideThrough(angle: number, time: number): void {
-    this.through = { angle, until: time + COMBAT.CHARGE_THROUGH_MS };
+    this.through = { angle, until: time + COMBAT.CHARGE_THROUGH_MS * this.breakThrough };
     this.noteCharge(time);
   }
 
@@ -356,7 +484,18 @@ export abstract class Unit extends Phaser.GameObjects.Container {
 
   setFacing(angle: number): void {
     this.facing = angle;
-    this.bodyGfx.rotation = angle;
+    if (!this.sprite) {
+      this.bodyGfx.rotation = angle;
+      return;
+    }
+    // Pixel art não gira: escolhe a direção desenhada. De lado vale até ~35° da horizontal,
+    // com folga para não ficar trocando de linha quando anda na diagonal.
+    const across = Math.abs(Math.cos(angle));
+    const along = Math.abs(Math.sin(angle));
+    if (across >= along * (this.dirRow === 1 ? 0.85 : 1.4)) {
+      this.dirRow = 1;
+      this.flipped = Math.cos(angle) < 0;
+    } else this.dirRow = Math.sin(angle) > 0 ? 0 : 2;
   }
 
   /**
@@ -464,10 +603,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       // Revida quem bateu se não estiver ocupado com outro alvo
       if (source.isAlive && (!this.target || !this.target.isAlive)) this.target = source;
     }
-    if (kind === "RANGED") this.shock(COMBAT.ARROW_SHOCK);
+    if (kind === "RANGED") this.shock(COMBAT.ARROW_SHOCK * source.arrowShock);
 
-    this.redrawBars();
-    this.scene.tweens.add({ targets: this.bodyGfx, alpha: 0.35, duration: 60, yoyo: true });
+    this.flashHit();
 
     if (this.hp <= 0) {
       if (!friendly) source.onKill();
@@ -479,21 +617,43 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   setPose(pose: "STAND" | "SIT" | "SLEEP"): void {
     if (this.pose === pose) return;
     this.pose = pose;
+    if (this.sprite) {
+      // Dormindo, a figura deita (o quadro sai da animação); sentada, fica mais baixa
+      this.shownLod = null;
+      this.applyLod();
+      return;
+    }
     this.bodyGfx.setScale(pose === "STAND" ? 1 : pose === "SIT" ? 0.8 : 0.7);
     this.bodyGfx.setAlpha(pose === "SLEEP" ? 0.4 : 1);
-    this.barsGfx.setVisible(pose === "STAND");
+  }
+
+  /** Golpe recebido: a figura pisca branca (o greybox, transparente). */
+  private flashHit(): void {
+    const img = this.sprite;
+    if (!img) {
+      this.scene.tweens.add({ targets: this.bodyGfx, alpha: 0.35, duration: 60, yoyo: true });
+      return;
+    }
+    img.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(70, () => {
+      if (img.active) this.restoreTint();
+    });
+  }
+
+  /** Cor de volta ao normal depois do brilho do golpe (subclasses tingem o pânico e o motim). */
+  protected restoreTint(): void {
+    this.sprite?.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
   }
 
   /** Vida vinda de dados (bando que volta à bolha, jogo carregado). */
   restoreHp(hp: number): void {
     this.hp = Math.max(1, Math.min(this.maxHp, hp));
-    this.redrawBars();
   }
 
   /** Texto curto que sobe e some acima da unidade (ex.: "esquiva"). */
   floatText(text: string, color: string): void {
     const t = this.scene.add
-      .text(this.x, this.y - this.radius - 14, text, {
+      .text(this.x, this.y + (this.sprite ? this.headY - 12 : -this.radius - 14), text, {
         fontFamily: "monospace",
         fontSize: "11px",
         color,
@@ -509,12 +669,17 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   playAttack(target: Unit): void {
     const a = Math.atan2(target.y - this.y, target.x - this.x);
     this.setFacing(a);
+    // A figura já tem o golpe desenhado: só um passo curto para a frente
+    const body = this.sprite ?? this.bodyGfx;
+    const reach = this.sprite ? 2 : 5;
+    const home = { x: 0, y: this.sprite ? this.feetY : 0 };
     this.scene.tweens.add({
-      targets: this.bodyGfx,
-      x: Math.cos(a) * 5,
-      y: Math.sin(a) * 5,
+      targets: body,
+      x: home.x + Math.round(Math.cos(a) * reach),
+      y: home.y + Math.round(Math.sin(a) * reach),
       duration: 70,
       yoyo: true,
+      onStop: () => body.setPosition(home.x, home.y),
     });
   }
 
@@ -522,24 +687,44 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     sfx.death(this);
     this.unitState = "DEAD";
     this.target = null;
-    this.scene.tweens.killTweensOf(this.bodyGfx);
+    const body = this.sprite ?? this.bodyGfx;
+    this.scene.tweens.killTweensOf(body);
+    if (this.sprite) {
+      this.sprite.setPosition(0, this.feetY);
+      this.restoreTint();
+      this.lastAttackAt = -Infinity;
+      const corpses = Unit.corpses;
+      if (corpses && corpses.scene === this.scene) {
+        // Cai (3 quadros) e fica no chão
+        this.scene.time.delayedCall(400, () => {
+          if (!this.active) return;
+          corpses.add(this.corpse());
+          this.destroy();
+        });
+        return;
+      }
+    }
+    // Com figura, ela cai antes de sumir
     this.scene.tweens.add({
       targets: this,
       alpha: 0,
+      delay: this.sprite ? 400 : 0,
       duration: 350,
       onComplete: () => this.destroy(),
     });
   }
 
-  protected redrawBars(): void {
-    const g = this.barsGfx;
-    g.clear();
-    if (!this.isAlive) return;
-    const w = this.radius * 2 + 6;
-    const y = -this.radius - 8;
-    g.fillStyle(COLORS.HP_BG, 0.85);
-    g.fillRect(-w / 2, y, w, 3);
-    g.fillStyle(COLORS.HP, 1);
-    g.fillRect(-w / 2, y, w * (this.hp / this.maxHp), 3);
+  /** O último quadro da queda, no mesmo lugar e virado para o mesmo lado. */
+  private corpse() {
+    const s = this.skin as Skin;
+    return {
+      texture: s.full,
+      frame: this.dirRow * FRAMES + ANIM.DIE + 2,
+      x: this.x,
+      y: this.y + this.feetY,
+      originX: s.cell.feetX / s.cell.w,
+      originY: s.cell.feetY / s.cell.h,
+      flip: this.dirRow === 1 && this.flipped,
+    };
   }
 }

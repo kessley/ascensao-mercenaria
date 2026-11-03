@@ -238,7 +238,7 @@ function campSite(key: string, s: GameState, kind: string): InteriorDef | null {
           text:
             days <= 2
               ? `Comandante, o depósito está no fim: ${s.rations} rações, comida para ${days} dia(s). Ou compramos, ou a tropa vai passar fome.`
-              : `Temos ${s.rations} rações no depósito — ${days} dias de comida para o bando inteiro. ${s.cargo > 0 ? `As carroças levam mais ${s.cargo}.` : ""}`,
+              : `Temos ${s.rations} rações no depósito — ${days} dias de comida para o bando inteiro. ${s.train === "ARMY" && s.cargo > 0 ? `As carroças levam mais ${s.cargo}.` : "Cada batalhão sai com a mochila cheia; as carroças ficam aqui, prontas para um comboio."}`,
           options: [{ id: panelAction({ kind: "QUARTERMASTER" }), label: "Rações, carroças e mercadorias" }, bye],
         },
       });
