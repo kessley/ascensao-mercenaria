@@ -35,7 +35,7 @@ export const PLAN_COMPETENCE: Record<PlanKind, number> = {
 
 /** Quem o bando viu e onde (nunca a posição de agora, se ninguém está olhando). */
 export interface ContactView extends Point {
-  kind: "HERO" | "TROOP" | "ARCHER" | "RIDER" | "WAGON" | "COURIER" | "SCOUT";
+  kind: "HERO" | "TROOP" | "SPEAR" | "ARCHER" | "RIDER" | "WAGON" | "COURIER" | "SCOUT";
   power: number;
 }
 
@@ -65,6 +65,8 @@ export interface BattleView {
   engaged: boolean;
   /** Foi visto de perto (emboscada não faz mais sentido). */
   exposed: boolean;
+  /** Batalha campal: os dois lados vieram lutar, e ninguém sai sem ter lutado. */
+  pitched?: boolean;
   /** Terreno bom por perto. */
   cover: { forest: Point | null; hill: Point | null };
 }
@@ -85,8 +87,28 @@ export function foeCenter(contacts: readonly ContactView[]): Point | null {
 export function exposedHero(contacts: readonly ContactView[], radius: number): ContactView | null {
   const hero = contacts.find((c) => c.kind === "HERO");
   if (!hero) return null;
-  const guards = contacts.filter((c) => (c.kind === "TROOP" || c.kind === "ARCHER" || c.kind === "RIDER") && Math.hypot(c.x - hero.x, c.y - hero.y) < radius);
+  const guards = contacts.filter((c) => (c.kind === "TROOP" || c.kind === "SPEAR" || c.kind === "ARCHER" || c.kind === "RIDER") && Math.hypot(c.x - hero.x, c.y - hero.y) < radius);
   return guards.length === 0 ? hero : null;
+}
+
+/**
+ * Em quem a cavalaria bate: arqueiros e carroças primeiro, depois quem está longe de lança. Quem
+ * tem cabeça não joga cavalo em lança firme enquanto houver outra coisa em que bater.
+ */
+export function choosePrey<T extends ContactView>(contacts: readonly T[], from: Point, competence: number): T | null {
+  const value: Partial<Record<ContactView["kind"], number>> = { ARCHER: 300, WAGON: 200, HERO: 160, TROOP: 100, RIDER: 60, SPEAR: competence >= 2 ? -400 : 100 };
+  let best: T | null = null;
+  let bestScore = -Infinity;
+  for (const c of contacts) {
+    const worth = value[c.kind];
+    if (worth === undefined) continue;
+    const score = worth - Math.hypot(c.x - from.x, c.y - from.y) / 4;
+    if (score > bestScore) {
+      best = c;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 /** Coragem do comandante: abaixo desta razão de forças, ele não fica para ver no que dá. */
@@ -95,6 +117,12 @@ function nerve(traits: readonly NobleTrait[]): number {
   if (traits.includes("CRUEL")) return 0.4;
   if (traits.includes("COWARD")) return 0.85;
   return 0.55;
+}
+
+/** Fração da tropa que precisa cair para quem já está na luta aceitar largá-la. */
+function bloodPrice(traits: readonly NobleTrait[]): number {
+  if (traits.includes("BRAVE") || traits.includes("CRUEL")) return 0.5;
+  return traits.includes("COWARD") ? 0.3 : 0.45;
 }
 
 /**
@@ -113,11 +141,14 @@ export function choosePlan(v: BattleView, exposedRadius: number, random: () => n
 
   add("ASSAULT", 30 + (Math.min(ratio, 2) - 1) * 20 + (has("BRAVE") || has("CRUEL") ? 12 : 0) + (has("COWARD") ? -15 : 0));
 
-  // Em menor número, sai enquanto dá. Moral no chão ou muita baixa só contam se o outro lado
-  // ainda estiver mais forte: quem também está em pedaços pode perder o campo por um fio
-  if (ratio < nerve(v.traits)) add("RETREAT", 80 + (nerve(v.traits) - ratio) * 40);
+  // Em menor número, sai enquanto dá: antes de a luta começar (numa batalha campal, nem isso) ou
+  // depois de apanhar de verdade. Ver que o outro é maior não basta para largar uma luta já aberta.
+  // Moral no chão ou muita baixa só contam se o outro lado ainda estiver mais forte: quem também
+  // está em pedaços pode perder o campo por um fio
+  const mayLeave = 1 - v.strength >= bloodPrice(v.traits) || (!v.exposed && !v.pitched);
+  if (mayLeave && ratio < nerve(v.traits)) add("RETREAT", 80 + (nerve(v.traits) - ratio) * 40);
   else if ((v.ownMorale < 30 || v.strength < 0.45) && ratio < 1) add("RETREAT", 70);
-  else if (ratio < 0.8) add("RETREAT", 10);
+  else if (mayLeave && ratio < 0.8) add("RETREAT", 10);
 
   // Duas frentes: precisa de gente para dividir
   if (melee.length >= 2 && ratio >= 0.7) add("FLANK", 42 + (has("CUNNING") ? 14 : 0) + (has("SCHOLAR") ? 8 : 0));
@@ -133,7 +164,8 @@ export function choosePlan(v: BattleView, exposedRadius: number, random: () => n
 
   // Carroças e arqueiros à vista: gente de honra não faz isso
   const soft = foes.filter((c) => c.kind === "WAGON" || c.kind === "ARCHER");
-  if (soft.length > 0 && melee.length >= 2) add("REAR_STRIKE", 36 + Math.min(16, soft.length * 3) + (has("GREEDY") ? 22 : 0) + (has("HONORABLE") ? -24 : 0));
+  const riders = v.squads.some((s) => s.role === "RIDERS");
+  if (soft.length > 0 && melee.length >= 2) add("REAR_STRIKE", 36 + Math.min(16, soft.length * 3) + (riders ? 14 : 0) + (has("GREEDY") ? 22 : 0) + (has("HONORABLE") ? -24 : 0));
 
   // Puxar a tropa para os arqueiros: exige gente e cabeça
   if (v.engaged && v.squads.length >= 2 && v.squads.some((s) => s.role === "RANGED") && ratio >= 0.7) add("FEINT", 40 + (has("CUNNING") ? 22 : 0) + (has("HONORABLE") ? -12 : 0));

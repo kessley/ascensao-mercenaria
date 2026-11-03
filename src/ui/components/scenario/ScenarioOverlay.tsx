@@ -1,12 +1,47 @@
-import { SCENARIO_OBJECTIVES } from "../../../game/data/scenarios";
+import { SCENARIO_OBJECTIVES, SIEGE_TOWNS } from "../../../game/data/scenarios";
 import { useGameStore } from "../../../store/useGameStore";
-import { TROOPS } from "../../../utils/constants";
+import { SIEGE, TROOPS } from "../../../utils/constants";
 import { Button } from "../Button";
 
 const clock = (seconds: number) => {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
+
+/** Estado dos muros e, para quem ataca, as escadas e o aríete. */
+function SiegeBar() {
+  const siege = useGameStore((s) => s.scenario?.siege);
+  const hud = useGameStore((s) => s.scenarioHud?.siege);
+  const ladders = useGameStore((s) => s.siege?.ladders ?? 0);
+  const rams = useGameStore((s) => s.siege?.ram ?? 0);
+  const send = useGameStore((s) => s.sendBattleCommand);
+  if (!siege || !hud) return null;
+  const button = "pointer-events-auto rounded border border-amber-700 px-2 py-0.5 hover:border-amber-300 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500";
+  return (
+    <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded bg-black/70 px-3 py-1.5 text-xs text-amber-100">
+      <span className="capitalize-first">
+        {SIEGE_TOWNS[siege.town].label}: portões {hud.gatesUp}/{hud.gates}
+        {hud.gatesUp > 0 && hud.weakest < 1 ? ` (o mais batido a ${Math.round(hud.weakest * 100)}%)` : ""} · escadas nos muros {hud.ladders}
+      </span>
+      {siege.role === "ATTACK" && (
+        <span className="flex gap-1">
+          <button
+            type="button"
+            className={button}
+            disabled={ladders === 0 || !hud.atWall}
+            title={hud.atWall ? "A tropa escolhida ergue a escada na muralha mais perto" : `Leve uma tropa a até ${SIEGE.LADDER_REACH} passos da muralha`}
+            onClick={() => send({ type: "SIEGE", ids: [], action: "PLANT_LADDER" })}
+          >
+            Erguer escada ({ladders})
+          </button>
+          <button type="button" className={button} disabled={rams === 0 || hud.ramOut} title="O aríete sai de perto da tropa escolhida para o portão mais próximo" onClick={() => send({ type: "SIEGE", ids: [], action: "SEND_RAM" })}>
+            Mandar aríete ({rams})
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
 
 /** Objetivo, tempo e quantos inimigos restam, no alto do HUD. */
 export function ScenarioBanner() {
@@ -15,14 +50,17 @@ export function ScenarioBanner() {
   if (!scenario) return null;
   const left = scenario.surviveMinutes * 60 - (hud?.seconds ?? 0);
   return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-x-3 rounded bg-black/70 px-3 py-1.5 text-xs text-neutral-200">
-      <b className="text-amber-200">{SCENARIO_OBJECTIVES[scenario.objective].label}</b>
-      <span className="font-mono">{scenario.objective === "SURVIVE" ? `faltam ${clock(left)}` : clock(hud?.seconds ?? 0)}</span>
-      <span>
-        Inimigos: <b className="text-red-300">{hud?.enemies ?? 0}</b>
-        {hud?.waiting ? " · mais a caminho" : ""}
-      </span>
-    </div>
+    <>
+      <div className="flex w-full flex-wrap items-center justify-between gap-x-3 rounded bg-black/70 px-3 py-1.5 text-xs text-neutral-200">
+        <b className="text-amber-200">{SCENARIO_OBJECTIVES[scenario.objective].label}</b>
+        <span className="font-mono">{scenario.objective === "SURVIVE" ? `faltam ${clock(left)}` : clock(hud?.seconds ?? 0)}</span>
+        <span>
+          Inimigos: <b className="text-red-300">{hud?.enemies ?? 0}</b>
+          {hud?.waiting ? " · mais a caminho" : ""}
+        </span>
+      </div>
+      <SiegeBar />
+    </>
   );
 }
 
@@ -42,6 +80,7 @@ export function ScenarioOverlay() {
   const setPaused = useGameStore((s) => s.setScenarioPaused);
   const startScenario = useGameStore((s) => s.startScenario);
   const leave = useGameStore((s) => s.leaveScenario);
+  const endBoarding = useGameStore((s) => s.endBoarding);
   if (!scenario || (!paused && !result)) return null;
 
   if (result) {
@@ -93,17 +132,24 @@ export function ScenarioOverlay() {
           </tbody>
         </table>
         {result.officers.length > 0 && <p className="text-xs text-neutral-400">Oficiais inimigos abatidos: {result.officers.join(", ")}.</p>}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="quiet" onClick={() => leave(null)}>
-            Menu
+        {result.friendlyFire > 0 && <p className="text-xs text-rose-300">Fogo amigo: {result.friendlyFire} flecha{result.friendlyFire > 1 ? "s" : ""} acertou os seus homens.</p>}
+        {scenario.boarding ? (
+          <Button variant="gold" onClick={endBoarding}>
+            Seguir viagem
           </Button>
-          <Button variant="quiet" onClick={() => leave(scenario.id)}>
-            Ajustar cenário
-          </Button>
-          <Button variant="gold" onClick={() => startScenario(scenario)}>
-            Jogar de novo
-          </Button>
-        </div>
+        ) : (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="quiet" onClick={() => leave(null)}>
+              Menu
+            </Button>
+            <Button variant="quiet" onClick={() => leave(scenario.id)}>
+              Ajustar cenário
+            </Button>
+            <Button variant="gold" onClick={() => startScenario(scenario)}>
+              Jogar de novo
+            </Button>
+          </div>
+        )}
       </Modal>
     );
   }
@@ -116,15 +162,19 @@ export function ScenarioOverlay() {
         <Button variant="gold" onClick={() => setPaused(false)}>
           Continuar
         </Button>
-        <Button variant="quiet" onClick={() => startScenario(scenario)}>
-          Recomeçar
-        </Button>
-        <Button variant="quiet" onClick={() => leave(scenario.id)}>
-          Voltar aos cenários
-        </Button>
-        <Button variant="quiet" onClick={() => leave(null)}>
-          Menu principal
-        </Button>
+        {!scenario.boarding && (
+          <>
+            <Button variant="quiet" onClick={() => startScenario(scenario)}>
+              Recomeçar
+            </Button>
+            <Button variant="quiet" onClick={() => leave(scenario.id)}>
+              Voltar aos cenários
+            </Button>
+            <Button variant="quiet" onClick={() => leave(null)}>
+              Menu principal
+            </Button>
+          </>
+        )}
       </div>
     </Modal>
   );

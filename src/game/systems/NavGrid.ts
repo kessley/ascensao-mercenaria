@@ -7,6 +7,14 @@ const UNKNOWN = 0;
 const KNOWN = 1;
 const SQRT2 = Math.SQRT2;
 
+/** Vão mais estreito que uma célula: passagem aberta numa muralha. */
+export interface NavOpening {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /**
  * Grade de navegação com A* (Marco 11): rios, mar, lagos e montanhas bloqueiam; lama, vau e
  * pântano custam mais; estradas custam menos. Cada célula é avaliada só quando alguém precisa
@@ -27,6 +35,10 @@ export class NavGrid {
   private readonly stamp: Uint32Array;
   private readonly closed: Uint32Array;
   private generation = 0;
+  /** Vãos que uma célula inteira não enxergaria (uma escada é mais estreita que a célula). */
+  private openings: readonly NavOpening[] = [];
+  /** Células abertas só por causa de um vão: a rota passa pelo meio delas, nunca em diagonal. */
+  private readonly narrow = new Set<number>();
 
   constructor(
     readonly width: number,
@@ -77,10 +89,26 @@ export class NavGrid {
         }
         if (worst === Infinity) break;
       }
+      this.narrow.delete(i);
+      if (worst === Infinity && this.inOpening(c, r)) {
+        worst = 1;
+        this.narrow.add(i);
+      }
       this.cost[i] = worst;
       this.state[i] = KNOWN;
     }
     return this.cost[i] * this.bonus[i];
+  }
+
+  private inOpening(c: number, r: number): boolean {
+    const x = c * this.cell;
+    const y = r * this.cell;
+    return this.openings.some((o) => o.x < x + this.cell && o.x + o.w > x && o.y < y + this.cell && o.y + o.h > y);
+  }
+
+  /** Vãos numa muralha (quem muda a lista reavalia as células em volta com `invalidate`). */
+  setOpenings(openings: readonly NavOpening[]): void {
+    this.openings = openings;
   }
 
   isOpen(p: Point): boolean {
@@ -125,9 +153,12 @@ export class NavGrid {
   lineClear(a: Point, b: Point): boolean {
     const d = Math.hypot(b.x - a.x, b.y - a.y);
     const steps = Math.max(1, Math.ceil(d / (this.cell * 0.4)));
+    const from = this.index(a.x, a.y);
+    const to = this.index(b.x, b.y);
     for (let s = 0; s <= steps; s++) {
       const i = this.index(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps);
       if (i < 0 || this.cellCost(i) === Infinity) return false;
+      if (i !== from && i !== to && this.narrow.has(i)) return false;
     }
     return true;
   }

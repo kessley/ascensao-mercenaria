@@ -4,7 +4,7 @@ import type { Soldier } from "../entities/Soldier";
 import { CAMP_SITES, CAMPFIRE, PALISADE, type CampSiteKind } from "../data/campLayout";
 import type { CampArea } from "./CampArea";
 import type { Follower, FollowerRole } from "../sim/campEvents";
-import { COLORS } from "../../utils/constants";
+import { COLORS, TROOPS } from "../../utils/constants";
 import { Unit } from "../entities/Unit";
 import { distance, type Point } from "../../utils/math";
 
@@ -376,7 +376,7 @@ export class CampLife {
     if (sermon && this.has("CHAPLAIN") && r < 0.5) return make("SERMON", this.stations.CHAPLAIN, "SIT", 12, true);
     // Dia comum
     if (this.has("PEDDLER") && r < 0.12) return make("BROWSE", jitter({ x: this.stations.PEDDLER.x, y: this.stations.PEDDLER.y + 34 }, 50), "STAND", 8);
-    if (s.troopType === "CAVALRY" && r < 0.35) return make("STABLE", jitter(this.sites.STABLE, 60), "STAND", 12);
+    if (TROOPS[s.troopType].family === "CAVALRY" && r < 0.35) return make("STABLE", jitter(this.sites.STABLE, 60), "STAND", 12);
     const roll = Math.random();
     if (roll < 0.3) return make("TRAIN", jitter({ x: this.sites.TRAINING.x - 120, y: this.sites.TRAINING.y }, 140), "STAND", 12);
     if (roll < 0.5) return make("DICE", quarter, "SIT", 12, true);

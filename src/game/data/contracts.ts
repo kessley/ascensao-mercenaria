@@ -3,9 +3,10 @@ import { distance, type Point } from "../../utils/math";
 import { GOODS, type Good } from "../../utils/constants";
 import type { Economy } from "../sim/market";
 import { roadGraphOf } from "../sim/roadGraph";
-import { TheRealm, ofRealm, theRealm } from "../worldgen/names";
+import { ofRealm, theRealm } from "../worldgen/names";
 import type { FieldArmy } from "../sim/kingdoms";
 import { RANSOM_OF, nobleName, type Noble } from "../sim/nobility";
+import { newId } from "../../utils/id";
 
 export type Difficulty = 1 | 2 | 3;
 
@@ -137,7 +138,7 @@ export function generateContract(world: WorldDef, clients: readonly ClientSettle
   const travelDays = Math.max(1, Math.ceil(travelDaysBetween(from, site.center)));
   const jitter = () => 0.9 + Math.random() * 0.2;
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     title: template.title,
     client: `${pick(CLIENT_FORM[client.kind])} ${client.name}`,
     clientId: client.id,
@@ -148,43 +149,6 @@ export function generateContract(world: WorldDef, clients: readonly ClientSettle
     advance: Math.round(d.advance * jitter()),
     reward: Math.round(d.reward * jitter() * (1 + Math.max(0, travelDays - 2) * 0.1)),
   };
-}
-
-/** O que falta fazer num contrato (mesa da Tenda e faixa do HUD). */
-export function contractGoal(
-  c: Contract,
-  name: { town: (id?: string) => string; site: (id: string) => string; realm: (id?: string) => string },
-  done = 0,
-): { short: string; long: string } {
-  const label = c.good ? GOODS[c.good].label.toLowerCase() : "mercadoria";
-  switch (c.kind) {
-    case "DELIVERY":
-      return { short: `levar ${c.qty} de ${label} a ${name.town(c.targetId)}`, long: `Leve ${c.qty} de ${label} ao mercado de ${name.town(c.targetId)} (★ no Mapa do Continente — Tab).` };
-    case "ESCORT":
-      return {
-        short: `escoltar a caravana de ${name.town(c.fromId)} a ${name.town(c.targetId)}`,
-        long: `A caravana espera no portão de ${name.town(c.fromId)} e só parte com o bando por perto. Leve-a até ${name.town(c.targetId)}.`,
-      };
-    case "RECOVER":
-      return { short: `recuperar ${c.qty} de ${label}`, long: `Destrua o bando que levou a carga e devolva ${c.qty} de ${label} ao mercado de ${name.town(c.targetId)}.` };
-    case "ROUTE":
-      return {
-        short: `limpar a estrada até ${name.town(c.targetId)}`,
-        long: `Acabe com os salteadores na estrada entre ${name.town(c.fromId)} e ${name.town(c.targetId)} (marcados no Mapa do Continente — Tab).`,
-      };
-    case "SABOTAGE":
-      return { short: `saquear caravanas (${done}/${c.need ?? 1})`, long: `Saqueie ${c.need ?? 1} caravana(s) ${ofRealm(name.realm(c.factionTarget))} (${done} até agora). O reino atacado não vai gostar.` };
-    case "RELIEF":
-      return { short: `romper o cerco de ${name.town(c.targetId)}`, long: `Destrua o exército ${ofRealm(name.realm(c.rival))} diante de ${name.town(c.targetId)} (★ no Mapa do Continente). Se ele recuar, o contrato também vale.` };
-    case "CIVIL":
-      return { short: `derrotar o exército ${ofRealm(name.realm(c.rival))}`, long: `Guerra civil: destrua o exército ${ofRealm(name.realm(c.rival))} que marcha contra ${name.town(c.targetId)}. O outro lado não vai esquecer.` };
-    case "BURN":
-      return { short: "queimar a ponte", long: `Queime a ponte marcada no Mapa do Continente (fale com a ponte: E). ${TheRealm(name.realm(c.rival))} não vai gostar.` };
-    case "RANSOM":
-      return { short: `libertar o nobre em ${name.town(c.targetId)}`, long: `Vá à Cidade Alta de ${name.town(c.targetId)}: pague o resgate ao Camareiro-mor na corte, ou tire o preso da masmorra pelos esgotos.` };
-    default:
-      return { short: name.site(c.siteId), long: `Os inimigos estão em ${name.site(c.siteId)} (★ no Mapa do Continente — Tab). Elimine todos.` };
-  }
 }
 
 /**
@@ -206,7 +170,7 @@ function warContract(world: WorldDef, clients: readonly ClientSettlement[], from
     if (!t || t.owner === a.factionId) continue;
     const civil = econ.wars.some((w) => w.civil && w.peace === undefined && (w.a === a.factionId || w.b === a.factionId) && (w.a === t.owner || w.b === t.owner));
     options.push(() => ({
-      id: crypto.randomUUID(),
+      id: newId(),
       kind: civil ? "CIVIL" : "RELIEF",
       title: civil ? `Guerra civil: salvar ${t.name}` : a.sieging !== undefined ? `Romper o cerco de ${t.name}` : `Deter o exército que marcha contra ${t.name}`,
       client: t.owner === "FREE" ? `Conselho de ${t.name}` : realm(t.owner),
@@ -231,7 +195,7 @@ function warContract(world: WorldDef, clients: readonly ClientSettlement[], from
     if (!home || !prison) continue;
     const ransom = RANSOM_OF(n);
     options.push(() => ({
-      id: crypto.randomUUID(),
+      id: newId(),
       kind: "RANSOM",
       title: `Libertar ${n.name}`,
       client: realm(n.factionId),
@@ -256,7 +220,7 @@ function warContract(world: WorldDef, clients: readonly ClientSettlement[], from
     const bridge = world.geo.crossings.find((c) => c.kind === "BRIDGE" && foeTowns.some((t) => distance(t, c) < 5000));
     if (!bridge) continue;
     options.push(() => ({
-      id: crypto.randomUUID(),
+      id: newId(),
       kind: "BURN",
       title: `Queimar a ponte ${ofRealm(realm(side[1]))}`,
       client: realm(side[0]),
@@ -305,7 +269,7 @@ function economicContract(world: WorldDef, clients: readonly ClientSettlement[],
       const qty = deliveryQty(pickd.g);
       const d = days(pickd.t);
       return {
-        id: crypto.randomUUID(),
+        id: newId(),
         kind: "DELIVERY",
         title: `Entregar ${GOODS[pickd.g].label.toLowerCase()} em ${pickd.t.name}`,
         client: `${pick(CLIENT_FORM[pickd.t.kind])} ${pickd.t.name}`,
@@ -333,7 +297,7 @@ function economicContract(world: WorldDef, clients: readonly ClientSettlement[],
       if (!target) continue;
       const difficulty: Difficulty = dest.days > 2 ? 3 : dest.days > 1.4 ? 2 : 1;
       return {
-        id: crypto.randomUUID(),
+        id: newId(),
         kind: "ESCORT",
         title: `Escoltar a caravana até ${target.name}`,
         client: `Guilda dos Mercadores de ${origin.name}`,
@@ -355,7 +319,7 @@ function economicContract(world: WorldDef, clients: readonly ClientSettlement[],
       const t = towns.find((x) => x.id === s.townId);
       if (!t) continue;
       return {
-        id: crypto.randomUUID(),
+        id: newId(),
         kind: "RECOVER",
         title: `Recuperar a carga roubada de ${t.name}`,
         client: `Guilda dos Mercadores de ${t.name}`,
@@ -384,7 +348,7 @@ function economicContract(world: WorldDef, clients: readonly ClientSettlement[],
       if (!target) continue;
       const difficulty: Difficulty = dest.days > 1.6 ? 3 : 2;
       return {
-        id: crypto.randomUUID(),
+        id: newId(),
         kind: "ROUTE",
         title: `Abrir a estrada de ${origin.name} a ${target.name}`,
         client: `Guilda dos Mercadores de ${origin.name}`,
@@ -407,7 +371,7 @@ function economicContract(world: WorldDef, clients: readonly ClientSettlement[],
       if (!client) continue;
       const need = Math.random() < 0.5 ? 1 : 2;
       return {
-        id: crypto.randomUUID(),
+        id: newId(),
         kind: "SABOTAGE",
         title: `Queimar as caravanas ${ofRealm(econ.factionName(side[1]))}`,
         client: `${pick(CLIENT_FORM[client.kind])} ${client.name}`,

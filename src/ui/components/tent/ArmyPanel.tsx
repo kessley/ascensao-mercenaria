@@ -1,13 +1,8 @@
 import { horseDeal, useGameStore, type BattalionData } from "../../../store/useGameStore";
+import { troopFacts } from "../../../game/data/troopFacts";
 import { BALANCE, FORMATIONS, PROGRESSION, TRADE, TROOPS, type TroopType } from "../../../utils/constants";
 import { battalionWage, reinforceCostPerSoldier } from "../../../utils/economy";
 import { xpToNextLevel } from "../../../utils/progression";
-
-const TROOP_HINT: Record<TroopType, string> = {
-  INFANTRY: "Linha de frente. Única com Parede de Escudos.",
-  ARCHERS: "Atiram de longe. Na colina, alcançam mais longe.",
-  CAVALRY: "Rápida. Investida em campo aberto causa dano 2,5x; atola na lama.",
-};
 
 /** Um batalhão: efetivo, tropa, formação, salário e reforço de soldados perdidos. */
 export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
@@ -100,7 +95,7 @@ export function RecruitPanel() {
       <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400">Recrutar tropas cruas</h2>
       <div className="grid grid-cols-1 gap-2">
         {(Object.keys(TROOPS) as TroopType[]).map((type) => {
-          const cavalry = type === "CAVALRY";
+          const cavalry = TROOPS[type].family === "CAVALRY";
           const cost = TROOPS[type].cost + (cavalry ? horses.cost : 0);
           return (
             <button
@@ -121,7 +116,8 @@ export function RecruitPanel() {
                     : `Faltam cavalos: há ${stable} no estábulo e o mercado mais perto não tem os outros. Compre cavalos nas estepes.`}
                 </span>
               )}
-              <span className="text-xs text-neutral-400">{TROOP_HINT[type]}</span>
+              <span className="text-xs text-neutral-400">{TROOPS[type].hint}</span>
+              <span className="text-xs text-neutral-500">{troopFacts(type).join(" · ")}</span>
             </button>
           );
         })}

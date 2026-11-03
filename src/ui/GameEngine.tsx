@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { createGameConfig } from "../game/GameConfig";
+import { installGameClock } from "../game/gameClock";
 
 /**
  * Hospeda a instância do Phaser.Game dentro do React.
@@ -15,6 +16,7 @@ export function GameEngine() {
     if (!containerRef.current || gameRef.current) return;
 
     gameRef.current = new Phaser.Game(createGameConfig(containerRef.current));
+    installGameClock(gameRef.current);
 
     return () => {
       // true = remove o canvas do DOM

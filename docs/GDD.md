@@ -337,6 +337,8 @@ Além da relação com cada reino e com cada personagem, o bando tem três reput
 > Implementado no Marco 16 (detalhes e números no Roadmap): além do que está aqui, **o inimigo passou a pensar**. Todo bando que luta tem comandante e tenentes de verdade, esquadrões em formação e moral pelas mesmas regras do jogador. O comandante decide só com o que os soldados viram, escolhe planos conforme a personalidade (flanco, emboscada, caça ao Comandante, recuo fingido, resistir, retirada) e procura o bando na campanha. A dificuldade muda a qualidade das decisões, nunca os atributos. Guarnições pequenas fecham os portões; só as fortes saem a campo.
 
 ### 8.12 Mares e continentes
+> Implementado no Marco 17 (detalhes e números no Roadmap). Ainda não: calamidades próprias de cada continente, invasões pelo mar e batalha entre navios.
+
 - **Navios:**
   - barca costeira: barata, só perto da costa;
   - coca: carga e tropas em mar aberto;
@@ -354,6 +356,8 @@ Além da relação com cada reino e com cada personagem, o bando tem três reput
 - **Os reinos da IA também navegam:** invasões pelo mar e piratas profissionais são ameaças reais na costa.
 
 ### 8.13 Legado e Lendas
+> Implementado no Marco 18 (detalhes e números no Roadmap).
+
 - **O Comandante envelhece e pode morrer.** Quando ele morre, um tenente **herda o bando** (o mais leal ou o escolhido em testamento). A campanha continua com outro protagonista, e os traços dele mudam o rumo. O jogo só acaba quando o bando acaba.
 - **Ambições:** objetivos opcionais que o jogador escolhe, como tornar-se rei, vencer três calamidades, dominar o comércio de sal ou unir um continente. Cada uma dá bônus e tem um epílogo próprio.
 - **Epílogo e Modo Lendas:** no fim, a crônica completa vira um livro navegável, como as Lendas do Dwarf Fortress: pessoas, batalhas, reinos, povoados e o que o bando fez a cada um.

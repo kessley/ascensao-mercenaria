@@ -27,7 +27,7 @@ export function gainXp(b: BattalionData, amount: number): { battalion: Battalion
 /** Pode aprender a habilidade agora? Retorna o motivo se não puder. */
 export function canLearn(b: BattalionData, id: SkillId): string | null {
   const skill = SKILLS[id];
-  if (skill.troopType !== b.troopType) return "Habilidade de outra tropa.";
+  if (skill.troopType !== TROOPS[b.troopType].family) return "Habilidade de outra tropa.";
   if (b.skills.includes(id)) return "Já aprendida.";
   if (skill.requires && !b.skills.includes(skill.requires)) return `Requer ${SKILLS[skill.requires].label}.`;
   if (b.skillPoints <= 0) return "Sem pontos de habilidade.";

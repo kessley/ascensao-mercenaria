@@ -1,4 +1,5 @@
 import { SUPPORT } from "../../utils/constants";
+import { newId } from "../../utils/id";
 
 /** Harpia: águia treinada de um batedor (Marco 16). Só serve depois do treino (`readyDay`). */
 export interface HarpyData {
@@ -29,11 +30,11 @@ const HARPY_NAMES = ["Garra", "Sombra", "Vento", "Rainha", "Flecha", "Cinza", "T
 const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
 export function newScout(): ScoutData {
-  return { id: crypto.randomUUID(), name: pick(RIDER_NAMES), missions: 0 };
+  return { id: newId(), name: pick(RIDER_NAMES), missions: 0 };
 }
 
 export function newMessenger(): MessengerData {
-  return { id: crypto.randomUUID(), name: pick(RIDER_NAMES), level: 1, deliveries: 0 };
+  return { id: newId(), name: pick(RIDER_NAMES), level: 1, deliveries: 0 };
 }
 
 export function newHarpy(readyDay: number): HarpyData {

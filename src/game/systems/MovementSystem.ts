@@ -1,17 +1,25 @@
 import { Unit } from "../entities/Unit";
-import { TERRAIN, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { COMBAT, TERRAIN, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
 
 /**
  * "Peso" de `u` ao se separar de `other`: quem pesa mais é menos empurrado.
- * O Comandante (herói) não é empurrado pelos próprios aliados — eles abrem passagem;
- * contra inimigos ele pesa mais que um soldado comum.
+ * O Comandante (herói) não é empurrado pelos próprios aliados — eles abrem passagem. Quem está
+ * plantado lutando ou na fileira não cede a quem chega andando; quem carrega abre caminho.
  */
 function massAgainst(u: Unit, other: Unit): number {
-  if (u.isHero) return u.team === other.team ? Infinity : 4;
-  return 1;
+  if (u.isHero && u.team === other.team) return Infinity;
+  if (u.isCharging || u.ridingThrough) return u.mass * COMBAT.PUSH_CHARGING;
+  // Cavalo em movimento abre caminho: é assim que a cavalaria sai de um cerco
+  if (u.mounted && u.unitState === "MOVING") return u.mass * COMBAT.PUSH_RIDER;
+  // Entre aliados ninguém é parede: quem passa e quem está parado abrem espaço um para o outro
+  const planted = u.team !== other.team && (u.unitState === "ATTACKING" || u.unitState === "IDLE");
+  return planted ? u.mass * COMBAT.PUSH_PLANTED : u.mass;
 }
 
-/** Empurra unidades sobrepostas para longe uma da outra (evita empilhamento sem usar física). */
+/**
+ * Afasta unidades sobrepostas (evita empilhamento sem usar física). A correção é só uma parte da
+ * sobreposição por quadro: as linhas se apertam e se acomodam, em vez de uma jogar a outra longe.
+ */
 export function separateUnits(units: readonly Unit[]): void {
   for (let i = 0; i < units.length; i++) {
     const a = units[i];
@@ -22,6 +30,7 @@ export function separateUnits(units: readonly Unit[]): void {
       const min = a.radius + b.radius + 2;
       let dx = b.x - a.x;
       let dy = b.y - a.y;
+      if (dx >= min || dx <= -min || dy >= min || dy <= -min) continue;
       let d = Math.hypot(dx, dy);
       if (d >= min) continue;
       if (d < 0.001) {
@@ -34,7 +43,7 @@ export function separateUnits(units: readonly Unit[]): void {
       const mb = massAgainst(b, a);
       if (ma === Infinity && mb === Infinity) continue;
       const shareA = ma === Infinity ? 0 : mb === Infinity ? 1 : mb / (ma + mb);
-      const overlap = min - d;
+      const overlap = (min - d) * COMBAT.PUSH_RATE;
       const nx = dx / d;
       const ny = dy / d;
       a.x -= nx * overlap * shareA;

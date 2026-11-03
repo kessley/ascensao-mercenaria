@@ -4,7 +4,8 @@ import type { Unit } from "../entities/Unit";
 import type { MoraleGroup } from "./MoraleSystem";
 import type { PassiveDef } from "../data/lieutenants";
 import { formationOffset } from "./formation";
-import { BALANCE, COLORS, WAR_AI, type EnemyKind, type Formation } from "../../utils/constants";
+import type { CycleState } from "../sim/combatRules";
+import { BALANCE, COLORS, COMBAT, SIEGE, WAR_AI, type EnemyKind, type Formation } from "../../utils/constants";
 import { angleTo, centroid, distance, type Point } from "../../utils/math";
 
 export type SquadRole = "MELEE" | "RANGED" | "RIDERS";
@@ -34,6 +35,10 @@ export interface SquadCommand {
   readonly retreating: boolean;
   /** Tropa treinada: em marcha, ninguém sai correndo antes da ordem. */
   readonly disciplined: boolean;
+  /** Atrás dos muros: não há para onde fugir. */
+  readonly cornered: boolean;
+  /** Atirar ali acertaria os nossos: quem sabe o que faz segura o tiro. */
+  holdsFire(u: Unit): boolean;
 }
 
 const ORDER_ANCHOR_FREE: ReadonlySet<SquadOrder["type"]> = new Set(["MARCH"]);
@@ -51,6 +56,13 @@ export class EnemySquad implements MoraleGroup {
   order: SquadOrder = { type: "MARCH" };
   facing = 0;
   pendingDeaths = 0;
+  pendingShock = 0;
+  flanked = false;
+  flankShockAt = -Infinity;
+  /** Quando virou a frente para quem o pegou de lado (ver `faceThreat`). */
+  private turnedAt = -Infinity;
+  /** Investida em ciclo dos cavaleiros (quem decide é a hoste). */
+  cycle: CycleState = { phase: "IN", hitAt: null };
   /** Disciplina do tipo de tropa; 0 = não sente medo (mortos-vivos). */
   mods: { moraleLoss: number };
   readonly fatigueRecovery = 1;
@@ -61,6 +73,8 @@ export class EnemySquad implements MoraleGroup {
   center: Point = { x: 0, y: 0 };
   /** Veio de uma ordem que ainda não acabou (usado pelos planos). */
   arrived = false;
+  /** Quantos começaram: baixa dói igual em tropa grande e pequena. */
+  startingCount = 0;
   private readonly gfx: Phaser.GameObjects.Graphics;
 
   constructor(
@@ -80,6 +94,27 @@ export class EnemySquad implements MoraleGroup {
     m.squad = this;
     m.slot = this.soldiers.length;
     this.soldiers.push(m);
+    this.startingCount++;
+  }
+
+  /** Bateu de investida: a hoste conta o tempo do choque a partir daqui. */
+  noteImpact(time: number): void {
+    if (this.cycle.phase === "IN" && this.cycle.hitAt === null) this.cycle.hitAt = time;
+  }
+
+  /** Bravura de quem está nele. */
+  get steadiness(): number {
+    return (this.soldiers[0]?.nerve ?? 1) * (this.command.cornered ? SIEGE.WALLS_NERVE : 1);
+  }
+
+  /** Quem sabe lutar vira a frente para quem o pegou de lado, em vez de morrer olhando para o outro lado. */
+  faceThreat(time: number): void {
+    if (!this.flanked || time - this.turnedAt < 4000 || this.order.type !== "HOLD") return;
+    const attacker = this.soldiers.find((s) => s.lastHitFrom?.isAlive && time - s.lastHitAt < BALANCE.MORALE.HIT_MEMORY_MS)?.lastHitFrom;
+    if (!attacker) return;
+    this.turnedAt = time;
+    this.facing = angleTo(this.center, attacker);
+    this.order = { ...this.order, facing: this.facing };
   }
 
   private defaultFormation(): Formation {
@@ -184,6 +219,7 @@ export class EnemySquad implements MoraleGroup {
     };
     if (fights) for (const a of allies) consider(a);
     for (const r of rivals) consider(r);
+    if (best && s.ranged && this.command.holdsFire(best)) return null;
     return best;
   }
 
@@ -191,6 +227,7 @@ export class EnemySquad implements MoraleGroup {
   drive(s: Enemy, dt: number, allies: readonly Unit[], rivals: readonly Unit[]): void {
     const now = s.scene.time.now;
     if (this.panicking) return this.fleeStep(s, dt, allies, rivals, now);
+    if (s.carryMomentum(dt, now)) return;
     const o = this.order;
     const passing = o.type === "MOVE";
     const fights = (s.hostile || s.provoked) && !s.friendly;
@@ -224,9 +261,17 @@ export class EnemySquad implements MoraleGroup {
         s.setFacing(angleTo(s, s.target));
         return;
       }
-      // Parede de Escudos não quebra a fileira para perseguir, a não ser com ordem de atacar
-      if (this.formation !== "SHIELD_WALL" || o.type === "ATTACK") {
-        s.moveTowards(s.target.x, s.target.y, dt);
+      // Segurando a posição, só sai do lugar por quem chegou perto dele (como o bando do jogador)
+      if (o.type === "HOLD" && (!s.ranged || s.onWall) && distance(this.slotOf(s, o.point), s.target) > COMBAT.HOLD_LEASH) s.target = null;
+    }
+
+    if (s.target) {
+      const close = distance(s, s.target) <= COMBAT.CHARGE_RANGE;
+      // Parede de Escudos não quebra a fileira para perseguir, a não ser com ordem de atacar;
+      // com ordem de atacar, o esquadrão vai em forma até perto do alvo
+      const planted = o.type === "HOLD" && s.canBrace;
+      if (!planted && (this.formation !== "SHIELD_WALL" || o.type === "ATTACK") && (close || o.type !== "ATTACK")) {
+        s.moveTowards(s.target.x, s.target.y, dt, close ? 1 : COMBAT.RUN);
         s.unitState = "MOVING";
         return;
       }
@@ -238,7 +283,9 @@ export class EnemySquad implements MoraleGroup {
       return;
     }
     const slot = this.slotOf(s, this.anchor());
-    s.unitState = s.moveTowards(slot.x, slot.y, dt) ? "IDLE" : "MOVING";
+    const settled = o.type === "HOLD" && Math.hypot(slot.x - s.x, slot.y - s.y) <= COMBAT.SLOT_SLACK;
+    const stride = o.type === "HOLD" ? COMBAT.WALK : this.role === "RIDERS" ? COMBAT.GALLOP : COMBAT.RUN;
+    s.unitState = settled || s.moveTowards(slot.x, slot.y, dt, stride) ? "IDLE" : "MOVING";
     if (s.unitState === "IDLE") {
       s.setFacing(this.facing);
       s.chargeDistance = 0;

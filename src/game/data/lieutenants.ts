@@ -1,4 +1,5 @@
 import type { Contract } from "./contracts";
+import { newId } from "../../utils/id";
 
 export type TraitId = "GREEDY" | "BRAVE" | "CAUTIOUS" | "BLOODTHIRSTY" | "HONORABLE" | "AMBITIOUS" | "LOYAL";
 export type PassiveId = "INSPIRING" | "STALWART" | "DRILLMASTER" | "TACTICIAN" | "MARKSMAN" | "FRUGAL" | "BERSERKER";
@@ -96,7 +97,7 @@ export function generateLieutenant(day: number): LieutenantData {
   const traits = [...(Object.keys(TRAITS) as TraitId[])].sort(() => Math.random() - 0.5).slice(0, 2);
   const name = pick(NAMES);
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     name,
     epithet: pick(EPITHETS),
     backstory: `${pick(ORIGINS)} ${pick(EVENTS)}`,

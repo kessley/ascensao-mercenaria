@@ -30,6 +30,7 @@ import {
 import { distance, type Point } from "../../utils/math";
 import { NavGrid } from "../systems/NavGrid";
 import { TOWN_SIZE, nearestGate, townLayout, type TownLayout } from "../world/townLayout";
+import { CULTURES, type ContinentDef, type CultureId } from "../data/planet";
 import { generateGeography } from "./geography";
 import { GeoMap } from "./geoMap";
 import { simulateHistory } from "./history";
@@ -321,7 +322,8 @@ function riverAngleAt(river: { points: Point[] }, p: Point): number {
 
 // --- Mundo ---
 
-export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORLD_OPTIONS): WorldDef {
+export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORLD_OPTIONS, culture: CultureId = "REALMS"): WorldDef {
+  names.useTongue(culture);
   const size = WORLD_SIZES[options.size];
   setWorldSize(size.cols, size.rows);
   const W = WORLD_WIDTH;
@@ -331,7 +333,7 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
   const area = (size.cols * size.rows) / 80; // em relação ao continente médio
 
   // 1. Geografia
-  const geoDef = generateGeography(rng, size.cols, size.rows);
+  const geoDef = generateGeography(rng, size.cols, size.rows, CULTURES[culture].climate);
   const geo = new GeoMap(geoDef);
 
   // Regiões: bioma da maioria das células, com nome
@@ -433,6 +435,7 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
       market: adjustMarket(market(rng, kind), resources),
       description: kind === "CAPITAL" ? rng.pick(DESCRIPTIONS.CAPITAL) : port ? rng.pick(PORT_DESCRIPTIONS) : river ? rng.pick(RIVER_DESCRIPTIONS) : rng.pick(DESCRIPTIONS[kind]),
       port,
+      luxury: CULTURES[culture].luxuryOutput > 0 ? CULTURES[culture].luxuryOutput * (port ? 1 : 0.4) : undefined,
       river,
       resources,
     });
@@ -663,6 +666,7 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
   const world: WorldDef = {
     seed,
     options,
+    culture,
     cols: size.cols,
     rows: size.rows,
     geo: geoDef,
@@ -681,6 +685,13 @@ export function generateWorld(seed: number, options: WorldOptions = DEFAULT_WORL
     history: [],
   };
   world.history = finishHistory(rng, world, history.entries);
+  return world;
+}
+
+/** O mundo de um continente do planeta, sempre igual para a mesma semente. */
+export function continentWorld(def: ContinentDef, options: WorldOptions): WorldDef {
+  const world = generateWorld(def.seed, { ...options, size: def.size }, def.culture);
+  if (!def.home) world.name = def.name;
   return world;
 }
 

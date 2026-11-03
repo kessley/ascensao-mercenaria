@@ -29,6 +29,27 @@ export function centroid(points: readonly Point[]): Point {
 }
 
 /** Item mais próximo de `from`, opcionalmente limitado a `maxDist`. */
+/** Comprimento de uma linha de pontos. */
+export function routeLength(route: readonly Point[]): number {
+  let total = 0;
+  for (let i = 1; i < route.length; i++) total += distance(route[i - 1], route[i]);
+  return total;
+}
+
+/** Ponto a `d` px do começo da linha. */
+export function pointAlong(route: readonly Point[], d: number): Point {
+  let left = d;
+  for (let i = 1; i < route.length; i++) {
+    const seg = distance(route[i - 1], route[i]);
+    if (left <= seg) {
+      const t = seg > 0 ? left / seg : 0;
+      return { x: route[i - 1].x + (route[i].x - route[i - 1].x) * t, y: route[i - 1].y + (route[i].y - route[i - 1].y) * t };
+    }
+    left -= seg;
+  }
+  return route[route.length - 1];
+}
+
 export function nearest<T extends Point>(items: readonly T[], from: Point, maxDist = Infinity): T | null {
   let best: T | null = null;
   let bestDist = maxDist;

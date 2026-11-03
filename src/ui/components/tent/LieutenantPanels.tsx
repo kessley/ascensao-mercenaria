@@ -67,10 +67,15 @@ export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData 
   const lieutenants = useGameStore((s) => s.lieutenants);
   const assignLieutenant = useGameStore((s) => s.assignLieutenant);
   const dismissLieutenant = useGameStore((s) => s.dismissLieutenant);
+  const heirId = useGameStore((s) => s.heirId);
+  const setHeir = useGameStore((s) => s.setHeir);
   const commanded = battalions.find((b) => b.id === l.battalionId);
 
   return (
     <div className="flex flex-col gap-3">
+      <button type="button" onClick={() => setHeir(l.id === heirId ? null : l.id)} className={`self-start rounded border px-2 py-1 text-xs ${l.id === heirId ? "border-amber-400 text-amber-200" : "border-neutral-600 text-neutral-200"}`}>
+        {l.id === heirId ? "Herdeiro no testamento" : "Nomear herdeiro no testamento"}
+      </button>
       <div className="flex flex-col gap-2 rounded bg-neutral-800 p-3 text-sm">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-base font-bold">{fullName(l)}</span>

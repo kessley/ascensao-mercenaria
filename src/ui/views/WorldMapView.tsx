@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { missionPlan } from "../../game/data/missionGuide";
+import { expeditionStage } from "../../game/sim/expeditions";
 import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
 import { PALISADE } from "../../game/data/campLayout";
@@ -79,6 +81,8 @@ export interface MapLayers {
   /** Névoa e exércitos (null = mapa inteiro revelado, como na criação do mundo). */
   snap: WorldSnapshot | null;
   contractSiteId: string | null;
+  /** Rota do contrato em andamento. */
+  contractRoute?: readonly Point[];
   /** Contratos da economia (Marco 14): os povoados envolvidos (entrega, escolta). */
   contractTownIds?: readonly string[];
   /** Ponte a queimar (contrato do Marco 15). */
@@ -92,6 +96,8 @@ export interface MapLayers {
   day?: number;
   /** Acampamento levantado (não aparece no mapa). */
   campPacked?: boolean;
+  /** Tropas em expedição: onde estão e para onde vão. */
+  expeditions?: readonly { at: Point; heading: Point }[];
 }
 
 interface Destination {
@@ -101,7 +107,7 @@ interface Destination {
 
 /** Desenha o mundo (terreno, estradas, povoados com a cor do dono, locais, névoa e exércitos). */
 export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): void {
-  const { world, settlements, calamities, snap, contractSiteId, dest, contractTownIds = [] } = layers;
+  const { world, settlements, calamities, snap, contractSiteId, dest, contractTownIds = [], contractRoute, expeditions } = layers;
   const s = scaleOf(world);
   const mapH = mapHeight(world);
   ctx.clearRect(0, 0, MAP_W, mapH);
@@ -253,6 +259,17 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     label(active ? `★ ${site.name}` : site.name, site.center, -14, active ? "#fbbf24" : "#e8c8a0");
   }
 
+  // Rota do contrato em andamento: de onde sai até onde chega
+  if (contractRoute && contractRoute.length > 1) {
+    ctx.strokeStyle = "#fbbf24";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 7]);
+    ctx.beginPath();
+    contractRoute.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x * s, p.y * s) : ctx.lineTo(p.x * s, p.y * s)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   if (!snap) return;
 
   // Covis de calamidade já descobertos
@@ -340,6 +357,26 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.arc(b.x * s, b.y * s, 3, 0, Math.PI * 2);
     ctx.fill();
   }
+  for (const e of expeditions ?? []) {
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(e.at.x * s, e.at.y * s);
+    ctx.lineTo(e.heading.x * s, e.heading.y * s);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#38bdf8";
+    ctx.strokeStyle = "#0b2536";
+    ctx.beginPath();
+    ctx.moveTo(e.at.x * s, e.at.y * s - 6);
+    ctx.lineTo(e.at.x * s + 6, e.at.y * s);
+    ctx.lineTo(e.at.x * s, e.at.y * s + 6);
+    ctx.lineTo(e.at.x * s - 6, e.at.y * s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.strokeStyle = "#e0b040";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -387,6 +424,8 @@ export function WorldMapView() {
   const followers = useGameStore((s) => s.followers);
   const day = useGameStore((s) => s.day);
   const campPacked = useGameStore((s) => s.campPacked);
+  const away = useGameStore((s) => s.expeditions);
+  const clock = useGameStore((s) => s.day + s.dayProgress);
   // Em campo, o exército só come o que as carroças levam
   const rations = useGameStore((s) => (s.exposure.away && !s.campPacked ? s.cargo : s.rations));
   const engaged = useGameStore((s) => s.battleHud?.engaged ?? false);
@@ -409,8 +448,9 @@ export function WorldMapView() {
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
-    if (ctx && world) drawWorldMap(ctx, { world, settlements, calamities, snap, contractSiteId, contractTownIds, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked });
-  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked]);
+    const expeditions = snap ? away.map((e) => expeditionStage(e, clock, snap.commander)) : [];
+    if (ctx && world) drawWorldMap(ctx, { expeditions, world, settlements, calamities, snap, contractSiteId, contractTownIds, contractRoute: world && activeContract ? missionPlan(activeContract.contract, { world, settlements }).route : undefined, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked });
+  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked, away, clock]);
 
   const plan = useMemo(() => {
     if (!dest || !snap) return null;
@@ -484,6 +524,7 @@ export function WorldMapView() {
           <span><span className="text-amber-300">●</span> Comandante</span>
           <span><span className="text-emerald-400">●</span> batedor (? = último lugar conhecido)</span>
           <span><span className="text-blue-400">■</span> seus povoados</span>
+          <span><span className="text-sky-400">◆</span> tropa em missão (- - - rumo)</span>
           <span><span className="text-red-500">■</span> bando à vista (- - - rumo)</span>
           <span><span className="text-red-500/50">■</span> ? última posição conhecida</span>
           <span><span className="text-red-400">☠</span> covil de calamidade</span>

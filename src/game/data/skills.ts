@@ -1,4 +1,4 @@
-import type { TroopType } from "../../utils/constants";
+import type { TroopFamily } from "../../utils/constants";
 
 export type SkillId =
   | "REINFORCED_SHIELDS"
@@ -38,7 +38,7 @@ export interface SkillMods {
 
 export interface SkillDef {
   id: SkillId;
-  troopType: TroopType;
+  troopType: TroopFamily;
   label: string;
   description: string;
   /** Habilidade exigida antes desta (ramo da árvore). */
@@ -147,8 +147,8 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   },
 };
 
-/** Árvore de cada tropa: dois ramos de [base, avançada]. */
-export const SKILL_TREE: Record<TroopType, [SkillId, SkillId][]> = {
+/** Árvore de cada família de tropa: dois ramos de [base, avançada]. */
+export const SKILL_TREE: Record<TroopFamily, [SkillId, SkillId][]> = {
   INFANTRY: [
     ["REINFORCED_SHIELDS", "LIVING_WALL"],
     ["IRON_DISCIPLINE", "COUNTERATTACK"],

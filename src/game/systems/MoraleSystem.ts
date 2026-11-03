@@ -1,6 +1,7 @@
 import type { Unit } from "../entities/Unit";
-import { BALANCE, SUPPORT } from "../../utils/constants";
-import { angleDiff, angleTo, clamp, distance, type Point } from "../../utils/math";
+import { BALANCE, COMBAT, SUPPORT } from "../../utils/constants";
+import { clamp, distance, type Point } from "../../utils/math";
+import { approachOf } from "../sim/combatRules";
 
 const M = BALANCE.MORALE;
 
@@ -17,6 +18,18 @@ export interface MoraleGroup {
   morale: number;
   readonly panicking: boolean;
   readonly mods: { moraleLoss: number };
+  /** Fileiras atrás seguram quem está na frente (< 1 = perde menos moral). */
+  readonly rankSupport?: number;
+  /** Quantos começaram: baixa dói igual em tropa grande e pequena. */
+  readonly startingCount: number;
+  /** Bravura da tropa (< 1 = perde menos moral). */
+  readonly steadiness?: number;
+  /** Abalos desde a última leitura: investida, flechas. */
+  pendingShock: number;
+  /** Está sendo atacada pelo lado ou por trás agora. */
+  flanked: boolean;
+  /** Quando levou o último choque de ser pega pelo lado. */
+  flankShockAt: number;
   readonly leaderPassive: { moraleLoss?: number; recovery?: number; panicBelow?: number } | null;
   readonly fatigueRecovery: number;
   panic(): void;
@@ -46,8 +59,11 @@ export function updateMorale(
 ): void {
   if (battalion.isDestroyed) return;
 
-  let delta = -battalion.pendingDeaths * M.LOSS_PER_DEATH;
+  // Cada baixa pesa pelo tamanho da tropa: oito homens sentem mais a perda de um
+  const perDeath = (M.LOSS_PER_DEATH * BALANCE.BATTALION_SIZE) / Math.max(1, battalion.startingCount);
+  let delta = -battalion.pendingDeaths * perDeath - battalion.pendingShock;
   battalion.pendingDeaths = 0;
+  battalion.pendingShock = 0;
 
   const center = battalion.center;
   const threats = enemies.filter((e) => distance(e, center) <= M.THREAT_RADIUS).length;
@@ -56,17 +72,25 @@ export function updateMorale(
     delta -= M.OUTNUMBERED_PER_SEC * dt;
   }
 
-  // Flanco: golpe recente vindo de mais de 90° em relação à frente da formação
-  let flanked = 0;
+  // Golpe recente vindo do lado ou de trás: a tropa percebe que foi pega no ponto fraco
+  let side = 0;
+  let rear = 0;
   for (const s of battalion.soldiers) {
     const attacker = s.lastHitFrom;
     if (!attacker || time - s.lastHitAt > M.HIT_MEMORY_MS) continue;
-    if (angleDiff(battalion.facing, angleTo(s, attacker)) > Math.PI / 2) flanked++;
+    const approach = approachOf(battalion.facing, s, attacker);
+    if (approach === "REAR") rear++;
+    else if (approach === "FLANK") side++;
   }
-  delta -= flanked * M.FLANKED_PER_SOLDIER_PER_SEC * dt;
+  delta -= (side * M.FLANKED_PER_SOLDIER_PER_SEC + rear * M.REAR_PER_SOLDIER_PER_SEC) * dt;
+  battalion.flanked = side + rear > 0;
+  if (battalion.flanked && time - battalion.flankShockAt >= COMBAT.FLANK_SHOCK_EVERY_MS) {
+    battalion.flankShockAt = time;
+    delta -= COMBAT.FLANK_SHOCK;
+  }
   // Disciplina (habilidade) e um tenente Inabalável amortecem todas as perdas
   const passive = battalion.leaderPassive;
-  delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1);
+  delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1) * (battalion.rankSupport ?? 1) * (battalion.steadiness ?? 1);
   // Estandarte à vista: os soldados seguem e protegem a bandeira do seu senhor
   if (banner.seen && !banner.faltering) {
     delta *= SUPPORT.BANNER_MORALE_LOSS;
@@ -86,4 +110,18 @@ export function updateMorale(
   const panicBelow = passive?.panicBelow ?? M.PANIC_BELOW;
   if (!battalion.panicking && battalion.morale < panicBelow) battalion.panic();
   else if (battalion.panicking && battalion.morale >= M.RALLY_ABOVE) battalion.rally();
+}
+
+/**
+ * Medo pega: quem começou a fugir agora abala os do mesmo lado que estão por perto. A cena passa
+ * a lista de quem viu alguém fugir uma vez só (`routing`, os que entraram em pânico neste quadro).
+ */
+export function spreadRout(routing: readonly MoraleGroup[], neighbors: readonly MoraleGroup[]): void {
+  for (const fleeing of routing) {
+    const c = fleeing.center;
+    for (const other of neighbors) {
+      if (other === fleeing || other.isDestroyed || other.panicking) continue;
+      if (distance(other.center, c) <= COMBAT.ROUT_RADIUS) other.pendingShock += COMBAT.ROUT_CONTAGION;
+    }
+  }
 }

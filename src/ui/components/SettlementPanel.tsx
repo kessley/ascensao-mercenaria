@@ -47,6 +47,14 @@ function Market({ t }: { t: Settlement }) {
   return (
     <>
       <ContractDelivery t={t} />
+      {t.port && (
+        <section className="flex flex-col gap-2">
+          <h3 className={sectionTitle}>Cais</h3>
+          <Button variant="quiet" onClick={() => useGameStore.getState().setCampPanel({ kind: "DOCK", settlementId: t.id })}>
+            Ir ao cais do porto
+          </Button>
+        </section>
+      )}
       <section className="flex flex-col gap-2">
         <h3 className={sectionTitle}>Rações</h3>
         <p className="text-xs text-neutral-400">

@@ -264,9 +264,9 @@ export function buildingCost(id: BuildingId): { gold: number; iron: number } {
 }
 
 /** Título do Comandante conforme quantos povoados governa. */
-export function titleFor(count: number): string {
-  let label: string = REALM.TITLES[0].label;
-  for (const t of REALM.TITLES) if (count >= t.min) label = t.label;
+export function titleFor(count: number, female = false): string {
+  let label: string = female ? REALM.TITLES[0].female : REALM.TITLES[0].label;
+  for (const t of REALM.TITLES) if (count >= t.min) label = female ? t.female : t.label;
   return label;
 }
 

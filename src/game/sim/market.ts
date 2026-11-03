@@ -36,6 +36,8 @@ export interface Economy {
 
 /** O que a economia precisa saber de um povoado (o `Settlement` do reino tem tudo isso). */
 export interface EconTown {
+  /** O luxo típico da terra (Marco 17). */
+  luxury?: number;
   kind: SettlementKind;
   population: number;
   prosperity: number;
@@ -71,7 +73,8 @@ export type IndustryId =
   | "STUD"
   | "HERBALIST"
   | "TRAPPERS"
-  | "PORT";
+  | "PORT"
+  | "LUXURY_WORKS";
 
 /** Oficinas: o que cada nível gasta e produz por dia. As lavouras seguem a estação. */
 export const INDUSTRIES: Record<IndustryId, { label: string; inputs: Partial<Stock>; outputs: Partial<Stock>; harvest?: boolean }> = {
@@ -88,6 +91,7 @@ export const INDUSTRIES: Record<IndustryId, { label: string; inputs: Partial<Sto
   HERBALIST: { label: "Ervanários", inputs: {}, outputs: { LUXURY: 0.12 } },
   TRAPPERS: { label: "Caçadores de peles", inputs: {}, outputs: { CLOTH: 0.3, LUXURY: 0.08 } },
   PORT: { label: "Porto", inputs: {}, outputs: { LUXURY: 0.2, SALT: 0.35 } },
+  LUXURY_WORKS: { label: "Oficinas de luxo", inputs: {}, outputs: { LUXURY: 1.6 } },
 };
 
 export function strata(t: EconTown): { peasants: number; burghers: number; nobles: number } {
@@ -114,6 +118,7 @@ export function industriesOf(t: EconTown): { id: IndustryId; level: number }[] {
     ["HERBALIST", res("HERBS") ? 1.2 : 0],
     ["TRAPPERS", res("FURS") ? 1.2 : 0],
     ["PORT", t.port ? 1 + (has("PORT") ? 1.5 : 0) : 0],
+    ["LUXURY_WORKS", t.luxury ?? 0],
   ];
   return list.filter(([, level]) => level > 0.01).map(([id, level]) => ({ id, level }));
 }

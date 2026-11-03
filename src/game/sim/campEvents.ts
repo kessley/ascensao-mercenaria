@@ -1,5 +1,6 @@
 import type { BattalionData } from "../../store/useGameStore";
 import { fullName, type LieutenantData, type TraitId } from "../data/lieutenants";
+import { newId } from "../../utils/id";
 
 /**
  * Vida no acampamento (Marco 12), em funções puras usadas pelo store:
@@ -49,7 +50,7 @@ export interface Follower {
 const FOLLOWER_NAMES = ["Ermelinda", "Bento", "Guida", "Tadeu", "Rosalva", "Anselmo", "Filipa", "Crispim", "Joana", "Lourenço", "Marta", "Simão"];
 
 export function newFollower(role: FollowerRole, day: number): Follower {
-  return { id: crypto.randomUUID(), role, name: FOLLOWER_NAMES[Math.floor(Math.random() * FOLLOWER_NAMES.length)], since: day };
+  return { id: newId(), role, name: FOLLOWER_NAMES[Math.floor(Math.random() * FOLLOWER_NAMES.length)], since: day };
 }
 
 export const hasFollower = (followers: readonly Follower[], role: FollowerRole) => followers.some((f) => f.role === role);
@@ -230,7 +231,7 @@ function lieutenantPairs(ctx: CampContext): { rivals: [LieutenantData, Lieutenan
 }
 
 const ev = (kind: CampEventKind, title: string, text: string, options: CampEventOption[], data: Record<string, string> = {}): CampEvent => ({
-  id: crypto.randomUUID(),
+  id: newId(),
   kind,
   title,
   text,

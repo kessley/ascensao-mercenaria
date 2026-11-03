@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
 import { sfx } from "../../audio/sounds";
-import { BALANCE, COLORS } from "../../utils/constants";
+import { BALANCE, COLORS, COMBAT } from "../../utils/constants";
 import { angleDiff, angleTo, nearest } from "../../utils/math";
 
 export interface CommanderKeys {
@@ -13,6 +13,17 @@ export interface CommanderKeys {
 
 /** Comandante: círculo azul com contorno dourado, controlado diretamente pelo jogador. */
 export class Commander extends Unit {
+  /** O jeito de quem manda (traços e cicatrizes, ver leaderBonus). */
+  private might = 1;
+
+  /** Ajusta o corpo ao Comandante do momento. */
+  embody(hp: number, damage: number): void {
+    const share = this.hp / this.maxHp;
+    this.maxHp = Math.round(BALANCE.COMMANDER.hp * hp);
+    this.might = damage;
+    this.restoreHp(this.maxHp * share);
+  }
+
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "ALLY", BALANCE.COMMANDER);
     this.autoAttack = false;
@@ -68,6 +79,10 @@ export class Commander extends Unit {
    * Golpe em arco à frente. Se houver um inimigo ao alcance, vira para ele antes;
    * atinge todos os inimigos dentro do arco.
    */
+  override outgoingDamage(target: Unit): number {
+    return super.outgoingDamage(target) * COMBAT.HERO_PACE * this.might;
+  }
+
   trySwing(enemies: readonly Unit[], time: number): void {
     if (!this.isAlive || !this.canAttack(time)) return;
     this.lastAttackAt = time;

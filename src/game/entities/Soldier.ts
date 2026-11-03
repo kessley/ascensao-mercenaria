@@ -2,8 +2,8 @@ import Phaser from "phaser";
 import { Unit } from "./Unit";
 import type { Battalion } from "./Battalion";
 import { drawTroopShape } from "./shapes";
-import { BALANCE, COLORS, FORMATIONS, TROOPS, type AttackKind, type TroopType, type UnitStats } from "../../utils/constants";
-import { angleDiff, angleTo } from "../../utils/math";
+import { BALANCE, COLORS, COMBAT, FORMATIONS, type AttackKind, type TroopType, type UnitStats } from "../../utils/constants";
+import { angleDiff, angleTo, distance } from "../../utils/math";
 
 /**
  * Soldado de um batalhão aliado. Forma por tipo:
@@ -31,7 +31,6 @@ export class Soldier extends Unit {
     this.troopType = troopType;
     this.battalion = battalion;
     this.isLieutenant = isLieutenant;
-    this.canCharge = TROOPS[troopType].canCharge;
     const m = battalion.mods;
     this.chargeMultiplier = BALANCE.CHARGE_MULTIPLIER + m.chargeBonus;
     this.chargeMinDistance = BALANCE.CHARGE_MIN_DISTANCE * m.chargeDistance;
@@ -72,11 +71,43 @@ export class Soldier extends Unit {
     const formationSpeed = f === "SHIELD_WALL" ? this.battalion.mods.shieldWallSpeed : FORMATIONS[f].speed;
     // Cansaço pesa nas pernas; a marcha forçada apressa quem não está lutando
     const pace = this.target ? 1 : Unit.pace;
-    return super.speedMultiplier() * formationSpeed * (this.battalion.leaderPassive?.speed ?? 1) * this.battalion.fatigueSpeed * pace;
+    // Perto do alvo é a toda; fora disso, no passo do batalhão
+    const stride = this.target && distance(this, this.target) <= COMBAT.CHARGE_RANGE ? 1 : this.battalion.stride;
+    return super.speedMultiplier() * formationSpeed * (this.battalion.leaderPassive?.speed ?? 1) * this.battalion.fatigueSpeed * pace * stride;
   }
 
   override attackRange(): number {
     return super.attackRange() * (this.battalion.leaderPassive?.range ?? 1);
+  }
+
+  override get frontFacing(): number {
+    return this.battalion.facing;
+  }
+
+  override shock(amount: number): void {
+    this.battalion.pendingShock += amount;
+  }
+
+  override get volleySize(): number {
+    return this.battalion.soldiers.length;
+  }
+
+  override meleeSkill(): number {
+    return this.attack + FORMATIONS[this.battalion.formation].attackBonus;
+  }
+
+  override defenseSkill(time: number): number {
+    const base = super.defenseSkill(time);
+    return base > 0 ? base + FORMATIONS[this.battalion.formation].defenseBonus : 0;
+  }
+
+  override noteCharge(time: number): void {
+    this.battalion.noteImpact(time);
+  }
+
+  /** Soldado da formação: a Dispersa não segura lança. */
+  override braces(attacker: Unit): boolean {
+    return this.battalion.formation !== "LOOSE" && super.braces(attacker);
   }
 
   override outgoingDamage(target: Unit): number {

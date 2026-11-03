@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import { BALANCE, COLORS, GEO, TERRAIN, TIME, WEATHER, type AttackKind, type TerrainType, type UnitStats, type Weather } from "../../utils/constants";
+import { BALANCE, COLORS, COMBAT, GEO, SIEGE, TERRAIN, TIME, WEATHER, type AttackKind, type TerrainType, type UnitStats, type Weather } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
+import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/combatRules";
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
@@ -41,11 +42,14 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   static groundStamp = 0;
   /** Marcha forçada (a cena liga): o Comandante e os soldados fora de combate andam mais depressa. */
   static pace = 1;
+  /** Flecha caiu sobre gente do próprio lado (a cena conta e avisa). */
+  static onFriendlyFire: ((victim: Unit, shooter: Unit) => void) | null = null;
 
   readonly team: Team;
   readonly radius: number;
-  readonly maxHp: number;
-  readonly ranged: boolean;
+  maxHp: number;
+  /** Atira de longe; acabou a munição, passa a lutar de perto. */
+  ranged: boolean;
   hp: number;
   speed: number;
   damage: number;
@@ -57,6 +61,31 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   facing = 0;
   /** false = só ataca por comando explícito (ex.: Comandante). */
   autoAttack = true;
+  /** No alto da muralha: alcança mais, bate mais forte, apanha menos de flecha. */
+  onWall = false;
+  /** Perícia, defesa, armadura e escudo (ver `UnitStats`). */
+  readonly attack: number;
+  readonly defense: number;
+  readonly armor: number;
+  readonly shieldBlock: number;
+  readonly pierce: number;
+  readonly antiCavalry: number;
+  readonly canBrace: boolean;
+  readonly mass: number;
+  readonly nerve: number;
+  readonly mounted: boolean;
+  readonly chargePower: number;
+  readonly spread: number;
+  readonly volley: number;
+  readonly flatShot: boolean;
+  readonly kite: boolean;
+  /** Tiros que restam (Infinity = quem não conta munição). */
+  ammo: number;
+  readonly maxAmmo: number;
+  /** Derrubado ou desequilibrado: não ataca nem apara até este momento. */
+  stunnedUntil = -Infinity;
+  /** Embalo depois do choque: segue em frente mais um pouco, sem parar para lutar. */
+  private through: { angle: number; until: number } | null = null;
   lastAttackAt = -Infinity;
   lastHitFrom: Unit | null = null;
   lastHitAt = -Infinity;
@@ -82,6 +111,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   stealth = 1;
   /** Sem tocha: à noite não se denuncia, mesmo com o bando de tochas acesas. */
   unlit = false;
+  /** Olho do inimigo a cavalo (ver WarHost): anda solto, não vale a pena ir atrás. */
+  isOutrider = false;
   /** Batedor: avistá-lo não arrasta o bando inteiro (ver Enemy.onSpot). */
   isScout = false;
   role: UnitRole = "TROOP";
@@ -112,6 +143,24 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.range = stats.range;
     this.cooldown = stats.cooldown;
     this.ranged = stats.ranged ?? false;
+    this.attack = stats.attack ?? 40;
+    this.defense = stats.defense ?? 40;
+    this.armor = stats.armor ?? 0;
+    this.shieldBlock = stats.shield ?? 0;
+    this.pierce = stats.pierce ?? 0;
+    this.antiCavalry = stats.antiCavalry ?? 1;
+    this.canBrace = stats.brace ?? false;
+    this.mass = stats.mass ?? 1;
+    this.nerve = stats.nerve ?? 1;
+    this.mounted = stats.mounted ?? false;
+    this.chargePower = stats.charge ?? 1;
+    this.spread = stats.spread ?? 1;
+    this.volley = stats.volley ?? 1;
+    this.flatShot = stats.flat ?? false;
+    this.kite = stats.kite ?? false;
+    this.maxAmmo = stats.ammo ?? Infinity;
+    this.ammo = this.maxAmmo;
+    this.canCharge = this.mounted && !this.ranged;
 
     this.bodyGfx = scene.add.graphics();
     this.barsGfx = scene.add.graphics();
@@ -178,11 +227,12 @@ export abstract class Unit extends Phaser.GameObjects.Container {
 
   speedMultiplier(): number {
     const t = TERRAIN[this.terrainType];
-    return (this.canCharge ? t.cavalrySpeed : t.speed) * this.nightSpeed() * this.groundFactor();
+    const climbing = Unit.terrain?.onLadder(this.x, this.y) ? SIEGE.LADDER_CLIMB : 1;
+    return (this.canCharge || this.mounted ? t.cavalrySpeed : t.speed) * this.nightSpeed() * this.groundFactor() * climbing;
   }
 
   attackRange(): number {
-    const range = this.ranged && this.terrainType === "HILL" ? this.range * BALANCE.HILL_RANGE_BONUS : this.range;
+    const range = (this.ranged && this.terrainType === "HILL" ? this.range * BALANCE.HILL_RANGE_BONUS : this.range) * (this.onWall && this.ranged ? SIEGE.WALL_RANGE : 1);
     if (!this.ranged) return range;
     return Unit.weather === "RAIN" ? range * WEATHER.RAIN_RANGE : Unit.weather === "STORM" ? range * WEATHER.STORM_RANGE : range;
   }
@@ -191,21 +241,115 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return this.canCharge && this.chargeDistance >= this.chargeMinDistance;
   }
 
+  /** Direção da frente da formação em que luta (null = sem formação: não tem lado fraco). */
+  get frontFacing(): number | null {
+    return null;
+  }
+
+  /** De que lado `source` chega nesta unidade. */
+  approachOf(source: Point): Approach {
+    const front = this.frontFacing;
+    return front === null ? "FRONT" : approachOf(front, this, source);
+  }
+
+  /** Perícia de ataque agora. */
+  meleeSkill(): number {
+    return this.attack;
+  }
+
+  /** Defesa agora: derrubado, não apara nada. */
+  defenseSkill(time: number): number {
+    return time < this.stunnedUntil ? 0 : this.defense;
+  }
+
+  /** Lanças firmes: parado, de frente para quem carrega. */
+  braces(attacker: Unit): boolean {
+    return this.canBrace && this.unitState !== "MOVING" && this.unitState !== "FLEEING" && this.approachOf(attacker) === "FRONT";
+  }
+
+  /** A tropa dele sente o golpe (a moral é do batalhão ou do esquadrão). */
+  shock(_amount: number): void {}
+
+  /** Empurrão de um golpe: anda sem cair na água nem atravessar muralha. */
+  shove(angle: number, amount: number): void {
+    this.stepBy(Math.cos(angle) * amount, Math.sin(angle) * amount);
+  }
+
+  /** A investida chegou (ou quebrou em lanças): a tropa fica sabendo. */
+  noteCharge(_time: number): void {}
+
+  /** Bateu e segue em frente com o embalo. */
+  rideThrough(angle: number, time: number): void {
+    this.through = { angle, until: time + COMBAT.CHARGE_THROUGH_MS };
+    this.noteCharge(time);
+  }
+
+  get ridingThrough(): boolean {
+    return this.through !== null;
+  }
+
+  /** Dá um passo de embalo; devolve true enquanto ele durar (a tropa não comanda este soldado). */
+  carryMomentum(dt: number, time: number): boolean {
+    const t = this.through;
+    if (!t) return false;
+    if (time >= t.until) {
+      this.through = null;
+      return false;
+    }
+    const step = this.speed * this.speedMultiplier() * dt;
+    this.stepBy(Math.cos(t.angle) * step, Math.sin(t.angle) * step);
+    this.setFacing(t.angle);
+    this.unitState = "MOVING";
+    return true;
+  }
+
+  /** Quantos atiram junto com ele: unidade grande cobre mais área (ver `volleySpread`). */
+  get volleySize(): number {
+    return 1;
+  }
+
+  /** Pode levar uma flecha que não era para ele. */
+  get strayTarget(): boolean {
+    return true;
+  }
+
+  /** Um tiro a menos; o último deixa de mãos vazias, e aí é lutar de perto. Do alto da muralha, o paiol não acaba. */
+  spendAmmo(): void {
+    if (this.onWall) return;
+    this.ammo--;
+    if (this.ammo > 0) return;
+    this.ranged = false;
+    this.range = BALANCE.OUT_OF_AMMO.range;
+    this.cooldown = BALANCE.OUT_OF_AMMO.cooldown;
+  }
+
+  /** Reabastecido depois da batalha. */
+  refillAmmo(stats: { range: number; cooldown: number; ranged?: boolean }): void {
+    this.ammo = this.maxAmmo;
+    this.ranged = stats.ranged ?? false;
+    this.range = stats.range;
+    this.cooldown = stats.cooldown;
+  }
+
   outgoingDamage(target: Unit): number {
     let dmg = this.damage;
     if (this.terrainType === "HILL" && target.terrainType !== "HILL") dmg *= BALANCE.HILL_DAMAGE_BONUS;
-    if (this.isCharging) dmg *= this.chargeMultiplier;
+    if (target.mounted) dmg *= this.antiCavalry;
+    dmg *= this.isCharging ? this.chargeMultiplier * this.chargePower * COMBAT.CHARGE_PACE : this.ranged ? COMBAT.ARROW_PACE : COMBAT.DAMAGE_PACE;
     if (this.nightCreature) dmg *= 1 + Unit.darkness * (TIME.NIGHT_CREATURE_DAMAGE - 1);
     if (this.inShallows) dmg *= GEO.SHALLOW_DAMAGE_DEALT;
+    if (this.onWall) dmg *= SIEGE.WALL_DAMAGE;
     return dmg;
   }
 
   /** Chamado quando esta unidade abate outra (soldados creditam o batalhão). */
   onKill(): void {}
 
-  incomingMultiplier(_source: Unit, kind: AttackKind): number {
+  incomingMultiplier(source: Unit, kind: AttackKind): number {
     const water = this.inShallows ? GEO.SHALLOW_DAMAGE_TAKEN : 1;
-    return (kind === "RANGED" && this.isInForest ? BALANCE.FOREST_RANGED_TAKEN : 1) * water;
+    const side = sideDamage(this.approachOf(source), kind === "RANGED");
+    const wall = this.onWall && kind === "RANGED" ? SIEGE.WALL_ARROW_TAKEN : 1;
+    return (kind === "RANGED" && this.isInForest ? BALANCE.FOREST_RANGED_TAKEN : 1) * water * side * wall * armorFactor(this.armor, source.pierce);
   }
 
   // --- Movimento e combate ---
@@ -299,7 +443,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   }
 
   canAttack(time: number): boolean {
-    return time - this.lastAttackAt >= this.cooldown;
+    return time >= this.stunnedUntil && time - this.lastAttackAt >= this.cooldown;
   }
 
   takeDamage(amount: number, source: Unit, time: number, kind: AttackKind = "MELEE"): void {
@@ -309,17 +453,24 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       sfx.dodge(this);
       return;
     }
+    const friendly = source !== this && source.team === this.team && kind === "RANGED";
+    // Escudo de frente para a chuva de flechas (quem vem de lado ou por trás não tem o que parar)
+    if (kind === "RANGED" && this.shieldBlock > 0 && this.approachOf(source) === "FRONT" && Math.random() < this.shieldBlock) return;
     this.hp = Math.max(0, this.hp - amount * this.incomingMultiplier(source, kind));
-    this.lastHitFrom = source;
-    this.lastHitAt = time;
-    // Revida quem bateu se não estiver ocupado com outro alvo
-    if (source.isAlive && (!this.target || !this.target.isAlive)) this.target = source;
+    if (friendly) Unit.onFriendlyFire?.(this, source);
+    else {
+      this.lastHitFrom = source;
+      this.lastHitAt = time;
+      // Revida quem bateu se não estiver ocupado com outro alvo
+      if (source.isAlive && (!this.target || !this.target.isAlive)) this.target = source;
+    }
+    if (kind === "RANGED") this.shock(COMBAT.ARROW_SHOCK);
 
     this.redrawBars();
     this.scene.tweens.add({ targets: this.bodyGfx, alpha: 0.35, duration: 60, yoyo: true });
 
     if (this.hp <= 0) {
-      source.onKill();
+      if (!friendly) source.onKill();
       this.die();
     }
   }

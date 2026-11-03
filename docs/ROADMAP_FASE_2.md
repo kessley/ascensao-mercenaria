@@ -2,7 +2,7 @@
 
 Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, estações, comércio, reinos) alimenta os outros. Os marcos estão em ordem de dependência.
 
-**Estado:** Marcos 10 a 16 ✅ OK · próximo: Marco 17. **OK** = concluído e jogável em greybox.
+**Estado:** Marcos 10 a 18 ✅ OK, fase concluída · próximo: Marco 19 (Fase 3). **OK** = concluído e jogável em greybox.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 1 — O bando](ROADMAP_FASE_1.md) · Design: [GDD.md](GDD.md), seção 8 (as regras para os marcos novos estão na 8.1)
 
@@ -696,8 +696,28 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
   - **Equilíbrio:** calibrado por simulação, sem jogar de verdade. Tamanho dos bandos, chance de rendição, custo de escadas e aríete e chance de capturar o Comandante ainda pedem ajuste jogando.
   - **Cercos da IA em campo:** quando um exército da IA cerca uma cidade, a chegada, a fome e o assalto continuam na simulação; o jogador pode atacar o acampamento dele, mas não vê escadas e aríetes inimigos nos muros.
 
-## Marco 17 — Mares e continentes (o novo Mapa Múndi)
+## Marco 17 — Mares e continentes (o novo Mapa Múndi) ✅ OK
 **Objetivo:** a terceira escala de mapa: o planeta, com outros continentes e o oceano entre eles. GDD 8.2 e 8.12.
+
+**Como ficou**
+- **Arquitetura:** cada continente é um mundo inteiro, gerado por `generateWorld` com a cultura dele só no primeiro desembarque. O bando viaja com o que é dele (`seaSlice.ts`); o que é da terra (`CONTINENT_KEYS`: povoados, reinos, nobres, contratos, acampamento, fama) fica guardado como um save parcial. Assim, combate, cidades, economia e IA funcionam em ultramar sem nada de novo.
+- **Planeta:** 4 continentes (`planet.ts`): Reinos do Oeste, Jarlados do Norte, Emirados das Areias e Impérios de Jade, cada um com língua, clima, tropas típicas e um luxo. O Mapa Múndi abre com Shift+Tab; terra sem carta náutica aparece só pelo contorno.
+- **Cais:** fica na praça de todo porto. Cartas (180 de ouro), navios (barca, coca e nau, comprados ou fretados) e quem embarca: soldado 1 lugar, cavalo 3, carroça 4. Quem não couber espera no cais e volta ao bando na volta.
+- **Viagem:** dias conforme distância, navio e estação, com tempestade (carga e homens), calmaria (mais dias e rações) e piratas: pagar pedágio, tentar despistar ou lutar. A abordagem é uma batalha num convés de dois navios ligados por pranchas, com o exército de verdade: as baixas ficam. Quem perde paga caro, mas os piratas devolvem um quarto de cada batalhão por resgate.
+- **Em ultramar:** fama e Temor começam em zero, os primeiros contratos pagam 30% menos, não há acampamento (monta-se um, que fica lá) e a tropa comum é a da terra: lanceiros e arqueiros montados nas areias, machadeiros e huscarlos no norte, alabardeiros e besteiros de repetição em jade.
+- **Comércio:** as oficinas locais produzem o luxo da terra. Medido: âmbar a 24 onde nasce e 79 em casa; 12 unidades compradas por 359 renderam 752.
+- **Terra distante:** a terceira camada da simulação (`farWorld.ts`). Uma semana em passos grossos: prosperidade, cidades que mudam de mãos, tronos e povoados do bando que se perdem. As notícias chegam semanas depois, e na volta o porto conta o que faltava.
+- **A IA no mar:** corsários desembarcam na praia perto de um porto e marcham para saqueá-lo.
+- **Teste automatizado:** 32 testes unitários e 45 verificações em jogo (`npm run test:battle -- mar`), do cais à volta para casa, com save longe de casa. Saves antigos não foram testados com o marco.
+- **Desempenho:** gerar um continente leva menos de 0,1 s; a troca de continente inteira, cerca de 1,6 s. O save com um continente guardado tem cerca de 130 KB.
+- **Ficou de fora:**
+  - calamidades próprias de cada continente: os outros continentes usam as de sempre;
+  - invasões de reinos pelo mar (só há corsários) e ilhas pequenas no Mapa Múndi;
+  - batalha naval entre navios e dano no casco: a frota não afunda;
+  - tropas típicas para o jogador recrutar: por enquanto, só o inimigo as usa;
+  - o equilíbrio de piratas e preços foi visto com jogador simulado, sem partida de verdade.
+
+**O que estava planejado:**
 - **Mapa Múndi do planeta** (3 a 5 continentes, ilhas e rotas marítimas), com névoa e cartas náuticas compráveis.
 - **Navios:** barca, coca e nau; fretar passagem ou comprar e manter frota. Capacidade: soldado 1, cavalo 3, carroça 4.
 - **Viagens:** dias conforme distância, vento e estação. Tempestade, calmaria e **piratas** (batalha de abordagem num convés).
@@ -708,8 +728,27 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 
 **Pronto quando:** o bando embarca num porto, sobrevive à viagem (talvez a piratas), desembarca num continente de outra cultura, lucra com comércio de luxo e, ao voltar, encontra o continente natal mudado pela simulação.
 
-## Marco 18 — Legado e Lendas
+## Marco 18 — Legado e Lendas ✅ OK
 **Objetivo:** a campanha vira uma saga que continua além do Comandante. GDD 8.13.
+
+**Como ficou**
+- **O Comandante:** tem nome, idade e cicatrizes (`legacy.ts`). A idade corre 3 anos por ano de campanha: uma campanha real dura poucos anos, e sem isso ninguém envelheceria. A partir dos 50, a velhice pode matar.
+- **Queda em combate:** antes ele sempre voltava recuperado. Agora pode não se levantar: 10% aos 30 anos, mais com a idade e as cicatrizes, até 60%. Quem sobrevive ganha uma cicatriz, que tira 5% da vida (no máximo 30%). Quem é levado prisioneiro não corre esse risco.
+- **Sucessão:** herda quem está no testamento (Livro do Bando ou ficha do tenente); sem ele, o tenente mais leal; sem tenentes, a tropa escolhe um veterano. O herdeiro traz os traços dele, que mudam o jogo: um corajoso bate mais forte, um ganancioso recebe contratos melhores, um honrado ganha mais Honra. A fama cai 25%, a Honra volta um pouco ao meio, os tenentes perdem lealdade (o ambicioso, mais) e o acampamento fica de luto.
+- **Fim:** o jogo só acaba quando o bando acaba (sem tropas, sem tenentes e sem ouro) ou quando o jogador encerra a saga.
+- **Ambições:** 6 opcionais, até 2 de cada vez (`ambitions.ts`), com prêmio em ouro e Fama e frase própria no epílogo. O herdeiro continua de onde o anterior parou.
+- **Livro do Bando (L):** Comandante, testamento, ambições, quem veio antes, Lendas e o fim da saga.
+- **Modo Lendas:** toda linha do diário vai para uma crônica de até 3000 acontecimentos; quando enche, sai primeiro o miúdo, nunca vitória ou desastre. O livro tem Crônica com busca, Pessoas, Batalhas, Reinos, Povoados e Antes do bando. Cada página sai do próprio texto da crônica (`legends.ts`).
+- **Epílogo:** ao encerrar, a saga é guardada fora dos saves (até 8) e fica em Lendas, no menu principal.
+- **Mundos que lembram:** "Voltar a este mundo, N anos depois" recria a mesma semente de 180 a 420 anos adiante. O bando entra na história, o povoado que ele governou lembra disso e as ruínas viram o túmulo do último chefe (`sagas.ts`).
+- **Teste automatizado:** 31 testes unitários e 36 verificações em jogo (`npm run test:battle -- lendas`), da primeira cicatriz ao mundo séculos depois.
+- **Ficou de fora:**
+  - mundos que lembram trazem história, texto e nomes, mas nem as ruínas das vilas fundadas pelo bando nem a geografia política mudam;
+  - o título no feminino depende de o nome estar nas listas de nomes femininos: tenentes herdeiros podem sair com título masculino;
+  - nomes iguais confundem as páginas das Lendas, que procuram pelo texto;
+  - idade, velhice e cicatrizes não foram medidas numa campanha longa de verdade.
+
+**O que estava planejado:**
 - **Envelhecimento e morte do Comandante**, com herdeiro (tenente leal ou escolhido em testamento).
 - **Ambições opcionais**, com bônus e epílogo próprio.
 - **Modo Lendas:** a crônica completa navegável (pessoas, batalhas, reinos, povoados).
