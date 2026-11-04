@@ -20,8 +20,8 @@ export type Dir = "S" | "E" | "N";
 export type Vehicle = "WAGON" | "CART" | "RAM";
 
 export interface Look {
-  /** Bicho sem cavaleiro: o resto do visual não conta. O cervo é do mapa vivo (G4). */
-  beast?: "WOLF" | "DEER";
+  /** Bicho sem cavaleiro: o resto do visual não conta. O cervo é do mapa vivo e o cavalo do estábulo (G4), na pelagem de `color`. */
+  beast?: "WOLF" | "DEER" | "HORSE";
   /** Veículo: também ignora o resto, menos a cor (a camisa do carroceiro, o toldo, a flâmula). */
   vehicle?: Vehicle;
   body: FigureBody;
@@ -38,6 +38,8 @@ export interface Look {
   cape?: number;
   /** Chifres no elmo (o Senhor da Guerra orc). */
   horns?: boolean;
+  /** Coroa de ouro na cabeça (reis, rainhas e consortes, na corte). */
+  crown?: boolean;
   /** Olhos acesos nessa cor (o Necromante, debaixo do capuz). */
   eyes?: number;
   /**
@@ -55,7 +57,7 @@ export const ANIM = { IDLE: 0, WALK: 2, ATTACK: 6, DIE: 9, GUARD: 12, HEAVY: 13,
 const isFall = (frame: number) => frame >= ANIM.DIE && frame < ANIM.DIE + 3;
 
 export const lookKey = (l: Look): string =>
-  [l.vehicle ?? "", l.beast ?? "", l.body, l.head, l.armor, l.weapon, l.shield, l.mount, l.color.toString(16), l.trim?.toString(16) ?? "", l.cape?.toString(16) ?? "", l.horns ? "h" : "", l.eyes?.toString(16) ?? "", l.scale ?? 1].join(".");
+  [l.vehicle ?? "", l.beast ?? "", l.body, l.head, l.armor, l.weapon, l.shield, l.mount, l.color.toString(16), l.trim?.toString(16) ?? "", l.cape?.toString(16) ?? "", l.horns ? "h" : "", l.crown ? "c" : "", l.eyes?.toString(16) ?? "", l.scale ?? 1].join(".");
 
 export const rides = (l: Look) => !!l.beast || l.mount !== "NONE";
 
@@ -198,6 +200,16 @@ function gearColor(l: Look): number {
   }
 }
 
+/** Coroa de ouro em cima da cabeça: o aro e três pontas (`x` e `w` são os da cabeça). */
+function crown(g: Grid, l: Look, x: number, y: number, w: number): void {
+  if (!l.crown) return;
+  const gold = ramp(0xe0b040);
+  g.rect(x, y - 1, w, 2, gold.base);
+  g.rect(x, y - 1, w, 1, gold.light);
+  for (const px of [x, x + Math.floor(w / 2), x + w - 1]) g.px(px, y - 2, gold.base);
+  g.px(x + Math.floor(w / 2), y, 0xc0392b);
+}
+
 /** Chifres de osso saindo do elmo, um de cada lado da cabeça (`x` e `w` são os da cabeça). */
 function horns(g: Grid, l: Look, x: number, y: number, w: number): void {
   if (!l.horns) return;
@@ -296,6 +308,7 @@ function headFront(g: Grid, m: Metrics, cx: number, y: number, l: Look): void {
   g.px(x, y, CLEAR);
   g.px(x + w - 1, y, CLEAR);
   horns(g, l, x, y, w);
+  crown(g, l, x, y, w);
 }
 
 function headSide(g: Grid, m: Metrics, cx: number, y: number, l: Look): void {
@@ -365,6 +378,7 @@ function headSide(g: Grid, m: Metrics, cx: number, y: number, l: Look): void {
   g.px(x, y, CLEAR);
   g.px(x + w - 1, y, CLEAR);
   horns(g, l, x, y, w);
+  crown(g, l, x, y, w);
 }
 
 function headBack(g: Grid, m: Metrics, cx: number, y: number, l: Look): void {
@@ -395,6 +409,7 @@ function headBack(g: Grid, m: Metrics, cx: number, y: number, l: Look): void {
   g.px(x, y, CLEAR);
   g.px(x + w - 1, y, CLEAR);
   horns(g, l, x, y, w);
+  crown(g, l, x, y, w);
 }
 
 function torso(g: Grid, m: Metrics, x: number, y: number, w: number, l: Look, front: boolean): void {
@@ -818,6 +833,7 @@ function drawFall(g: Grid, m: Metrics, cx: number, fy: number, stage: number, l:
 
 function mountRamp(l: Look): Ramp {
   if (l.beast === "DEER") return DEER;
+  if (l.beast === "HORSE") return ramp(l.color);
   return l.mount === "WOLF" || l.beast === "WOLF" ? WOLF : HORSE;
 }
 
@@ -1113,7 +1129,7 @@ function drawMounted(g: Grid, m: Metrics, cx: number, fy: number, dir: Dir, fram
     else wolfBack(g, cx, fy, frame);
     return;
   }
-  if (l.beast === "DEER") {
+  if (l.beast === "DEER" || l.beast === "HORSE") {
     if (dir === "E") horseSide(g, cx, fy, frame, l);
     else if (dir === "S") horseHead(g, cx, horseFront(g, cx, fy, frame, l), l);
     else horseBack(g, cx, fy, frame, l);

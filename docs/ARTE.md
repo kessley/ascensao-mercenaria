@@ -6,9 +6,10 @@ Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel a
 - todo soldado, inimigo e bicho que luta;
 - o chão, em todos os degraus do zoom, com água que se mexe, pontes, vaus, balsas e picos;
 - as matas: árvores, moitas e pedras;
-- as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades.
+- as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades;
+- os interiores das construções, a Cidade Alta das capitais e a Liça dos duelos (G4, parte 5).
 
-Interiores, interface e efeitos ainda são greybox.
+A interface e os efeitos ainda são greybox.
 
 ## Como a arte é feita
 - **Por código, em camadas** (`src/game/art/`). Nenhuma imagem é carregada: as folhas são desenhadas na primeira vez que alguém veste aquele visual e guardadas como textura.
@@ -114,9 +115,9 @@ Interiores, interface e efeitos ainda são greybox.
 | Moradores, camponeses, viajantes, peregrinos, caçadores e cervos no mapa | `MapLife`, `Extra` | ✅ pixel art (G4): figuras do G1; o camponês trabalha a terra com a enxada e o caçador volta com o cervo nas costas |
 | Seguidores do acampamento e cargas | `CampLife`, `campProps.ts` | ✅ pixel art (G4): figuras do G1 com a roupa do ofício, os lugares de trabalho (caldeirão, banca, enfermaria, púlpito, bigorna, varal) e a carga de ferro; as crianças ficaram para depois |
 | Tenentes sentados na fogueira | `CampArea`, `Extra` | ✅ pixel art (G4): sentados, virados para o fogo, com o anel prateado |
-| Gente dos interiores | `InteriorScene` | greybox |
-| Cidade Alta das capitais | `CapitalScene` | greybox |
-| Duelos da Liça | `DuelScene` | greybox |
+| Gente dos interiores | `InteriorScene`, `Extra` | ✅ pixel art (G4): guardas, nobres (quem reina, de coroa), escrivães, sacerdotes, ladrões e o rato dos esgotos; quem dorme deita no catre |
+| Cidade Alta das capitais | `CapitalScene`, `Extra` | ✅ pixel art (G4): o povo, os criados, os guardas e os nobres; disfarçado, o Comandante usa capuz |
+| Duelos da Liça | `DuelScene`, `Extra` | ✅ pixel art (G4): os dois lutadores no dobro do tamanho, com as poses do duelo, e a arquibancada cheia |
 
 ### Efeitos
 | O quê | Onde no código | Estado |
@@ -152,7 +153,7 @@ Interiores, interface e efeitos ainda são greybox.
 | Muralhas, paliçadas, torres e portões; o portão fechado e o arrombado no cerco | `TownArt`, `SiegeWorks` | ✅ pixel art |
 | Pátios da guarnição (tendas, cerca, fogueira, armeiro, bonecos) | `TownArt` | ✅ pixel art |
 | Chão dos povoados (lavouras, ruas, praça, pátios) | `TerrainMap` | ✅ pintado no chão, com o filtro do G2 de perto |
-| Cidade Alta vista de fora | `TownArt` | ✅ pixel art (por dentro é G4) |
+| Cidade Alta vista de fora | `TownArt` | ✅ pixel art (por dentro também: G4, parte 5) |
 | Acampamento do bando (paliçada, torres, pavilhão, intendência, recrutamento, estábulo, ferraria, treino, poço, tendas dos batalhões) | `CampArea` | ✅ pixel art |
 | Bandeiras dos povoados (paço, portões, guarnição), na cor do dono | `Settlements`, `TownArt` | ✅ pixel art |
 | Locais de contrato: barracas de bandidos, choupanas goblins, ruínas assombradas, vau do pântano | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão pisado pintado no chão |
@@ -167,8 +168,8 @@ Interiores, interface e efeitos ainda são greybox.
 | Barcaças e navios de comércio | ✅ pixel art (G4, parte 3), `ships.ts`: casco, velas e espuma; vela recolhida no porto durante a tempestade |
 | Convés da abordagem | ✅ pixel art (G4, parte 3), `deck.ts`: os dois navios, as pranchas e o mar que corre |
 | Gente do mapa e do acampamento (ver acima) | ✅ pixel art (G4, parte 4) |
-| Interiores das construções | greybox |
-| Cidade Alta das capitais | greybox |
+| Interiores das construções | ✅ pixel art (G4, parte 5), `interiors.ts`: a sala numa imagem só e os móveis como peças, cada um com a sua altura |
+| Cidade Alta das capitais | ✅ pixel art (G4, parte 5), `cityArt.ts` e `capitalArt.ts`: o chão com o filtro do G2 e o calçamento; os prédios do G3 e os novos (torre de menagem, paços, palácios com jardim, chafariz) |
 
 ### Interface (G5)
 | O quê | Estado |
@@ -189,7 +190,7 @@ Interiores, interface e efeitos ainda são greybox.
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco,** em seis partes. As quatro primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento. Falta: os interiores e a Cidade Alta, e o acabamento do G1.
+4. **G4, resto do elenco,** em seis partes. As cinco primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta. Falta o acabamento do G1.
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface:** fonte, molduras, ícones e retratos.

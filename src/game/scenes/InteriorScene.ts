@@ -1,11 +1,18 @@
 import Phaser from "phaser";
 import { buildInterior, type Furniture, type InteriorDef, type Npc, type Spot, type Talk } from "../data/interiors";
-import { drawTroopShape } from "../entities/shapes";
 import { registerDialogHandler } from "../interiorBridge";
 import { courtChoice, nobleTalk } from "../data/courtTalk";
 import { useGameStore, type CampPanel } from "../../store/useGameStore";
-import { COLORS, GOODS, GOOD_LIST, WORLD } from "../../utils/constants";
+import { GOODS, GOOD_LIST, WORLD } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
+import { Extra } from "../entities/Extra";
+import { Unit } from "../entities/Unit";
+import { bitmapKey } from "../art/atlas";
+import { gridBitmap } from "../art/pixel";
+import { BACK_FACE, FLAT_FURNITURE, ROOM_WALL, furniturePiece, roomGrid } from "../art/interiors";
+import { commanderLook, folkLook, nobleLook, troopLook } from "../art/looks";
+import type { Look } from "../art/figures";
+import { seedFromText } from "../worldgen/rng";
 
 /** Ao entrar: qual prédio e para onde o Comandante volta ao sair. */
 export interface InteriorData {
@@ -21,33 +28,49 @@ interface NpcView {
   home: Point;
   pos: Point;
   target: Point;
-  gfx: Phaser.GameObjects.Graphics;
+  fig: Extra;
   label: Phaser.GameObjects.Text;
   wait: number;
+  /** Deitado no catre (ferido, doente, dormindo): não anda nem vira. */
+  lying: boolean;
+  /** Onde fica o nome (de quem deita, na cabeceira do catre); null = em cima da cabeça. */
+  labelAt: Point | null;
 }
 
 const COMMANDER_SPEED = 200;
 const RADIUS = 14;
 /** Dá para falar por cima de um balcão. */
 const TALK_RADIUS = 82;
+/** Pelagens dos cavalos do estábulo, um de cada. */
+const HORSE_COATS = [0x7a5030, 0x5a3a22, 0x3a2a20, 0x9a8a7a, 0xb08a5a, 0x6a4a2a];
+/** Onde fica o canto da grade de cada móvel em relação ao pé (a textura é feita uma vez só). */
+const OFFSETS = new Map<string, { dx: number; dy: number }>();
 
-const FLOOR: Record<InteriorDef["style"], { floor: number; seam: number; wall: number }> = {
-  TENT: { floor: 0xc9b48a, seam: 0xb09a70, wall: 0x9c8660 },
-  WOOD: { floor: 0x8a6a45, seam: 0x6e5236, wall: 0x4a321c },
-  STONE: { floor: 0x8d877c, seam: 0x77716a, wall: 0x4e4a44 },
-  TEMPLE: { floor: 0xd9d2bf, seam: 0xbdb6a2, wall: 0x77716a },
-};
+/** A roupa de quem está na sala: pelo ofício, se a sala diz; senão, nobre, tropa ou morador. */
+function npcLook(n: Npc): Look {
+  if (n.folk) {
+    const own = n.folk === "TOWNSFOLK" || n.folk === "FAMILY" || n.folk === "CLERK" || n.folk === "MERCHANT";
+    return folkLook(n.folk, own ? n.color : undefined);
+  }
+  if (n.nobleId || n.crown) return nobleLook(n.color, !!n.crown);
+  if (n.troop) return n.color === 0xdfe3ee ? { ...troopLook("INFANTRY"), trim: 0xdfe3ee } : troopLook(n.troop);
+  return folkLook("TOWNSFOLK", n.color);
+}
 
 /**
  * Interior de uma estrutura (Marco 14), no estilo de um mapa de Pokémon: a cena do mundo dorme
  * (o tempo para), o Comandante anda pela sala com WASD, fala com quem está ali (E) e sai pelo
  * tapete da porta. As conversas abrem os painéis de sempre (Intendência, Ferraria...) ou fazem
  * algo ali mesmo (pagar uma rodada, dar esmola, dar comida a uma família com fome).
+ *
+ * Em pixel art (G4): a sala é uma imagem só (chão, paredes, porta), cada móvel uma peça com a
+ * profundidade do pé, e a gente são figuras do G1. A câmera fica em 200% e segue o Comandante
+ * quando a sala não cabe na tela.
  */
 export class InteriorScene extends Phaser.Scene {
   private def!: InteriorDef;
   private data0!: InteriorData;
-  private commander!: Phaser.GameObjects.Graphics;
+  private commander!: Extra;
   private pos: Point = { x: 0, y: 0 };
   private facing = -Math.PI / 2;
   private npcs: NpcView[] = [];
@@ -80,16 +103,16 @@ export class InteriorScene extends Phaser.Scene {
     }
     this.def = def;
     this.cameras.main.setBackgroundColor(0x0d0d0d);
+    // Pixel art só fica firme em escala inteira: 200% quando a tela tem espaço, senão 100%
+    const cam = this.cameras.main;
+    cam.setZoom(cam.width >= 1000 && cam.height >= 560 ? 2 : 1);
     this.drawRoom();
     for (const n of def.npcs) this.addNpc(n);
     this.pos = { ...def.spawn };
-    this.commander = this.add.graphics().setDepth(5);
-    this.drawCommander();
-
-    const cam = this.cameras.main;
-    const zoom = Math.min(1.35, (cam.width - 80) / def.w, (cam.height - 140) / def.h);
-    cam.setZoom(zoom);
-    cam.centerOn(def.w / 2, def.h / 2 + 20 / zoom);
+    this.commander = new Extra(this, this.pos.x, this.pos.y, commanderLook(), RADIUS);
+    this.commander.setOwnLod("FULL");
+    this.commander.setFacing(this.facing);
+    this.follow();
     cam.fadeIn(220, 0, 0, 0);
 
     const keyboard = this.input.keyboard;
@@ -117,9 +140,10 @@ export class InteriorScene extends Phaser.Scene {
     const unregister = registerDialogHandler((id) => this.onChoice(id));
     store.enterInterior({ key: def.key, title: def.title, settlementId: def.settlementId });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, unregister);
+    if (import.meta.env.DEV) (window as unknown as { __interior?: InteriorScene }).__interior = this;
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
     if (!this.def || this.leaving) return;
     const dt = Math.min(delta, 50) / 1000;
     const s = useGameStore.getState();
@@ -127,37 +151,35 @@ export class InteriorScene extends Phaser.Scene {
     if (!busy) this.move(dt);
     for (const v of this.npcs) this.updateNpc(v, dt, busy);
     this.updateNear();
+    this.showNames();
+    this.follow();
+    Unit.animateAll(time, this.cameras.main.worldView, this);
+  }
+
+  /** A sala inteira na tela quando cabe; senão, a câmera acompanha o Comandante até as paredes. */
+  private follow(): void {
+    const cam = this.cameras.main;
+    const d = this.def;
+    const vw = cam.width / cam.zoom;
+    const vh = cam.height / cam.zoom;
+    // Folga em cima para o nome da sala, que fica por cima da tela
+    const x0 = -ROOM_WALL;
+    const x1 = d.w + ROOM_WALL;
+    const y0 = -ROOM_WALL - BACK_FACE - 34 / cam.zoom;
+    const y1 = d.h + ROOM_WALL + 6;
+    const axis = (p: number, a: number, b: number, v: number) => (b - a <= v ? (a + b) / 2 : Phaser.Math.Clamp(p, a + v / 2, b - v / 2));
+    cam.centerOn(Math.round(axis(this.pos.x, x0, x1, vw)), Math.round(axis(this.pos.y, y0, y1, vh)));
   }
 
   // --- Desenho ---
 
   private drawRoom(): void {
     const d = this.def;
-    const st = FLOOR[d.style];
-    const g = this.add.graphics().setDepth(0);
-    const wall = 22;
-    g.fillStyle(st.floor, 1);
-    g.fillRect(0, 0, d.w, d.h);
-    g.lineStyle(1, st.seam, 0.7);
-    if (d.style === "WOOD") for (let y = 26; y < d.h; y += 26) g.lineBetween(0, y, d.w, y);
-    else if (d.style === "TENT") for (let x = 60; x < d.w; x += 90) g.lineBetween(x, 0, x, d.h);
-    else {
-      for (let y = 40; y < d.h; y += 40) g.lineBetween(0, y, d.w, y);
-      for (let x = 40; x < d.w; x += 40) g.lineBetween(x, 0, x, d.h);
-    }
-    g.fillStyle(st.wall, 1);
-    g.fillRect(-wall, -wall, d.w + wall * 2, wall);
-    g.fillRect(-wall, 0, wall, d.h);
-    g.fillRect(d.w, 0, wall, d.h);
-    g.fillRect(-wall, d.h, d.w / 2 - 34 + wall, wall);
-    g.fillRect(d.w / 2 + 34, d.h, d.w / 2 - 34 + wall, wall);
-    g.lineStyle(3, COLORS.OUTLINE, 1);
-    g.strokeRect(-wall, -wall, d.w + wall * 2, d.h + wall * 2);
-    // Tapete da porta (por onde se sai)
-    g.fillStyle(0x7a2a22, 1);
-    g.fillRect(d.door.x - 34, d.h - 14, 68, 28);
-    g.lineStyle(2, 0xe0b040, 0.9);
-    g.strokeRect(d.door.x - 34, d.h - 14, 68, 28);
+    const wall = ROOM_WALL;
+    // A sala só depende do estilo, do tamanho e da porta: povoados diferentes dividem a textura
+    const key = `sala:${d.style}:${d.w}x${d.h}:${Math.round(d.door.x)}`;
+    const tex = bitmapKey(this, key, () => gridBitmap(roomGrid(d.style, d.w, d.h, d.door.x, seedFromText(key))));
+    this.add.image(-wall, -wall - BACK_FACE, tex).setOrigin(0, 0).setDepth(-2);
     // Paredes contam como sólidas
     this.solids.push(
       new Phaser.Geom.Rectangle(-wall, -wall, d.w + wall * 2, wall),
@@ -166,187 +188,87 @@ export class InteriorScene extends Phaser.Scene {
       new Phaser.Geom.Rectangle(-wall, d.h, d.w / 2 - 34 + wall, wall),
       new Phaser.Geom.Rectangle(d.w / 2 + 34, d.h, d.w / 2 - 34 + wall, wall),
     );
-    const items = this.add.graphics().setDepth(1);
-    for (const fu of [...d.furniture].sort((a, b) => Number(b.kind === "CARPET" || b.kind === "HAY") - Number(a.kind === "CARPET" || a.kind === "HAY"))) {
-      this.drawFurniture(items, fu);
+    d.furniture.forEach((fu, i) => {
+      this.placeFurniture(fu, i);
       if (fu.solid) this.solids.push(new Phaser.Geom.Rectangle(fu.x, fu.y, fu.w, fu.h));
-    }
+    });
+    // Onde dá para mexer em alguma coisa: um brilho pequeno no chão
+    const marks = this.add.graphics().setDepth(-0.4);
     for (const sp of d.spots) {
-      items.fillStyle(0xffe066, 0.5);
-      items.fillCircle(sp.x, sp.y, 5);
+      marks.fillStyle(0xffe066, 0.55);
+      marks.fillRect(Math.round(sp.x) - 1, Math.round(sp.y) - 3, 2, 6);
+      marks.fillRect(Math.round(sp.x) - 3, Math.round(sp.y) - 1, 6, 2);
     }
   }
 
-  private drawFurniture(g: Phaser.GameObjects.Graphics, fu: Furniture): void {
-    const { x, y, w, h, color } = fu;
-    const outline = () => {
-      g.lineStyle(2, COLORS.OUTLINE, 0.9);
-      g.strokeRect(x, y, w, h);
-    };
-    switch (fu.kind) {
-      case "CARPET":
-        g.fillStyle(color, 0.85);
-        g.fillRect(x, y, w, h);
-        g.lineStyle(3, 0xe0b040, 0.6);
-        g.strokeRect(x + 6, y + 6, w - 12, h - 12);
-        return;
-      case "HAY":
-        g.fillStyle(color, 0.8);
-        g.fillRect(x, y, w, h);
-        g.lineStyle(1, 0xa89040, 0.8);
-        for (let k = 6; k < h; k += 8) g.lineBetween(x + 4, y + k, x + w - 4, y + k - 3);
-        return;
-      case "BED":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.fillStyle(0xe8e0d0, 1);
-        if (h > w) g.fillRect(x + 4, y + 4, w - 8, h * 0.22);
-        else g.fillRect(x + 4, y + 4, w * 0.22, h - 8);
-        outline();
-        return;
-      case "BARREL":
-        g.fillStyle(color, 1);
-        g.fillCircle(x + w / 2, y + h / 2, w / 2);
-        g.lineStyle(2, 0x2a1a0a, 1);
-        g.strokeCircle(x + w / 2, y + h / 2, w / 2);
-        g.strokeCircle(x + w / 2, y + h / 2, w / 3);
-        return;
-      case "SACK":
-        g.fillStyle(color, 1);
-        g.fillEllipse(x + w / 2, y + h / 2, w, h);
-        g.lineStyle(2, 0x6a5030, 1);
-        g.strokeEllipse(x + w / 2, y + h / 2, w, h);
-        g.lineBetween(x + w / 2 - 4, y + 4, x + w / 2 + 4, y + 4);
-        return;
-      case "CRATE":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.lineStyle(2, 0x3a2a14, 1);
-        g.lineBetween(x, y, x + w, y + h);
-        g.lineBetween(x + w, y, x, y + h);
-        outline();
-        return;
-      case "FIRE":
-        g.fillStyle(0x3a2a20, 1);
-        g.fillRect(x, y, w, h);
-        g.fillStyle(0xff8c1a, 1);
-        g.fillCircle(x + w / 2, y + h / 2 + 4, Math.min(w, h) * 0.3);
-        g.fillStyle(0xffe066, 1);
-        g.fillCircle(x + w / 2, y + h / 2 + 6, Math.min(w, h) * 0.16);
-        outline();
-        return;
-      case "ANVIL":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y + h * 0.3, w, h * 0.4);
-        g.fillRect(x + w * 0.3, y, w * 0.4, h);
-        return;
-      case "IRON":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.lineStyle(1, 0x4a5a6a, 1);
-        g.strokeRect(x, y, w, h);
-        return;
-      case "HORSE":
-        g.fillStyle(color, 1);
-        g.fillEllipse(x + w / 2, y + h / 2 + 6, w, h * 0.7);
-        g.fillEllipse(x + w / 2, y + 8, w * 0.4, h * 0.36);
-        g.lineStyle(2, COLORS.OUTLINE, 0.8);
-        g.strokeEllipse(x + w / 2, y + h / 2 + 6, w, h * 0.7);
-        return;
-      case "RACK":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.lineStyle(2, 0xb8b8b8, 1);
-        for (let k = 10; k < h; k += 18) g.lineBetween(x + 4, y + k, x + w - 4, y + k - 8);
-        return;
-      case "ALTAR":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.fillStyle(0xffe066, 1);
-        for (const cx of [x + 14, x + w - 14]) g.fillCircle(cx, y + 10, 4);
-        outline();
-        return;
-      case "BOARD":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.lineStyle(1, 0xe8e8e8, 0.7);
-        for (let k = 6; k < h; k += 7) g.lineBetween(x + 8, y + k, x + w - 8 - ((k * 13) % 30), y + k);
-        outline();
-        return;
-      case "BANNER":
-        g.lineStyle(3, 0x3a2a14, 1);
-        g.lineBetween(x + w / 2, y - 10, x + w / 2, y + h + 14);
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        return;
-      case "CHEST":
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        g.fillStyle(0xe0b040, 1);
-        g.fillRect(x, y + h * 0.4, w, 4);
-        outline();
-        return;
-      default:
-        g.fillStyle(color, 1);
-        g.fillRect(x, y, w, h);
-        if (fu.kind === "COUNTER") {
-          g.fillStyle(0x000000, 0.2);
-          g.fillRect(x, y + h - 8, w, 8);
-        }
-        outline();
+  private placeFurniture(fu: Furniture, i: number): void {
+    if (fu.kind === "HORSE") {
+      // O cavalo do estábulo é uma figura: respira parado na baia, de lado
+      const look: Look = { beast: "HORSE", body: "HUMAN", head: "BARE", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: HORSE_COATS[i % HORSE_COATS.length] };
+      const horse = new Extra(this, Math.round(fu.x + fu.w / 2), Math.round(fu.y + fu.h * 0.55), look, 10);
+      horse.setOwnLod("FULL");
+      horse.setFacing(i % 2 ? Math.PI : 0);
+      return;
     }
+    const x = Math.round(fu.x);
+    const y = Math.round(fu.y);
+    const w = Math.round(fu.w);
+    const h = Math.round(fu.h);
+    // As decorações (canecas, livros, armas) variam com o lugar do móvel na sala
+    const seed = (x * 31 + y * 17 + w * 7 + h) >>> 0;
+    const key = `movel:${fu.kind}:${w}x${h}:${fu.color.toString(16)}:${seed}`;
+    let off = OFFSETS.get(key);
+    if (!off || !this.textures.exists(key)) {
+      const piece = furniturePiece(fu.kind, w, h, fu.color, seed);
+      if (!piece) return;
+      off = { dx: piece.dx, dy: piece.dy };
+      OFFSETS.set(key, off);
+      bitmapKey(this, key, () => gridBitmap(piece.grid));
+    }
+    // Rentes ao chão ficam embaixo de todos; o catre, pela cabeceira (quem deita fica por cima);
+    // o resto pela linha de baixo do pé, como as figuras
+    const depth = FLAT_FURNITURE.has(fu.kind) ? -1 + y * 1e-6 : fu.kind === "BED" ? y * 1e-6 : (y + h) * 1e-6;
+    this.add.image(x + off.dx, y + off.dy, key).setOrigin(0, 0).setDepth(depth);
   }
 
   private addNpc(npc: Npc): void {
-    const gfx = this.add.graphics().setDepth(4);
-    if (npc.troop) {
-      drawTroopShape(gfx, npc.troop, 11);
-      if (npc.color !== 0x2f6fdf) {
-        gfx.fillStyle(npc.color, 1);
-        gfx.fillCircle(0, 0, 8);
+    const fig = new Extra(this, npc.x, npc.y, npcLook(npc), npc.folk === "RAT" ? 10 : 11);
+    fig.setOwnLod("FULL");
+    let pos = { x: npc.x, y: npc.y };
+    let labelAt: Point | null = null;
+    const lying = npc.mark === "WOUNDED" || npc.mark === "SICK" || npc.mark === "SLEEP";
+    fig.setFacing(Math.PI / 2);
+    if (lying) {
+      fig.setPose("SLEEP");
+      // Deita no catre logo acima, se houver (o alojamento põe cada um na frente do seu), com a
+      // cabeça no travesseiro: no quadro caído a cabeça fica à direita, então gira um quarto de volta
+      // (de 90 em 90 graus o pixel art não borra) no catre em pé, ou espelha no deitado
+      const bed = this.def.furniture.find((f) => f.kind === "BED" && npc.x >= f.x && npc.x <= f.x + f.w && npc.y >= f.y + f.h - 4 && npc.y - (f.y + f.h) < 30);
+      if (bed && bed.h > bed.w) {
+        fig.rotation = -Math.PI / 2;
+        pos = { x: Math.round(bed.x + bed.w / 2 - 3), y: Math.round(bed.y + bed.h * 0.3) };
+      } else if (bed) {
+        fig.scaleX = -1;
+        pos = { x: Math.round(bed.x + bed.w * 0.36), y: Math.round(bed.y + bed.h / 2 - 4) };
       }
-    } else {
-      gfx.fillStyle(npc.color, 1);
-      gfx.fillCircle(0, 0, 11);
-      gfx.lineStyle(2, COLORS.OUTLINE, 1);
-      gfx.strokeCircle(0, 0, 11);
-      gfx.fillStyle(0x3a2a1a, 1);
-      gfx.fillCircle(0, -4, 5);
+      if (bed) labelAt = { x: Math.round(bed.x + bed.w / 2), y: Math.round(bed.y - 10) };
     }
-    if (npc.crown) {
-      gfx.fillStyle(0xe0b040, 1);
-      gfx.fillTriangle(-9, -11, -3, -18, 0, -11);
-      gfx.fillTriangle(9, -11, 3, -18, 0, -11);
-    }
-    if (npc.mark === "WOUNDED") {
-      gfx.fillStyle(0xffffff, 1);
-      gfx.fillRect(-7, -2, 14, 4);
-      gfx.fillStyle(0xd02020, 1);
-      gfx.fillRect(-2, -6, 4, 12);
-    } else if (npc.mark === "SICK") {
-      gfx.fillStyle(0x80c050, 0.6);
-      gfx.fillCircle(0, 0, 12);
-    }
+    fig.x = pos.x;
+    fig.y = pos.y;
+    const zoom = this.cameras.main.zoom;
     const label = this.add
-      .text(npc.x, npc.y - 22, npc.mark === "SLEEP" ? "z z z" : npc.name, { fontFamily: "monospace", fontSize: "11px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 })
-      .setOrigin(0.5)
+      .text(pos.x, pos.y + fig.headY - 6, npc.mark === "SLEEP" ? "z z z" : npc.name, {
+        fontFamily: "monospace",
+        fontSize: `${Math.round(15 / zoom)}px`,
+        color: "#ffe9b0",
+        stroke: "#000000",
+        strokeThickness: Math.max(2, Math.round(4 / zoom)),
+        resolution: zoom,
+      })
+      .setOrigin(0.5, 1)
       .setDepth(6)
       .setAlpha(npc.mark === "SLEEP" ? 0.8 : 0);
-    gfx.setPosition(npc.x, npc.y);
-    this.npcs.push({ npc, home: { x: npc.x, y: npc.y }, pos: { x: npc.x, y: npc.y }, target: { x: npc.x, y: npc.y }, gfx, label, wait: Math.random() * 2 });
-  }
-
-  private drawCommander(): void {
-    const g = this.commander;
-    g.clear();
-    g.fillStyle(COLORS.ALLY, 1);
-    g.fillCircle(0, 0, RADIUS);
-    g.lineStyle(3, COLORS.COMMANDER_OUTLINE, 1);
-    g.strokeCircle(0, 0, RADIUS);
-    g.fillStyle(COLORS.COMMANDER_OUTLINE, 1);
-    g.fillTriangle(RADIUS + 6, 0, RADIUS - 2, -5, RADIUS - 2, 5);
-    g.setPosition(this.pos.x, this.pos.y);
-    g.setRotation(this.facing);
+    this.npcs.push({ npc, home: { ...pos }, pos, target: { ...pos }, fig, label, wait: Math.random() * 2, lying, labelAt });
   }
 
   // --- Movimento ---
@@ -371,15 +293,17 @@ export class InteriorScene extends Phaser.Scene {
     const ny = { x: this.pos.x, y: this.pos.y + (vy / len) * step };
     if (!this.blocked(ny, RADIUS)) this.pos.y = ny.y;
     this.facing = Math.atan2(vy, vx);
-    this.commander.setPosition(this.pos.x, this.pos.y);
-    this.commander.setRotation(this.facing);
+    this.commander.setFacing(this.facing);
+    this.commander.x = this.pos.x;
+    this.commander.y = this.pos.y;
     // Pisou no tapete da porta andando para fora: sai
     if (vy > 0 && Math.abs(this.pos.x - this.def.door.x) < 34 && this.pos.y > this.def.h - 30) this.exit();
   }
 
   private updateNpc(v: NpcView, dt: number, busy: boolean): void {
     const w = v.npc.wander ?? 0;
-    if (w > 0 && !busy && v.npc.mark !== "SLEEP") {
+    let walking = false;
+    if (w > 0 && !busy && !v.lying) {
       if (distance(v.pos, v.target) < 3) {
         v.wait -= dt;
         if (v.wait <= 0) {
@@ -392,11 +316,29 @@ export class InteriorScene extends Phaser.Scene {
         const d = distance(v.pos, v.target);
         const s = Math.min(d, 40 * dt);
         v.pos = { x: v.pos.x + ((v.target.x - v.pos.x) / d) * s, y: v.pos.y + ((v.target.y - v.pos.y) / d) * s };
+        v.fig.walkTo(v.pos.x, v.pos.y);
+        walking = true;
       }
     }
-    v.gfx.setPosition(v.pos.x, v.pos.y);
-    v.label.setPosition(v.pos.x, v.pos.y - 22);
-    if (v.npc.mark !== "SLEEP") v.label.setAlpha(distance(v.pos, this.pos) < 110 ? 1 : 0);
+    const near = distance(v.pos, this.pos);
+    // Quem está perto olha para o Comandante
+    if (!walking && !v.lying && near < TALK_RADIUS + 20) v.fig.setFacing(Math.atan2(this.pos.y - v.pos.y, this.pos.x - v.pos.x));
+    if (v.labelAt) v.label.setPosition(v.labelAt.x, v.labelAt.y);
+    else v.label.setPosition(Math.round(v.pos.x), Math.round(v.pos.y + v.fig.headY - 4));
+  }
+
+  /** O nome só de quem está mais perto (até 110 px): lado a lado, os nomes se atropelavam. Quem dorme mostra o "z z z". */
+  private showNames(): void {
+    let best: NpcView | null = null;
+    let bd = 110;
+    for (const v of this.npcs) {
+      const d = distance(v.pos, this.pos);
+      if (v.npc.mark !== "SLEEP" && d < bd) {
+        bd = d;
+        best = v;
+      }
+    }
+    for (const v of this.npcs) if (v.npc.mark !== "SLEEP") v.label.setAlpha(v === best ? 1 : 0);
   }
 
   // --- Interação ---

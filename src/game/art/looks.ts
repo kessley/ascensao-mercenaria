@@ -1,5 +1,6 @@
 import { COLORS, ENEMIES, type EnemyKind, type TroopType } from "../../utils/constants";
 import type { FigureBody, HeadGear, Look, ShieldKind, Vehicle, Weapon } from "./figures";
+import { ramp } from "./pixel";
 
 /**
  * Visual de cada tropa e de cada inimigo: corpo, cabeça, armadura, arma, escudo e montaria.
@@ -121,7 +122,7 @@ export function messengerLook(): Look {
   return { body: "HUMAN", head: "CAP", armor: 0, weapon: "NONE", shield: "NONE", mount: "HORSE", color: COLORS.MESSENGER, trim: COLORS.PENNANT };
 }
 
-/** Gente que não luta (G4): no mapa vivo e entre os seguidores do acampamento. */
+/** Gente que não luta (G4): no mapa vivo, entre os seguidores do acampamento, nos interiores e na Cidade Alta. */
 export type FolkKind =
   | "TOWNSFOLK"
   | "PEASANT"
@@ -134,7 +135,16 @@ export type FolkKind =
   | "HEALER"
   | "CHAPLAIN"
   | "FAMILY"
-  | "SMITH";
+  | "SMITH"
+  // Dos interiores e da Cidade Alta
+  | "GUARD"
+  | "NOBLE"
+  | "CLERK"
+  | "MERCHANT"
+  | "PRIEST"
+  | "THIEF"
+  | "WORKER"
+  | "RAT";
 
 const FOLK: Record<FolkKind, Omit<Look, "color"> & { color: number }> = {
   // A cor da roupa dos moradores e das famílias varia: a de cada um vem de fora
@@ -150,10 +160,30 @@ const FOLK: Record<FolkKind, Omit<Look, "color"> & { color: number }> = {
   CHAPLAIN: { body: "HUMAN", head: "BARE", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0x2b2b2b },
   FAMILY: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0xb08a6a },
   SMITH: { body: "HUMAN", head: "BARE", armor: 0, weapon: "AXE", shield: "NONE", mount: "NONE", color: 0x4a3a2a },
+  // A guarda dos povoados e da corte: elmo, malha e lança
+  GUARD: { body: "HUMAN", head: "HELM", armor: 1, weapon: "SPEAR", shield: "NONE", mount: "NONE", color: 0x7f8c8d },
+  // Nobres: a capa e o friso de ouro (a coroa, para quem reina, vem de `nobleLook`)
+  NOBLE: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x8080d0, cape: 0x3a2a5a, trim: 0xe0b040 },
+  // Escrivães, intendentes, mordomos, conselheiros
+  CLERK: { body: "HUMAN", head: "BARE", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x7a6a5a },
+  MERCHANT: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x6a4a8a, cape: 0x4a2a3a, trim: 0xc9a23a },
+  PRIEST: { body: "HUMAN", head: "HOOD", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0xe8e0c8, trim: 0xe0b040 },
+  THIEF: { body: "HUMAN", head: "HOOD", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x3a3430, cape: 0x2a2420 },
+  // Cavalariços, carcereiros e quem mais trabalha sem ferramenta na mão
+  WORKER: { body: "HUMAN", head: "CAP", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x8a6a40 },
+  // O rato enorme dos esgotos: o desenho do lobo, no pardo do rato
+  RAT: { beast: "WOLF", body: "HUMAN", head: "BARE", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x5a4a3a },
 };
 
 /** O visual de quem não luta; `color` troca a cor da roupa (moradores e famílias variam). */
 export function folkLook(kind: FolkKind, color?: number): Look {
   const look = FOLK[kind];
   return color === undefined ? { ...look } : { ...look, color };
+}
+
+/** Um nobre na corte: a roupa na cor dada, a capa mais escura e, para quem reina, a coroa. */
+export function nobleLook(color: number, crowned: boolean): Look {
+  const look: Look = { ...FOLK.NOBLE, color, cape: ramp(color).dark };
+  if (crowned) look.crown = true;
+  return look;
 }

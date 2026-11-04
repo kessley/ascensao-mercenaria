@@ -13,13 +13,13 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
   - os locais de missão sempre habitados (etapa 10 ✅ OK);
-  - o G4 até a parte 4: harpias, navios e convés; a gente do mapa e do acampamento.
+  - o G4 até a parte 5: harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 5: os interiores e a Cidade Alta.
-  - Já estão feitas as quatro primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento.
-  - Faltam os interiores e a Cidade Alta, e o acabamento do G1.
+- **A seguir:** o G4 termina (etapa 11, em seis partes) com a parte 6: o acabamento do G1 (os 2 tipos de inimigo que faltam e o cavalo de frente e de costas).
+  - Já estão feitas as cinco primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta.
+  - Depois dele vem o Marco 22 (etapa 12).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -48,7 +48,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
-| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 a 4 de 6 ✅ OK |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 a 5 de 6 ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
@@ -620,8 +620,55 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - as crianças das famílias (o greybox desenhava uma): a figura ainda não tem um tamanho menor;
 - quem trabalha nos postos do Marco 22 entra com ele. A figura de enfeite e as ferramentas já servem.
 
-### 11.5. Interiores e a Cidade Alta
-**A fazer:** o lado de dentro das construções e a Cidade Alta das capitais (de fora ela já é pixel art).
+### 11.5. Interiores e a Cidade Alta ✅ OK
+**Feito:**
+- **Os interiores** (`art/interiors.ts`, `InteriorScene`): a sala inteira é uma imagem só.
+  - O chão de cada estilo: tábuas, lajes, mármore em xadrez, ou terra com palha na tenda.
+  - A parede do fundo tem janelas, tochas, vitrais ou a lona; na porta, as ombreiras e o capacho.
+  - Os móveis viraram peças, cada uma com a sua altura:
+    - mesa (de banquete, de mapa ou de taverna), catre, banco, balcão, baú, estante de livros e quadro de avisos;
+    - barril, caixote, saco, feno, tapete e estandarte;
+    - lareira com a coifa, bigorna, ferro e armeiro;
+    - altar, trono, pilar e o poleiro com os falcões;
+    - o canal do esgoto e as celas da masmorra (grades finas na frente, parede de pedra entre uma e outra).
+  - Os cavalos do estábulo são figuras, em pelagens diferentes.
+  - Toda a gente das salas é figura:
+    - guardas de elmo e lança, nobres de capa (quem reina, de coroa), escrivães, mercadores e sacerdotes;
+    - ladrões, trabalhadores, o ferreiro e o taverneiro;
+    - o rato enorme dos esgotos.
+  - Quem dorme ou está ferido deita no catre.
+  - O zoom é 2 nas telas grandes, com o pixel inteiro. Só aparece o nome de quem está mais perto.
+- **A Cidade Alta** (`art/cityArt.ts`, `world/capitalArt.ts`, `world/capitalPaint.ts`):
+  - O chão vem em pedaços de 600 px, com 1 px de textura por px de mundo, em duas camadas.
+    - A base é terra, grama, a água do fosso e a areia da Liça. Ela passa pelo filtro do chão do G2, no worker.
+    - Por cima vem o calçamento:
+      - pedra nas ruas, com a Avenida Real mais larga e lajes claras no Bairro Nobre;
+      - lajes na Praça Real, no Grande Mercado e no pátio do castelo;
+      - a ponte de tábuas;
+      - a arquibancada da Liça, com o povo sentado e a barreira da justa.
+  - Os prédios saem das peças do G3: casas, oficinas, barracos, tavernas com placa, a catedral, as muralhas, as torres e o Portão Velho.
+  - Também há peças novas:
+    - a torre de menagem: o telhado fica escondido atrás das ameias, com os torreões e a torre do meio, que leva o estandarte;
+    - os paços de pedra do castelo;
+    - os palácios do Bairro Nobre, com o jardim na frente;
+    - o chafariz, o lampião e a lápide.
+  - A TownArt monta só os grupos de peças que estão perto da câmera.
+  - Os portões do Bairro Nobre e do castelo abrem e fecham na tela.
+  - O Comandante, o povo, os criados, os guardas e os nobres são figuras. Disfarçado, o Comandante usa capuz e cajado. O zoom é 1.
+- **A Liça dos duelos** (`DuelScene`):
+  - a areia e a arquibancada cheia;
+  - os dois lutadores no dobro do tamanho, com as poses do duelo em campo: armar, golpear, guarda, esquiva e tropeço;
+  - o aviso do golpe continua no chão.
+- Nas casas grandes, a chaminé agora tem no máximo 16 px. Antes ela parecia um poste.
+- **Testes:**
+  - 12 testes de regras novos. São 8 dos interiores e 4 da Cidade Alta: as peças novas, os calçamentos e se todo prédio vira peça.
+  - A suíte `duelos` continua passando (17/17).
+  - Conferido na tela: as salas, os bairros da Cidade Alta, os portões e o duelo. Na Cidade Alta, cada quadro leva 12 ms.
+
+**Ficou para depois:**
+- a Cidade Alta não tem zoom: fica sempre em 100%;
+- os prédios muito grandes, como a estalagem e a Casa dos Mercadores, ainda têm muito telhado liso;
+- o povo da arquibancada faz parte do chão: não se mexe nem torce.
 
 ### 11.6. Acabamento do G1
 **A fazer:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.

@@ -11,7 +11,7 @@ import { CLEAR, Grid, SHADOW, seeded } from "./pixel";
  */
 
 export type Culture = "REALMS" | "SANDS" | "ISLES" | "JADE";
-type RoofKind = "GABLE" | "FLAT" | "STEEP" | "CURVED";
+export type RoofKind = "GABLE" | "FLAT" | "STEEP" | "CURVED";
 
 export interface Piece {
   grid: Grid;
@@ -20,7 +20,7 @@ export interface Piece {
   dy: number;
 }
 
-interface Style {
+export interface Style {
   /** Reboco ou tábuas da parede, vigas e pilares, embasamento. */
   wall: number;
   frame: number;
@@ -107,7 +107,7 @@ export const SH = 4;
 /** Altura da muralha de pedra, da paliçada e das torres. */
 export const WALL_FACE = 46;
 const PALISADE_FACE = 34;
-const MERLON = 5;
+export const MERLON = 5;
 const TOWER_FACE = 66;
 
 /** Clareia (f > 0) ou escurece (f < 0) uma cor. */
@@ -156,7 +156,7 @@ export function prism(ox: number, oy: number, fx: number, fy: number, fw: number
 }
 
 /** Ameias na borda de um topo de pedra (lados N, S, L e O). */
-function crenels(g: Grid, ox: number, oy: number, fx: number, fy: number, fw: number, fh: number, z: number, color: number, sides: string, rnd: () => number, ruined: boolean, round = false): void {
+export function crenels(g: Grid, ox: number, oy: number, fx: number, fy: number, fw: number, fh: number, z: number, color: number, sides: string, rnd: () => number, ruined: boolean, round = false): void {
   const top = (x: number, y: number, w: number, h: number) => {
     g.rect(x, y, w, h, tone(color, 0.22));
     if (round) {
@@ -180,7 +180,7 @@ function crenels(g: Grid, ox: number, oy: number, fx: number, fy: number, fw: nu
 }
 
 /** Telhado de duas águas com a cumeeira na horizontal: a água de trás, curta e na sombra, e a da frente. */
-function roofEW(g: Grid, x: number, y: number, w: number, h: number, color: number, kind: RoofKind, thatch: boolean, rnd: () => number): number {
+export function roofEW(g: Grid, x: number, y: number, w: number, h: number, color: number, kind: RoofKind, thatch: boolean, rnd: () => number): number {
   const ridge = Math.max(3, Math.round(h * (kind === "STEEP" ? 0.42 : 0.34)));
   const back = tone(color, -0.3);
   g.rect(x, y, w, ridge, back);
@@ -259,7 +259,7 @@ function roofEW(g: Grid, x: number, y: number, w: number, h: number, color: numb
 }
 
 /** Terraço das areias: chão de barro com mureta, alçapão e jarras. */
-function flatRoof(g: Grid, x: number, y: number, w: number, h: number, color: number, rnd: () => number): void {
+export function flatRoof(g: Grid, x: number, y: number, w: number, h: number, color: number, rnd: () => number): void {
   g.rect(x, y, w, h, color);
   speckle(g, x, y, w, h, color, 0.05, rnd);
   const wall = tone(color, 0.14);
@@ -296,7 +296,7 @@ function flatRoof(g: Grid, x: number, y: number, w: number, h: number, color: nu
 const facadeWall = (st: Style, ruined: boolean) => (ruined ? tone(st.wall, -0.4) : st.wall);
 
 /** Fachada do lado sul: parede da cultura, janelas, porta (se for deste lado) e embasamento. */
-function facade(g: Grid, x: number, y: number, w: number, h: number, st: Style, culture: Culture, doorX: number | null, rnd: () => number, ruined: boolean): void {
+export function facade(g: Grid, x: number, y: number, w: number, h: number, st: Style, culture: Culture, doorX: number | null, rnd: () => number, ruined: boolean): void {
   const wall = ruined ? tone(st.wall, -0.4) : st.wall;
   const frame = ruined ? tone(st.frame, -0.3) : st.frame;
   g.rect(x, y, w, h, wall);
@@ -491,11 +491,14 @@ export function housePiece(
   }
   // Chaminé na água de trás
   if ((culture === "REALMS" || culture === "ISLES") && rnd() < 0.6 && !ruined) {
+    // Nas casas grandes (as da Cidade Alta) a chaminé não passa de 16 px: virava um poste
     const cx = ox + 6 + Math.floor(rnd() * Math.max(1, w - 18));
-    g.rect(cx, ry - 3, 6, ridge + 4, st.base);
-    g.rect(cx, ry - 3, 6, 2, tone(st.base, 0.25));
-    g.rect(cx + 1, ry - 3, 4, 1, 0x1c1714);
-    g.rect(cx + 5, ry - 1, 1, ridge + 2, tone(st.base, -0.25));
+    const ch = Math.min(ridge + 4, 16);
+    const cy = ry + ridge + 1 - ch;
+    g.rect(cx, cy, 6, ch, st.base);
+    g.rect(cx, cy, 6, 2, tone(st.base, 0.25));
+    g.rect(cx + 1, cy, 4, 1, 0x1c1714);
+    g.rect(cx + 5, cy + 2, 1, ch - 2, tone(st.base, -0.25));
   }
   if (turret && !ruined) {
     // Campanário: torrinha no meio da cumeeira com o sino
@@ -528,7 +531,7 @@ export function housePiece(
  * Salão com a cumeeira de norte a sul (templo das ilhas e dos reinos): as duas águas, a empena
  * triangular na frente e a fachada embaixo. Pé em (fx, fy, fw, fh) a partir de (ox, oy).
  */
-function gableHall(g: Grid, ox: number, oy: number, fx: number, fy: number, fw: number, fh: number, H: number, gt: number, st: Style, culture: Culture, color: number, doorX: number | null, rnd: () => number, ruined: boolean): void {
+export function gableHall(g: Grid, ox: number, oy: number, fx: number, fy: number, fw: number, fh: number, H: number, gt: number, st: Style, culture: Culture, color: number, doorX: number | null, rnd: () => number, ruined: boolean): void {
   facade(g, ox + fx, oy + fy + fh - H, fw, H, st, culture, doorX === null ? null : ox + fx + doorX, rnd, ruined);
   const c = fw / 2;
   const lit = tone(color, 0.06);
@@ -557,7 +560,7 @@ function gableHall(g: Grid, ox: number, oy: number, fx: number, fy: number, fw: 
 }
 
 /** Cúpula: meia elipse sobre a linha `base`, luz à esquerda e um remate no alto. */
-function dome(g: Grid, cx: number, base: number, rx: number, ry: number, color: number): void {
+export function dome(g: Grid, cx: number, base: number, rx: number, ry: number, color: number): void {
   for (let i = -rx; i <= rx; i++) {
     const hgt = Math.round(ry * Math.sqrt(Math.max(0, 1 - (i / (rx + 0.5)) ** 2)));
     const c = i < -rx * 0.35 ? tone(color, 0.2) : i > rx * 0.4 ? tone(color, -0.25) : color;

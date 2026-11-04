@@ -64,9 +64,12 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     Unit.corpses?.setLod(lod);
   }
 
-  /** Um passo da animação de todas as figuras; quem está fora da tela só atualiza a profundidade. */
-  static animateAll(now: number, view: Phaser.Geom.Rectangle): void {
-    for (const u of Unit.live) u.animate(now, view);
+  /**
+   * Um passo da animação de todas as figuras; quem está fora da tela só atualiza a profundidade.
+   * Com `scene`, só as daquela cena (os interiores e a Cidade Alta, com o mundo dormindo).
+   */
+  static animateAll(now: number, view: Phaser.Geom.Rectangle, scene?: Phaser.Scene): void {
+    for (const u of Unit.live) if (!scene || u.scene === scene) u.animate(now, view);
   }
 
   readonly team: Team;
@@ -166,6 +169,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   protected sprite: Phaser.GameObjects.Image | null = null;
   private skin: Skin | null = null;
   private shownLod: Lod | null = null;
+  /** Nível de detalhe só desta figura (as cenas de dentro não seguem o zoom do mundo); null = o de todos. */
+  private ownLod: Lod | null = null;
   private shownFrame = -1;
   /** Quadros da folha que a figura usa agora, pelo número. */
   private sheet: readonly Phaser.Textures.Frame[] = [];
@@ -252,15 +257,25 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   get headY(): number {
     const s = this.skin;
     if (!s) return -this.radius;
-    const lod = Unit.lod;
+    const lod = this.lodNow;
     return this.feetY - (lod === "FULL" ? s.height : (lod === "MINI" ? s.mini2.h : s.dot2.h) * LOD_SCALE[lod]);
+  }
+
+  private get lodNow(): Lod {
+    return this.ownLod ?? Unit.lod;
+  }
+
+  /** Fixa o nível de detalhe desta figura, fora do zoom do mundo (null = volta a seguir o de todos). */
+  setOwnLod(lod: Lod | null): void {
+    this.ownLod = lod;
+    this.applyLod();
   }
 
   private applyLod(): void {
     const s = this.skin;
     const img = this.sprite;
-    if (!s || !img || this.shownLod === Unit.lod) return;
-    const lod = (this.shownLod = Unit.lod);
+    if (!s || !img || this.shownLod === this.lodNow) return;
+    const lod = (this.shownLod = this.lodNow);
     if (lod === "FULL") img.setTexture(s.full, 0).setOrigin(s.cell.feetX / s.cell.w, s.cell.feetY / s.cell.h);
     else if (lod === "MINI") img.setTexture(s.mini, 0).setOrigin(0.5, (s.mini2.h - 1) / s.mini2.h);
     else img.setTexture(s.dot, 0).setOrigin(0.5, 1);
@@ -288,7 +303,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     if (this.x < view.x - 64 || this.x > view.right + 64 || this.y < view.y - 64 || this.y > view.bottom + 96) return;
     const walking = now - this.lastMoveAt < 140;
     let frame: number;
-    if (Unit.lod === "FULL") {
+    const lod = this.lodNow;
+    if (lod === "FULL") {
       let col: number;
       if (!this.isAlive) {
         // O relógio da animação é o da cena (o mesmo do último golpe): a queda conta dele
@@ -303,8 +319,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       frame = this.dirRow * FRAMES + col;
       img.setFlipX(this.dirRow === 1 && this.flipped);
     } else {
-      frame = Unit.lod === "MINI" && walking && this.isAlive ? Math.floor(this.walked / 14) % 2 : 0;
-      img.setFlipX(Unit.lod === "MINI" && Math.cos(this.facing) < 0);
+      frame = lod === "MINI" && walking && this.isAlive ? Math.floor(this.walked / 14) % 2 : 0;
+      img.setFlipX(lod === "MINI" && Math.cos(this.facing) < 0);
     }
     if (frame !== this.shownFrame) {
       // Os quadros da folha têm o mesmo tamanho: basta trocar o quadro. O setFrame do Phaser procura
