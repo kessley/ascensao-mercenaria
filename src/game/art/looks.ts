@@ -120,3 +120,40 @@ export function scoutLook(): Look {
 export function messengerLook(): Look {
   return { body: "HUMAN", head: "CAP", armor: 0, weapon: "NONE", shield: "NONE", mount: "HORSE", color: COLORS.MESSENGER, trim: COLORS.PENNANT };
 }
+
+/** Gente que não luta (G4): no mapa vivo e entre os seguidores do acampamento. */
+export type FolkKind =
+  | "TOWNSFOLK"
+  | "PEASANT"
+  | "TRAVELER"
+  | "PILGRIM"
+  | "HUNTER"
+  | "DEER"
+  | "COOK"
+  | "PEDDLER"
+  | "HEALER"
+  | "CHAPLAIN"
+  | "FAMILY"
+  | "SMITH";
+
+const FOLK: Record<FolkKind, Omit<Look, "color"> & { color: number }> = {
+  // A cor da roupa dos moradores e das famílias varia: a de cada um vem de fora
+  TOWNSFOLK: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0xa88a6a },
+  PEASANT: { body: "HUMAN", head: "CAP", armor: 0, weapon: "HOE", shield: "NONE", mount: "NONE", color: 0xb89a5a },
+  TRAVELER: { body: "HUMAN", head: "HOOD", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0x6a5a3a, cape: 0x4a3a2a },
+  PILGRIM: { body: "HUMAN", head: "HOOD", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0xd8d4c8 },
+  HUNTER: { body: "HUMAN", head: "HOOD", armor: 0, weapon: "BOW", shield: "NONE", mount: "NONE", color: 0x4a5a2a },
+  DEER: { beast: "DEER", body: "HUMAN", head: "BARE", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x9a6a3c },
+  COOK: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0xe8dcc0 },
+  PEDDLER: { body: "HUMAN", head: "CAP", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0x9c6b3c, cape: 0x6a4a2a },
+  HEALER: { body: "HUMAN", head: "HOOD", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x6f8f5a },
+  CHAPLAIN: { body: "HUMAN", head: "BARE", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0x2b2b2b },
+  FAMILY: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0xb08a6a },
+  SMITH: { body: "HUMAN", head: "BARE", armor: 0, weapon: "AXE", shield: "NONE", mount: "NONE", color: 0x4a3a2a },
+};
+
+/** O visual de quem não luta; `color` troca a cor da roupa (moradores e famílias variam). */
+export function folkLook(kind: FolkKind, color?: number): Look {
+  const look = FOLK[kind];
+  return color === undefined ? { ...look } : { ...look, color };
+}

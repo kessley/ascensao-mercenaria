@@ -11,7 +11,8 @@ import { CLEAR, Grid, OUTLINE, enlarge, glint, gridBitmap, ramp, rimLight, type 
 
 export type FigureBody = "HUMAN" | "GOBLIN" | "ORC" | "SKELETON";
 export type HeadGear = "HAIR" | "BARE" | "HOOD" | "HELM" | "GREAT_HELM" | "CAP" | "BANDANA";
-export type Weapon = "SWORD" | "AXE" | "SPEAR" | "LANCE" | "JAVELIN" | "BOW" | "CROSSBOW" | "STAFF" | "NONE";
+/** `STICK` (cajado de caminhante) e `HOE` (enxada) são da gente que não luta (G4). */
+export type Weapon = "SWORD" | "AXE" | "SPEAR" | "LANCE" | "JAVELIN" | "BOW" | "CROSSBOW" | "STAFF" | "STICK" | "HOE" | "NONE";
 export type ShieldKind = "NONE" | "ROUND" | "KITE";
 export type Mount = "NONE" | "HORSE" | "BARDED" | "WOLF";
 export type Dir = "S" | "E" | "N";
@@ -19,8 +20,8 @@ export type Dir = "S" | "E" | "N";
 export type Vehicle = "WAGON" | "CART" | "RAM";
 
 export interface Look {
-  /** Bicho sem cavaleiro: o resto do visual não conta. */
-  beast?: "WOLF";
+  /** Bicho sem cavaleiro: o resto do visual não conta. O cervo é do mapa vivo (G4). */
+  beast?: "WOLF" | "DEER";
   /** Veículo: também ignora o resto, menos a cor (a camisa do carroceiro, o toldo, a flâmula). */
   vehicle?: Vehicle;
   body: FigureBody;
@@ -122,6 +123,9 @@ const TUSK = 0xf0ead8;
 const HORSE: Ramp = { light: 0xa77b52, base: 0x7d5636, dark: 0x553820 };
 const MANE = 0x2e2018;
 const WOLF: Ramp = { light: 0xaeaea6, base: 0x7c7c78, dark: 0x52524e };
+const DEER: Ramp = { light: 0xc0905a, base: 0x9a6a3c, dark: 0x6a4626 };
+const ANTLER = 0xd8c8a0;
+const DEER_TAIL = 0xf0e8d8;
 
 interface Pose {
   bob: number;
@@ -540,7 +544,20 @@ function quiver(g: Grid, x: number, y: number): void {
 }
 
 function staffTip(l: Look): number {
+  if (l.weapon === "STICK") return WOOD.dark;
   return l.trim ?? 0xb070ff;
+}
+
+/** O brilho do cajado do mago no golpe; o de caminhante não brilha. */
+const staffFlash = (l: Look, p: Pose) => (p.act === 1 && l.weapon === "STAFF" ? 0xffffff : staffTip(l));
+
+/** Enxada: cabo de madeira e a folha de ferro atravessada na ponta. */
+function hoe(g: Grid, hx: number, hy: number, deg: number, flip: number): void {
+  const [bx, by] = polar(hx, hy, deg + 180, 2, flip);
+  const [tx, ty] = polar(hx, hy, deg, 10, flip);
+  g.line(bx, by, tx, ty, WOOD.base);
+  const [ax, ay] = polar(tx, ty, deg - 90, 3, flip);
+  g.line(tx, ty, ax, ay, IRON.dark);
 }
 
 // --- Figura a pé ---
@@ -598,8 +615,15 @@ function drawFront(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look
       break;
     }
     case "STAFF":
+    case "STICK":
       g.line(hx, fy, hx, yh - 3, WOOD.base);
-      g.rect(hx - 1, yh - 5, 2, 2, p.act === 1 ? 0xffffff : staffTip(l));
+      g.rect(hx - 1, yh - 5, 2, 2, staffFlash(l, p));
+      break;
+    case "HOE":
+      // O trabalho: ergue a enxada e crava no chão à frente
+      if (p.act === 1) hoe(g, hx, y0 - 1, 95, -1);
+      else if (p.act === 2) hoe(g, hx, hy, -80, -1);
+      else hoe(g, hx, hy, 85, -1);
       break;
     case "BOW":
       if (p.act === 1) bowFront(g, cx, y0 + 3, true);
@@ -635,8 +659,12 @@ function drawBack(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look)
       pole(g, armX1 + 1, y0 + m.torsoH, p.act === 2 ? 100 : 92, l.weapon === "JAVELIN" ? 11 : 16, 1, IRON.light);
       break;
     case "STAFF":
+    case "STICK":
       g.line(armX1 + 1, fy, armX1 + 1, yh - 3, WOOD.base);
       g.rect(armX1, yh - 5, 2, 2, staffTip(l));
+      break;
+    case "HOE":
+      hoe(g, armX1 + 1, y0 + m.torsoH, p.act === 1 ? 95 : p.act === 2 ? 110 : 88, 1);
       break;
     case "BOW":
       bowSide(g, armX1 + m.armW + 1, y0 + 3 - (p.act === 1 ? 3 : 0), false);
@@ -722,10 +750,17 @@ function drawSide(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look)
       }
       break;
     }
-    case "STAFF": {
+    case "STAFF":
+    case "STICK": {
       const [hx] = reach(-20);
       g.line(hx + 1, fy, hx + 1, yh - 3, WOOD.base);
-      g.rect(hx, yh - 5, 2, 2, p.act === 1 ? 0xffffff : staffTip(l));
+      g.rect(hx, yh - 5, 2, 2, staffFlash(l, p));
+      break;
+    }
+    case "HOE": {
+      // Erguida atrás da cabeça e cravada no chão à frente
+      const [hx, hy] = reach(p.act === 1 ? 60 : p.act === 2 ? -20 : -40);
+      hoe(g, hx, hy, p.act === 1 ? 115 : p.act === 2 ? -50 : 70, 1);
       break;
     }
     case "BOW": {
@@ -782,6 +817,7 @@ function drawFall(g: Grid, m: Metrics, cx: number, fy: number, stage: number, l:
 // --- Montaria ---
 
 function mountRamp(l: Look): Ramp {
+  if (l.beast === "DEER") return DEER;
   return l.mount === "WOLF" || l.beast === "WOLF" ? WOLF : HORSE;
 }
 
@@ -813,8 +849,10 @@ function horseSide(g: Grid, cx: number, fy: number, frame: number, l: Look): num
   };
   leg(legsX[2] + gait[2] + lunge, c.dark, gait[2] > 0 ? 1 : 0);
   leg(legsX[3] + gait[3] + lunge, c.dark, gait[3] > 0 ? 1 : 0);
+  const deer = l.beast === "DEER";
   // Rabo
   if (wolf) g.line(cx - rx, bodyY - 1, cx - rx - 3, bodyY - 3, c.light);
+  else if (deer) g.rect(cx - rx - 1, bodyY - 3, 2, 2, DEER_TAIL);
   else {
     g.line(cx - rx, bodyY - 2, cx - rx - 2, bodyY + 4, MANE);
     g.px(cx - rx - 1, bodyY - 2, MANE);
@@ -846,7 +884,14 @@ function horseSide(g: Grid, cx: number, fy: number, frame: number, l: Look): num
     g.rect(cx + 12, bodyY - 8, 2, 2, c.dark);
     g.px(cx + 10, bodyY - 8, OUTLINE);
     g.px(cx + 8, bodyY - 10, c.dark);
-    g.line(cx + 6, bodyY - 6, cx + 8, bodyY - 9, MANE);
+    if (deer) {
+      // Sem crina: a galhada, com as pontas para trás
+      g.line(cx + 9, bodyY - 10, cx + 8, bodyY - 14, ANTLER);
+      g.line(cx + 8, bodyY - 12, cx + 6, bodyY - 13, ANTLER);
+      g.line(cx + 11, bodyY - 10, cx + 12, bodyY - 14, ANTLER);
+      g.px(cx + 13, bodyY - 13, ANTLER);
+      g.px(cx + 9, bodyY - 7, DEER_TAIL);
+    } else g.line(cx + 6, bodyY - 6, cx + 8, bodyY - 9, MANE);
     if (l.mount === "BARDED") g.rect(cx + 9, bodyY - 9, 3, 1, IRON.light);
   }
   leg(legsX[0] + gait[0] + lunge, c.base, gait[0] > 0 ? 1 : 0);
@@ -904,7 +949,14 @@ function horseHead(g: Grid, cx: number, chestY: number, l: Look): void {
   g.px(cx + 1, chestY - 1, OUTLINE);
   g.px(cx - 2, chestY - 4, c.dark);
   g.px(cx + 1, chestY - 4, c.dark);
-  g.rect(cx - 1, chestY - 3, 2, 1, MANE);
+  if (l.beast === "DEER") {
+    // A galhada aberta em V e o focinho claro
+    g.line(cx - 2, chestY - 4, cx - 4, chestY - 8, ANTLER);
+    g.line(cx + 1, chestY - 4, cx + 3, chestY - 8, ANTLER);
+    g.px(cx - 5, chestY - 7, ANTLER);
+    g.px(cx + 4, chestY - 7, ANTLER);
+    g.rect(cx - 1, chestY + 3, 2, 1, DEER_TAIL);
+  } else g.rect(cx - 1, chestY - 3, 2, 1, MANE);
   if (l.mount === "BARDED") g.rect(cx - 1, chestY - 2, 2, 4, IRON.light);
 }
 
@@ -926,6 +978,14 @@ function horseBack(g: Grid, cx: number, fy: number, frame: number, l: Look): num
   g.rect(cx + 2, rumpY + 1, 4, 1, cover.light);
   g.rect(cx + 5, rumpY + 3, 2, 3, cover.dark);
   if (l.mount === "BARDED") g.rect(cx - 6, rumpY + 6, 13, 1, l.trim ?? cover.light);
+  if (l.beast === "DEER") {
+    // O traseiro branco e o rabo curto; a galhada aparece por cima da garupa
+    g.oval(cx, rumpY + 3, 3, 2, DEER_TAIL);
+    g.rect(cx - 1, rumpY + 1, 2, 2, c.dark);
+    g.line(cx - 2, rumpY - 3, cx - 4, rumpY - 7, ANTLER);
+    g.line(cx + 1, rumpY - 3, cx + 3, rumpY - 7, ANTLER);
+    return rumpY;
+  }
   // Rabo: balança no passo e abre na ponta
   const sway = step ? 1 : 0;
   g.rect(cx - 1, rumpY, 2, 6, MANE);
@@ -1051,6 +1111,12 @@ function drawMounted(g: Grid, m: Metrics, cx: number, fy: number, dir: Dir, fram
     if (dir === "E") horseSide(g, cx, fy, frame, l);
     else if (dir === "S") wolfHead(g, cx, wolfFront(g, cx, fy, frame));
     else wolfBack(g, cx, fy, frame);
+    return;
+  }
+  if (l.beast === "DEER") {
+    if (dir === "E") horseSide(g, cx, fy, frame, l);
+    else if (dir === "S") horseHead(g, cx, horseFront(g, cx, fy, frame, l), l);
+    else horseBack(g, cx, fy, frame, l);
     return;
   }
   if (dir === "E") {

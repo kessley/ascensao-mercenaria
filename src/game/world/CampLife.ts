@@ -4,8 +4,13 @@ import type { Soldier } from "../entities/Soldier";
 import { CAMP_SITES, CAMPFIRE, PALISADE, type CampSiteKind } from "../data/campLayout";
 import type { CampArea } from "./CampArea";
 import type { Follower, FollowerRole } from "../sim/campEvents";
-import { COLORS, TROOPS } from "../../utils/constants";
+import { TROOPS } from "../../utils/constants";
 import { Unit } from "../entities/Unit";
+import { Extra } from "../entities/Extra";
+import { folkLook } from "../art/looks";
+import { bitmapKey } from "../art/atlas";
+import { ironLoadBitmap, stationPieces } from "../art/campProps";
+import type { ArtJob } from "./TownArt";
 import { distance, type Point } from "../../utils/math";
 
 type Activity =
@@ -93,10 +98,13 @@ const BUBBLE: Partial<Record<Activity, { text: string[]; color: string }>> = {
 };
 
 const MAX_BUBBLES = 28;
+/** A roupa das famílias de soldado, uma de cada. */
+const FAMILY_COLORS = [0xb08a6a, 0x8a6a8a, 0x6a8a9a, 0xa89a5a];
 
 interface FollowerFigure {
   follower: Follower;
-  gfx: Phaser.GameObjects.Graphics;
+  /** A figura do G1 (G4), com a roupa do ofício. */
+  fig: Extra;
   home: Point;
   target: Point;
   waitUntil: number;
@@ -121,10 +129,8 @@ export class CampLife {
   private bubbles: Phaser.GameObjects.Text[] = [];
   private figures: FollowerFigure[] = [];
   private state: CampState = { hour: 12, hungry: false, lowMorale: false, arrears: false, rebelId: null, party: false, friends: [], training: [], wounded: false, payday: false, iron: false };
-  /** Carga nas costas de quem leva ferro (e do ajudante de ferreiro). */
-  private readonly carryGfx: Phaser.GameObjects.Graphics;
-  /** Estações de trabalho dos seguidores (caldeirão, banca, enfermaria, púlpito, varal). */
-  private stationGfx: Phaser.GameObjects.Graphics | null = null;
+  /** Carga nas costas de quem leva ferro (e do ajudante de ferreiro): uma imagem por carga. */
+  private readonly loads: Phaser.GameObjects.Image[] = [];
   private readonly stations: Record<FollowerRole, Point>;
   /** Texto sobre o Campo de Treino enquanto alguém treina. */
   private readonly trainingLabel: Phaser.GameObjects.Text;
@@ -156,7 +162,6 @@ export class CampLife {
       FAMILY: { x: f.x - 170, y: f.y + 230 },
       SMITH: { x: this.sites.FORGE.x + 10, y: this.sites.FORGE.y + 62 },
     };
-    this.carryGfx = scene.add.graphics().setDepth(6);
     this.trainingLabel = scene.add
       .text(this.sites.TRAINING.x - 125, this.sites.TRAINING.y - 110, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 })
       .setOrigin(0.5)
@@ -193,23 +198,31 @@ export class CampLife {
     for (const t of this.tasks.values()) t.until = Math.min(t.until, now + Math.random() * 1500);
     // Os seguidores também trocam de tarefa (o cozinheiro corre para o caldeirão na refeição)
     for (const f of this.figures) {
-      f.target = { x: f.gfx.x, y: f.gfx.y };
+      f.target = { x: f.fig.x, y: f.fig.y };
       f.waitUntil = 0;
     }
   }
 
   /** Seguidores do acampamento como figuras (refeito quando a lista muda). */
   setFollowers(followers: readonly Follower[]): void {
-    for (const f of this.figures) f.gfx.destroy();
+    for (const f of this.figures) f.fig.destroy();
     this.figures = followers.map((follower, i) => {
       const home = this.followerHome(follower.role, i);
-      const gfx = this.scene.add.graphics({ x: home.x, y: home.y }).setDepth(4);
-      drawFollower(gfx, follower.role);
-      return { follower, gfx, home, target: home, waitUntil: 0 };
+      // As famílias variam a roupa, uma de cada
+      const look = follower.role === "FAMILY" ? folkLook("FAMILY", FAMILY_COLORS[i % FAMILY_COLORS.length]) : folkLook(follower.role);
+      const fig = new Extra(this.scene, home.x, home.y, look);
+      return { follower, fig, home, target: home, waitUntil: 0 };
     });
-    this.stationGfx?.destroy();
-    this.stationGfx = this.scene.add.graphics().setDepth(-2.1);
-    for (const role of new Set(followers.map((f) => f.role))) drawStation(this.stationGfx, role, this.stations[role]);
+    // O lugar de trabalho de cada ofício (uma vez por ofício, mesmo com várias famílias)
+    const jobs: ArtJob[] = [];
+    for (const role of new Set(followers.map((f) => f.role))) {
+      const st = this.stations[role];
+      for (const p of stationPieces(role)) {
+        const y = Math.round(st.y + p.dy);
+        jobs.push({ x: Math.round(st.x + p.dx), y, depth: p.flat ? y - 60 : y, make: p.make });
+      }
+    }
+    this.camp.setFollowerArt(jobs);
   }
 
   private has(role: FollowerRole): boolean {
@@ -256,24 +269,29 @@ export class CampLife {
 
   /** Barras de ferro nas costas de quem as leva para a Ferraria. */
   private drawCarried(near: boolean): void {
-    const g = this.carryGfx;
-    g.clear();
-    if (!near) return;
-    const bar = (x: number, y: number) => {
-      g.fillStyle(0x8a949c, 1);
-      g.fillRect(x - 7, y - 3, 14, 6);
-      g.lineStyle(1, 0x2b2b2b, 1);
-      g.strokeRect(x - 7, y - 3, 14, 6);
-    };
-    for (const [s, t] of this.tasks) if (t.activity === "HAUL" && t.loaded && s.isAlive && s.unitState === "MOVING") bar(s.x + 8, s.y - 10);
-    for (const f of this.figures) if (f.follower.role === "SMITH" && f.carrying) bar(f.gfx.x + 9, f.gfx.y - 9);
+    const carriers: Unit[] = [];
+    if (near) {
+      for (const [s, t] of this.tasks) if (t.activity === "HAUL" && t.loaded && s.isAlive && s.unitState === "MOVING") carriers.push(s);
+      for (const f of this.figures) if (f.follower.role === "SMITH" && f.carrying) carriers.push(f.fig);
+    }
+    const key = bitmapKey(this.scene, "camp:iron-load", ironLoadBitmap);
+    while (this.loads.length < carriers.length) this.loads.push(this.scene.add.image(0, 0, key).setOrigin(0.5, 1));
+    this.loads.forEach((img, i) => {
+      const u = carriers[i];
+      if (!u) {
+        img.setVisible(false);
+        return;
+      }
+      // No ombro, um tico atrás da cabeça, e por cima de quem carrega
+      img.setVisible(true).setPosition(Math.round(u.x + 3), Math.round(u.y + u.headY + 9)).setDepth(u.depth + 1e-7);
+    });
   }
 
   destroy(): void {
-    this.carryGfx.destroy();
+    for (const img of this.loads) img.destroy();
     for (const b of this.bubbles) b.destroy();
-    for (const f of this.figures) f.gfx.destroy();
-    this.stationGfx?.destroy();
+    for (const f of this.figures) f.fig.destroy();
+    this.camp.setFollowerArt([]);
     this.trainingLabel.destroy();
     this.tasks.clear();
   }
@@ -511,7 +529,7 @@ export class CampLife {
       case "COOK":
         if (meal) return { to: near(home, 24), wait: 700 };
         // Fora das refeições: vai à lenha da Intendência e volta ao caldeirão
-        return distance({ x: fig.gfx.x, y: fig.gfx.y }, home) < 30 ? { to: { x: this.sites.QUARTERMASTER.x - 150, y: this.sites.QUARTERMASTER.y - 60 }, wait: 1500 } : { to: near(home, 10), wait: 4000 };
+        return distance({ x: fig.fig.x, y: fig.fig.y }, home) < 30 ? { to: { x: this.sites.QUARTERMASTER.x - 150, y: this.sites.QUARTERMASTER.y - 60 }, wait: 1500 } : { to: near(home, 10), wait: 4000 };
       case "PEDDLER":
         return { to: near(home, 30), wait: 2500 + Math.random() * 3000 };
       case "HEALER":
@@ -527,7 +545,7 @@ export class CampLife {
         return { to: { x: this.stations.FAMILY.x + Math.random() * 120, y: this.stations.FAMILY.y + (Math.random() - 0.5) * 20 }, wait: 1500 + Math.random() * 2500 + (time % 7) };
       case "SMITH": {
         // Martela na bigorna; de vez em quando busca ferro na Intendência (e volta carregando)
-        const at = { x: fig.gfx.x, y: fig.gfx.y };
+        const at = { x: fig.fig.x, y: fig.fig.y };
         const store = { x: this.sites.QUARTERMASTER.x + 40, y: this.sites.QUARTERMASTER.y + 30 };
         if (distance(at, store) < 30) {
           fig.carrying = st.iron;
@@ -543,15 +561,20 @@ export class CampLife {
   private updateFollowers(time: number, dt: number): void {
     const night = this.state.hour >= 21 || this.state.hour < 5;
     for (const fig of this.figures) {
-      fig.gfx.setAlpha(night ? 0.45 : 1);
+      const g = fig.fig;
+      // De noite, cada um dorme onde está
+      g.setPose(night ? "SLEEP" : "STAND");
       if (night) continue;
-      const g = fig.gfx;
       const d = distance({ x: g.x, y: g.y }, fig.target);
       if (d < 4) {
-        // Trabalhando no lugar: o cozinheiro mexe a panela, a curandeira se abaixa
-        if (fig.follower.role === "COOK" || fig.follower.role === "HEALER") g.rotation = Math.sin(time / 220) * 0.4;
-        // Ajudante na bigorna: martelando
-        if (fig.follower.role === "SMITH" && distance({ x: g.x, y: g.y }, fig.home) < 20) g.rotation = Math.abs(Math.sin(time / 120)) * 0.6;
+        // Trabalhando no lugar: o cozinheiro mexe a panela, a curandeira cuida, o ajudante martela
+        const role = fig.follower.role;
+        const working = role === "COOK" || role === "HEALER" || (role === "SMITH" && distance({ x: g.x, y: g.y }, fig.home) < 20);
+        if (working && time - g.lastAttackAt > (role === "SMITH" ? 520 : 1100)) {
+          if (role !== "SMITH") g.setFacing(role === "COOK" ? -Math.PI / 2 : Math.PI / 2);
+          else g.setFacing(0);
+          g.work(time);
+        }
         if (time > fig.waitUntil) {
           const w = this.workTarget(fig, time);
           fig.target = w.to;
@@ -559,10 +582,8 @@ export class CampLife {
         }
         continue;
       }
-      g.rotation = 0;
       const step = Math.min(d, 45 * dt);
-      g.x += ((fig.target.x - g.x) / d) * step;
-      g.y += ((fig.target.y - g.y) / d) * step;
+      g.walkTo(g.x + ((fig.target.x - g.x) / d) * step, g.y + ((fig.target.y - g.y) / d) * step);
     }
   }
 
@@ -584,127 +605,5 @@ export class CampLife {
       }
     }
     for (let i = used; i < this.bubbles.length; i++) this.bubbles[i].setVisible(false);
-  }
-}
-
-/** Estação de trabalho de um seguidor (só desenho). */
-function drawStation(g: Phaser.GameObjects.Graphics, role: FollowerRole, at: Point): void {
-  switch (role) {
-    case "COOK":
-      // Trempe com caldeirão e um monte de lenha
-      g.lineStyle(3, 0x3b2a17, 1);
-      g.lineBetween(at.x - 18, at.y + 14, at.x, at.y - 16);
-      g.lineBetween(at.x + 18, at.y + 14, at.x, at.y - 16);
-      g.fillStyle(0x2b2b2b, 1);
-      g.fillCircle(at.x, at.y, 14);
-      g.fillStyle(0x8a6a3a, 1);
-      g.fillCircle(at.x, at.y, 9);
-      g.fillStyle(0xe67e22, 0.8);
-      g.fillCircle(at.x, at.y + 14, 5);
-      break;
-    case "PEDDLER":
-      // Banca com toldo e bugigangas
-      g.fillStyle(0x6b4a2b, 1);
-      g.fillRect(at.x - 34, at.y + 6, 68, 18);
-      g.fillStyle(0x3a6ab8, 0.9);
-      g.fillRect(at.x - 38, at.y - 14, 76, 14);
-      g.fillStyle(0xf0e6d2, 0.9);
-      for (let k = 0; k < 76; k += 16) g.fillRect(at.x - 38 + k, at.y - 14, 8, 14);
-      for (const [dx, c] of [[-24, 0xc9a23a], [-8, 0xb84a3a], [8, 0x3a9a5a], [24, 0xd8d8d8]] as [number, number][]) {
-        g.fillStyle(c, 1);
-        g.fillRect(at.x + dx - 5, at.y + 10, 10, 9);
-      }
-      break;
-    case "HEALER":
-      // Tenda da enfermaria com cruz e esteiras
-      g.fillStyle(0xe8e0cc, 1);
-      g.fillRect(at.x - 34, at.y - 30, 68, 44);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeRect(at.x - 34, at.y - 30, 68, 44);
-      g.fillStyle(0xc0392b, 1);
-      g.fillRect(at.x - 4, at.y - 22, 8, 26);
-      g.fillRect(at.x - 13, at.y - 13, 26, 8);
-      g.fillStyle(0x9c8660, 0.9);
-      for (let k = 0; k < 5; k++) g.fillRect(at.x - 70 + k * 30, at.y + 32, 20, 12);
-      break;
-    case "CHAPLAIN":
-      // Púlpito de caixotes com um estandarte branco
-      g.fillStyle(0xb08850, 1);
-      g.fillRect(at.x - 12, at.y - 10, 24, 20);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeRect(at.x - 12, at.y - 10, 24, 20);
-      g.lineStyle(3, 0x6b4a2b, 1);
-      g.lineBetween(at.x + 18, at.y + 8, at.x + 18, at.y - 36);
-      g.fillStyle(0xf5f0e0, 1);
-      g.fillRect(at.x + 18, at.y - 36, 22, 16);
-      break;
-    case "SMITH":
-      // Bigorna num toco, balde d'água e uma pilha de ferro
-      g.fillStyle(0x6b4a2b, 1);
-      g.fillCircle(at.x, at.y + 4, 12);
-      g.fillStyle(0x3a3a3a, 1);
-      g.fillRect(at.x - 14, at.y - 6, 28, 10);
-      g.fillTriangle(at.x + 14, at.y - 6, at.x + 24, at.y - 2, at.x + 14, at.y + 4);
-      g.fillStyle(0x2b4a6b, 1);
-      g.fillCircle(at.x - 30, at.y + 10, 8);
-      g.fillStyle(0x8a949c, 1);
-      for (let k = 0; k < 3; k++) g.fillRect(at.x + 26, at.y + 8 + k * 5, 16, 4);
-      break;
-    case "FAMILY": {
-      // Varal com roupa estendida
-      g.lineStyle(3, 0x6b4a2b, 1);
-      g.lineBetween(at.x - 10, at.y - 24, at.x - 10, at.y + 6);
-      g.lineBetween(at.x + 130, at.y - 24, at.x + 130, at.y + 6);
-      g.lineStyle(1.5, 0xd8d0b8, 1);
-      g.lineBetween(at.x - 10, at.y - 22, at.x + 130, at.y - 22);
-      const colors = [0xc0392b, 0x2e86c1, 0xf5f0e0, 0x7d6608, 0x6c3483];
-      for (let k = 0; k < 6; k++) {
-        g.fillStyle(colors[k % colors.length], 1);
-        g.fillRect(at.x + 4 + k * 20, at.y - 22, 12, 14);
-      }
-      break;
-    }
-  }
-}
-
-/** Seguidor visto de cima: civil sem armas, com a marca do ofício. */
-function drawFollower(g: Phaser.GameObjects.Graphics, role: FollowerRole): void {
-  const colors: Record<FollowerRole, number> = { COOK: 0xe8dcc0, PEDDLER: 0x9c6b3c, HEALER: 0x6f8f5a, CHAPLAIN: 0x2b2b2b, FAMILY: 0xb08a6a, SMITH: 0x4a3a2a };
-  g.clear();
-  if (role === "PEDDLER") {
-    // Carroça de bugigangas ao lado
-    g.fillStyle(0x6b4a2b, 1);
-    g.fillRect(14, -12, 30, 22);
-    g.fillStyle(0xc9a23a, 1);
-    g.fillRect(18, -8, 8, 8);
-    g.fillStyle(0x3a6ab8, 1);
-    g.fillRect(30, -6, 8, 8);
-  }
-  const r = role === "FAMILY" ? 6 : 8;
-  g.fillStyle(colors[role], 1);
-  g.fillCircle(0, 0, r);
-  g.lineStyle(2, COLORS.OUTLINE, 1);
-  g.strokeCircle(0, 0, r);
-  if (role === "HEALER") {
-    g.fillStyle(0xc0392b, 1);
-    g.fillRect(-1.5, -5, 3, 10);
-    g.fillRect(-5, -1.5, 10, 3);
-  } else if (role === "CHAPLAIN") {
-    g.fillStyle(0xffffff, 1);
-    g.fillRect(-3, -6, 6, 3);
-  } else if (role === "COOK") {
-    g.fillStyle(0x7a5a3a, 1);
-    g.fillCircle(12, 6, 6); // panela
-  } else if (role === "FAMILY") {
-    g.fillStyle(0xd2b48c, 1);
-    g.fillCircle(10, 6, 4); // criança
-  } else if (role === "SMITH") {
-    // Avental de couro e o martelo
-    g.fillStyle(0x7a5a3a, 1);
-    g.fillRect(-4, -2, 8, 7);
-    g.lineStyle(2, 0x6b4a2b, 1);
-    g.lineBetween(6, 0, 15, -6);
-    g.fillStyle(0x5a5a5a, 1);
-    g.fillRect(12, -10, 7, 5);
   }
 }

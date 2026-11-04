@@ -13,13 +13,13 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
   - os locais de missão sempre habitados (etapa 10 ✅ OK);
-  - o G4 até a parte 3: harpias, navios e convés.
+  - o G4 até a parte 4: harpias, navios e convés; a gente do mapa e do acampamento.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 4: a gente do mapa e do acampamento.
-  - Já estão feitas as três primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés.
-  - Faltam a gente do mapa e do acampamento, os interiores e a Cidade Alta, e o acabamento do G1.
+- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 5: os interiores e a Cidade Alta.
+  - Já estão feitas as quatro primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento.
+  - Faltam os interiores e a Cidade Alta, e o acabamento do G1.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -48,7 +48,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
-| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 a 3 de 6 ✅ OK |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 a 4 de 6 ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
@@ -596,8 +596,29 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - o mar que se mexe cobre uma área em volta dos navios; mais longe, é a cor lisa;
 - a harpia some ao chegar, sem pousar no braço de ninguém.
 
-### 11.4. Gente do mapa e do acampamento
-**A fazer:** viajantes, caravanas, seguidores e quem trabalha nos postos, com as figuras do G1. O Marco 22 põe essa gente para construir.
+### 11.4. Gente do mapa e do acampamento ✅ OK
+**Feito:**
+- **A figura de enfeite** (`entities/Extra.ts`): uma `Unit` que não luta. Ganha de graça a animação, a direção e o zoom das figuras do G1. A coluna da parte 2 passou a usar a mesma.
+- **Gente nova nas figuras** (`folkLook` em `art/looks.ts`):
+  - duas ferramentas: o cajado de caminhante (o do mago, sem a pedra e sem o brilho) e a enxada, que sobe e desce nos quadros do golpe;
+  - o cervo, sobre o desenho do cavalo: mais claro, com galhada e rabo branco, nas três direções.
+- **O mapa vivo** (`MapLife`): moradores com roupas de seis cores, camponeses de boné e enxada, viajantes de capa e cajado, peregrinos de branco, caçadores de arco e as manadas de cervos.
+  - Parado na lavoura, o camponês trabalha a terra, cada um no seu tempo.
+  - A flechada no cervo toca o tiro do arco. O caçador volta com o cervo nas costas, como uma capa da cor do bicho.
+  - Na névoa, ninguém aparece, como antes. As caravanas já eram pixel art: são bandos de verdade, com a carroça do mercador.
+- **Os seguidores do acampamento** (`CampLife`): cada um com a roupa do ofício. O cozinheiro vai de branco, o mascate de capa e cajado, a curandeira de verde, o capelão de preto, o ajudante de ferreiro com o martelo, e as famílias em quatro cores.
+  - Trabalham com os quadros do golpe: o cozinheiro mexe o caldeirão, a curandeira cuida dos feridos, o ajudante martela a bigorna.
+  - De noite, dormem onde estão.
+  - Os lugares de trabalho viraram peças (`art/campProps.ts`): o caldeirão na trempe, com o fogo e a lenha; a banca de toldo listrado; a enfermaria com a cruz e dez esteiras; o púlpito de caixotes com o estandarte; a bigorna no toco, com o balde e o ferro; e o varal.
+  - A carga de ferro nas costas de quem a leva para a Ferraria (soldados e o ajudante) é uma peça pequena.
+- **Os tenentes sem comando** sentam na roda da fogueira, virados para o fogo, com o anel prateado.
+- **Testes:**
+  - 8 de regras novos: as folhas de toda a gente, a enxada, o cajado sem brilho, o cervo, as cores e as peças dos seguidores.
+  - As suítes `missoes` (28/28) e `companhias` (15/15) continuam passando. Conferido também na tela, no acampamento e num povoado.
+
+**Ficou para depois:**
+- as crianças das famílias (o greybox desenhava uma): a figura ainda não tem um tamanho menor;
+- quem trabalha nos postos do Marco 22 entra com ele. A figura de enfeite e as ferramentas já servem.
 
 ### 11.5. Interiores e a Cidade Alta
 **A fazer:** o lado de dentro das construções e a Cidade Alta das capitais (de fora ela já é pixel art).

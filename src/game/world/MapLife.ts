@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import type { Settlement } from "../sim/realm";
 import { streetPath, type TownLayout, type Rect } from "./townLayout";
 import type { TerrainMap } from "./TerrainMap";
-import { COLORS } from "../../utils/constants";
+import { Extra } from "../entities/Extra";
+import { folkLook } from "../art/looks";
+import type { Look } from "../art/figures";
 import { distance, type Point } from "../../utils/math";
 
 type WalkerKind = "TOWNSFOLK" | "PEASANT" | "TRAVELER" | "PILGRIM" | "DEER" | "HUNTER";
@@ -31,6 +33,8 @@ interface Walker {
   /** Caçador: a caça que persegue e se já abateu uma. */
   prey: Walker | null;
   carrying: boolean;
+  /** Último golpe de trabalho (a enxada na lavoura, a flechada no cervo). */
+  workAt: number;
 }
 
 /** O que o mapa vivo precisa saber do mundo a cada quadro. */
@@ -62,8 +66,7 @@ const DANGER_RADIUS = 2600;
 const MAX_WALKERS = 140;
 
 /**
- * Mapa vivo (Marco 12): gente e bichos que só existem perto da câmera (baratos, um desenho só
- * por quadro) e os sinais que contam o que está acontecendo antes de o inimigo aparecer.
+ * Mapa vivo (Marco 12): gente e bichos que só existem perto da câmera e os sinais que contam o que está acontecendo antes de o inimigo aparecer.
  * - Moradores andam pelas ruas e entram nas casas; à noite somem quase todos. Mais gente quanto
  *   maior e mais próspero o povoado; uma cidade saqueada fica vazia.
  * - (A guarnição são soldados de verdade: ver Garrisons.ts.)
@@ -71,19 +74,22 @@ const MAX_WALKERS = 140;
  * - Viajantes e peregrinos andam pelas estradas (com lanterna à noite) e dão meia-volta diante
  *   de um bando; cervos pastam e fogem de quem chega perto; caçadores saem dos povoados atrás
  *   dos cervos e voltam com a caça nas costas.
+ * - Cada um é uma figura do G1 (G4): o morador com a roupa de cada um, o camponês com a
+ *   enxada (trabalha a terra parado na lavoura), o viajante de capa e cajado, o peregrino de
+ *   branco, o caçador de arco e o cervo.
  * - Sinais: **fumaça** sobre povoados saqueados ou em ruínas (acima da névoa, visível de longe),
  *   **corvos** sobre campos de batalha recentes e **rastros** de marcha no chão.
  */
 export class MapLife {
   private walkers: Walker[] = [];
-  private readonly gfx: Phaser.GameObjects.Graphics;
+  /** A figura de cada um (feita quando ele aparece, desfeita quando ele some). */
+  private readonly figures = new Map<Walker, Extra>();
   private readonly signals: Phaser.GameObjects.Graphics;
   private readonly trackGfx: Phaser.GameObjects.Graphics;
   private lastPlanAt = -Infinity;
   private danger = new Set<string>();
 
-  constructor(scene: Phaser.Scene) {
-    this.gfx = scene.add.graphics().setDepth(-0.5);
+  constructor(private readonly scene: Phaser.Scene) {
     this.signals = scene.add.graphics().setDepth(17);
     this.trackGfx = scene.add.graphics().setDepth(-5);
   }
@@ -98,7 +104,8 @@ export class MapLife {
   }
 
   destroy(): void {
-    this.gfx.destroy();
+    for (const f of this.figures.values()) f.destroy();
+    this.figures.clear();
     this.signals.destroy();
     this.trackGfx.destroy();
     this.walkers = [];
@@ -262,6 +269,7 @@ export class MapLife {
       home: { x: p.x, y: p.y },
       prey: null,
       carrying: false,
+      workAt: -Infinity,
     };
   }
 
@@ -386,6 +394,7 @@ export class MapLife {
       this.walkers = this.walkers.filter((x) => x !== prey);
       for (const o of this.walkers) if (o.kind === "DEER" && distance(o, prey) < 400) o.path = [{ x: o.x + (o.x - w.x) * 2, y: o.y + (o.y - w.y) * 2 }];
       w.carrying = true;
+      w.workAt = time;
       w.prey = null;
       w.speed = 36;
     }
@@ -394,47 +403,42 @@ export class MapLife {
 
   // --- Desenho ---
 
+  /** O visual de cada um. O caçador que volta com o cervo o leva nas costas, como uma capa. */
+  private lookOf(w: Walker): Look {
+    switch (w.kind) {
+      case "TOWNSFOLK":
+        return folkLook("TOWNSFOLK", w.color);
+      case "HUNTER":
+        return w.carrying ? { ...folkLook("HUNTER"), cape: 0x8b5a2b } : folkLook("HUNTER");
+      default:
+        return folkLook(w.kind);
+    }
+  }
+
   private draw(time: number, ctx: MapLifeContext): void {
-    const g = this.gfx;
-    g.clear();
+    // Quem sumiu (foi para casa, saiu da vista, virou caça) leva a figura junto
+    const here = new Set(this.walkers);
+    for (const [w, fig] of this.figures) {
+      if (here.has(w)) continue;
+      fig.destroy();
+      this.figures.delete(w);
+    }
     for (const w of this.walkers) {
-      if (!ctx.canSee(w)) continue;
-      switch (w.kind) {
-        case "HUNTER":
-          g.fillStyle(w.color, 1);
-          g.fillCircle(w.x, w.y, 6);
-          g.lineStyle(1.5, COLORS.OUTLINE, 0.9);
-          g.strokeCircle(w.x, w.y, 6);
-          g.lineStyle(2, 0x8b5a2b, 1);
-          g.beginPath();
-          g.arc(w.x - 6, w.y, 8, -1.1, 1.1); // arco
-          g.strokePath();
-          if (w.carrying) {
-            g.fillStyle(0x8b5a2b, 1);
-            g.fillEllipse(w.x + 4, w.y - 6, 14, 7); // cervo nas costas
-          }
-          break;
-        case "DEER":
-          g.fillStyle(w.color, 1);
-          g.fillEllipse(w.x, w.y, 16, 9);
-          g.fillCircle(w.x + 8, w.y - 3, 3.5);
-          break;
-        default: {
-          const r = w.kind === "TRAVELER" ? 6 : 5;
-          g.fillStyle(w.color, 1);
-          g.fillCircle(w.x, w.y, r);
-          g.lineStyle(1.5, COLORS.OUTLINE, 0.9);
-          g.strokeCircle(w.x, w.y, r);
-          if (w.kind === "TRAVELER" || w.kind === "PILGRIM") {
-            g.lineStyle(2, 0x5a3d1e, 1);
-            g.lineBetween(w.x + 6, w.y - 8, w.x + 6, w.y + 6); // cajado
-          } else if (w.kind === "PEASANT" && w.path.length === 0) {
-            g.lineStyle(2, 0x5a3d1e, 1);
-            const swing = Math.sin(time / 260 + w.x) * 4;
-            g.lineBetween(w.x, w.y, w.x + 7, w.y + 6 + swing); // enxada
-          }
-        }
+      let fig = this.figures.get(w);
+      if (!fig) {
+        fig = new Extra(this.scene, w.x, w.y, this.lookOf(w), w.kind === "DEER" ? 12 : 8);
+        this.figures.set(w, fig);
+        if (w.kind === "HUNTER") fig.setData("carrying", false);
       }
+      if (w.kind === "HUNTER" && fig.getData("carrying") !== w.carrying) {
+        fig.dress(this.lookOf(w));
+        fig.setData("carrying", w.carrying);
+      }
+      fig.walkTo(w.x, w.y);
+      fig.setVisible(ctx.canSee(w));
+      // Parado na lavoura, o camponês trabalha a terra (cada um no seu tempo)
+      if (w.kind === "PEASANT" && !w.leaving && w.path.length === 0 && time - w.workAt > 900 + (Math.abs(w.home.x) % 500)) w.workAt = time;
+      if (w.workAt > fig.lastAttackAt) fig.work(w.workAt);
     }
     this.drawSignals(time, ctx);
   }

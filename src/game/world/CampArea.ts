@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { drawTroopShape } from "../entities/shapes";
+import { Extra } from "../entities/Extra";
+import { troopLook } from "../art/looks";
 import type { Commander } from "../entities/Commander";
 import { CAMP_SITES, CAMPFIRE, INTERACT_RADIUS, PALISADE, QUARTER_SLOTS, type CampSite } from "../data/campLayout";
 import type { CampDef } from "../data/world";
@@ -44,6 +45,8 @@ const PALISADE_INSET = 30;
 const STAKE = 6;
 const STAKE_GROUP = 6;
 const ART_ID = "acampamento";
+/** As peças dos seguidores (caldeirão, banca, enfermaria...), refeitas quando a lista muda. */
+const FOLLOWER_ART_ID = "acampamento:seguidores";
 
 /** Ponto de interação no mundo: um local do acampamento, um alojamento, um tenente ou uma cidade. */
 export interface Interactable {
@@ -222,6 +225,11 @@ export class CampArea {
   /** Manda as peças para a montagem (a antiga fica na tela até a nova acabar). */
   private publishArt(): void {
     this.art.setJobs(ART_ID, [...this.artJobs, ...this.quarterJobs]);
+  }
+
+  /** As peças dos lugares de trabalho dos seguidores, na mesma montagem do acampamento. */
+  setFollowerArt(jobs: ArtJob[]): void {
+    this.art.setJobs(FOLLOWER_ART_ID, jobs);
   }
 
   /** Monta e mostra as peças perto da câmera (chamado a cada quadro). */
@@ -497,11 +505,11 @@ export class CampArea {
 
   private addLieutenantSpot(l: LieutenantData, pos: Point, drawFigure: boolean): void {
     if (drawFigure) {
-      const fig = this.scene.add.graphics({ x: pos.x, y: pos.y }).setDepth(6);
-      drawTroopShape(fig, "INFANTRY", 11);
-      fig.lineStyle(3, COLORS.LIEUTENANT, 1);
-      fig.strokeCircle(0, 0, 16);
-      fig.rotation = Math.PI / 2;
+      // Sentado na roda da fogueira, virado para o fogo, com o anel prateado de tenente
+      const fig = new Extra(this.scene, pos.x, pos.y, { ...troopLook("INFANTRY"), trim: 0xdfe3ee }, 8, COLORS.LIEUTENANT);
+      const fire = this.at(CAMPFIRE);
+      fig.setFacing(Math.atan2(fire.y - pos.y, fire.x - pos.x));
+      fig.setPose("SIT");
       this.quarterObjects.push(fig);
       this.quarterObjects.push(worldLabel(this.scene, pos.x, pos.y - 26, l.name, "#dfe3ee"));
     }

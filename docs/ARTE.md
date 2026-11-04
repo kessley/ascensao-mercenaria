@@ -111,9 +111,9 @@ Interiores, interface e efeitos ainda são greybox.
 ### Gente que não luta
 | O quê | Onde no código | Estado |
 | --- | --- | --- |
-| Viajantes e caravanas no mapa | `MapLife` | greybox (círculos) |
-| Seguidores do acampamento (cozinheira, ferreiro, crianças) e cargas | `CampLife` | greybox |
-| Tenentes sentados na fogueira | `CampArea` | greybox |
+| Moradores, camponeses, viajantes, peregrinos, caçadores e cervos no mapa | `MapLife`, `Extra` | ✅ pixel art (G4): figuras do G1; o camponês trabalha a terra com a enxada e o caçador volta com o cervo nas costas |
+| Seguidores do acampamento e cargas | `CampLife`, `campProps.ts` | ✅ pixel art (G4): figuras do G1 com a roupa do ofício, os lugares de trabalho (caldeirão, banca, enfermaria, púlpito, bigorna, varal) e a carga de ferro; as crianças ficaram para depois |
+| Tenentes sentados na fogueira | `CampArea`, `Extra` | ✅ pixel art (G4): sentados, virados para o fogo, com o anel prateado |
 | Gente dos interiores | `InteriorScene` | greybox |
 | Cidade Alta das capitais | `CapitalScene` | greybox |
 | Duelos da Liça | `DuelScene` | greybox |
@@ -166,6 +166,7 @@ Interiores, interface e efeitos ainda são greybox.
 | Harpias (ver acima) | ✅ pixel art (G4, parte 3) |
 | Barcaças e navios de comércio | ✅ pixel art (G4, parte 3), `ships.ts`: casco, velas e espuma; vela recolhida no porto durante a tempestade |
 | Convés da abordagem | ✅ pixel art (G4, parte 3), `deck.ts`: os dois navios, as pranchas e o mar que corre |
+| Gente do mapa e do acampamento (ver acima) | ✅ pixel art (G4, parte 4) |
 | Interiores das construções | greybox |
 | Cidade Alta das capitais | greybox |
 
@@ -188,7 +189,7 @@ Interiores, interface e efeitos ainda são greybox.
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco,** em seis partes. As três primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés. Falta: a gente do mapa e do acampamento com as figuras do G1, os interiores e a Cidade Alta, e o acabamento do G1.
+4. **G4, resto do elenco,** em seis partes. As quatro primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento. Falta: os interiores e a Cidade Alta, e o acabamento do G1.
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface:** fonte, molduras, ícones e retratos.

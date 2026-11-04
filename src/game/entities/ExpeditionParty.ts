@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
+import { Extra } from "./Extra";
 import { COLORS, TROOPS, type TroopType } from "../../utils/constants";
 import type { Point } from "../../utils/math";
 import { troopLook, vehicleLook } from "../art/looks";
-import type { Look } from "../art/figures";
 import { LOD_SCALE, standardKey, type StandardGlyph } from "../art/atlas";
 
 /** Mais que isso não cabe na coluna sem virar um borrão. */
@@ -18,20 +18,6 @@ const JUMP = 500;
 export interface PartyTroop {
   troop: TroopType;
   soldiers: number;
-}
-
-/** Figura só de enfeite (G4): anda com a coluna, não luta e não é alvo de ninguém. */
-class Marcher extends Unit {
-  constructor(scene: Phaser.Scene, x: number, y: number, look: Look, radius: number) {
-    super(scene, x, y, "ALLY", { hp: 1, speed: 0, damage: 0, range: 0, cooldown: 1e9, radius });
-    this.autoAttack = false;
-    this.wear(look);
-    this.drawBody();
-  }
-
-  protected drawBody(): void {
-    this.bodyGfx.clear();
-  }
 }
 
 /** Uma figura por soldado até o limite; acima dele, a mesma proporção de cada tropa. */
@@ -60,8 +46,8 @@ export class ExpeditionParty {
   x: number;
   y: number;
   private facing = 0;
-  private readonly marchers: Marcher[];
-  private carts: Marcher[] = [];
+  private readonly marchers: Extra[];
+  private carts: Extra[] = [];
   private readonly standard: Phaser.GameObjects.Image | null;
   private readonly label: Phaser.GameObjects.Text;
   /** Distância entre as filas e entre quem vai lado a lado (cavalo ocupa mais). */
@@ -83,7 +69,7 @@ export class ExpeditionParty {
     const rides = list.some((t) => TROOPS[t].stats.mounted);
     this.along = rides ? 30 : 20;
     this.across = rides ? 22 : 16;
-    this.marchers = list.map((t) => new Marcher(scene, at.x, at.y, troopLook(t), TROOPS[t].stats.radius));
+    this.marchers = list.map((t) => new Extra(scene, at.x, at.y, troopLook(t), TROOPS[t].stats.radius));
     this.standard = list.length > 0 ? scene.add.image(at.x, at.y, standardKey(scene, captain ? COLORS.CAPTAIN : 0x38bdf8, glyphOf(list[0]))).setOrigin(2.5 / 19, 1) : null;
     this.label = scene.add
       .text(at.x, at.y, tag ? `${name} · ${tag}` : name, { fontFamily: "monospace", fontSize: "12px", color: "#bfe3ff", stroke: "#10202e", strokeThickness: 3 })
@@ -97,7 +83,7 @@ export class ExpeditionParty {
     const n = cart ? Math.max(1, Math.min(MAX_CARTS, count)) : 0;
     if (n === this.carts.length) return;
     while (this.carts.length > n) this.carts.pop()?.destroy();
-    while (this.carts.length < n) this.carts.push(new Marcher(this.scene, this.x, this.y, vehicleLook("WAGON", COLORS.ALLY), 16));
+    while (this.carts.length < n) this.carts.push(new Extra(this.scene, this.x, this.y, vehicleLook("WAGON", COLORS.ALLY), 16));
     this.place();
   }
 
