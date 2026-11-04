@@ -40,7 +40,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | G2 | Pixel art: chão | ✅ OK |
 | | 21 | Duelos no meio da batalha | ✅ OK |
 | | — | Locais de missão sempre habitados | ✅ OK |
-| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | partes 1 e 2 de 6 (carroças, aríetes e escadas; a coluna das expedições e do comboio) ✅ OK |
+| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | partes 1 a 3 de 6 (carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés) ✅ OK |
 | | 22 | Do bivaque à cidade: acampamento e fortaleza construídos pelo bando, e a cidade que nasce sozinha | |
 | | G5 | Pixel art: interface | |
 | | 23 | Cultura, religião e língua | |

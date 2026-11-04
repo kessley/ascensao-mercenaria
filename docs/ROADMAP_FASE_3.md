@@ -12,13 +12,14 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
-  - os locais de missão sempre habitados (etapa 10 ✅ OK).
+  - os locais de missão sempre habitados (etapa 10 ✅ OK);
+  - o G4 até a parte 3: harpias, navios e convés.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 3: harpias, navios e convés.
-  - Já estão feitas as duas primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio.
-  - Faltam harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1.
+- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 4: a gente do mapa e do acampamento.
+  - Já estão feitas as três primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés.
+  - Faltam a gente do mapa e do acampamento, os interiores e a Cidade Alta, e o acabamento do G1.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -47,7 +48,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
-| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 a 3 de 6 ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
@@ -571,8 +572,29 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - **Conserto no caminho:** a cena esquecia o comboio quando recomeçava (ao voltar de uma batalha, ao carregar o jogo), e ele sumia até sair outro. Agora o comboio é desenhado de novo.
 - **Testes:** a suíte `missoes` manda a companhia de um capitão para uma escolta e confere que a coluna marcha (28 de 28). Conferido também na tela.
 
-### 11.3. Harpias, navios e convés
-**A fazer:** as harpias em pixel art; os navios no mar e o convés da batalha no mar.
+### 11.3. Harpias, navios e convés ✅ OK
+**Feito:**
+- **A harpia** (`art/harpy.ts`, `Harpy`): uma águia de asas largas e cabeça clara, vista de cima em três direções. O oeste é o leste espelhado.
+  - Bate as asas em 4 quadros por pouco mais de um segundo e depois plana. Vira para onde voa, com folga na diagonal, como as figuras.
+  - A sombra vai no chão, 34 px abaixo da ave: é ela que mostra a altura. Ave e sombra crescem com o zoom, como as figuras.
+- **Barcaças e navios de comércio** (`art/ships.ts`, `TradeRoutes`): o casco visto do alto e um pouco de lado, com o costado, o convés de tábuas e a espuma na linha d'água.
+  - A barcaça leva caixotes e uma vela. O navio tem castelo de popa, gurupés, dois mastros, velas com faixa e flâmula.
+  - Viram para onde vão (de frente, de lado, de costas). A espuma se mexe e o barco balança um pixel.
+  - Na tempestade, parado no porto, o barco recolhe a vela e o rastro some.
+- **O convés da abordagem** (`art/deck.ts`, `buildDeck`): os dois navios a 1 px por px de mundo, como o chão.
+  - A proa fica em ponta, para fora. A popa é reta, com a amurada aberta onde as pranchas apoiam e um cunho de ferro de cada lado.
+  - No convés: tábuas ao comprido em três tons, com emendas e pregos, escotilhas com grade, a base do mastro, cabos enrolados e a sombra da vela atravessando tudo. Embaixo, o costado e a espuma.
+  - O navio deles é o nosso espelhado, em madeira mais escura e com a cinta vermelha (a nossa é azul).
+  - As pranchas têm travessas e corrimão de corda. O mar é um ladrilho que corre devagar.
+  - As paredes da cena não mudaram: a arte cobre as mesmas amuradas.
+- **Testes:**
+  - 11 de regras novos: o polígono da grade, as folhas da harpia e dos barcos, e o convés.
+  - A suíte `mar` continua passando (45 de 45), com a abordagem no convés. Conferido também na tela.
+
+**Ficou para depois:**
+- o mastro do convés é só a base: em pé, ele taparia quem luta atrás;
+- o mar que se mexe cobre uma área em volta dos navios; mais longe, é a cor lisa;
+- a harpia some ao chegar, sem pousar no braço de ninguém.
 
 ### 11.4. Gente do mapa e do acampamento
 **A fazer:** viajantes, caravanas, seguidores e quem trabalha nos postos, com as figuras do G1. O Marco 22 põe essa gente para construir.

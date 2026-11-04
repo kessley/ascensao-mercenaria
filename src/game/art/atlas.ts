@@ -1,7 +1,9 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "./canvasTexture";
 import { bannerSprite, cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
+import { HARPY_CELL, harpyShadow, harpySheet } from "./harpy";
 import type { Bitmap } from "./pixel";
+import { shipCell, shipSheet, type ShipKind } from "./ships";
 import { VEHICLE_CELL, VEHICLE_DOT, VEHICLE_MINI, vehicleDot, vehicleMiniSheet, vehicleSheet } from "./vehicles";
 
 /**
@@ -64,6 +66,33 @@ export function standardKey(scene: Phaser.Scene, color: number, glyph: StandardG
   if (scene.textures.exists(key)) return key;
   const b = bannerSprite(color, glyph);
   addSheet(scene, key, b, b.width, b.height);
+  return key;
+}
+
+/** Uma textura de um quadro só, feita uma vez (o convés, o mar). */
+export function bitmapKey(scene: Phaser.Scene, key: string, make: () => Bitmap): string {
+  if (!scene.textures.exists(key)) {
+    const b = make();
+    addSheet(scene, key, b, b.width, b.height);
+  }
+  return key;
+}
+
+/** A harpia: a folha (direção × bater de asas) e a sombra no chão. */
+export function harpyKeys(scene: Phaser.Scene): { body: string; shadow: string } {
+  const keys = { body: "harpy", shadow: "harpy:shadow" };
+  if (!scene.textures.exists(keys.body)) addSheet(scene, keys.body, harpySheet(), HARPY_CELL.w, HARPY_CELL.h);
+  bitmapKey(scene, keys.shadow, harpyShadow);
+  return keys;
+}
+
+/** A folha de um barco (direção × vela aberta ou recolhida × espuma). */
+export function shipKey(scene: Phaser.Scene, kind: ShipKind): string {
+  const key = `ship:${kind}`;
+  if (!scene.textures.exists(key)) {
+    const cell = shipCell(kind);
+    addSheet(scene, key, shipSheet(kind), cell.w, cell.h);
+  }
   return key;
 }
 

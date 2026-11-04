@@ -89,6 +89,30 @@ export class Grid {
     }
   }
 
+  /** Polígono cheio (asas, cascos, velas): pinta o centro de cada pixel que cai dentro dele. */
+  poly(points: readonly (readonly [number, number])[], c: number): void {
+    if (points.length < 3) return;
+    const ys = points.map((p) => p[1]);
+    const y0 = Math.max(0, Math.floor(Math.min(...ys)));
+    const y1 = Math.min(this.h - 1, Math.ceil(Math.max(...ys)));
+    for (let y = y0; y <= y1; y++) {
+      const sy = y + 0.5;
+      const xs: number[] = [];
+      for (let i = 0; i < points.length; i++) {
+        const [ax, ay] = points[i];
+        const [bx, by] = points[(i + 1) % points.length];
+        if (ay <= sy === by <= sy) continue;
+        xs.push(ax + ((sy - ay) / (by - ay)) * (bx - ax));
+      }
+      xs.sort((a, b) => a - b);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        for (let x = Math.ceil(xs[k] - 0.5); x <= Math.floor(xs[k + 1] - 0.5); x++) this.px(x, y, c);
+      }
+    }
+    // Pontas finas (a ponta da asa, a do mastro) não somem: os vértices sempre aparecem
+    for (const [x, y] of points) this.px(Math.round(x), Math.round(y), c);
+  }
+
   /** Contorno de 1 px em volta de tudo o que foi desenhado. */
   outline(): void {
     const marks: number[] = [];

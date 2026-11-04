@@ -11,6 +11,8 @@ import { weatherAt } from "../../utils/season";
 import { geoOf } from "../worldgen/geoMap";
 import { ofRealm } from "../worldgen/names";
 import { distance, type Point } from "../../utils/math";
+import { shipKey } from "../art/atlas";
+import { SHIP_FRAMES, shipCell } from "../art/ships";
 
 /** Barcaça num rio ou navio na costa (Marco 14): anda por uma linha (o rio, o mar) com a carga. */
 export interface Ship {
@@ -49,6 +51,9 @@ const lengthOf = (path: readonly Point[]) => path.reduce((sum, p, i) => (i === 0
 export class TradeRoutes {
   ships: Ship[] = [];
   private readonly gfx: Phaser.GameObjects.Graphics;
+  /** O desenho de cada barco à vista, com a direção para onde ele está virado. */
+  private readonly sprites = new Map<string, { img: Phaser.GameObjects.Image; row: number; west: boolean }>();
+  private clock = 0;
   private seq = 0;
   /** Caminhos por mar e por rio já calculados (par de povoados → linha; null = não há). */
   private readonly waterPaths = new Map<string, Point[] | null>();
@@ -56,7 +61,7 @@ export class TradeRoutes {
   private readonly told = new WeakSet<Warband>();
 
   constructor(
-    scene: Phaser.Scene,
+    private readonly scene: Phaser.Scene,
     private readonly world: WorldDef,
     private readonly warbands: WarbandManager,
     private readonly layoutOf: (id: string) => TownLayout | undefined,
@@ -66,6 +71,8 @@ export class TradeRoutes {
 
   destroy(): void {
     this.gfx.destroy();
+    for (const s of this.sprites.values()) s.img.destroy();
+    this.sprites.clear();
   }
 
   // --- Partidas (uma vez por dia) ---
@@ -341,6 +348,7 @@ export class TradeRoutes {
 
   /** Tempo real: os barcos andam; a caravana escoltada parte quando o bando chega perto. */
   update(dt: number, view: Phaser.Geom.Rectangle, army: readonly Point[]): TradeNews[] {
+    this.clock += dt;
     const news = this.move(dt, (sh) => sh.speed * dt);
     for (const b of this.warbands.bands) {
       if (b.kind !== "CARAVAN") continue;
@@ -416,36 +424,54 @@ export class TradeRoutes {
     return sh.path[sh.path.length - 1];
   }
 
-  /** Barcos à vista: casco, vela e o rastro na água. */
+  /** Barcos à vista: o desenho (virado para onde vão, vela recolhida no porto) e o rastro na água. */
   private draw(view: Phaser.Geom.Rectangle): void {
     const g = this.gfx;
     g.clear();
+    const seen = new Set<string>();
+    const foam = Math.floor(this.clock / 0.55) % 2;
     for (const sh of this.ships) {
       const p = this.positionOf(sh);
       if (p.x < view.x - 100 || p.y < view.y - 100 || p.x > view.right + 100 || p.y > view.bottom + 100) continue;
+      seen.add(sh.id);
       const ahead = this.positionOf({ ...sh, done: sh.done + 40 });
       const a = Math.atan2(ahead.y - p.y, ahead.x - p.x);
       const big = sh.kind === "SHIP" ? 1.6 : 1;
       const c = Math.cos(a);
       const s = Math.sin(a);
-      const pt = (x: number, y: number) => ({ x: p.x + (x * c - y * s) * big, y: p.y + (x * s + y * c) * big });
-      g.fillStyle(0xffffff, 0.25);
-      const w1 = pt(-30, -8);
-      const w2 = pt(-30, 8);
-      const w3 = pt(-60, 0);
-      g.fillTriangle(w1.x, w1.y, w2.x, w2.y, w3.x, w3.y);
-      g.fillStyle(0x5a3a1e, 1);
-      const h = [pt(22, 0), pt(10, -9), pt(-20, -9), pt(-20, 9), pt(10, 9)] as unknown as Phaser.Math.Vector2[];
-      g.fillPoints(h, true);
-      g.lineStyle(2, 0x1a1008, 1);
-      g.strokePoints(h, true);
-      // Vela (os navios têm duas)
-      g.fillStyle(sh.held ? 0x9a9a9a : 0xf0e8d8, 1);
-      for (const off of sh.kind === "SHIP" ? [6, -10] : [0]) {
-        const m1 = pt(off, -13);
-        const m2 = pt(off, 13);
-        const m3 = pt(off - 9, 0);
-        g.fillTriangle(m1.x, m1.y, m2.x, m2.y, m3.x, m3.y);
+      if (!sh.held) {
+        const pt = (x: number, y: number) => ({ x: p.x + (x * c - y * s) * big, y: p.y + (x * s + y * c) * big });
+        g.fillStyle(0xffffff, 0.22);
+        const w1 = pt(-18, -6);
+        const w2 = pt(-18, 6);
+        const w3 = pt(-52, 0);
+        g.fillTriangle(w1.x, w1.y, w2.x, w2.y, w3.x, w3.y);
+      }
+      let sprite = this.sprites.get(sh.id);
+      if (!sprite) {
+        const cell = shipCell(sh.kind);
+        const img = this.scene.add.image(p.x, p.y, shipKey(this.scene, sh.kind), 0).setOrigin(cell.cx / cell.w, cell.cy / cell.h).setDepth(-1.4);
+        sprite = { img, row: 1, west: c < 0 };
+        this.sprites.set(sh.id, sprite);
+      }
+      // Vira com folga, como as figuras: de lado, de frente ou de costas
+      if (Math.abs(c) >= Math.abs(s) * (sprite.row === 1 ? 0.85 : 1.4)) {
+        sprite.row = 1;
+        sprite.west = c < 0;
+      } else sprite.row = s > 0 ? 0 : 2;
+      const bob = sh.held ? 0 : foam;
+      sprite.img
+        .setVisible(true)
+        .setFrame(sprite.row * SHIP_FRAMES + (sh.held ? 2 : 0) + bob)
+        .setFlipX(sprite.row === 1 && sprite.west)
+        .setPosition(Math.round(p.x), Math.round(p.y) + bob);
+    }
+    for (const [id, sprite] of this.sprites) {
+      if (seen.has(id)) continue;
+      if (this.ships.some((sh) => sh.id === id)) sprite.img.setVisible(false);
+      else {
+        sprite.img.destroy();
+        this.sprites.delete(id);
       }
     }
   }

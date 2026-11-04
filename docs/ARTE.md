@@ -105,13 +105,13 @@ Interiores, interface e efeitos ainda são greybox.
 | Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM), `vehicles.ts` | ✅ pixel art (G4): mula e toldo listrado na cor da caravana; aríete coberto na cor de quem assalta |
 | Carroças do bando | `Wagon`, `vehicles.ts` | ✅ pixel art (G4): carro de bois com lona e carroceiro; as rodas giram e o destroço fica no chão |
 | Escadas e aríete do jogador nos cercos | `SiegeWorks`, `ladderPiece` em `buildings.ts`, `vehicles.ts` | ✅ pixel art (G4): a viga do aríete bate no portão; as escadas encostam do lado de fora, nos quatro lados |
-| Harpias | `Harpy` | greybox |
+| Harpias | `Harpy`, `harpy.ts` | ✅ pixel art (G4): águia de asas largas que bate as asas e plana, com a sombra no chão mostrando a altura |
 | Coluna de tropas em expedição e comboio de suprimentos | `ExpeditionParty` | ✅ pixel art (G4): figuras do G1 em filas de três, o porta-estandarte na frente (dourado com capitão) e os carros de bois atrás |
 
 ### Gente que não luta
 | O quê | Onde no código | Estado |
 | --- | --- | --- |
-| Viajantes, caravanas e barcos no mapa | `MapLife` | greybox (círculos) |
+| Viajantes e caravanas no mapa | `MapLife` | greybox (círculos) |
 | Seguidores do acampamento (cozinheira, ferreiro, crianças) e cargas | `CampLife` | greybox |
 | Tenentes sentados na fogueira | `CampArea` | greybox |
 | Gente dos interiores | `InteriorScene` | greybox |
@@ -163,8 +163,9 @@ Interiores, interface e efeitos ainda são greybox.
 | O quê | Estado |
 | --- | --- |
 | Carroças, aríetes e escadas (ver acima) | ✅ pixel art (G4, parte 1) |
-| Harpias (ver acima) | greybox |
-| Navios e convés | greybox |
+| Harpias (ver acima) | ✅ pixel art (G4, parte 3) |
+| Barcaças e navios de comércio | ✅ pixel art (G4, parte 3), `ships.ts`: casco, velas e espuma; vela recolhida no porto durante a tempestade |
+| Convés da abordagem | ✅ pixel art (G4, parte 3), `deck.ts`: os dois navios, as pranchas e o mar que corre |
 | Interiores das construções | greybox |
 | Cidade Alta das capitais | greybox |
 
@@ -187,7 +188,7 @@ Interiores, interface e efeitos ainda são greybox.
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco,** em seis partes. As duas primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio. Falta: harpias, navios, convés, interiores e Cidade Alta, e a gente do mapa e do acampamento com as figuras do G1.
+4. **G4, resto do elenco,** em seis partes. As três primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés. Falta: a gente do mapa e do acampamento com as figuras do G1, os interiores e a Cidade Alta, e o acabamento do G1.
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface:** fonte, molduras, ícones e retratos.
