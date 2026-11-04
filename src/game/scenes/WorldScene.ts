@@ -450,7 +450,7 @@ export class WorldScene extends Phaser.Scene {
           this.newsOfArmy.push({ key: band.ownerId, at: { x: at.x, y: at.y, day: day + near / WAR_AI.NEWS_SPEED, size } });
         }
       },
-      officerDown: (host, name, chief) => this.onOfficerDown(host, name, chief),
+      officerDown: (host, name, chief, hero) => this.onOfficerDown(host, name, chief, hero),
       vanish: (e) => {
         e.fled = true;
         e.unitState = "DEAD";

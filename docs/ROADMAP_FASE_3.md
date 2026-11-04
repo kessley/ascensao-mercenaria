@@ -10,7 +10,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - os capitães (Marco 20 ✅ OK, no acampamento e na batalha);
   - a `WorldScene` dividida em partes (etapa 8);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-- **Em andamento:** os duelos no meio da batalha (Marco 21), em três partes. A primeira (as regras do duelo, já na Liça) está feita; a seguir, os heróis do outro lado.
+- **Em andamento:** os duelos no meio da batalha (Marco 21), em três partes. As duas primeiras (as regras do duelo, já na Liça, e os heróis do outro lado) estão feitas; a seguir, o duelo no campo.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -37,7 +37,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
-| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | parte 1 de 3 ✅ OK |
+| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | partes 1 e 2 de 3 ✅ OK |
 | 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
 | 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
 | 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
@@ -411,13 +411,30 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 
 **Ficou para depois:** a Liça segue em greybox (círculos), porque as poses das figuras vêm com a parte 3.
 
-### 9.2. Marco 21, parte 2: os heróis do outro lado
-**A fazer:**
-- Os capitães e chefes das forças inimigas ganham uma ficha de herói: nome, Duelo (1 a 5), temperamento e arma.
-- **Quem procura duelo** (Duelo 3 ou mais, e bravo, orgulhoso ou cruel) leva estandarte próprio, e os batedores avisam quando o veem. Chefes de calamidade que lutam de perto também procuram.
-- **Capturar, resgatar e recrutar:** o oficial capturado guarda a ficha, e quem muda de lado vira capitão do bando (origem "capturado").
+### 9.2. Marco 21, parte 2: os heróis do outro lado ✅ OK
+**Feito:**
+- **Ficha de herói** (`src/game/data/heroes.ts`): cada chefe e capitão das forças inimigas tem nome, Duelo (1 a 5), um traço e uma arma. A ficha vai no save junto com o comando do bando.
+  - **A mão sai do tipo de bando:** goblins 1 a 2, salteadores e hordas 2 a 3, patrulhas e exércitos 3 a 4. Os capitães ficam um ponto abaixo do chefe, e orcs e cavaleiros mortos um acima. Um nobre de verdade traz a dele (o marcial dividido por 2).
+  - **A arma é a do povo:** orcs e chefes salteadores no machado, sargentos e capitães dos reinos com espada e escudo, o chefe goblin na lança, e o resto na espada.
+  - **O traço dá o jeito de lutar:** o bravo, o cruel e o ambicioso emendam golpes; o astuto e o invejoso fingem o pesado; o covarde e o estudioso esperam o erro; os outros são firmes.
+- **Quem procura duelo** (Duelo 3 ou mais, e bravo, cruel ou ambicioso, que faz as vezes do orgulhoso):
+  - leva o estandarte do desafio: uma flâmula vermelha de duas pontas, com espadas cruzadas, acima do nome;
+  - na primeira vez que alguém do bando o vê, o diário avisa, por exemplo: "Avistamos Ruzbag Come-Ratos (Duelo 4, de machado, bravo): ele procura o Comandante para um duelo."
+  - O Senhor da Guerra orc, chefe de calamidade que luta de perto, procura sempre (Duelo 5, machado, cruel). O Lorde Necromante, que ataca de longe, não procura.
+- **Capturar e recrutar:**
+  - o chefe que se rende ferido guarda a ficha, e a lista de prisioneiros mostra a mão, a arma e o traço;
+  - o botão novo "Recrutar como capitão" oferece um lugar no bando. A chance de aceitar começa em 30% e sobe com a Fama (até mais 40%). O ganancioso, o ambicioso e o covarde ouvem mais (mais 20%); o honrado e o pio, menos (menos 25%);
+  - quem recusa não muda de ideia, um nobre de verdade nunca aceita, e o limite de 3 capitães continua valendo;
+  - quem aceita vira capitão de origem "inimigo que mudou de lado": a mão que mostrou em campo, o traço convertido, sem companhia, sem custo de contratação e com lealdade 30.
+- **Batalha personalizada:** cada força ganhou o campo "Duelo do comandante" (pela competência, ou de 1 a 5).
+- **Testes:**
+  - 10 de regras (`tests/unit/heroes.test.ts`): a mão por tipo de bando, a arma, o temperamento, quem procura duelo, a chance de aceitar e o capitão que sai do prisioneiro;
+  - conferido em batalha de verdade: a ficha, o estandarte e o aviso. Recrutar foi conferido pela loja do jogo, com um ganancioso que aceita e um honrado que recusa;
+  - as suítes `ia` e `companhias` continuam passando (28 de 28).
 
-**Pronto quando:** num exército inimigo dá para ver quem é o herói antes do contato, e um capitão capturado pode virar capitão do bando.
+**Ficou para depois:**
+- só o chefe que cai pode virar prisioneiro, como antes; os capitães inimigos, não. Na parte 3, o herói que se rende num duelo vira prisioneiro;
+- o resgate pedido não depende da mão do herói.
 
 ### 9.3. Marco 21, parte 3: o duelo no campo
 **A fazer:**

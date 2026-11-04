@@ -7,6 +7,7 @@ import type { Warband } from "./Warbands";
 import type { TerrainType } from "../../utils/constants";
 import { COMBAT, SUPPORT, WAR_AI, type EnemyKind, type Formation } from "../../utils/constants";
 import { PASSIVES, type PassiveId } from "../data/lieutenants";
+import { BOSS_HEROES, heroWords, rollHero, seeksDuel, type HeroData } from "../data/heroes";
 import { choosePlan, choosePrey, exposedHero, foeCenter, PLAN_LABEL, type BattleView, type ContactView, type PlanKind } from "../sim/warMind";
 import { cycleStep } from "../sim/combatRules";
 import type { NobleTrait } from "../sim/nobility";
@@ -18,7 +19,9 @@ export interface StaffData {
   chief: string;
   traits: NobleTrait[];
   competence: number;
-  lieutenants: { name: string; passive: PassiveId }[];
+  lieutenants: { name: string; passive: PassiveId; hero?: HeroData }[];
+  /** Ficha de herói do chefe (Marco 21; saves antigos não têm: sai na hora). */
+  hero?: HeroData;
 }
 
 /** O que a hoste atrás dos muros precisa saber deles (batalha de cerco). */
@@ -61,7 +64,7 @@ export interface HostLinks {
   /** Viu o bando do jogador: quantos e onde (vai para a estratégia do reino). */
   sawArmy: (host: WarHost, at: Point, size: number) => void;
   /** Um oficial caiu (nota do combate). */
-  officerDown: (host: WarHost, name: string, chief: boolean) => void;
+  officerDown: (host: WarHost, name: string, chief: boolean, hero: HeroData | null) => void;
   /** Tira do mapa (fugitivo que sumiu de vista). */
   vanish: (e: Enemy) => void;
   /** O bando largou a luta: procura outro rumo. */
@@ -146,8 +149,10 @@ export function makeStaff(kinds: readonly EnemyKind[], base: number, chief?: { n
   const name = chief?.name ?? (undead ? necromancerName() : chiefName());
   const traits = chief ? [...chief.traits] : [pick(TRAIT_POOL)];
   const competence = chief?.martial !== undefined ? Math.max(2, Math.min(5, 1 + Math.round(chief.martial / 2.5))) : base;
-  const lieutenants = kinds.filter((k) => CAPTAINS.has(k)).map(() => ({ name: chiefName(), passive: pick(PASSIVE_POOL) }));
-  return { chief: name, traits, competence, lieutenants };
+  const lieutenants = kinds.filter((k) => CAPTAINS.has(k)).map((k) => ({ name: chiefName(), passive: pick(PASSIVE_POOL), hero: rollHero(k, base, pick(TRAIT_POOL), false) }));
+  const head = kinds.find((k) => CHIEFS.has(k)) ?? kinds.find((k) => CAPTAINS.has(k));
+  const hero = head ? (BOSS_HEROES[head] ?? rollHero(head, base, traits[0] ?? null, true, chief?.martial)) : undefined;
+  return { chief: name, traits, competence, lieutenants, hero };
 }
 
 /** Quanto vale em combate: vida atrás da armadura vezes o que ele bate. */
@@ -280,12 +285,18 @@ export class WarHost implements SquadCommand {
       squad.lieutenantName = data?.name ?? null;
       squad.passive = data ? PASSIVES[data.passive] : null;
       c.setTitle(data?.name ?? null);
+      if (data) {
+        data.hero ??= rollHero(c.kind, this.staff.competence, pick(TRAIT_POOL), false);
+        c.makeHero(data.name, data.hero);
+      }
     });
     // O comandante fica no maior esquadrão; sem chefe, o primeiro capitão manda (mortos-vivos)
     this.leader = chiefs[0] ?? captains[0] ?? null;
     if (this.leader) {
       if (this.leader.squad !== bySize[0]) bySize[0]?.add(this.leader);
       this.leader.setTitle(this.staff.chief);
+      this.staff.hero ??= BOSS_HEROES[this.leader.kind] ?? rollHero(this.leader.kind, this.staff.competence, this.staff.traits[0] ?? null, true);
+      this.leader.makeHero(this.staff.chief, this.staff.hero);
     } else {
       this.headless = true;
     }
@@ -414,6 +425,7 @@ export class WarHost implements SquadCommand {
       const trait = this.staff.traits[0];
       this.links.feed(`Reconhecemos ${this.staff.chief}${trait ? ` (${TRAIT_WORD[trait] ?? ""})` : ""}.`);
     }
+    this.announceHeroes();
     if (w.time >= this.nextPerceive) {
       this.nextPerceive = w.time + WAR_AI.PERCEIVE_MS;
       this.perceive(w);
@@ -945,6 +957,18 @@ export class WarHost implements SquadCommand {
     }
   }
 
+  /** Quem procura o Comandante para um duelo: os batedores avisam na primeira vez que o veem. */
+  private announceHeroes(): void {
+    for (const m of this.members) {
+      const h = m.hero;
+      if (!h || !m.isAlive || !m.revealed || !m.hostile || this.announced.has(m) || !seeksDuel(h)) continue;
+      this.announced.add(m);
+      this.links.feed(`Avistamos ${h.name} (${heroWords(h)}): ele procura o Comandante para um duelo.`);
+    }
+  }
+
+  private announced = new Set<Enemy>();
+
   // --- Quem manda caiu ---
 
   private onLeaderDown(w: HostWorld): void {
@@ -952,7 +976,7 @@ export class WarHost implements SquadCommand {
     const seen = this.leader?.revealed;
     this.leader = null;
     for (const s of this.squads) s.morale = Math.max(0, s.morale - WAR_AI.LEADER_DEATH_MORALE);
-    this.links.officerDown(this, name, true);
+    this.links.officerDown(this, name, true, this.staff.hero ?? null);
     if (seen) this.links.feed(`${name} caiu! O inimigo vacila.`);
     this.successionAt = w.time + WAR_AI.SUCCESSION_MS;
   }
@@ -973,6 +997,7 @@ export class WarHost implements SquadCommand {
     const name = this.squads[i].lieutenantName ?? "um capitão";
     this.leader = heir;
     this.staff.chief = name;
+    this.staff.hero = this.staff.lieutenants.find((l) => l.name === name)?.hero ?? this.staff.hero;
     this.staff.competence = Math.max(1, this.staff.competence - 1);
     this.staff.lieutenants = this.staff.lieutenants.filter((l) => l.name !== name);
     this.squads[i].lieutenant = null;

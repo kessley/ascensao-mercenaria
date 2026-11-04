@@ -9,6 +9,7 @@ import { kingdomsAtWar } from "../../sim/realm";
 import { ofRealm } from "../../worldgen/names";
 import type { EnemyGroupDef } from "../../data/battleMaps";
 import { fullName } from "../../data/lieutenants";
+import type { HeroData } from "../../data/heroes";
 import { localTroop } from "../../data/planet";
 import { useGameStore, type BattalionSurvivors, type BattleResult } from "../../../store/useGameStore";
 import { BALANCE, COLORS, SUPPORT, REALM, WORLD, WEATHER, PRISONERS, WAR_AI, type EnemyKind, type TroopType } from "../../../utils/constants";
@@ -163,7 +164,7 @@ export const combatMethods = {
   },
 
   /** Oficial inimigo caído: nota no combate; um lorde tem o destino resolvido na hora. */
-  onOfficerDown(this: WorldScene, host: WarHost, name: string, chief: boolean): void {
+  onOfficerDown(this: WorldScene, host: WarHost, name: string, chief: boolean, hero: HeroData | null): void {
     const eng = this.engagement;
     const armyId = host.band?.armyId;
     if (chief && armyId) {
@@ -179,7 +180,7 @@ export const combatMethods = {
       this.run.officers.push(name);
       if (chief && host.band === this.run.prey) this.run.chiefDown = true;
     }
-    eng?.officers.push({ name, factionId: host.band?.ownerId ?? null });
+    eng?.officers.push({ name, factionId: host.band?.ownerId ?? null, hero: hero ?? undefined });
   },
 
   /** Quem se rendeu: uma parte dos que caíram e dos que fugiam perto da tropa (Marco 16). */
@@ -210,7 +211,7 @@ export const combatMethods = {
     if (taken > 0) eng.notes.push(`${taken} inimigo${taken > 1 ? "s se renderam" : " se rendeu"}: veja a lista de prisioneiros.`);
     for (const o of eng.officers) {
       if (Math.random() > P.OFFICER_CAPTURE) continue;
-      store.addCaptiveOfficer({ name: o.name, factionId: o.factionId, nobleId: null, ransom: P.RANSOM_OFFICER });
+      store.addCaptiveOfficer({ name: o.name, factionId: o.factionId, nobleId: null, ransom: P.RANSOM_OFFICER, hero: o.hero });
       eng.notes.push(`${o.name} se rendeu ferido.`);
     }
   },

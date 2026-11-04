@@ -7,6 +7,7 @@ import { Scout, type ScoutMode, type ScoutOrder } from "../../entities/Scout";
 import type { Warband } from "../../systems/Warbands";
 import type { Rect, TownLayout } from "../../world/townLayout";
 import type { BattleScenario, ScenarioForce } from "../../data/scenarios";
+import type { HeroData } from "../../data/heroes";
 import type { GameState, TrumpetCall } from "../../../store/useGameStore";
 import type { Formation } from "../../../utils/constants";
 import type { Point } from "../../../utils/math";
@@ -104,7 +105,7 @@ export interface PendingDelivery {
 export interface Engagement {
   enemies: Set<Enemy>;
   /** Oficiais caídos neste combate (podem ter se rendido feridos). */
-  officers: { name: string; factionId: string | null }[];
+  officers: { name: string; factionId: string | null; hero?: HeroData }[];
   /** Batalhões que entraram no combate (só eles ganham XP e entram no relatório). */
   participants: Set<Battalion>;
   /** Abates de cada batalhão (e do tenente) quando entrou no combate. */

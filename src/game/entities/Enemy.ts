@@ -4,6 +4,8 @@ import { BALANCE, COLORS, ENEMIES, FORMATIONS, TIME, WOLF, type AttackKind, type
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 import { enemyLook } from "../art/looks";
+import { duelBannerKey } from "../art/atlas";
+import { BOSS_HEROES, seeksDuel, type HeroData } from "../data/heroes";
 
 /**
  * Goblin: quadrado vermelho. IA simples de aggro → perseguição → ataque, com coleira.
@@ -83,6 +85,9 @@ export class Enemy extends Unit {
   wanderGoal: Point | null = null;
   intercept: Unit | null = null;
   private titleText: Phaser.GameObjects.Text | null = null;
+  /** Herói (Marco 21): oficial com nome e mão no um contra um. Quem procura duelo leva estandarte próprio. */
+  hero: (HeroData & { name: string }) | null = null;
+  private challenge: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind = "GOBLIN", color?: number) {
     super(scene, x, y, "ENEMY", ENEMIES[kind].stats);
@@ -91,6 +96,9 @@ export class Enemy extends Unit {
     this.home = { x, y };
     this.wear(enemyLook(kind, this.bodyColor));
     this.drawBody();
+    // Chefe de calamidade que luta de perto: herói por natureza
+    const boss = BOSS_HEROES[kind];
+    if (boss) this.makeHero(ENEMIES[kind].label, boss);
   }
 
   /** Oficial: o nome aparece sobre ele (o jogador tem de saber em quem mirar). */
@@ -100,6 +108,18 @@ export class Enemy extends Unit {
     if (!title) return;
     this.titleText = this.scene.add.text(0, this.sprite ? Math.round(this.headY) - 16 : -this.radius - 20, title, { fontFamily: "monospace", fontSize: "11px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
     this.add(this.titleText);
+  }
+
+  /** Dá a ficha de herói; quem procura o Comandante ergue o estandarte do desafio. */
+  makeHero(name: string, data: HeroData): void {
+    this.hero = { name, ...data };
+    this.challenge?.destroy();
+    this.challenge = null;
+    if (!seeksDuel(data)) return;
+    const key = duelBannerKey(this.scene);
+    const top = this.sprite ? Math.round(this.headY) - 18 : -this.radius - 22;
+    this.challenge = this.scene.add.image(0, top - 12, key).setOrigin(0.5, 1);
+    this.add(this.challenge);
   }
 
   /** Mostra o escudo na Parede de Escudos. */

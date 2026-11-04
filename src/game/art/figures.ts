@@ -1153,6 +1153,30 @@ export function dotSprite(l: Look): Bitmap {
   return gridBitmap(big(l) ? enlarge(g) : g);
 }
 
+/**
+ * Estandarte do desafio (Marco 21): o herói que procura o Comandante para um duelo leva uma
+ * flâmula vermelha de duas pontas, com duas espadas cruzadas. Aparece antes do contato.
+ */
+export function duelBannerSprite(): Bitmap {
+  const g = new Grid(13, 22);
+  const cloth = ramp(0xb0242a);
+  g.rect(1, 0, 2, 22, WOOD.base);
+  g.rect(2, 0, 1, 22, WOOD.dark);
+  g.rect(1, 0, 2, 1, 0xd8b048);
+  // Flâmula de duas pontas, presa no alto do mastro
+  g.rect(3, 1, 9, 9, cloth.base);
+  g.rect(3, 1, 9, 1, cloth.light);
+  g.rect(3, 10, 4, 2, cloth.base);
+  g.rect(9, 10, 3, 2, cloth.base);
+  g.rect(7, 9, 2, 1, CLEAR);
+  g.rect(3, 9, 9, 1, cloth.dark);
+  const ink = 0xf4ecd8;
+  g.line(5, 8, 10, 3, ink);
+  g.line(5, 3, 10, 8, ink);
+  g.outline();
+  return gridBitmap(g);
+}
+
 /** Estandarte do batalhão no zoom aberto: diz de longe quem é quem. */
 export function bannerSprite(color: number, glyph: "SWORD" | "BOW" | "HORSE" | "SPEAR"): Bitmap {
   const g = new Grid(19, 25);

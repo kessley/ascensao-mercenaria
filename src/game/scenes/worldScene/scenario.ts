@@ -82,7 +82,9 @@ export const scenarioMethods = {
       ownerId: null,
       chief: force.chief ? { name: force.chief, traits: [force.trait] } : undefined,
     });
-    if (band.staff) band.staff = { ...band.staff, competence: force.competence, traits: [force.trait] };
+    // A ficha do chefe acompanha o que o cenário pediu (sem mão escolhida, sai de novo com a competência)
+    const hero = band.staff?.hero && force.duel ? { ...band.staff.hero, duel: force.duel, trait: force.trait } : undefined;
+    if (band.staff) band.staff = { ...band.staff, competence: force.competence, traits: [force.trait], hero };
     const stance = forceStance(run.def, force);
     if (stance === "HOLD") this.warbands.holdGround(band);
     else run.nextCourse = 0;

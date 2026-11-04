@@ -125,6 +125,7 @@ Interiores, interface e efeitos ainda são greybox.
 | Textos que sobem ("esquiva", "flanqueados!") | `Unit.floatText` | texto |
 | Ordens, destinos, linha de batalha e seleção | `WorldScene`, `Battalion` | greybox (de propósito: são da interface) |
 | Estandarte e nome do batalhão | `Battalion.drawBanner` | greybox |
+| Estandarte do desafio (herói inimigo que procura duelo, Marco 21) | `duelBannerSprite` em `figures.ts`, `Enemy.makeHero` | ✅ pixel art: flâmula vermelha de duas pontas com espadas cruzadas |
 | Névoa de guerra | `FogOfWar` | greybox |
 | Noite e tochas | `NightLayer` | greybox |
 | Chuva, neve e nevoeiro | `WeatherLayer` | greybox |

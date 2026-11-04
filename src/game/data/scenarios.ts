@@ -67,6 +67,8 @@ export interface ScenarioForce {
   trait: NobleTrait;
   /** Vazio: o chefe recebe um nome sorteado. */
   chief: string;
+  /** Mão do comandante no um contra um, de 1 a 5 (Marco 21); sem valor, sai da competência. */
+  duel?: number;
 }
 
 export interface BattleScenario {

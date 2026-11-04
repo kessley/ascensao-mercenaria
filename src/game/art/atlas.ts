@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "./canvasTexture";
-import { cellOf, dotOf, dotSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
+import { cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
 import type { Bitmap } from "./pixel";
 
 /**
@@ -44,6 +44,14 @@ function addSheet(scene: Phaser.Scene, key: string, b: Bitmap, fw: number, fh: n
   const cols = b.width / fw;
   const rows = b.height / fh;
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) texture.add(r * cols + c, 0, c * fw, r * fh, fw, fh);
+}
+
+/** O estandarte do desafio dos heróis inimigos (uma textura só para todos). */
+export function duelBannerKey(scene: Phaser.Scene): string {
+  const key = "duel-banner";
+  const b = duelBannerSprite();
+  addSheet(scene, key, b, b.width, b.height);
+  return key;
 }
 
 const sheets = new WeakMap<Phaser.Textures.Texture, Phaser.Textures.Frame[]>();

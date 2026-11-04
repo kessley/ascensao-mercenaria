@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGameStore } from "../../../store/useGameStore";
-import { PRISONERS } from "../../../utils/constants";
+import { CAPTAINS, PRISONERS } from "../../../utils/constants";
+import { heroWords, joinChance } from "../../../game/data/heroes";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -14,6 +15,8 @@ export function PrisonersPanel() {
   const captiveChoice = useGameStore((s) => s.captiveChoice);
   const officerChoice = useGameStore((s) => s.officerChoice);
   const send = useGameStore((s) => s.sendBattleCommand);
+  const fame = useGameStore((s) => s.fame);
+  const full = useGameStore((s) => s.captains.length >= CAPTAINS.MAX_HIRED);
   const [message, setMessage] = useState<string | null>(null);
   if (groups.length === 0 && officers.length === 0) return message ? <p className="text-xs text-amber-200">{message}</p> : null;
 
@@ -44,7 +47,10 @@ export function PrisonersPanel() {
       ))}
       {officers.map((o) => (
         <div key={o.id} className="flex flex-col gap-1 rounded bg-neutral-800 px-2 py-1 text-xs text-amber-100">
-          <span>{o.name}</span>
+          <span>
+            {o.name}
+            {o.hero && <span className="text-neutral-400"> · {heroWords(o.hero)}</span>}
+          </span>
           <span className="flex flex-wrap gap-1">
             <button type="button" className={button} disabled={o.questioned} title="Rotas, planos, quem marcha" onClick={() => {
                 setMessage(officerChoice(o.id, "QUESTION"));
@@ -55,6 +61,17 @@ export function PrisonersPanel() {
             <button type="button" className={button} onClick={() => setMessage(officerChoice(o.id, "RANSOM"))}>
               Resgatar (+{o.ransom})
             </button>
+            {!o.nobleId && (
+              <button
+                type="button"
+                className={button}
+                disabled={o.refused || full}
+                title={o.refused ? "Já recusou" : full ? "O bando já tem todos os capitães" : `Vira capitão do bando, com lealdade baixa; chance de aceitar: ${Math.round(joinChance(o.hero, fame) * 100)}%`}
+                onClick={() => setMessage(officerChoice(o.id, "RECRUIT"))}
+              >
+                Recrutar como capitão
+              </button>
+            )}
             <button type="button" className={button} title="Nobres lembram" onClick={() => setMessage(officerChoice(o.id, "FREE"))}>
               Libertar
             </button>
