@@ -8,6 +8,7 @@ import { makeStaff, promoteRoster, type StaffData, type WarHost } from "../../sy
 import { kingdomsAtWar } from "../../sim/realm";
 import { ofRealm } from "../../worldgen/names";
 import type { EnemyGroupDef } from "../../data/battleMaps";
+import type { SiteDef } from "../../data/world";
 import { fullName } from "../../data/lieutenants";
 import type { HeroData } from "../../data/heroes";
 import { localTroop } from "../../data/planet";
@@ -259,9 +260,39 @@ export const combatMethods = {
     this.engagement?.notes.push("O inimigo emboscou o bando.");
   },
 
+  /** Moradores dos locais de missão perto do bando (Fase 3, etapa 10). */
+  updateSiteResidents(this: WorldScene): void {
+    const s = useGameStore.getState();
+    const active = s.activeContract?.contract;
+    this.siteResidents.update({
+      sites: this.world.sites,
+      presence: this.presence(),
+      now: s.day + s.dayProgress,
+      lifeOf: (id) => useGameStore.getState().siteLife[id],
+      contractSite: active && (active.kind ?? "SITE") === "SITE" ? active.siteId : null,
+      fighting: !!this.engagement,
+      onChange: (id, life) => useGameStore.getState().setSiteLife(id, life),
+      onCleared: (site) => this.siteCleared(site),
+    });
+  },
+
+  /** Local limpo (caiu o último morador, ou o contrato foi cumprido): fica vazio por uns dias. */
+  siteCleared(this: WorldScene, site: SiteDef): void {
+    const s = useGameStore.getState();
+    s.setSiteLife(site.id, { fill: 0, since: s.day + s.dayProgress });
+    const text = `${site.name} está limpo: por uns dias, ninguém mora lá.`;
+    this.engagement?.notes.push(text);
+    this.pushFeed(text);
+    s.chronicle(text, "good");
+  },
+
   /** Contrato cumprido (todos os inimigos do local mortos), povoado tomado ou líder de calamidade abatido. */
   checkObjectives(this: WorldScene): void {
     if (this.contractId && this.contractEnemies.length > 0 && this.contractEnemies.every((e) => !e.isAlive)) {
+      // O local do contrato fica vazio, como o de moradores limpo à mão
+      const done = useGameStore.getState().activeContract?.contract;
+      const site = done && (done.kind ?? "SITE") === "SITE" ? this.world.sites.find((x) => x.id === done.siteId) : undefined;
+      if (site) this.siteCleared(site);
       if (this.engagement) this.engagement.contractDone = true;
       // Largaram o local sem ninguém lutando: o serviço está feito do mesmo jeito
       else {
@@ -332,6 +363,13 @@ export const combatMethods = {
         e.destroy();
       }
       this.contractEnemies = this.contractEnemies.filter((e) => e.isAlive);
+      // Os moradores que fugiram também não voltam (contam como fora do local)
+      for (const e of this.siteResidents.members()) {
+        if (!e.routed || !eng.enemies.has(e)) continue;
+        e.fled = true;
+        e.unitState = "DEAD";
+        e.destroy();
+      }
     }
     if (eng && result === "VICTORY") this.takePrisoners(eng);
     const killed = eng ? [...eng.enemies].filter((e) => !e.isAlive && !e.fled).length : 0;

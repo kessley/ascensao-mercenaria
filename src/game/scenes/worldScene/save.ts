@@ -29,7 +29,7 @@ export const saveMethods = {
     const c = this.commander;
     const enemies: EnemySave[] = this.enemies
       // Guarnições e bichos não vão no save: voltam a aparecer quando o bando chega perto
-      .filter((e) => e.isAlive && e.owner?.kind !== "WARBAND" && e.owner?.kind !== "MUTINY" && e.owner?.kind !== "GARRISON" && e.owner?.kind !== "WILDLIFE")
+      .filter((e) => e.isAlive && e.owner?.kind !== "WARBAND" && e.owner?.kind !== "MUTINY" && e.owner?.kind !== "GARRISON" && e.owner?.kind !== "WILDLIFE" && e.owner?.kind !== "SITE")
       .map((e) => ({ kind: e.kind, x: e.x, y: e.y, hp: e.hp, color: e.bodyColor, owner: e.owner }));
     return {
       commander: { x: c.x, y: c.y, hp: c.hp, facing: c.facing },
@@ -98,7 +98,9 @@ export const saveMethods = {
     this.warbands.restore(field.warbands);
     this.trade.restore(field.trade);
 
-    // Inimigos dos locais (contrato, cerco, covis) com a vida que tinham
+    // Inimigos dos locais (contrato, cerco, covis) com a vida que tinham. Os moradores dos locais
+    // não vão no save: o store guarda quantos são, e eles voltam quando o bando chegar perto
+    this.siteResidents.forget();
     for (const e of this.enemies) {
       if (!e.isAlive || e.owner?.kind === "WARBAND") continue;
       e.unitState = "DEAD";

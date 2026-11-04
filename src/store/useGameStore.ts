@@ -73,6 +73,7 @@ import { hearRumors, rumorLine, type Ear, type Rumor } from "../game/sim/rumors"
 import { INITIAL_COURT, courtSlice, type CourtActions, type CourtState } from "./courtSlice";
 import { FOUNDER, INITIAL_LEGACY, legacySlice, type LegacyActions, type LegacyState } from "./legacySlice";
 import { leaderBonus, type Leader } from "../game/sim/legacy";
+import type { SiteLife } from "../game/sim/siteLife";
 import { trimAnnals } from "../game/sim/legends";
 import { rememberSaga, type SagaRecord } from "../game/data/sagas";
 import { personName } from "../game/worldgen/names";
@@ -671,6 +672,8 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   harpyChicks: number;
   /** Ninhos já encontrados. */
   nestsFound: string[];
+  /** Moradores dos locais de missão: o quanto cada um tinha e desde quando (sem registro, cheio). */
+  siteLife: Record<string, SiteLife>;
   messengers: MessengerData[];
   contracts: Contract[];
   log: LogEntry[];
@@ -985,6 +988,7 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   scoutLost: (id: string) => void;
   scoutReturned: (id: string) => void;
   nestFound: (id: string, by: string) => void;
+  setSiteLife: (id: string, life: SiteLife) => void;
   /** Comprar uma ave do falcoeiro (ou dar um filhote de ninho) a um batedor. */
   harpyBuy: (scoutId: string) => string;
   harpyAdopt: (scoutId: string) => string;
@@ -1561,6 +1565,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     scouts: Array.from({ length: SUPPORT.START_SCOUTS }, newScout),
     harpyChicks: 0,
     nestsFound: [],
+    siteLife: {},
     warDifficulty: "VETERAN",
     messengers: Array.from({ length: SUPPORT.START_MESSENGERS }, newMessenger),
     contracts,
@@ -3165,6 +3170,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }),
 
   scoutReturned: (id) => set((s) => ({ scouts: s.scouts.map((x) => (x.id === id ? { ...x, missions: x.missions + 1 } : x)) })),
+
+  setSiteLife: (id, life) => set((s) => ({ siteLife: { ...s.siteLife, [id]: life } })),
 
   nestFound: (id, by) =>
     set((s) => {

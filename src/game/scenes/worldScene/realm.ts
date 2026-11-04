@@ -11,6 +11,7 @@ import { TheRealm, ofRealm } from "../../worldgen/names";
 import type { EnemyGroupDef } from "../../data/battleMaps";
 import { ferryDocks, regionName } from "../../data/world";
 import { isRaiderKind } from "../../sim/realm";
+import { activeLairs, siteFill } from "../../sim/siteLife";
 import { useGameStore } from "../../../store/useGameStore";
 import { SUPPORT, GEO, PROGRESSION, REALM, KINGDOM, WOLF, WORLD, CAMP_MOVE, FATIGUE, SEASONS, TRADE } from "../../../utils/constants";
 import { cargoCapacity } from "../../../utils/economy";
@@ -257,7 +258,10 @@ export const realmMethods = {
     this.syncHarpies();
     // Inverno: os goblins saem menos dos covis
     this.maybeCorsairs(after);
-    const band = this.warbands.maybeSpawnGoblins(after, this.world.lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1);
+    // Covis perto de um local limpo ficam quietos até ele se encher de novo (Fase 3, etapa 10)
+    const lives = useGameStore.getState().siteLife;
+    const lairs = activeLairs(this.world.lairs, this.world.sites, (id) => siteFill(lives[id], after));
+    const band = this.warbands.maybeSpawnGoblins(after, lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1);
     if (band) useGameStore.getState().chronicle(`Rumores: um bando goblin deixou seu covil nos ermos.`, "bad");
     this.spawnArmies(after);
     this.spawnAgents();

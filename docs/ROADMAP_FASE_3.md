@@ -11,11 +11,12 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - a `WorldScene` dividida em partes (etapa 8);
   - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-  - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer.
+  - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
+  - os locais de missão sempre habitados (etapa 10 ✅ OK).
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
-  - os locais de missão passam a ter moradores fixos (etapa 10).
-- **A seguir:** os locais habitados (etapa 10). Depois, o G4 continua (etapa 11, em seis partes).
+  - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
+- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 3: harpias, navios e convés.
   - Já estão feitas as duas primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio.
   - Faltam harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1.
 
@@ -45,7 +46,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
-| 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | |
+| 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
@@ -494,18 +495,33 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 - o capitão nosso que perde não é preso pelo inimigo, só levado para trás;
 - a figura do herói mostra a arma do tipo dele, que nem sempre é a da ficha: o chefe salteador luta de machado no duelo, mas aparece de espada.
 
-## 10. Locais de missão sempre habitados
+## 10. Locais de missão sempre habitados ✅ OK
 **Objetivo:** um local de missão tem gente mesmo sem contrato. Pedido em 4 de novembro, jogando: no acampamento goblin não havia nenhum goblin para matar.
 
-**A causa:** hoje os inimigos de um local só aparecem enquanto há um contrato aceito para ele (`worldScene/army.ts`). Sem contrato, o local é só cenário.
+**A causa:** os inimigos de um local só apareciam enquanto havia um contrato aceito para ele (`worldScene/army.ts`). Sem contrato, o local era só cenário.
 
-**A fazer** (GDD, seção 6, "Contratos"):
-- **Moradores fixos:** cada local tem moradores, com uns 60% da força que o contrato traria. Ficam dormentes até o bando chegar perto, como os grupos do contrato.
-- **Limpo,** o local fica vazio por alguns dias e depois volta a se encher devagar.
-- **Sem contrato:** saque e experiência, mas sem paga.
-- **Com contrato:** os moradores ganham reforço e o chefe, e a paga vem cheia. O contrato termina quando caem todos do local, moradores e reforço.
-- **Os locais mandam os bandos da região:** os bandos goblins já saem dos covis. O local limpo para de mandar bando até se encher de novo, o que dá motivo para limpar sem contrato.
-- **Saves antigos:** os locais ganham moradores na primeira vez que carregam.
+**Feito** (GDD, seção 6, "Contratos"):
+- **Moradores fixos** (`src/game/world/SiteResidents.ts`, com as contas puras em `src/game/sim/siteLife.ts`): cada local tem metade da força de um contrato médio, sem o chefe. Um contrato fácil traz 70% e o chefe.
+  - Funcionam como as guarnições dos povoados: longe do bando, os moradores são só um número no store (`siteLife`).
+  - Com alguém do bando a 2600 px, viram inimigos no mapa, dormentes até alguém chegar mais perto.
+  - Com todos a mais de 3400 px e ninguém lutando, voltam a ser número sem perder ninguém.
+- **Cada morador que cai baixa o número.** Os que fogem de um combate perdido também não voltam.
+- **Limpo,** o local fica vazio 5 dias e depois enche 15% por dia, até ficar cheio em uns 7 dias. O diário anota.
+- **Sem contrato:** o saque de quem cai e a experiência, como em todo combate, mas sem paga.
+- **Com contrato:** no lugar dos moradores, vem a força do contrato (de 70% a 140% da força inteira) e o chefe.
+  - Os moradores fora de vista saem; quem está à vista fica no mapa, sem dono.
+  - Cumprido o contrato, o local fica limpo, como quando caem os moradores.
+  - Se o contrato cair, os moradores voltam com o número que tinham.
+- **Covis quietos:** os covis a até 6000 px de um local com menos da metade da gente não mandam bando goblin.
+- **Saves:** os moradores não vão no save; o store guarda quantos são. Num save antigo, todos os locais começam cheios.
+- **Testes:**
+  - 9 de regras novos: as contas e o gerente dos moradores.
+  - Uma suíte de batalha nova, `locais`, com 13 de 13, numa campanha de verdade: sem contrato o local tem moradores, sem chefe; ele fica vazio quando eles caem e volta a encher dias depois; com contrato, vem mais forte e com o chefe.
+  - As suítes `missoes` (40 de 40) e `mar` (45 de 45) continuam passando.
+
+**Ficou para depois:**
+- os moradores ficam no local: não andam pela região nem saem para caçar;
+- um contrato oferecido para um local que acabou de ser limpo continua aparecendo, e o local vem com a força do contrato.
 
 **Pronto quando:**
 - chegar a um acampamento goblin sem contrato acha goblins;

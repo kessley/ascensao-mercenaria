@@ -695,6 +695,26 @@ export const WOLF = {
   PELT_GOLD: 4,
 } as const;
 
+/**
+ * Locais de missão sempre habitados (Fase 3, etapa 10): moradores fixos com parte da força do
+ * contrato. Com contrato, vem a força inteira e o chefe; limpo, o local esvazia e volta a encher.
+ */
+export const SITE_LIFE = {
+  /** Os moradores têm esta fração da força de um contrato médio (o fácil traz 0,7 e o chefe). */
+  SHARE: 0.5,
+  /** Vazio de todo, o local espera estes dias antes de alguém voltar... */
+  EMPTY_DAYS: 5,
+  /** ...e depois enche esta fração por dia (cheio em uns 7 dias). */
+  REGROW_PER_DAY: 0.15,
+  /** Os moradores aparecem quando alguém do bando chega a esta distância do centro do local... */
+  SPAWN_RADIUS: 2600,
+  /** ...e voltam a ser só um número quando todos estão mais longe que isto (e ninguém luta). */
+  DESPAWN_RADIUS: 3400,
+  /** Covis a esta distância de um local com menos gente que isto não mandam bando. */
+  QUIET_BELOW: 0.5,
+  QUIET_RADIUS: 6000,
+} as const;
+
 /** Agentes do mundo vivo (Marco 12): patrulhas, mensageiros dos reinos e refugiados. */
 export const AGENTS = {
   /** Patrulha de um reino: soldados e besteiros que caçam bandos perto das terras do reino. */

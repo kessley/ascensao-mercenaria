@@ -33,6 +33,7 @@ import { insideTown } from "../world/townLayout";
 import { kingdomsAtWar } from "../sim/realm";
 import { GarrisonManager } from "../world/Garrisons";
 import { WildlifeManager } from "../world/Wildlife";
+import { SiteResidents } from "../world/SiteResidents";
 import { CampLife } from "../world/CampLife";
 import { MapLife } from "../world/MapLife";
 import { TradeRoutes } from "../world/TradeRoutes";
@@ -119,6 +120,8 @@ export class WorldScene extends Phaser.Scene {
   garrisons!: GarrisonManager;
   /** Alcateias de lobos. */
   wildlife!: WildlifeManager;
+  /** Moradores dos locais de missão perto do bando (Fase 3, etapa 10). */
+  siteResidents!: SiteResidents;
   /** Rotas das tropas do bando (povoados que barram o exército contam como muro). */
   armyNav!: NavGrid;
   /** Povoados e para quem os portões estão fechados (ver updateGateRules). */
@@ -501,6 +504,11 @@ export class WorldScene extends Phaser.Scene {
       (id) => this.provokeTown(id),
     );
     this.wildlife = new WildlifeManager((x, y, kind) => this.spawnEnemy(x, y, kind), despawn);
+    this.siteResidents = new SiteResidents((site, group, i) => {
+      const units = this.spawnEnemyGroup(group, { kind: "SITE", siteId: site.id });
+      this.attachGroup(`site:${site.id}:${i}`, units);
+      return units;
+    }, despawn);
 
     this.missionGfx = this.add.graphics().setDepth(14);
     this.resetDuels();
@@ -761,6 +769,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateGarrisons(time);
     this.updateGarrisonUnits();
     if (!this.run) this.wildlife.update(time, this.wildlifeContext());
+    if (!this.run) this.updateSiteResidents();
     this.updateCampLife(time, dt);
     this.updateMapLife(time, dt);
     this.updateExpeditions(dt);

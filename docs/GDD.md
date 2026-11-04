@@ -130,10 +130,10 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
   - **Acampamento móvel:** pode ser levantado e montado em outro lugar. Paliçada reforçada, torres e fosso protegem o acampamento fixo e se perdem na mudança. Com o Marco 22, o jogador constrói o acampamento peça por peça, a planta viaja nas carroças e o bando pode fincar o estandarte numa fortaleza (seção 9).
   - **Salários (Ouro):** Tropas exigem pagamento regular. Atrasar salários leva à perda de tropas por deserção e pode culminar em um Motim, forçando o Comandante a combater seus próprios soldados rebelados.
   - **Contratos:** São a principal fonte de injeção de recursos, pagando um adiantamento logístico e um bônus gordo na conclusão. Aceito na tenda, o contrato marca um local no mapa e um prazo; o bônus sai quando todos os inimigos do local caem. Vencido o prazo, o cliente contrata outro bando.
-    - **Locais sempre habitados** (planejado, Fase 3, etapa 10): cada local tem moradores fixos, com uns 60% da força que o contrato traria.
+    - **Locais sempre habitados** (Fase 3, etapa 10): cada local tem moradores fixos, com metade da força de um contrato médio e sem o chefe.
       - **Sem contrato:** limpar o local rende saque e experiência, mas não paga.
-      - **Com contrato:** os moradores ganham reforço e o chefe, e a paga vem cheia.
-      - **Limpo,** o local fica vazio por alguns dias e volta a se encher devagar. Enquanto está vazio, não manda bandos contra a região.
+      - **Com contrato:** no lugar dos moradores vem a força inteira do contrato, com o chefe, e a paga vem cheia.
+      - **Limpo,** o local fica vazio por alguns dias e volta a se encher devagar. Enquanto tem menos da metade da gente, os covis em volta não mandam bandos contra a região.
   - **Motim:** acontece dentro do acampamento: o batalhão rebelado pega em armas ali mesmo, diante dos alojamentos.
 
 ## 7. A Transição para o Reino e Estrutura de Campanha

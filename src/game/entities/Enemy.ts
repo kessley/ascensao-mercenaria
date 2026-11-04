@@ -35,6 +35,8 @@ export class Enemy extends Unit {
     /** Soldado da guarnição de um povoado (ou morador armado num cerco: `militia`). */
     | { kind: "GARRISON"; settlementId: string; militia?: boolean }
     | { kind: "CALAMITY"; id: string }
+    /** Morador de um local de missão, sem contrato (Fase 3, etapa 10). */
+    | { kind: "SITE"; siteId: string }
     /** Bichos do mundo (alcateias de lobos). */
     | { kind: "WILDLIFE"; pack: number }
     | null = null;
