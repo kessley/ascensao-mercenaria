@@ -39,7 +39,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | 20 | Capitães: a cadeia de comando | ✅ OK |
 | | G2 | Pixel art: chão | ✅ OK |
 | | 21 | Duelos no meio da batalha | ✅ OK |
-| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | |
+| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | parte 1 de 6 (carroças, aríetes e escadas) ✅ OK |
 | | 22 | Acampamento construído pelo bando (e construir nas vilas) | |
 | | G5 | Pixel art: interface | |
 | | 23 | Cultura, religião e língua | |
@@ -153,7 +153,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
   - **HUD:** a cena publica dez vezes por segundo; se nada mudou, a interface não se redesenha.
 - **Testes:** os 247 de regras passam. As suítes de batalha passam como antes (215 a 216 de 218), e as falhas são as verificações de sorte já listadas na [Dívida](ROADMAP_FASE_3.md#dívida). Cada uma foi repetida com o código antigo e com o novo, e os dois dão o mesmo.
 - **Ficou de fora:**
-  - **No mapa:** o anel de comando (88 arcos pontilhados) e as carroças em greybox ainda são `Graphics`, que o Phaser refaz a cada quadro (cerca de 1 ms). As carroças ganham arte no G4.
+  - **No mapa:** o anel de comando (88 arcos pontilhados) ainda é `Graphics`, que o Phaser refaz a cada quadro. As carroças, que também eram, viraram figuras no G4.
   - **Na cena:** a cena inteira é reordenada por profundidade a cada quadro em que alguém anda (0,3 ms no mapa); chão e construções podiam ir para camadas próprias.
   - **Na batalha,** o que sobra no perfil com 1280 soldados: a IA dos esquadrões (16% do tempo), o empurra-empurra (8%), a animação (8%) e o desenho dos contêineres do Phaser (3,8 ms por quadro).
 

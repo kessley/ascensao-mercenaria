@@ -1653,6 +1653,8 @@ export const SIEGE = {
   RAMPART_DEPTH: 190,
   RAM: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18, mass: 12 } satisfies UnitStats,
   RAM_DPS: 34,
+  /** Uma batida da viga a cada tanto (só a figura e o som: o dano corre por segundo). */
+  RAM_SWING_MS: 1400,
   GATE_HP: { PALISADE: 260, STONE: 620 },
   /** O portão mal cuidado que um batedor pode achar. */
   WEAK_GATE: 0.55,

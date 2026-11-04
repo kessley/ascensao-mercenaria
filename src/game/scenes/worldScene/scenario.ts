@@ -156,7 +156,8 @@ export const scenarioMethods = {
     const leader = troops[0];
     if (siege.rams > 0 && leader && !w.ram?.isAlive && w.nearestGate(leader)) {
       siege.rams--;
-      const ram = this.spawnEnemy(leader.x, leader.y, "SIEGE_RAM");
+      // A tripulação e a flâmula do aríete vestem a cor de quem assalta
+      const ram = this.spawnEnemy(leader.x, leader.y, "SIEGE_RAM", leader.bodyColor);
       ram.hostile = true;
       ram.autoAttack = false;
       ram.driver = () => {};

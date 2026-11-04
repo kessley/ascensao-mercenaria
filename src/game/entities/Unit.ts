@@ -298,7 +298,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       else if (this.pose === "SLEEP") col = ANIM.DIE + 2;
       else if (this.duelPose !== null) col = this.duelPose;
       else if (now - this.lastAttackAt < 330) col = ANIM.ATTACK + Math.min(2, Math.floor((now - this.lastAttackAt) / 110));
-      else if (walking) col = ANIM.WALK + (Math.floor(this.walked / (s.rides ? 18 : 11)) % 4);
+      else if (walking) col = ANIM.WALK + (Math.floor(this.walked / s.stride) % 4);
       else col = ANIM.IDLE + (Math.floor((now + this.phase) / 650) % 2);
       frame = this.dirRow * FRAMES + col;
       img.setFlipX(this.dirRow === 1 && this.flipped);

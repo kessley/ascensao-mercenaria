@@ -102,9 +102,9 @@ Interiores, interface e efeitos ainda são greybox.
 | Guarnições, patrulhas e alcateias | `Enemy` | ✅ pixel art |
 | Tropa dormindo ou sentada no acampamento | `Unit.setPose` | ✅ deita (quadro da queda) ou fica mais baixa |
 | Poses do duelo no campo (Marco 21): guarda erguida, pesado armando, esquiva e atordoado | `figures.ts` (colunas 12 a 15 da folha), `Unit.duelPose` | ✅ pixel art; o golpe leve usa as poses de ataque |
-| Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM) | greybox |
-| Carroças do bando | `Wagon` | greybox |
-| Escadas e aríete do jogador nos cercos | `SiegeWorks` | greybox |
+| Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM), `vehicles.ts` | ✅ pixel art (G4): mula e toldo listrado na cor da caravana; aríete coberto na cor de quem assalta |
+| Carroças do bando | `Wagon`, `vehicles.ts` | ✅ pixel art (G4): carro de bois com lona e carroceiro; as rodas giram e o destroço fica no chão |
+| Escadas e aríete do jogador nos cercos | `SiegeWorks`, `ladderPiece` em `buildings.ts`, `vehicles.ts` | ✅ pixel art (G4): a viga do aríete bate no portão; as escadas encostam do lado de fora, nos quatro lados |
 | Harpias | `Harpy` | greybox |
 | Coluna de tropas em expedição | `ExpeditionParty` | greybox |
 
@@ -162,7 +162,8 @@ Interiores, interface e efeitos ainda são greybox.
 ### Resto do elenco (G4)
 | O quê | Estado |
 | --- | --- |
-| Carroças, aríetes, escadas e harpias (ver acima) | greybox |
+| Carroças, aríetes e escadas (ver acima) | ✅ pixel art (G4, parte 1) |
+| Harpias (ver acima) | greybox |
 | Navios e convés | greybox |
 | Interiores das construções | greybox |
 | Cidade Alta das capitais | greybox |
@@ -186,8 +187,8 @@ Interiores, interface e efeitos ainda são greybox.
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22, quando ele vier;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco:** carroças, aríetes, escadas, harpias, navios, convés, interiores e Cidade Alta. Gente do mapa e do acampamento com as figuras do G1.
-   - As carroças primeiro: com as rações refeitas, elas saem num comboio pelo mapa (hoje desenhado com a coluna das expedições), e o Marco 22 carrega as construções nelas.
+4. **G4, resto do elenco,** em seis partes. A primeira está feita: carroças, aríetes e escadas. Falta: harpias, navios, convés, interiores e Cidade Alta, e a gente do mapa e do acampamento com as figuras do G1.
+   - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa (ainda desenhado com a coluna das expedições), e o Marco 22 carrega as construções nelas.
    - A coluna das expedições e do comboio, com o estandarte do capitão à frente (Marco 20).
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface:** fonte, molduras, ícones e retratos.

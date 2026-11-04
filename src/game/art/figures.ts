@@ -15,10 +15,14 @@ export type Weapon = "SWORD" | "AXE" | "SPEAR" | "LANCE" | "JAVELIN" | "BOW" | "
 export type ShieldKind = "NONE" | "ROUND" | "KITE";
 export type Mount = "NONE" | "HORSE" | "BARDED" | "WOLF";
 export type Dir = "S" | "E" | "N";
+/** Carro de bois, carroça de mercador e aríete coberto (G4): a folha sai de `vehicles.ts`. */
+export type Vehicle = "WAGON" | "CART" | "RAM";
 
 export interface Look {
   /** Bicho sem cavaleiro: o resto do visual não conta. */
   beast?: "WOLF";
+  /** Veículo: também ignora o resto, menos a cor (a camisa do carroceiro, o toldo, a flâmula). */
+  vehicle?: Vehicle;
   body: FigureBody;
   head: HeadGear;
   /** 0 = pano ou couro, 1 = malha, 2 = placas. */
@@ -50,7 +54,7 @@ export const ANIM = { IDLE: 0, WALK: 2, ATTACK: 6, DIE: 9, GUARD: 12, HEAVY: 13,
 const isFall = (frame: number) => frame >= ANIM.DIE && frame < ANIM.DIE + 3;
 
 export const lookKey = (l: Look): string =>
-  [l.beast ?? "", l.body, l.head, l.armor, l.weapon, l.shield, l.mount, l.color.toString(16), l.trim?.toString(16) ?? "", l.cape?.toString(16) ?? "", l.horns ? "h" : "", l.eyes?.toString(16) ?? "", l.scale ?? 1].join(".");
+  [l.vehicle ?? "", l.beast ?? "", l.body, l.head, l.armor, l.weapon, l.shield, l.mount, l.color.toString(16), l.trim?.toString(16) ?? "", l.cape?.toString(16) ?? "", l.horns ? "h" : "", l.eyes?.toString(16) ?? "", l.scale ?? 1].join(".");
 
 export const rides = (l: Look) => !!l.beast || l.mount !== "NONE";
 

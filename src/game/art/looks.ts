@@ -1,5 +1,5 @@
 import { COLORS, ENEMIES, type EnemyKind, type TroopType } from "../../utils/constants";
-import type { FigureBody, HeadGear, Look, ShieldKind, Weapon } from "./figures";
+import type { FigureBody, HeadGear, Look, ShieldKind, Vehicle, Weapon } from "./figures";
 
 /**
  * Visual de cada tropa e de cada inimigo: corpo, cabeça, armadura, arma, escudo e montaria.
@@ -75,8 +75,8 @@ function headOf(kind: EnemyKind, body: FigureBody, armor: 0 | 1 | 2, ranged: boo
 
 export function enemyLook(kind: EnemyKind, color: number): Look | null {
   const def = ENEMIES[kind];
-  // Carroça e aríete ainda são greybox (etapa G4)
-  if (kind === "CART" || kind === "SIEGE_RAM") return null;
+  if (kind === "CART") return vehicleLook("CART", color);
+  if (kind === "SIEGE_RAM") return vehicleLook("RAM", color);
   if (kind === "WOLF") return { beast: "WOLF", body: "HUMAN", head: "BARE", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color };
   const mutiny = MUTINY[kind];
   if (mutiny) return troopLook(mutiny, color);
@@ -101,6 +101,11 @@ export function enemyLook(kind: EnemyKind, color: number): Look | null {
     ...(kind === "ORC_WARLORD" ? { horns: true, cape: 0x5a1a14 } : {}),
     ...(def.boss ? { scale: 2 as const } : {}),
   };
+}
+
+/** Veículo (G4): só o tipo e a cor contam (o resto do visual é de enfeite). */
+export function vehicleLook(vehicle: Vehicle, color: number): Look {
+  return { vehicle, body: "HUMAN", head: "BARE", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color };
 }
 
 /** O Comandante: capa e penacho dourados, para ser achado de longe no meio da tropa. */

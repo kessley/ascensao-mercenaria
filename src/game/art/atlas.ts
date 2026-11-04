@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { addCanvasTexture } from "./canvasTexture";
 import { cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
 import type { Bitmap } from "./pixel";
+import { VEHICLE_CELL, VEHICLE_DOT, VEHICLE_MINI, vehicleDot, vehicleMiniSheet, vehicleSheet } from "./vehicles";
 
 /**
  * Texturas das figuras, feitas na primeira vez que alguém veste aquele visual e guardadas no
@@ -26,8 +27,8 @@ export interface Skin {
   dot2: { w: number; h: number };
   /** Altura da figura acima dos pés (de frente, parada): nomes e avisos vão em cima. */
   height: number;
-  /** Montado (ou bicho): passo mais largo na animação. */
-  rides: boolean;
+  /** Chão percorrido a cada quadro do passo: montado (ou bicho) dá passo mais largo; roda de veículo, mais curto. */
+  stride: number;
 }
 
 const skins = new Map<string, Skin>();
@@ -80,10 +81,11 @@ export function skinOf(scene: Phaser.Scene, look: Look): Skin {
   const id = lookKey(look);
   let skin = skins.get(id);
   if (skin && scene.textures.exists(skin.full)) return skin;
-  const cell = cellOf(look);
-  const mini = miniOf(look);
-  const dot = dotOf(look);
-  const sheet = figureSheet(look);
+  const vehicle = !!look.vehicle;
+  const cell = vehicle ? VEHICLE_CELL : cellOf(look);
+  const mini = vehicle ? VEHICLE_MINI : miniOf(look);
+  const dot = vehicle ? VEHICLE_DOT : dotOf(look);
+  const sheet = vehicle ? vehicleSheet(look) : figureSheet(look);
   skin = {
     full: `fig:${id}`,
     mini: `fig:${id}:mini`,
@@ -92,11 +94,11 @@ export function skinOf(scene: Phaser.Scene, look: Look): Skin {
     mini2: mini,
     dot2: dot,
     height: cell.feetY - topOf(sheet, cell.w, cell.h),
-    rides: rides(look),
+    stride: vehicle ? 8 : rides(look) ? 18 : 11,
   };
   addSheet(scene, skin.full, sheet, cell.w, cell.h);
-  addSheet(scene, skin.mini, miniSheet(look), mini.w, mini.h);
-  addSheet(scene, skin.dot, dotSprite(look), dot.w, dot.h);
+  addSheet(scene, skin.mini, vehicle ? vehicleMiniSheet(look) : miniSheet(look), mini.w, mini.h);
+  addSheet(scene, skin.dot, vehicle ? vehicleDot(look) : dotSprite(look), dot.w, dot.h);
   skins.set(id, skin);
   return skin;
 }

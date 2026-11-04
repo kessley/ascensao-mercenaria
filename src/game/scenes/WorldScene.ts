@@ -678,7 +678,7 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.lastFogAt >= SUPPORT.FOG_UPDATE_MS) this.updateVision(time);
     else this.updateReveal(seen, time);
     this.updateHostility();
-    this.works?.update(dt);
+    this.works?.update(dt, time);
     const active = this.fieldDuel ? this.activeEnemies().filter((e) => !e.dueling) : this.activeEnemies();
     // Só os hostis contam para alvos automáticos, moral e combate (patrulhas em paz, refugiados e mensageiros não)
     const hostiles = active.filter((e) => e.hostile);

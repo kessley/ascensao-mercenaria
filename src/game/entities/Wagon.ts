@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
-import { SUPPLY } from "../../utils/constants";
+import { COLORS, SUPPLY } from "../../utils/constants";
+import { vehicleLook } from "../art/looks";
 import type { Point } from "../../utils/math";
 
 /** Terrenos onde a carroça atola. */
@@ -15,7 +16,6 @@ export class Wagon extends Unit {
   /** Carga de mercadoria atrasa as rodas (Marco 14): a cena atualiza a cada quadro. */
   static load = 1;
   readonly wagonId: string;
-  private wheelPhase = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, wagonId: string, hp: number) {
     super(scene, x, y, "ALLY", SUPPLY.WAGON);
@@ -26,33 +26,14 @@ export class Wagon extends Unit {
     this.townAccess = "ARMY";
     this.lure = SUPPLY.WAGON_LURE;
     this.restoreHp(hp);
+    // Carro de bois com lona (G4): o carroceiro veste a cor do bando
+    this.wear(vehicleLook("WAGON", COLORS.ALLY));
     this.drawBody();
   }
 
+  /** A figura é o carro inteiro: nada no chão. */
   protected drawBody(): void {
-    const g = this.bodyGfx;
-    g.clear();
-    // Rodas, caixa de tábuas e a lona por cima (olhando para +X)
-    g.fillStyle(0x2a1d10, 1);
-    for (const [x, y] of [
-      [-12, -13],
-      [10, -13],
-      [-12, 13],
-      [10, 13],
-    ]) {
-      g.fillEllipse(x + Math.sin(this.wheelPhase) * 0.6, y, 9, 5);
-    }
-    g.fillStyle(0x7a5530, 1);
-    g.fillRect(-18, -11, 34, 22);
-    g.fillStyle(0xe6dcc0, 1);
-    g.fillRoundedRect(-15, -10, 26, 20, 6);
-    g.lineStyle(1, 0x8a7a5a, 1);
-    for (const x of [-8, 0, 8]) g.lineBetween(x, -10, x, 10);
-    // Lança e o boi à frente
-    g.lineStyle(2, 0x4e3820, 1);
-    g.lineBetween(16, 0, 26, 0);
-    g.fillStyle(0x5a4632, 1);
-    g.fillEllipse(31, 0, 12, 9);
+    this.bodyGfx.clear();
   }
 
   /** Atola em terreno ruim e na neve (o chão da estação pesa mais para rodas). */
@@ -76,6 +57,5 @@ export class Wagon extends Unit {
     }
     this.moveTowards(p.x, p.y, dt);
     this.unitState = "MOVING";
-    this.wheelPhase += dt * 8;
   }
 }

@@ -11,7 +11,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - a `WorldScene` dividida em partes (etapa 8);
   - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-- **A seguir:** o G4, o resto do elenco em pixel art (etapa 10): carroças, aríetes, escadas, harpias, navios e a gente do mapa e do acampamento.
+- **Em andamento:** o G4, o resto do elenco em pixel art (etapa 10), em seis partes. A primeira (carroças, aríetes e escadas) está feita; a seguir, a coluna das expedições e do comboio.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -39,7 +39,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
-| 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
+| 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | parte 1 de 6 ✅ OK |
 | 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
 | 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 13 | [Marco 23: cultura, religião e língua](#13-marco-23-cultura-religião-e-língua) | recurso | | |
@@ -489,14 +489,51 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 
 ## 10. G4: resto do elenco
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.
-- **Carroças, aríetes e escadas.** As carroças primeiro: o comboio (etapa 4) e as obras do Marco 22 dependem delas.
-- **A coluna das expedições e do comboio,** com o estandarte do capitão à frente (Marco 20).
-- **Harpias, navios e convés.**
-- **Gente do mapa e do acampamento:** viajantes, caravanas, seguidores e quem trabalha nos postos. O Marco 22 põe essa gente para construir.
-- **Interiores e a Cidade Alta.**
-- **Acabamento do G1:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
 
 **Pronto quando:** numa marcha com comboio, num cerco e numa viagem por mar, nada em campo é mais círculo nem retângulo.
+
+São seis partes, uma por vez, como no Marco 21.
+
+### 10.1. Carroças, aríetes e escadas ✅ OK
+As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 dependem delas.
+
+**Feito:**
+- **Uma folha de veículo** com o jeito da folha das figuras: 3 direções e as mesmas 16 colunas, num arquivo novo (`src/game/art/vehicles.ts`). A `Unit` cuida do veículo como cuida das figuras:
+  - andando, as rodas giram (um quarto de volta em quatro quadros) e os bichos dão o passo;
+  - parado, o bicho baixa a cabeça de vez em quando;
+  - a 50% e a 25% de zoom, entram as versões menores, como as das figuras;
+  - destruído, o veículo tomba, levanta poeira e vira destroço, que fica no chão como os corpos.
+- **O carro de bois do trem de suprimentos** (`Wagon`): lona em arco sobre o leito de tábuas, quatro rodas, uma junta de bois com canga e o carroceiro sentado na frente, de camisa azul do bando.
+  - De frente, os dois bois puxando.
+  - De costas, a boca da lona com os sacos dentro.
+- **A carroça do mercador** (`Enemy`, CART): duas rodas, uma mula nos varais e, no leito, caixote, barril e saco, debaixo de um toldo listrado na cor da caravana.
+- **O aríete coberto,** o nosso (`SiegeRam`) e o do inimigo (`Enemy`, SIEGE_RAM):
+  - telhado de duas águas, coberto de couro remendado, sobre quatro rodas;
+  - a tripulação empurra lá embaixo, na sombra, com as pernas no passo, e a cabeça de ferro sai pela frente;
+  - **o golpe:** encostado no portão, a viga recua e bate a cada 1,4 s, com som e uma faísca. É só a figura: o dano continua correndo por segundo, como antes;
+  - a flâmula e a tripulação vestem a cor de quem leva o aríete: azul no nosso, a cor de quem assalta no do inimigo.
+- **As escadas de assalto** (`SiegeWorks`): duas em cada brecha, de madeira recém-cortada, encostadas do lado de fora. Servem na pedra e na paliçada.
+  - Ao sul, sobem pela face que se vê, do chão até passar do alto.
+  - Ao norte, a muralha as esconde: só as pontas aparecem, acima das ameias ou das estacas.
+  - A leste e a oeste, sobem na diagonal até a beira do alto.
+- **Testes:** 8 de regras novos: a folha, as rodas e o passo, o golpe só no aríete, o destroço sem sombra, a cor, e as escadas nos quatro lados. Conferido também na tela, num cerco ao forte de pedra e noutro à aldeia de paliçada.
+
+**Ficou para depois:** o carroceiro e a tripulação do aríete são gente pequena desenhada no veículo, não figuras do G1: não lutam e não fogem sozinhos.
+
+### 10.2. A coluna das expedições e do comboio
+**A fazer:** a `ExpeditionParty` em figuras: os soldados com a arte do G1, o estandarte do capitão à frente (Marco 20) e, no comboio, o carro de bois da parte 1 atrás.
+
+### 10.3. Harpias, navios e convés
+**A fazer:** as harpias em pixel art; os navios no mar e o convés da batalha no mar.
+
+### 10.4. Gente do mapa e do acampamento
+**A fazer:** viajantes, caravanas, seguidores e quem trabalha nos postos, com as figuras do G1. O Marco 22 põe essa gente para construir.
+
+### 10.5. Interiores e a Cidade Alta
+**A fazer:** o lado de dentro das construções e a Cidade Alta das capitais (de fora ela já é pixel art).
+
+### 10.6. Acabamento do G1
+**A fazer:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
 
 ## 11. Marco 22: acampamento construído pelo bando (e construir nas vilas)
 **Objetivo:** o acampamento deixa de ser um layout fixo e passa a ser construído pelo jogador, peça por peça, como em *Cult of the Lamb*. As mesmas regras valem nas vilas que o bando funda.

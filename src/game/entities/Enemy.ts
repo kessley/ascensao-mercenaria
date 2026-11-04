@@ -237,29 +237,6 @@ export class Enemy extends Unit {
       g.fillRect(s - 4, -2, 4, 4);
       return;
     }
-    if (this.kind === "SIEGE_RAM") {
-      // Aríete: telhado de madeira e a viga saindo pela frente (olhando para +X)
-      g.fillStyle(0x4a3220, 1);
-      g.fillRect(-s * 1.4, -s * 0.7, s * 2.8, s * 1.4);
-      g.fillStyle(0x7a5a38, 1);
-      g.fillRect(-s * 0.6, -s * 0.25, s * 2.4, s * 0.5);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeRect(-s * 1.4, -s * 0.7, s * 2.8, s * 1.4);
-      return;
-    }
-    if (this.kind === "CART") {
-      // Carroça de mercador: caixa de madeira com toldo e rodas (olhando para +X)
-      g.fillStyle(0x2a1c10, 1);
-      for (const [wx, wy] of [[-s * 0.7, -s * 0.75], [s * 0.7, -s * 0.75], [-s * 0.7, s * 0.75], [s * 0.7, s * 0.75]]) g.fillCircle(wx, wy, s * 0.32);
-      g.fillStyle(this.bodyColor, 1);
-      g.fillRect(-s * 1.2, -s * 0.65, s * 2.4, s * 1.3);
-      g.fillStyle(0xe8dcc0, 1);
-      g.fillRect(-s * 1.0, -s * 0.55, s * 1.6, s * 1.1);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeRect(-s * 1.2, -s * 0.65, s * 2.4, s * 1.3);
-      g.lineBetween(s * 1.2, 0, s * 1.7, 0);
-      return;
-    }
     if (this.kind === "WOLF") {
       // Lobo: corpo alongado, focinho e orelhas
       g.fillStyle(this.bodyColor, 1);
