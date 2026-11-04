@@ -176,9 +176,10 @@ export const agentsMethods = {
     const at = { x: c.from.x + (to.x - c.from.x) * t, y: c.from.y + (to.y - c.from.y) * t };
     if (this.convoyParty?.id !== c.id) {
       this.convoyParty?.party.destroy();
-      const soldiers = c.escort.reduce((n, b) => n + b.soldiers, 0);
-      const party = new ExpeditionParty(this, at, Math.max(2, soldiers), c.returning ? "Carroças voltando" : c.escort.length > 0 ? "Comboio escoltado" : "Comboio sem escolta", false, null);
-      party.setCart(true);
+      const escort = c.escort.map((b) => ({ troop: b.troopType, soldiers: b.soldiers }));
+      const party = new ExpeditionParty(this, at, escort, c.returning ? "Carroças voltando" : c.escort.length > 0 ? "Comboio escoltado" : "Comboio sem escolta", false, null);
+      // O comboio leva as carroças do bando (as de verdade ficam escondidas enquanto ele está na estrada)
+      party.setCart(true, s.wagons.length);
       this.convoyParty = { id: c.id, party };
     }
     this.convoyParty.party.follow(at, Math.atan2(to.y - c.from.y, to.x - c.from.x), dt);
@@ -206,9 +207,9 @@ export const agentsMethods = {
       const stage = expeditionStage(e, now, this.commander);
       let entry = this.parties.get(e.id);
       if (!entry) {
-        const soldiers = e.battalions.reduce((n, b) => n + b.soldiers, 0);
+        const troops = e.battalions.map((b) => ({ troop: b.troopType, soldiers: b.soldiers }));
         const name = e.captain ? `Companhia de ${captainName(e.captain)}` : (e.battalions[0]?.name ?? "Tropa");
-        entry = { party: new ExpeditionParty(this, stage.at, soldiers, name, !!e.captain), leg: stage.leg };
+        entry = { party: new ExpeditionParty(this, stage.at, troops, name, !!e.captain), leg: stage.leg };
         this.parties.set(e.id, entry);
       }
       entry.party.follow(stage.at, stage.facing, dt);

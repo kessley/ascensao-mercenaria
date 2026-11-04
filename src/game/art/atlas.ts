@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "./canvasTexture";
-import { cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
+import { bannerSprite, cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
 import type { Bitmap } from "./pixel";
 import { VEHICLE_CELL, VEHICLE_DOT, VEHICLE_MINI, vehicleDot, vehicleMiniSheet, vehicleSheet } from "./vehicles";
 
@@ -51,6 +51,18 @@ function addSheet(scene: Phaser.Scene, key: string, b: Bitmap, fw: number, fh: n
 export function duelBannerKey(scene: Phaser.Scene): string {
   const key = "duel-banner";
   const b = duelBannerSprite();
+  addSheet(scene, key, b, b.width, b.height);
+  return key;
+}
+
+/** O desenho do estandarte: espada, arco, cavalo ou lança, conforme a tropa. */
+export type StandardGlyph = "SWORD" | "BOW" | "HORSE" | "SPEAR";
+
+/** O estandarte de uma coluna em marcha (expedição e comboio), na cor e com o desenho de quem vai. */
+export function standardKey(scene: Phaser.Scene, color: number, glyph: StandardGlyph): string {
+  const key = `standard:${color.toString(16)}:${glyph}`;
+  if (scene.textures.exists(key)) return key;
+  const b = bannerSprite(color, glyph);
   addSheet(scene, key, b, b.width, b.height);
   return key;
 }

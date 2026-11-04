@@ -39,7 +39,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | 20 | Capitães: a cadeia de comando | ✅ OK |
 | | G2 | Pixel art: chão | ✅ OK |
 | | 21 | Duelos no meio da batalha | ✅ OK |
-| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | parte 1 de 6 (carroças, aríetes e escadas) ✅ OK |
+| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | partes 1 e 2 de 6 (carroças, aríetes e escadas; a coluna das expedições e do comboio) ✅ OK |
 | | 22 | Acampamento construído pelo bando (e construir nas vilas) | |
 | | G5 | Pixel art: interface | |
 | | 23 | Cultura, religião e língua | |

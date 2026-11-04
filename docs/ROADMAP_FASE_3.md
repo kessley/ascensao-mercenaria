@@ -11,7 +11,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - a `WorldScene` dividida em partes (etapa 8);
   - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-- **Em andamento:** o G4, o resto do elenco em pixel art (etapa 10), em seis partes. A primeira (carroças, aríetes e escadas) está feita; a seguir, a coluna das expedições e do comboio.
+- **Em andamento:** o G4, o resto do elenco em pixel art (etapa 10), em seis partes. As duas primeiras (carroças, aríetes e escadas; a coluna das expedições e do comboio) estão feitas; a seguir, harpias, navios e convés.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -39,7 +39,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
-| 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | parte 1 de 6 ✅ OK |
+| 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
 | 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
 | 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 13 | [Marco 23: cultura, religião e língua](#13-marco-23-cultura-religião-e-língua) | recurso | | |
@@ -520,8 +520,15 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 
 **Ficou para depois:** o carroceiro e a tripulação do aríete são gente pequena desenhada no veículo, não figuras do G1: não lutam e não fogem sozinhos.
 
-### 10.2. A coluna das expedições e do comboio
-**A fazer:** a `ExpeditionParty` em figuras: os soldados com a arte do G1, o estandarte do capitão à frente (Marco 20) e, no comboio, o carro de bois da parte 1 atrás.
+### 10.2. A coluna das expedições e do comboio ✅ OK
+**Feito:**
+- **A coluna em figuras** (`ExpeditionParty`): cada soldado é uma figura do G1 com a tropa do batalhão. Acima de 36, vão 36, na mesma proporção de cada tropa.
+  - As figuras são `Unit`s de enfeite: andam, viram para onde a coluna vai e trocam de tamanho com o zoom como todo mundo, mas não lutam e ninguém as ataca. A luta da expedição continua resolvida em conta.
+  - Em filas de três, um tico fora do alinhamento; com cavalo, as filas abrem mais.
+- **O porta-estandarte vai na frente,** com o estandarte da tropa: dourado com capitão (Marco 20), azul sem ele, e o desenho da tropa da frente (espada, lança, arco ou cavalo).
+- **O comboio:** os carros de bois da parte 1, atrás da escolta, um para cada carroça do bando (até 4). Sem escolta, vão só as carroças. A expedição que escolta uma caravana leva uma.
+- **Conserto no caminho:** a cena esquecia o comboio quando recomeçava (ao voltar de uma batalha, ao carregar o jogo), e ele sumia até sair outro. Agora o comboio é desenhado de novo.
+- **Testes:** a suíte `missoes` manda a companhia de um capitão para uma escolta e confere que a coluna marcha (28 de 28). Conferido também na tela.
 
 ### 10.3. Harpias, navios e convés
 **A fazer:** as harpias em pixel art; os navios no mar e o convés da batalha no mar.

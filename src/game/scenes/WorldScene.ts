@@ -331,6 +331,8 @@ export class WorldScene extends Phaser.Scene {
     this.siegeId = null;
     this.works = null;
     this.parties = new Map();
+    // A cena velha levou as figuras do comboio junto: o próximo quadro desenha de novo
+    this.convoyParty = null;
     this.leftFrom = new Map();
     this.gateRules = [];
     this.visit = null;
