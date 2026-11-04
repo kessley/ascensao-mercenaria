@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "./canvasTexture";
-import { cellOf, dotOf, dotSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
+import { bannerSprite, cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
 import type { Bitmap } from "./pixel";
+import { VEHICLE_CELL, VEHICLE_DOT, VEHICLE_MINI, vehicleDot, vehicleMiniSheet, vehicleSheet } from "./vehicles";
 
 /**
  * Texturas das figuras, feitas na primeira vez que alguém veste aquele visual e guardadas no
@@ -26,8 +27,8 @@ export interface Skin {
   dot2: { w: number; h: number };
   /** Altura da figura acima dos pés (de frente, parada): nomes e avisos vão em cima. */
   height: number;
-  /** Montado (ou bicho): passo mais largo na animação. */
-  rides: boolean;
+  /** Chão percorrido a cada quadro do passo: montado (ou bicho) dá passo mais largo; roda de veículo, mais curto. */
+  stride: number;
 }
 
 const skins = new Map<string, Skin>();
@@ -46,6 +47,42 @@ function addSheet(scene: Phaser.Scene, key: string, b: Bitmap, fw: number, fh: n
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) texture.add(r * cols + c, 0, c * fw, r * fh, fw, fh);
 }
 
+/** O estandarte do desafio dos heróis inimigos (uma textura só para todos). */
+export function duelBannerKey(scene: Phaser.Scene): string {
+  const key = "duel-banner";
+  const b = duelBannerSprite();
+  addSheet(scene, key, b, b.width, b.height);
+  return key;
+}
+
+/** O desenho do estandarte: espada, arco, cavalo ou lança, conforme a tropa. */
+export type StandardGlyph = "SWORD" | "BOW" | "HORSE" | "SPEAR";
+
+/** O estandarte de uma coluna em marcha (expedição e comboio), na cor e com o desenho de quem vai. */
+export function standardKey(scene: Phaser.Scene, color: number, glyph: StandardGlyph): string {
+  const key = `standard:${color.toString(16)}:${glyph}`;
+  if (scene.textures.exists(key)) return key;
+  const b = bannerSprite(color, glyph);
+  addSheet(scene, key, b, b.width, b.height);
+  return key;
+}
+
+const sheets = new WeakMap<Phaser.Textures.Texture, Phaser.Textures.Frame[]>();
+
+/** Os quadros de uma folha pelo número (todos do mesmo tamanho, como `addSheet` corta). */
+export function sheetOf(texture: Phaser.Textures.Texture): readonly Phaser.Textures.Frame[] {
+  let list = sheets.get(texture);
+  if (!list) {
+    list = [];
+    for (const name of texture.getFrameNames()) {
+      const i = Number(name);
+      if (Number.isInteger(i)) list[i] = texture.get(i);
+    }
+    sheets.set(texture, list);
+  }
+  return list;
+}
+
 /** Primeira linha com corpo (não sombra) no quadro parado de frente. */
 function topOf(b: Bitmap, w: number, h: number): number {
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (b.rgba[(y * b.width + x) * 4 + 3] === 255) return y;
@@ -56,10 +93,11 @@ export function skinOf(scene: Phaser.Scene, look: Look): Skin {
   const id = lookKey(look);
   let skin = skins.get(id);
   if (skin && scene.textures.exists(skin.full)) return skin;
-  const cell = cellOf(look);
-  const mini = miniOf(look);
-  const dot = dotOf(look);
-  const sheet = figureSheet(look);
+  const vehicle = !!look.vehicle;
+  const cell = vehicle ? VEHICLE_CELL : cellOf(look);
+  const mini = vehicle ? VEHICLE_MINI : miniOf(look);
+  const dot = vehicle ? VEHICLE_DOT : dotOf(look);
+  const sheet = vehicle ? vehicleSheet(look) : figureSheet(look);
   skin = {
     full: `fig:${id}`,
     mini: `fig:${id}:mini`,
@@ -68,11 +106,11 @@ export function skinOf(scene: Phaser.Scene, look: Look): Skin {
     mini2: mini,
     dot2: dot,
     height: cell.feetY - topOf(sheet, cell.w, cell.h),
-    rides: rides(look),
+    stride: vehicle ? 8 : rides(look) ? 18 : 11,
   };
   addSheet(scene, skin.full, sheet, cell.w, cell.h);
-  addSheet(scene, skin.mini, miniSheet(look), mini.w, mini.h);
-  addSheet(scene, skin.dot, dotSprite(look), dot.w, dot.h);
+  addSheet(scene, skin.mini, vehicle ? vehicleMiniSheet(look) : miniSheet(look), mini.w, mini.h);
+  addSheet(scene, skin.dot, vehicle ? vehicleDot(look) : dotSprite(look), dot.w, dot.h);
   skins.set(id, skin);
   return skin;
 }

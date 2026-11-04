@@ -38,9 +38,10 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | — | Rações refeitas: mochilas por batalhão e comboio de carroças | feito, falta jogar uma campanha |
 | | 20 | Capitães: a cadeia de comando | ✅ OK |
 | | G2 | Pixel art: chão | ✅ OK |
-| | 21 | Duelos no meio da batalha | |
-| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | |
-| | 22 | Acampamento construído pelo bando (e construir nas vilas) | |
+| | 21 | Duelos no meio da batalha | ✅ OK |
+| | — | Locais de missão sempre habitados | ✅ OK |
+| | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | partes 1 e 2 de 6 (carroças, aríetes e escadas; a coluna das expedições e do comboio) ✅ OK |
+| | 22 | Do bivaque à cidade: acampamento e fortaleza construídos pelo bando, e a cidade que nasce sozinha | |
 | | G5 | Pixel art: interface | |
 | | 23 | Cultura, religião e língua | |
 | | G6 | Pixel art: atmosfera | |
@@ -130,6 +131,32 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 - **Diário de missões (J):** contrato do Comandante, tropas fora, favores da corte e as últimas notícias.
 - **Expedições:** "Enviar tropas" manda batalhões cumprirem limpezas de local, escoltas e estradas. Eles saem do campo, levam rações, recebem salário e voltam com o resultado, resolvido em conta pela força contra a dificuldade (`src/game/sim/expeditions.ts`). Quem morre não volta.
 - **Visão:** batalhões enxergam 420 px, os que atiram 620 px e o Comandante 520 px, com o alcance de percepção de quem atira do lado inimigo acompanhando.
+
+### Desempenho: batalhas quatro vezes mais leves ✅ OK
+**Objetivo:** abrir espaço para os batalhões grandes, que esperavam o motor aguentar 1500 soldados de perto.
+- **Medido** (Edge com janela, 8 batalhões contra uma força igual, um passo de 1/30 s por vez; tempo de JavaScript por passo, mediana e 1% pior):
+  | Soldados | Simulação antes | Simulação agora | Desenho |
+  | --- | --- | --- | --- |
+  | 640 | 5,6 ms / 9,3 ms | 2,2 ms / 6,8 ms | 2,2 ms |
+  | 1280 | 22,7 ms / 28,4 ms | 6,5 ms / 10,9 ms | 3,8 ms |
+  | 1600 | 31,4 ms / 42,7 ms | 7,6 ms / 15,5 ms | 3,8 ms |
+  | 1600, zoom 25% | 30,8 ms / 43,1 ms | 7,1 ms / 18,7 ms | 3,5 ms |
+  - Com 1600 soldados o quadro inteiro caiu de 35 para 11 ms: passa a caber em 60 fps.
+  - No mapa (acampamento, passeio de 25% a 100%, capital e cidade) o jogo já ia no limite da tela (160 a 165 fps), com passo de 2,5 a 3 ms, e continua assim.
+- **O que mudou** (nenhuma regra):
+  - **Empurra-empurra:** `separateUnits` testava todos os pares (820 mil por quadro com 1280 soldados). Agora uma grade só junta vizinhos (`src/game/systems/nearPairs.ts`, com teste contra a conta de todos os pares). Caiu de 33% para 8% do tempo.
+  - **Distância:** `distance` usa `Math.sqrt` em vez de `Math.hypot`, que é bem mais lento.
+  - **Olhar do inimigo:** quem está além do máximo que o soldado enxerga sai antes da conta inteira da percepção (`Enemy.farthestSight`).
+  - **Moral:** a contagem de ameaças não cria listas nem tira raiz.
+  - **Figuras:** a troca de quadro usa o quadro já guardado da folha (`sheetOf` em `atlas.ts`), e não o `setFrame` do Phaser, 14 vezes mais caro. A profundidade só muda quando a figura se mexe.
+  - **Nomes dos batalhões e falas do acampamento:** a cor era trocada a cada quadro, e cada troca redesenhava o texto e o mandava de novo para a placa de vídeo.
+  - **Névoa de guerra:** um pixel por célula numa textura pequena, ampliada sem suavizar, no lugar de um retângulo por célula (33 mil comandos de desenho por quadro a 25%). Comparada lado a lado com a antiga: igual a 100%; de mais longe, só as bordas entre células claras e escuras andam um pixel.
+  - **HUD:** a cena publica dez vezes por segundo; se nada mudou, a interface não se redesenha.
+- **Testes:** os 247 de regras passam. As suítes de batalha passam como antes (215 a 216 de 218), e as falhas são as verificações de sorte já listadas na [Dívida](ROADMAP_FASE_3.md#dívida). Cada uma foi repetida com o código antigo e com o novo, e os dois dão o mesmo.
+- **Ficou de fora:**
+  - **No mapa:** o anel de comando (88 arcos pontilhados) ainda é `Graphics`, que o Phaser refaz a cada quadro. As carroças, que também eram, viraram figuras no G4.
+  - **Na cena:** a cena inteira é reordenada por profundidade a cada quadro em que alguém anda (0,3 ms no mapa); chão e construções podiam ir para camadas próprias.
+  - **Na batalha,** o que sobra no perfil com 1280 soldados: a IA dos esquadrões (16% do tempo), o empurra-empurra (8%), a animação (8%) e o desenho dos contêineres do Phaser (3,8 ms por quadro).
 
 ---
 

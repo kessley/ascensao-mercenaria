@@ -73,6 +73,7 @@ import { hearRumors, rumorLine, type Ear, type Rumor } from "../game/sim/rumors"
 import { INITIAL_COURT, courtSlice, type CourtActions, type CourtState } from "./courtSlice";
 import { FOUNDER, INITIAL_LEGACY, legacySlice, type LegacyActions, type LegacyState } from "./legacySlice";
 import { leaderBonus, type Leader } from "../game/sim/legacy";
+import type { SiteLife } from "../game/sim/siteLife";
 import { trimAnnals } from "../game/sim/legends";
 import { rememberSaga, type SagaRecord } from "../game/data/sagas";
 import { personName } from "../game/worldgen/names";
@@ -247,6 +248,25 @@ export interface SupplyConvoy {
 
 export type BattalionStatus = "READY" | "MOVING" | "ENGAGED" | "FLEEING" | "DESTROYED";
 
+/** As barras de um duelista: vida, fôlego e postura de 0 a 1. */
+export interface DuelistHud {
+  name: string;
+  hp: number;
+  stamina: number;
+  posture: number;
+  /** Do nosso lado. */
+  ally: boolean;
+}
+
+/** O duelo no campo: quem luta e quanto falta para os homens separarem os dois. */
+export interface DuelHud {
+  /** Sem o Comandante (um capitão nosso): as duas cabeças lutam sozinhas. */
+  auto: boolean;
+  /** Segundos até o fim do tempo. */
+  left: number;
+  fighters: [DuelistHud, DuelistHud];
+}
+
 /** Snapshot publicado pela BattleScene (~10 Hz) para o HUD React. */
 export interface BattleHud {
   commanderHp: number;
@@ -324,6 +344,8 @@ export interface BattleHud {
   escort: { x: number; y: number; waiting: boolean } | null;
   /** Câmera lenta: ms que faltam e ms de espera até poder usar de novo. */
   slow: { left: number; wait: number };
+  /** Duelo no campo (Marco 21) em andamento, ou null. */
+  duel: DuelHud | null;
   /** Comandante muito ferido: o estandarte vacila. */
   bannerFaltering: boolean;
   /** Inimigos visíveis agora. */
@@ -650,6 +672,8 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   harpyChicks: number;
   /** Ninhos já encontrados. */
   nestsFound: string[];
+  /** Moradores dos locais de missão: o quanto cada um tinha e desde quando (sem registro, cheio). */
+  siteLife: Record<string, SiteLife>;
   messengers: MessengerData[];
   contracts: Contract[];
   log: LogEntry[];
@@ -964,6 +988,7 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   scoutLost: (id: string) => void;
   scoutReturned: (id: string) => void;
   nestFound: (id: string, by: string) => void;
+  setSiteLife: (id: string, life: SiteLife) => void;
   /** Comprar uma ave do falcoeiro (ou dar um filhote de ninho) a um batedor. */
   harpyBuy: (scoutId: string) => string;
   harpyAdopt: (scoutId: string) => string;
@@ -1540,6 +1565,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     scouts: Array.from({ length: SUPPORT.START_SCOUTS }, newScout),
     harpyChicks: 0,
     nestsFound: [],
+    siteLife: {},
     warDifficulty: "VETERAN",
     messengers: Array.from({ length: SUPPORT.START_MESSENGERS }, newMessenger),
     contracts,
@@ -2850,7 +2876,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
   setWorldSnapshot: (snapshot) => set({ worldSnapshot: snapshot }),
   chronicle: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
 
-  setBattleHud: (hud) => set({ battleHud: hud }),
+  setBattleHud: (hud) => {
+    // A cena publica dez vezes por segundo: igual ao anterior (parado no acampamento), nada se redesenha
+    const prev = get().battleHud;
+    if (prev && JSON.stringify(prev) === JSON.stringify(hud)) return;
+    set({ battleHud: hud });
+  },
 
   resolveEngagement: (result, survivors, support, info) => {
     const s = get();
@@ -3139,6 +3170,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     }),
 
   scoutReturned: (id) => set((s) => ({ scouts: s.scouts.map((x) => (x.id === id ? { ...x, missions: x.missions + 1 } : x)) })),
+
+  setSiteLife: (id, life) => set((s) => ({ siteLife: { ...s.siteLife, [id]: life } })),
 
   nestFound: (id, by) =>
     set((s) => {

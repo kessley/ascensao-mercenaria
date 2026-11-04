@@ -4,6 +4,8 @@ import { BALANCE, COLORS, ENEMIES, FORMATIONS, TIME, WOLF, type AttackKind, type
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 import { enemyLook } from "../art/looks";
+import { duelBannerKey } from "../art/atlas";
+import { BOSS_HEROES, seeksDuel, type HeroData } from "../data/heroes";
 
 /**
  * Goblin: quadrado vermelho. IA simples de aggro → perseguição → ataque, com coleira.
@@ -33,6 +35,8 @@ export class Enemy extends Unit {
     /** Soldado da guarnição de um povoado (ou morador armado num cerco: `militia`). */
     | { kind: "GARRISON"; settlementId: string; militia?: boolean }
     | { kind: "CALAMITY"; id: string }
+    /** Morador de um local de missão, sem contrato (Fase 3, etapa 10). */
+    | { kind: "SITE"; siteId: string }
     /** Bichos do mundo (alcateias de lobos). */
     | { kind: "WILDLIFE"; pack: number }
     | null = null;
@@ -83,6 +87,9 @@ export class Enemy extends Unit {
   wanderGoal: Point | null = null;
   intercept: Unit | null = null;
   private titleText: Phaser.GameObjects.Text | null = null;
+  /** Herói (Marco 21): oficial com nome e mão no um contra um. Quem procura duelo leva estandarte próprio. */
+  hero: (HeroData & { name: string }) | null = null;
+  private challenge: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind = "GOBLIN", color?: number) {
     super(scene, x, y, "ENEMY", ENEMIES[kind].stats);
@@ -91,6 +98,9 @@ export class Enemy extends Unit {
     this.home = { x, y };
     this.wear(enemyLook(kind, this.bodyColor));
     this.drawBody();
+    // Chefe de calamidade que luta de perto: herói por natureza
+    const boss = BOSS_HEROES[kind];
+    if (boss) this.makeHero(ENEMIES[kind].label, boss);
   }
 
   /** Oficial: o nome aparece sobre ele (o jogador tem de saber em quem mirar). */
@@ -100,6 +110,18 @@ export class Enemy extends Unit {
     if (!title) return;
     this.titleText = this.scene.add.text(0, this.sprite ? Math.round(this.headY) - 16 : -this.radius - 20, title, { fontFamily: "monospace", fontSize: "11px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
     this.add(this.titleText);
+  }
+
+  /** Dá a ficha de herói; quem procura o Comandante ergue o estandarte do desafio. */
+  makeHero(name: string, data: HeroData): void {
+    this.hero = { name, ...data };
+    this.challenge?.destroy();
+    this.challenge = null;
+    if (!seeksDuel(data)) return;
+    const key = duelBannerKey(this.scene);
+    const top = this.sprite ? Math.round(this.headY) - 18 : -this.radius - 22;
+    this.challenge = this.scene.add.image(0, top - 12, key).setOrigin(0.5, 1);
+    this.add(this.challenge);
   }
 
   /** Mostra o escudo na Parede de Escudos. */
@@ -217,29 +239,6 @@ export class Enemy extends Unit {
       g.fillRect(s - 4, -2, 4, 4);
       return;
     }
-    if (this.kind === "SIEGE_RAM") {
-      // Aríete: telhado de madeira e a viga saindo pela frente (olhando para +X)
-      g.fillStyle(0x4a3220, 1);
-      g.fillRect(-s * 1.4, -s * 0.7, s * 2.8, s * 1.4);
-      g.fillStyle(0x7a5a38, 1);
-      g.fillRect(-s * 0.6, -s * 0.25, s * 2.4, s * 0.5);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeRect(-s * 1.4, -s * 0.7, s * 2.8, s * 1.4);
-      return;
-    }
-    if (this.kind === "CART") {
-      // Carroça de mercador: caixa de madeira com toldo e rodas (olhando para +X)
-      g.fillStyle(0x2a1c10, 1);
-      for (const [wx, wy] of [[-s * 0.7, -s * 0.75], [s * 0.7, -s * 0.75], [-s * 0.7, s * 0.75], [s * 0.7, s * 0.75]]) g.fillCircle(wx, wy, s * 0.32);
-      g.fillStyle(this.bodyColor, 1);
-      g.fillRect(-s * 1.2, -s * 0.65, s * 2.4, s * 1.3);
-      g.fillStyle(0xe8dcc0, 1);
-      g.fillRect(-s * 1.0, -s * 0.55, s * 1.6, s * 1.1);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeRect(-s * 1.2, -s * 0.65, s * 2.4, s * 1.3);
-      g.lineBetween(s * 1.2, 0, s * 1.7, 0);
-      return;
-    }
     if (this.kind === "WOLF") {
       // Lobo: corpo alongado, focinho e orelhas
       g.fillStyle(this.bodyColor, 1);
@@ -302,14 +301,23 @@ export class Enemy extends Unit {
 
   /** De quão longe este inimigo percebe `ally` (o batedor usa a mesma conta para ficar fora dela). */
   perceptionOf(ally: Unit): number {
-    const night = ally.unlit ? Enemy.darkPerception : Enemy.perception;
+    const sight = this.sightIn(ally.unlit ? Enemy.darkPerception : Enemy.perception);
+    return (ally.isInForest ? Math.min(sight, BALANCE.FOREST_DETECT_RANGE) : sight) * ally.stealth;
+  }
+
+  /** Até onde enxerga com essa luz, antes da mata e da furtividade de quem é visto (cresce com `night`). */
+  sightIn(night: number): number {
     // Criaturas da noite enxergam no escuro: apagar as tochas não as engana
     const perception = this.nightCreature ? Math.max(1, night) : night;
     // Nevoeiro, neve e chuva escondem o bando de todos (Marco 13)
     const aggro = (ENEMIES[this.kind].aggroRange ?? BALANCE.GOBLIN_AGGRO_RANGE) * perception * Enemy.weatherSight;
     // Quem atira de longe olha longe: a IA enxerga para o alcance que tem, como o jogador
-    const sight = this.ranged ? Math.max(aggro, this.range * BALANCE.SHOOTER_SIGHT * perception * Enemy.weatherSight) : aggro;
-    return (ally.isInForest ? Math.min(sight, BALANCE.FOREST_DETECT_RANGE) : sight) * ally.stealth;
+    return this.ranged ? Math.max(aggro, this.range * BALANCE.SHOOTER_SIGHT * perception * Enemy.weatherSight) : aggro;
+  }
+
+  /** O mais longe que enxerga alguém agora (com ou sem tochas): quem está além disso nem precisa da conta inteira. */
+  get farthestSight(): number {
+    return this.sightIn(Math.max(Enemy.perception, Enemy.darkPerception));
   }
 
   /** Aliado está ao alcance da percepção? Na floresta, só bem de perto. */

@@ -1055,6 +1055,63 @@ export function gateDebrisPiece(w: number, h: number, culture: Culture, seed: nu
   return { grid: g, dx: -M, dy: -M };
 }
 
+/** Madeira recém-cortada das escadas de assalto. */
+const LADDER = { light: 0xdcb27a, base: 0xc89a62, dark: 0x8a6438 };
+/** Altura das estacas da paliçada acima do pé (as do `palisadeRow`). */
+const STAKES = PALISADE_FACE + 2;
+
+/**
+ * Escadas de assalto (Marco 16; arte no G4): duas escadas de mão encostadas na muralha, do chão de
+ * fora até o alto. `w`×`h` é a brecha que elas abrem, de um lado a outro da muralha (com 4 px de
+ * folga de cada lado); `side` é o lado de fora.
+ * - Ao sul, as escadas sobem pela face que se vê, na frente dela.
+ * - Ao norte, a muralha as esconde: só as pontas passam por cima, atrás dela.
+ * - A leste e a oeste, sobem na diagonal, do chão de fora até a beira do alto.
+ * Devolve a peça e a profundidade (em relação ao canto de cima da brecha).
+ */
+export function ladderPiece(side: "N" | "S" | "E" | "W", w: number, h: number, wallT: number, stone: boolean): { piece: Piece; depth: number } {
+  const F = stone ? WALL_FACE : STAKES;
+  const ox = 34;
+  const oy = F + 24;
+  const g = new Grid(ox + w + 34, oy + h + 16);
+  const rails = (fx: number, fy: number, tx: number, ty: number, dx: number, dy: number) => {
+    g.line(ox + fx, oy + fy, ox + tx, oy + ty, LADDER.base);
+    g.line(ox + fx + dx, oy + fy + dy, ox + tx + dx, oy + ty + dy, LADDER.dark);
+    const n = Math.max(2, Math.floor(Math.hypot(tx - fx, ty - fy) / 5));
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(fx + ((tx - fx) * i) / n);
+      const y = Math.round(fy + ((ty - fy) * i) / n);
+      g.line(ox + x, oy + y, ox + x + dx, oy + y + dy, LADDER.light);
+    }
+  };
+  // O pé da muralha (linha de baixo do chão dela) e a beira do alto, na tela
+  const bottom = 4 + wallT;
+  let depth: number;
+  if (side === "S" || side === "N") {
+    const xs = [Math.round(w / 2) - 15, Math.round(w / 2) + 6];
+    if (side === "S") {
+      const top = stone ? bottom - F : bottom - STAKES;
+      for (const x of xs) rails(x, bottom + 8, x, top - 3, 8, 0);
+      depth = bottom + 8;
+    } else {
+      // A face do norte não aparece: as pontas sobem por trás, acima das ameias (ou das estacas)
+      const top = stone ? 4 - F - 8 : bottom - STAKES;
+      for (const x of xs) rails(x, top + 10, x, top - 12, 8, 0);
+      depth = bottom - 2;
+    }
+  } else {
+    const ys = [Math.round(h / 2) - 13, Math.round(h / 2) + 7];
+    const west = side === "W";
+    // Na pedra, a beira do alto fica na borda da muralha; na paliçada, nas estacas do meio
+    const edge = stone ? (west ? 4 : 4 + wallT) : 4 + Math.round(wallT / 2) + (west ? -2 : 2);
+    const foot = west ? edge - 26 : edge + 26;
+    for (const y of ys) rails(foot, y + 4, edge + (west ? 1 : -1), y - F - 2, 0, 6);
+    depth = Math.round(h / 2) + 17;
+  }
+  g.outline();
+  return { piece: { grid: g, dx: -ox, dy: -oy }, depth };
+}
+
 /** Barraca do mercado: toldo listrado em quatro postes e o balcão com mercadoria. */
 export function stallPiece(w: number, h: number, color: number, culture: Culture, seed: number): Piece {
   const st = STYLES[culture];

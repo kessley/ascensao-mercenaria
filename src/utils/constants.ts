@@ -695,6 +695,26 @@ export const WOLF = {
   PELT_GOLD: 4,
 } as const;
 
+/**
+ * Locais de missão sempre habitados (Fase 3, etapa 10): moradores fixos com parte da força do
+ * contrato. Com contrato, vem a força inteira e o chefe; limpo, o local esvazia e volta a encher.
+ */
+export const SITE_LIFE = {
+  /** Os moradores têm esta fração da força de um contrato médio (o fácil traz 0,7 e o chefe). */
+  SHARE: 0.5,
+  /** Vazio de todo, o local espera estes dias antes de alguém voltar... */
+  EMPTY_DAYS: 5,
+  /** ...e depois enche esta fração por dia (cheio em uns 7 dias). */
+  REGROW_PER_DAY: 0.15,
+  /** Os moradores aparecem quando alguém do bando chega a esta distância do centro do local... */
+  SPAWN_RADIUS: 2600,
+  /** ...e voltam a ser só um número quando todos estão mais longe que isto (e ninguém luta). */
+  DESPAWN_RADIUS: 3400,
+  /** Covis a esta distância de um local com menos gente que isto não mandam bando. */
+  QUIET_BELOW: 0.5,
+  QUIET_RADIUS: 6000,
+} as const;
+
 /** Agentes do mundo vivo (Marco 12): patrulhas, mensageiros dos reinos e refugiados. */
 export const AGENTS = {
   /** Patrulha de um reino: soldados e besteiros que caçam bandos perto das terras do reino. */
@@ -987,6 +1007,77 @@ export const CAPTAINS = {
   TACTICS_CHANCE: 0.05,
   /** E tira isto das baixas por ponto acima de 3. */
   TACTICS_LOSSES: 0.08,
+} as const;
+
+/**
+ * Duelo, um contra um (Marco 21; a Liça do Marco 15 usa as mesmas regras). Distâncias no tamanho
+ * da Liça; no campo, as figuras são menores e tudo encolhe junto (`DuelState.scale`).
+ */
+export const DUEL = {
+  /** Duelo longo demais: os dois são separados pelos seus homens. */
+  TIMEOUT_S: 90,
+  /** Corpo de cada um: os dois não se atravessam. */
+  BODY: 20,
+  /** Passo do Comandante, por segundo. */
+  STEP: 190,
+  STAMINA: 100,
+  /** Fôlego que volta por segundo: parado, bloqueando, e no meio de um golpe. */
+  REGEN: 24,
+  REGEN_BLOCK: 6,
+  REGEN_BUSY: 12,
+  LIGHT: { COST: 14, DAMAGE: 30, RECOVER: 0.32, ARC: 1.05, STUN: 0.3, PUSH: 22 },
+  HEAVY: { COST: 26, DAMAGE: 50, RECOVER: 0.5, ARC: 1.2, STUN: 0.5, PUSH: 34 },
+  /** Empurrão: curto e sem dano; abre a guarda de quem só bloqueia. */
+  SHOVE: { COST: 12, WINDUP: 0.18, RECOVER: 0.3, REACH: 56, ARC: 0.9, PUSH: 40, STUN: 0.25, OPEN: 0.55 },
+  /** Bloqueio: só de frente, até este ângulo. */
+  BLOCK_ARC: 1.3,
+  /** Fôlego que cada golpe aparado custa e a parte do dano que passa pela guarda. */
+  BLOCK_COST: { LIGHT: 12, HEAVY: 22 },
+  CHIP: { LIGHT: 0.08, HEAVY: 0.25 },
+  /** Aparar: a guarda erguida até este tanto antes do golpe chegar atordoa quem atacou. */
+  PARRY_WINDOW: 0.18,
+  PARRY_STUN: 0.8,
+  /** Quem solta e ergue a guarda de novo antes disto não apara (não adianta martelar a tecla). */
+  PARRY_REARM: 0.35,
+  /** Postura (equilíbrio, de 0 a 100): cada golpe bloqueado enche; cheia, a guarda quebra. */
+  POSTURE: { LIGHT: 22, HEAVY: 46, SHOVE: 40, HIT: 10, PARRY_RELIEF: 15, DECAY: 12, BROKEN_S: 1.3 },
+  /** Esquiva: um passo curto, com um instante em que nada acerta. */
+  DODGE: { COST: 20, TIME: 0.24, DISTANCE: 64, UNTOUCHABLE: 0.2, RECOVER: 0.12 },
+  /** Um aperto de tecla espera este tanto pela vez (dá para emendar o próximo golpe). */
+  BUFFER_S: 0.25,
+  /** No meio do aviso, quem ataca só vira este tanto por segundo: o passo para o lado tira do arco. */
+  WINDUP_TURN: 3,
+  /** O pesado fingido vira leve quando falta esta parte do aviso. */
+  FEINT_AT: 0.45,
+} as const;
+
+/** O duelo no campo (Marco 21, parte 3): o anel, o tempo de fora e o que o fim muda na batalha. */
+export const FIELD_DUEL = {
+  /** O herói a esta distância do Comandante (ou de um capitão nosso) abre o duelo. */
+  TRIGGER: 60,
+  /** Raio do anel: ninguém entra; quem estava dentro recua até a borda. */
+  RING: 90,
+  /** Quem está até aqui do centro para de lutar e fica olhando. */
+  WATCH: 150,
+  /** O herói vai atrás do Comandante que está até aqui e à vista dele. */
+  SEEK: 600,
+  /** Ritmo da batalha fora do anel e o zoom da câmera durante o duelo. */
+  SLOW: 0.5,
+  ZOOM: 2,
+  /** Tamanho das distâncias do duelo no campo (as figuras são menores que na Liça). */
+  SCALE: 0.6,
+  /** Espera entre um duelo e outro (ms do jogo). */
+  COOLDOWN_MS: 15000,
+  /** Moral de quem venceu e de quem perdeu o seu duelista; quem estava perto do anel sente o dobro. */
+  MORALE_WIN: 12,
+  MORALE_LOSS: 20,
+  NEAR: 320,
+  /** O Comandante vencido sai com esta fração da vida (ferido, menos) e é levado este tanto para trás. */
+  BEATEN_HP: 0.3,
+  WOUNDED_HP: 0.15,
+  DRAG: 260,
+  /** Fama de quem perde um duelo em campo. */
+  LOSS_FAME: 1,
 } as const;
 
 /** Economia do acampamento (Marco 3). */
@@ -1582,6 +1673,8 @@ export const SIEGE = {
   RAMPART_DEPTH: 190,
   RAM: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18, mass: 12 } satisfies UnitStats,
   RAM_DPS: 34,
+  /** Uma batida da viga a cada tanto (só a figura e o som: o dano corre por segundo). */
+  RAM_SWING_MS: 1400,
   GATE_HP: { PALISADE: 260, STONE: 620 },
   /** O portão mal cuidado que um batedor pode achar. */
   WEAK_GATE: 0.55,

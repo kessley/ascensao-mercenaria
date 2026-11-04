@@ -1,10 +1,12 @@
 import Phaser from "phaser";
 import { Unit } from "../entities/Unit";
 import { wallOutward, type Gate, type Rect, type TownLayout } from "../world/townLayout";
-import { gateBarPiece, gateDebrisPiece, gateDoorPiece, type Culture } from "../art/buildings";
+import { gateBarPiece, gateDebrisPiece, gateDoorPiece, ladderPiece, type Culture } from "../art/buildings";
+import { vehicleLook } from "../art/looks";
+import { sfx } from "../../audio/sounds";
 import { pieceImage } from "../world/TownArt";
 import { COLORS, GEO, SIEGE } from "../../utils/constants";
-import { distance, type Point } from "../../utils/math";
+import { angleTo, distance, type Point } from "../../utils/math";
 
 /** Um portão no cerco: fechado é sólido; o aríete o derruba. */
 export interface SiegeGate {
@@ -15,7 +17,7 @@ export interface SiegeGate {
   broken: boolean;
 }
 
-/** Aríete: vai até o portão mais perto e bate até ele cair. Quem chegar perto pode destruí-lo. */
+/** Aríete coberto (pixel art no G4): vai até o portão mais perto e bate até ele cair. Quem chegar perto pode destruí-lo. */
 export class SiegeRam extends Unit {
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "ALLY", SIEGE.RAM);
@@ -23,19 +25,13 @@ export class SiegeRam extends Unit {
     this.role = "WAGON";
     this.lure = 0.5;
     this.townAccess = "ANY";
+    this.wear(vehicleLook("RAM", COLORS.ALLY));
     this.drawBody();
   }
 
+  /** A figura é o aríete inteiro: nada no chão. */
   protected drawBody(): void {
-    const g = this.bodyGfx;
-    const r = this.radius;
-    g.clear();
-    g.fillStyle(0x4a3220, 1);
-    g.fillRect(-r * 1.4, -r * 0.7, r * 2.8, r * 1.4);
-    g.fillStyle(0x7a5a38, 1);
-    g.fillRect(-r * 0.6, -r * 0.25, r * 2.4, r * 0.5);
-    g.lineStyle(2, COLORS.OUTLINE, 1);
-    g.strokeRect(-r * 1.4, -r * 0.7, r * 2.8, r * 1.4);
+    this.bodyGfx.clear();
   }
 }
 
@@ -60,7 +56,9 @@ export class SiegeWorks {
   ram: Unit | null = null;
   /** Surtida: os portões ficam abertos até este momento (tempo da cena). */
   sallyUntil = 0;
-  private readonly gfx: Phaser.GameObjects.Graphics;
+  /** As escadas desenhadas, na ordem de `ladders`. */
+  private readonly ladderArt: Phaser.GameObjects.Image[] = [];
+  private gone = false;
   /** As folhas fechadas de cada portão (somem na surtida e quando ele cai) e os destroços dos que caíram. */
   private readonly doors: Phaser.GameObjects.Image[][];
   private readonly debris: (Phaser.GameObjects.Image | null)[];
@@ -84,7 +82,6 @@ export class SiegeWorks {
     });
     this.doors = layout.gates.map((gate) => this.makeDoor(gate));
     this.debris = layout.gates.map(() => null);
-    this.gfx = scene.add.graphics().setDepth(4);
     this.draw();
   }
 
@@ -232,8 +229,8 @@ export class SiegeWorks {
     this.onGateDown(g.gate);
   }
 
-  /** Aríete: anda até o portão e bate. */
-  update(dt: number): void {
+  /** Aríete: anda até o portão e bate (`time` é o relógio das figuras: o golpe aparece nele). */
+  update(dt: number, time: number): void {
     const r = this.ram;
     if (!r) return;
     if (!r.isAlive) {
@@ -252,6 +249,12 @@ export class SiegeWorks {
       return;
     }
     r.unitState = "IDLE";
+    // A viga recua e bate: a figura mostra o golpe, e o portão range
+    if (time - r.lastAttackAt >= SIEGE.RAM_SWING_MS) {
+      r.lastAttackAt = time;
+      r.setFacing(angleTo(r, g.gate));
+      sfx.charge(r);
+    }
     this.batter(g, SIEGE.RAM_DPS * dt);
   }
 
@@ -273,34 +276,31 @@ export class SiegeWorks {
     this.showDoors();
     this.onChange();
     this.scene.time.delayedCall(ms + 50, () => {
-      if (!this.gfx.active) return;
+      if (this.gone) return;
       this.showDoors();
       this.onChange();
     });
   }
 
   private draw(): void {
-    const g = this.gfx;
-    g.clear();
     this.gates.forEach((s, i) => {
       if (s.broken && !this.debris[i]) this.debris[i] = this.makeDebris(s.gate, i);
     });
     this.showDoors();
-    // Escadas: dois banzos e os degraus sobre a muralha
-    for (const r of this.ladders) {
-      g.fillStyle(0xb08a5a, 1);
-      const vertical = r.w > r.h;
-      const steps = 5;
-      for (let i = 0; i < steps; i++) {
-        if (vertical) g.fillRect(r.x + (r.w * i) / steps, r.y + 2, 5, r.h - 4);
-        else g.fillRect(r.x + 2, r.y + (r.h * i) / steps, r.w - 4, 5);
-      }
+    // Escadas: um par encostado na muralha em cada brecha nova, do lado de fora
+    const stone = this.layout.wallKind === "STONE";
+    for (let i = this.ladderArt.length; i < this.ladders.length; i++) {
+      const r = this.ladders[i];
+      const out = wallOutward(this.layout, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
+      const side = Math.abs(Math.cos(out)) > 0.5 ? (Math.cos(out) > 0 ? "E" : "W") : Math.sin(out) > 0 ? "S" : "N";
+      const { piece, depth } = ladderPiece(side, Math.round(r.w), Math.round(r.h), Math.round(this.layout.wallThickness), stone);
+      this.ladderArt.push(pieceImage(this.scene, `siege-ladder-${serial++}`, piece, Math.round(r.x), Math.round(r.y), r.y + depth));
     }
   }
 
   destroy(): void {
-    this.gfx.destroy();
-    for (const img of [...this.doors.flat(), ...this.debris]) {
+    this.gone = true;
+    for (const img of [...this.doors.flat(), ...this.debris, ...this.ladderArt]) {
       if (!img) continue;
       const key = img.texture.key;
       img.destroy();

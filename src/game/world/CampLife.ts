@@ -578,7 +578,9 @@ export class CampLife {
         const phase = (time + (s.x * 7 + s.y * 13)) % 9000;
         if (phase > (t.activity === "CROWD" || t.activity === "PARTY" ? 4500 : 2600)) continue;
         const b = this.bubbles[used++];
-        b.setText(t.bubble).setColor(t.bubbleColor).setPosition(s.x, s.y + s.headY - 10).setVisible(true);
+        // setColor redesenha o texto a cada chamada (setText só quando muda): a cor, só quando é outra
+        if (b.style.color !== t.bubbleColor) b.setColor(t.bubbleColor);
+        b.setText(t.bubble).setPosition(s.x, s.y + s.headY - 10).setVisible(true);
       }
     }
     for (let i = used; i < this.bubbles.length; i++) this.bubbles[i].setVisible(false);

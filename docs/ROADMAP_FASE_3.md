@@ -1,10 +1,24 @@
 # Roadmap — Fase 3: O arcano
 
-Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador, cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
+Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador (que vira fortaleza e, em volta dela, cidade), cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
-**Onde estamos (3 de novembro de 2026):**
-- **Feito:** a progressão dos batalhões, a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3), as rações refeitas (mochilas e comboio) e os capitães (Marco 20 ✅ OK, no acampamento e na batalha).
-- **A seguir:** a arrumação da `WorldScene` (etapa 8).
+**Onde estamos (4 de novembro de 2026):**
+- **Feito:**
+  - a progressão dos batalhões;
+  - a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3);
+  - as rações refeitas (mochilas e comboio);
+  - os capitães (Marco 20 ✅ OK, no acampamento e na batalha);
+  - a `WorldScene` dividida em partes (etapa 8);
+  - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
+  - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
+  - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
+  - os locais de missão sempre habitados (etapa 10 ✅ OK).
+- **Combinado em 4 de novembro, depois de um brainstorm:**
+  - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
+  - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
+- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 3: harpias, navios e convés.
+  - Já estão feitas as duas primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio.
+  - Faltam harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -30,15 +44,16 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 5 | [Marco 20, parte 1: capitães no acampamento](#5-marco-20-parte-1-capitães-no-acampamento) | recurso | | ✅ OK |
 | 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
-| 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene) | dívida | Os Marcos 21 e 22 mexem muito nela | |
-| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | |
-| 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
-| 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
-| 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
-| 13 | [Marco 23: cultura, religião e língua](#13-marco-23-cultura-religião-e-língua) | recurso | | |
-| 14 | [G6: atmosfera](#14-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
-| 15 | [Marco 19: magia do Comandante](#15-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
-| 16 | [Fechamento: jogar uma campanha inteira](#16-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
+| 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
+| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
+| 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
+| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
+| 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
+| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
+| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
+| 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
 
@@ -68,7 +83,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - chefes no dobro do tamanho, corpos que ficam no chão e escala inteira da tela;
   - a barra de vida saiu de cima das unidades.
 - **Medido:** o desenho de cerca de 1500 unidades caiu de 20 a 35 ms por quadro para 0 a 12 ms. O gargalo agora é a simulação, de 25 a 60 ms.
-- **O que ficou para depois:** o cavalo de frente e de costas (a pose mais fraca) e as poses de duelo, que entram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
+- **O que ficou para depois:** o cavalo de frente e de costas (a pose mais fraca). As poses de duelo entraram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
 
 ## 3. G3: construções ✅ OK
 - **Povoados** (`src/game/art/buildings.ts`, `src/game/world/TownArt.ts`): casas, Casa do Conselho, castelo, templo, muralhas, paliçadas, portões, mercado, poço, pátios da guarnição, ruínas e a Cidade Alta vista de fora, nas 4 culturas:
@@ -273,14 +288,38 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - de perto, nenhum pedaço do campo de batalha é mais greybox;
 - a floresta esconde quem está dentro dela. Na tela, a árvore cobre quem passa atrás, pela profundidade do pé; na regra, quem está na mata só é visto de perto (`FOREST_DETECT_RANGE`).
 
-## 8. Arrumação: dividir a `WorldScene`
-**Objetivo:** `WorldScene.ts` passa de 6000 linhas, e os Marcos 21 e 22 vão mexer muito nela.
-- Separar em módulos pelo que já existe: comboio e expedições, carroças, cercos, mar, acampamento e a interface de batalha (HUD).
-- Nenhuma regra muda. As suítes de batalha (`npm run test:battle`) têm de passar iguais antes e depois.
+## 8. Arrumação: dividir a `WorldScene` ✅ OK
+**Objetivo:** `WorldScene.ts` passava de 6000 linhas, e os Marcos 21 e 22 vão mexer muito nela.
 
-**Pronto quando:** nenhum arquivo da cena passa de 2000 linhas, e as suítes passam.
+**Feito:**
+- **`WorldScene.ts` caiu de 6226 para 942 linhas.** Ficaram nela os campos, o `create`, o `update`, as estações e o clima.
+- **O resto foi para 13 partes em `src/game/scenes/worldScene/`:**
+  | Parte | O quê | Linhas |
+  | --- | --- | --- |
+  | `army.ts` | exército em campo, líder, carroças, fadiga e cortejo | 452 |
+  | `camp.ts` | acampamento, cidades, caminhada, forragear, acampamento móvel e noite | 582 |
+  | `sea.ts` | corsários, desembarque e o convés | 104 |
+  | `scenario.ts` | batalha personalizada | 301 |
+  | `combat.ts` | inimigos em campo, encontro, prisioneiros, objetivos, fim do combate, derrota e visão | 563 |
+  | `siege.ts` | cerco, portões e guarnições | 364 |
+  | `realm.ts` | calamidades, exércitos dos reinos, revoltas, relógio, eventos dos bandos, viagem e pontes | 724 |
+  | `agents.ts` | agentes do mundo, comboio, expedições e descanso | 321 |
+  | `save.ts` | salvar, carregar e o retrato do mapa | 293 |
+  | `orders.ts` | raio de comando, sinais e mensageiros | 418 |
+  | `input.ts` | teclado, mouse, ordens da interface, seleção e câmera | 806 |
+  | `scouts.ts` | batedores e harpias | 306 |
+  | `hud.ts` | HUD da batalha | 108 |
+  | `shared.ts` | constantes, tipos e ajudantes que as partes dividem | 188 |
+- **Como:** cada parte é um objeto de métodos com `this: WorldScene`, posto no protótipo da cena no fim de `WorldScene.ts`. Uma interface com o nome da classe diz ao TypeScript que os métodos são dela.
+  - As chamadas (`this.publishHud()`) e o corpo dos métodos não mudaram: a divisão foi feita por um roteiro, com a árvore do TypeScript, copiando cada método inteiro, com os comentários.
+  - Os membros da cena deixaram de ser `private`, porque as partes os usam de fora da classe.
+- **Nenhuma regra mudou:** as 10 suítes de batalha passam como antes (217 de 218 verificações, o mesmo placar de antes; a que falha é um dos confrontos que oscilam por sorteio), assim como os 242 testes de regras.
 
-## 9. Marco 21: duelos no meio da batalha
+**Ficou de fora:** as partes ainda usam o estado da cena inteira por `this`. Separar o estado de cada parte (o cerco guardar o próprio, por exemplo) fica para quando um marco pedir.
+
+**Pronto quando** (vale agora): nenhum arquivo da cena passa de 2000 linhas (o maior, `WorldScene.ts`, tem 942), e as suítes passam.
+
+## 9. Marco 21: duelos no meio da batalha ✅ OK
 **Objetivo:** quando um herói inimigo de nível alto chega ao Comandante, a batalha em volta para e os dois lutam sozinhos, como nos duelos de *Total War: Three Kingdoms*. A diferença: **ninguém aceita nem recusa, o Comandante é puxado**. É uma luta de ação no chão, com esquiva e bloqueio, curta e perigosa, sem nada de fantasia.
 
 - **Antes, os capitães do outro lado** (vieram do Marco 20): os exércitos dos reinos ganham capitães com nome, nível e Duelo, e não só o chefe da força. Dá para capturar, pedir resgate e recrutar quem muda de lado.
@@ -339,60 +378,305 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - lendo os avisos, esquivando e aparando, dá para vencer um herói melhor;
 - perder custa caro, mas não acaba a campanha.
 
-## 10. G4: resto do elenco
+O marco foi dividido em três partes: as regras (que a Liça já usa), os heróis do outro lado e o duelo no campo.
+
+### 9.1. Marco 21, parte 1: as regras do duelo ✅ OK
+**Feito:**
+- **As regras saíram da Liça** para um módulo puro, `src/game/sim/duel.ts`, e a Liça (`DuelScene`) passou a usá-lo. O duelo no campo (parte 3) usa o mesmo.
+- **Golpes** (no ritmo do Comandante; todos avisam antes com o arco vermelho, e o do pesado é largo e escuro):
+  - **leve:** avisa em 0,24 s e tira 30 de vida;
+  - **pesado:** avisa em 0,56 s, tira 50 e enche a postura de quem bloqueia duas vezes mais;
+  - **empurrão:** curto e sem dano; abre a guarda de quem só bloqueia.
+- **Defesa:**
+  - **bloquear:** de frente, segura quase todo o dano, mas cada golpe aparado gasta fôlego e enche a postura;
+  - **aparar:** a guarda erguida até 0,18 s antes de o golpe chegar atordoa quem atacou por 0,8 s. Martelar a tecla não apara: quem solta e ergue de novo em menos de 0,35 s só bloqueia;
+  - **esquiva:** um passo curto, com 0,2 s em que nada acerta; gasta fôlego.
+  - **Postura cheia** (ou o fôlego zerado bloqueando): a guarda quebra, 1,3 s atordoado, e o próximo golpe entra.
+- **Pé no chão:**
+  - 100 de vida: 4 ou 5 golpes limpos decidem;
+  - a armadura segura parte do dano;
+  - ferimentos e cansaço de antes entram como vida e fôlego menores.
+- **Armas:** a espada é rápida; a lança alcança mais e avisa mais devagar; o machado bate mais e quebra a guarda; espada e escudo bloqueia melhor e esquiva pior.
+- **A IA luta pelo temperamento:**
+  - o agressivo emenda golpes;
+  - o firme alterna;
+  - o paciente guarda distância, espera o erro e castiga;
+  - o traiçoeiro finge o pesado, que vira leve no meio do aviso.
+  - A mão (1 a 10) dá o ritmo (a mais fraca avisa 1,9 vez mais devagar que o Comandante; a melhor, 1,3), a leitura do aviso e a precisão da distância.
+- **Fim:**
+  - 90 s sem vencedor separam os dois;
+  - quem cai se rende, sai ferido ou, raramente, morre (bem mais com vencedor cruel ou ferida de antes). A parte 3 usa isso.
+- **A Liça com os controles novos:**
+  - WASD anda;
+  - Espaço ou clique: golpe leve;
+  - Q ou botão direito: golpe pesado;
+  - Shift segura a guarda (na hora certa, apara);
+  - F esquiva, e E empurra.
+  - A barra de postura fica embaixo da de fôlego.
+- **Testes:** 23 de regras (`tests/unit/duel.test.ts`):
+  - cada golpe, o bloqueio, aparar, a esquiva, o empurrão, a postura, as armas e o fim por tempo;
+  - IA contra IA: a mão melhor vence quase sempre (8 contra 4, mais de 80%), mãos iguais ficam perto da metade, e os duelos acabam em 5 a 10 s;
+  - alguém nas teclas que lê o aviso com 0,25 s de reação (e deixa passar 1 em 5) vence um herói de mão 10 em mais de 60% das vezes; quem quase não lê perde para um de mão 8.
+
+**Ficou para depois:** a Liça segue em greybox (círculos), porque as poses das figuras vêm com a parte 3.
+
+### 9.2. Marco 21, parte 2: os heróis do outro lado ✅ OK
+**Feito:**
+- **Ficha de herói** (`src/game/data/heroes.ts`): cada chefe e capitão das forças inimigas tem nome, Duelo (1 a 5), um traço e uma arma. A ficha vai no save junto com o comando do bando.
+  - **A mão sai do tipo de bando:** goblins 1 a 2, salteadores e hordas 2 a 3, patrulhas e exércitos 3 a 4. Os capitães ficam um ponto abaixo do chefe, e orcs e cavaleiros mortos um acima. Um nobre de verdade traz a dele (o marcial dividido por 2).
+  - **A arma é a do povo:** orcs e chefes salteadores no machado, sargentos e capitães dos reinos com espada e escudo, o chefe goblin na lança, e o resto na espada.
+  - **O traço dá o jeito de lutar:** o bravo, o cruel e o ambicioso emendam golpes; o astuto e o invejoso fingem o pesado; o covarde e o estudioso esperam o erro; os outros são firmes.
+- **Quem procura duelo** (Duelo 3 ou mais, e bravo, cruel ou ambicioso, que faz as vezes do orgulhoso):
+  - leva o estandarte do desafio: uma flâmula vermelha de duas pontas, com espadas cruzadas, acima do nome;
+  - na primeira vez que alguém do bando o vê, o diário avisa, por exemplo: "Avistamos Ruzbag Come-Ratos (Duelo 4, de machado, bravo): ele procura o Comandante para um duelo."
+  - O Senhor da Guerra orc, chefe de calamidade que luta de perto, procura sempre (Duelo 5, machado, cruel). O Lorde Necromante, que ataca de longe, não procura.
+- **Capturar e recrutar:**
+  - o chefe que se rende ferido guarda a ficha, e a lista de prisioneiros mostra a mão, a arma e o traço;
+  - o botão novo "Recrutar como capitão" oferece um lugar no bando. A chance de aceitar começa em 30% e sobe com a Fama (até mais 40%). O ganancioso, o ambicioso e o covarde ouvem mais (mais 20%); o honrado e o pio, menos (menos 25%);
+  - quem recusa não muda de ideia, um nobre de verdade nunca aceita, e o limite de 3 capitães continua valendo;
+  - quem aceita vira capitão de origem "inimigo que mudou de lado": a mão que mostrou em campo, o traço convertido, sem companhia, sem custo de contratação e com lealdade 30.
+- **Batalha personalizada:** cada força ganhou o campo "Duelo do comandante" (pela competência, ou de 1 a 5).
+- **Testes:**
+  - 10 de regras (`tests/unit/heroes.test.ts`): a mão por tipo de bando, a arma, o temperamento, quem procura duelo, a chance de aceitar e o capitão que sai do prisioneiro;
+  - conferido em batalha de verdade: a ficha, o estandarte e o aviso. Recrutar foi conferido pela loja do jogo, com um ganancioso que aceita e um honrado que recusa;
+  - as suítes `ia` e `companhias` continuam passando (28 de 28).
+
+**Ficou para depois:**
+- só o chefe que cai pode virar prisioneiro, como antes; os capitães inimigos, não. Na parte 3, o herói que se rende num duelo vira prisioneiro;
+- o resgate pedido não depende da mão do herói.
+
+### 9.3. Marco 21, parte 3: o duelo no campo ✅ OK
+**Feito:**
+- **O herói vai atrás do Comandante:** quem procura duelo e tem o Comandante a até 600 px larga o esquadrão e vai até ele, derrubando quem estiver no caminho. Com o Comandante longe demais, ou com outro duelo no campo, volta para os seus. É assim que dá para fugir dele.
+- **A 60 px, o duelo abre sem perguntar.** É um modo da cena do mundo, numa parte nova (`src/game/scenes/worldScene/duel.ts`):
+  - **o anel tem 90 px.** Quem estava dentro recua até a borda. Quem está a até 150 px do centro para de lutar e fica olhando para os dois;
+  - golpe e flecha de fora não tocam nos dois, e ninguém escolhe os dois como alvo;
+  - **o tempo:** fora do anel, a batalha anda na metade do tempo; o duelo anda no tempo de verdade;
+  - **a câmera** vai a 200% em cima dos dois. A barra de ordens dá lugar aos controles do duelo, e as notícias esperam o fim;
+  - **o comando:** a voz do Comandante não chega à tropa, e os capitães decidem sozinhos (parte 2 do Marco 20).
+- **As regras e os controles da Liça,** com as distâncias do campo (60% das da Liça). O herói luta com a vida da ficha (80, mais 5 por ponto de mão) e com o jeito do temperamento dele.
+- **As poses novas das figuras:**
+  - guarda erguida: o escudo vem para a frente do peito e a lâmina fica de pé;
+  - pesado armando, esquiva e atordoado;
+  - o golpe leve usa as poses de ataque que já existiam;
+  - são 4 colunas novas na folha de cada figura.
+- **As barras na interface:** vida, fôlego e postura dos dois, e o tempo que falta.
+- **O fim:**
+  - **O Comandante vence:** o herói se rende (vai para a lista de prisioneiros, com a ficha), sai ferido ou morre.
+    - A moral da tropa sobe 12, e o dobro para quem estava a até 320 px do anel. A dos esquadrões do herói cai 20, também em dobro perto do anel.
+    - A Fama sobe 3. Executar o herói rendido depois custa Honra, como qualquer oficial preso.
+  - **O herói vence:** o Comandante cede ou cai ferido (ferido, leva mais uma cicatriz). A guarda o arrasta 260 px para trás, com 30% da vida (ferido, com 15%).
+    - A moral da tropa cai, a do inimigo sobe, e a Fama cai 1.
+    - Se ele morre, vale a regra do herdeiro (Marco 18).
+  - **90 s sem vencedor:** os homens de cada um separam os dois.
+  - **Limites:** um duelo por herói em cada batalha, e 15 s entre um duelo e outro.
+- **O herói contra um capitão nosso:** quando ele encosta num capitão e não no Comandante, as duas cabeças lutam no anel, sem câmera lenta nem zoom, e o resultado vai para o diário.
+  - O capitão vencido é levado para trás, ferido.
+  - Se ele morre, é a morte de capitão de sempre.
+- **Testes:**
+  - **1 de regras novo:** nas distâncias do campo, quem lê os avisos vence um herói de Duelo 5 em mais de 60% das vezes (de 73% a 100%, conforme o temperamento), e quem não lê perde para um de Duelo 4;
+  - **a suíte de batalha `duelos`** (`npm run test:battle -- duelos`, 17 verificações):
+    - o herói larga os seus e puxa o Comandante, e o duelo abre a 60 px;
+    - tempo pela metade e câmera a 200%;
+    - um esquadrão e um batalhão mandados para dentro do anel param na borda: o mais perto ficou a 98 px do centro, e 18 a 25 soldados ficaram olhando;
+    - nada de fora toca nos dois, e as barras vão para a interface;
+    - no fim, o tempo e a câmera voltam;
+    - a moral reage para os dois lados: com o Comandante vencendo, a nossa subiu 14 e a deles caiu 40; com o herói vencendo, a nossa caiu 33;
+    - a batalha vai até o fim depois do duelo, e o duelo contra um capitão acaba no diário;
+  - **as outras suítes de batalha** passam todas (218 de 218), inclusive as verificações de sorte da [Dívida](#dívida) nesta rodada.
+
+**Pronto quando**, os três itens do marco:
+- o duelo abre sem perguntar e o anel para: conferido pela suíte `duelos`;
+- quem lê os avisos vence um herói melhor, na Liça e no campo: conferido pelos testes de regras;
+- perder custa moral, Fama, vida e às vezes uma cicatriz, e só mata pela regra do herdeiro.
+
+**Ficou para depois:**
+- a Liça continua em greybox: as poses existem, mas a `DuelScene` ainda desenha círculos;
+- o capitão nosso que perde não é preso pelo inimigo, só levado para trás;
+- a figura do herói mostra a arma do tipo dele, que nem sempre é a da ficha: o chefe salteador luta de machado no duelo, mas aparece de espada.
+
+## 10. Locais de missão sempre habitados ✅ OK
+**Objetivo:** um local de missão tem gente mesmo sem contrato. Pedido em 4 de novembro, jogando: no acampamento goblin não havia nenhum goblin para matar.
+
+**A causa:** os inimigos de um local só apareciam enquanto havia um contrato aceito para ele (`worldScene/army.ts`). Sem contrato, o local era só cenário.
+
+**Feito** (GDD, seção 6, "Contratos"):
+- **Moradores fixos** (`src/game/world/SiteResidents.ts`, com as contas puras em `src/game/sim/siteLife.ts`): cada local tem metade da força de um contrato médio, sem o chefe. Um contrato fácil traz 70% e o chefe.
+  - Funcionam como as guarnições dos povoados: longe do bando, os moradores são só um número no store (`siteLife`).
+  - Com alguém do bando a 2600 px, viram inimigos no mapa, dormentes até alguém chegar mais perto.
+  - Com todos a mais de 3400 px e ninguém lutando, voltam a ser número sem perder ninguém.
+- **Cada morador que cai baixa o número.** Os que fogem de um combate perdido também não voltam.
+- **Limpo,** o local fica vazio 5 dias e depois enche 15% por dia, até ficar cheio em uns 7 dias. O diário anota.
+- **Sem contrato:** o saque de quem cai e a experiência, como em todo combate, mas sem paga.
+- **Com contrato:** no lugar dos moradores, vem a força do contrato (de 70% a 140% da força inteira) e o chefe.
+  - Os moradores fora de vista saem; quem está à vista fica no mapa, sem dono.
+  - Cumprido o contrato, o local fica limpo, como quando caem os moradores.
+  - Se o contrato cair, os moradores voltam com o número que tinham.
+- **Covis quietos:** os covis a até 6000 px de um local com menos da metade da gente não mandam bando goblin.
+- **Saves:** os moradores não vão no save; o store guarda quantos são. Num save antigo, todos os locais começam cheios.
+- **Testes:**
+  - 9 de regras novos: as contas e o gerente dos moradores.
+  - Uma suíte de batalha nova, `locais`, com 13 de 13, numa campanha de verdade: sem contrato o local tem moradores, sem chefe; ele fica vazio quando eles caem e volta a encher dias depois; com contrato, vem mais forte e com o chefe.
+  - As suítes `missoes` (40 de 40) e `mar` (45 de 45) continuam passando.
+
+**Ficou para depois:**
+- os moradores ficam no local: não andam pela região nem saem para caçar;
+- um contrato oferecido para um local que acabou de ser limpo continua aparecendo, e o local vem com a força do contrato.
+
+**Pronto quando:**
+- chegar a um acampamento goblin sem contrato acha goblins;
+- limpo, ele fica vazio por uns dias e depois volta a ter gente;
+- com contrato, o mesmo local vem mais forte e com o chefe.
+
+## 11. G4: resto do elenco
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.
-- **Carroças, aríetes e escadas.** As carroças primeiro: o comboio (etapa 4) e as obras do Marco 22 dependem delas.
-- **A coluna das expedições e do comboio,** com o estandarte do capitão à frente (Marco 20).
-- **Harpias, navios e convés.**
-- **Gente do mapa e do acampamento:** viajantes, caravanas, seguidores e quem trabalha nos postos. O Marco 22 põe essa gente para construir.
-- **Interiores e a Cidade Alta.**
-- **Acabamento do G1:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
 
 **Pronto quando:** numa marcha com comboio, num cerco e numa viagem por mar, nada em campo é mais círculo nem retângulo.
 
-## 11. Marco 22: acampamento construído pelo bando (e construir nas vilas)
-**Objetivo:** o acampamento deixa de ser um layout fixo e passa a ser construído pelo jogador, peça por peça, como em *Cult of the Lamb*. As mesmas regras valem nas vilas que o bando funda.
+São seis partes, uma por vez, como no Marco 21.
 
-- **O começo:** só a tenda do Comandante, a fogueira e uma paliçada pequena. O resto o jogador põe onde quiser, dentro da paliçada.
-  - Encaixe numa grade de 20 px.
-  - Só o terreno firme serve: nada na água nem na rocha.
-  - A peça fantasma fica verde ou vermelha, com o custo ao lado.
-- **Construções do acampamento**, simples e de campanha:
-  - **as de hoje:** intendência, posto de recrutamento, campo de treino, estábulo, ferraria, alojamentos (1 por batalhão), torres, paliçada reforçada e fosso;
-  - **novas:**
-    - cozinha (as rações rendem mais);
-    - enfermaria (feridos voltam mais cedo);
-    - depósito (mais carga e mais reserva para os comboios);
-    - taverna de campanha (moral e boatos);
-    - tenda do capitão (a companhia acampa junta);
-    - capela ou altar (Marco 23);
-    - curral;
-    - horta;
-    - poço;
-    - latrina (menos doença);
-    - estandarte e tochas.
-  - **A paliçada cresce em degraus:** pequena, média e grande. Paliçada maior cabe mais coisas, mas custa mais e é mais difícil de guarnecer.
-- **Custo:** ouro e os bens do Marco 14 (madeira, tecido, ferro).
-  - Quem constrói são os seguidores (Marco 12) e os soldados de folga, em dias.
-  - Soldado trabalhando não treina nem descansa. Essa é a decisão.
-  - Os seguidores podem ficar fixos num posto: cozinheiro, ferreiro, curandeiro, como os seguidores de *Cult of the Lamb*.
-- **Levantar e montar (Marco 13):**
-  - Ao levantar o acampamento, as construções vão para as carroças. Cada uma ocupa carga: a ferraria pesa e a tenda não.
-  - A planta fica guardada. Ao montar em outro lugar, o jogo repõe as peças na mesma disposição, contornando a água e a rocha.
-  - O que não coube nas carroças fica para trás e precisa ser refeito.
-- **Nas vilas fundadas pelo bando (Marco 9):**
-  - As construções da Sala de Administração (fazendas, mina, mercado, muralhas, quartel, serraria, moinho, porto…) ganham lugar no mapa: o jogador escolhe o terreno dentro da planta da vila.
-  - As casas crescem sozinhas em volta, conforme a população.
-  - A muralha começa como paliçada e vira pedra.
-  - Os reinos constroem nas cidades deles pelas mesmas regras.
-- **Arte (parte do marco):** as peças do G3 (casas, tendas, cercas, ferraria, poço, torres) já servem. Cada construção nova precisa da sua peça.
+### 11.1. Carroças, aríetes e escadas ✅ OK
+As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 dependem delas.
+
+**Feito:**
+- **Uma folha de veículo** com o jeito da folha das figuras: 3 direções e as mesmas 16 colunas, num arquivo novo (`src/game/art/vehicles.ts`). A `Unit` cuida do veículo como cuida das figuras:
+  - andando, as rodas giram (um quarto de volta em quatro quadros) e os bichos dão o passo;
+  - parado, o bicho baixa a cabeça de vez em quando;
+  - a 50% e a 25% de zoom, entram as versões menores, como as das figuras;
+  - destruído, o veículo tomba, levanta poeira e vira destroço, que fica no chão como os corpos.
+- **O carro de bois do trem de suprimentos** (`Wagon`): lona em arco sobre o leito de tábuas, quatro rodas, uma junta de bois com canga e o carroceiro sentado na frente, de camisa azul do bando.
+  - De frente, os dois bois puxando.
+  - De costas, a boca da lona com os sacos dentro.
+- **A carroça do mercador** (`Enemy`, CART): duas rodas, uma mula nos varais e, no leito, caixote, barril e saco, debaixo de um toldo listrado na cor da caravana.
+- **O aríete coberto,** o nosso (`SiegeRam`) e o do inimigo (`Enemy`, SIEGE_RAM):
+  - telhado de duas águas, coberto de couro remendado, sobre quatro rodas;
+  - a tripulação empurra lá embaixo, na sombra, com as pernas no passo, e a cabeça de ferro sai pela frente;
+  - **o golpe:** encostado no portão, a viga recua e bate a cada 1,4 s, com som e uma faísca. É só a figura: o dano continua correndo por segundo, como antes;
+  - a flâmula e a tripulação vestem a cor de quem leva o aríete: azul no nosso, a cor de quem assalta no do inimigo.
+- **As escadas de assalto** (`SiegeWorks`): duas em cada brecha, de madeira recém-cortada, encostadas do lado de fora. Servem na pedra e na paliçada.
+  - Ao sul, sobem pela face que se vê, do chão até passar do alto.
+  - Ao norte, a muralha as esconde: só as pontas aparecem, acima das ameias ou das estacas.
+  - A leste e a oeste, sobem na diagonal até a beira do alto.
+- **Testes:** 8 de regras novos: a folha, as rodas e o passo, o golpe só no aríete, o destroço sem sombra, a cor, e as escadas nos quatro lados. Conferido também na tela, num cerco ao forte de pedra e noutro à aldeia de paliçada.
+
+**Ficou para depois:** o carroceiro e a tripulação do aríete são gente pequena desenhada no veículo, não figuras do G1: não lutam e não fogem sozinhos.
+
+### 11.2. A coluna das expedições e do comboio ✅ OK
+**Feito:**
+- **A coluna em figuras** (`ExpeditionParty`): cada soldado é uma figura do G1 com a tropa do batalhão. Acima de 36, vão 36, na mesma proporção de cada tropa.
+  - As figuras são `Unit`s de enfeite: andam, viram para onde a coluna vai e trocam de tamanho com o zoom como todo mundo, mas não lutam e ninguém as ataca. A luta da expedição continua resolvida em conta.
+  - Em filas de três, um tico fora do alinhamento; com cavalo, as filas abrem mais.
+- **O porta-estandarte vai na frente,** com o estandarte da tropa: dourado com capitão (Marco 20), azul sem ele, e o desenho da tropa da frente (espada, lança, arco ou cavalo).
+- **O comboio:** os carros de bois da parte 1, atrás da escolta, um para cada carroça do bando (até 4). Sem escolta, vão só as carroças. A expedição que escolta uma caravana leva uma.
+- **Conserto no caminho:** a cena esquecia o comboio quando recomeçava (ao voltar de uma batalha, ao carregar o jogo), e ele sumia até sair outro. Agora o comboio é desenhado de novo.
+- **Testes:** a suíte `missoes` manda a companhia de um capitão para uma escolta e confere que a coluna marcha (28 de 28). Conferido também na tela.
+
+### 11.3. Harpias, navios e convés
+**A fazer:** as harpias em pixel art; os navios no mar e o convés da batalha no mar.
+
+### 11.4. Gente do mapa e do acampamento
+**A fazer:** viajantes, caravanas, seguidores e quem trabalha nos postos, com as figuras do G1. O Marco 22 põe essa gente para construir.
+
+### 11.5. Interiores e a Cidade Alta
+**A fazer:** o lado de dentro das construções e a Cidade Alta das capitais (de fora ela já é pixel art).
+
+### 11.6. Acabamento do G1
+**A fazer:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
+
+## 12. Marco 22: do bivaque à cidade
+**Objetivo:** o bando começa com quase nada e constrói a própria casa. A tenda vira acampamento, o acampamento vira fortaleza e, em volta da fortaleza, uma cidade nasce sozinha. O design inteiro, com o catálogo e os números, está na [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22).
+
+**O que mudou no plano** (combinado em 4 de novembro, depois de um brainstorm):
+- **Não se constrói cidade à mão,** nem nas vilas fundadas pelo bando. Uma cidade montada peça por peça não ficaria parecida com as do gerador e quebraria os cercos.
+  - O jogador constrói só dentro do que é do bando: o bivaque, o acampamento e a fortaleza.
+  - A cidade nasce sozinha, desenhada pelo gerador.
+  - As vilas fundadas (Marco 9) continuam geridas pela Sala de Administração.
+- **A área é quadrada,** com grade de 40 px, em vez da paliçada oval de hoje.
+- **O começo é humilde** e sem tenente: o tenente vem com a tenda dos oficiais.
+- **Sete necessidades** justificam construir: Leitos, Comida, Salubridade, Cura, Moral, Segurança e Ofício.
+
+São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se a quarta ficar grande demais, vai para a Fase 4.
+
+**Arte:** as peças do G3 (casas, tendas, cercas, ferraria, poço, torres) e as carroças do G4 servem a muitas construções. Cada construção nova precisa da sua peça, feita junto com a parte que a usa. Os ícones das construções ficam para o G5.
+
+### 12.1. Marco 22, parte 1: o bivaque e a grade
+**A fazer:**
+- **O começo novo** (GDD 9.9): o Comandante, 1 batalhão de infantaria, 1 batedor, 1 mensageiro, 1 carroça, cerca de 80 de ouro e 20 rações. Só a tenda, a fogueira e uma barraca, e nenhum tenente.
+- **A grade quadrada** (GDD 9.2):
+  - células de 40 px, com a peça fantasma verde ou vermelha e o custo ao lado;
+  - mover e desmontar;
+  - o portão no lado que o jogador escolher.
+- **Os patamares 0 e 1:** o bivaque de 10×10 células e a paliçada em três tamanhos (16×16, 22×22 e 28×28), crescendo por igual nos quatro lados.
+- **Quatro das sete necessidades no painel:** Leitos, Comida, Cura e Segurança.
+- **As primeiras construções,** cerca de 16:
+  - as 6 de hoje, viradas peças: intendência, posto de recrutamento, campo de treino, estábulo, ferraria e barraca (o alojamento de hoje);
+  - as novas: mastro de recrutamento, tenda dos oficiais, cozinha, enfermaria, poço e estande de tiro;
+  - a defesa: a paliçada nos três tamanhos, as torres e o fosso. As obras de hoje (`CAMP_WORKS`) viram peças.
+- **As tropas e o tenente liberados por construção** (GDD 9.6).
+- **Levantar e montar com a planta:**
+  - a planta viaja nas carroças, e cada construção ocupa carga;
+  - ao montar, o quadrado precisa caber: as árvores de dentro viram madeira, e água ou rocha impedem;
+  - o que não coube fica para trás.
+- **Balanceamento:**
+  - uma simulação dos primeiros 30 dias, com as metas de ritmo da GDD 9.9;
+  - a ameaça cresce com a fama, e não com o dia.
+- **Saves antigos:** o acampamento de hoje vira peças na grade, com tudo o que já tinha.
 
 **Pronto quando:**
-- uma campanha nova começa com o acampamento quase vazio, e nos primeiros dias o jogador escolhe o que construir primeiro (enfermaria ou ferraria?);
-- levantar e montar o acampamento em outro lugar mantém o que coube nas carroças;
-- dá para pôr construções numa vila fundada pelo bando.
+- uma campanha nova começa com três peças, e nos dias 3 a 5 o jogador faz a primeira escolha de verdade (a 2ª barraca ou o estande de tiro?);
+- o 2º batalhão chega por volta do dia 10, e a paliçada pequena entre os dias 15 e 20;
+- levantar e montar em outro lugar mantém a planta e o que coube nas carroças;
+- um save antigo abre com o acampamento dele.
 
-## 12. G5: interface
+### 12.2. Marco 22, parte 2: a vida no acampamento
+**A fazer:**
+- **As sete necessidades completas no painel:** entram Salubridade, Moral e Ofício (GDD 9.3).
+- **A falta aparece no acampamento:** soldados dormindo ao relento, fila na fogueira, doentes no chão, cavalos amarrados na paliçada.
+- **Turnos dos batalhões** (descanso, treino, obra e guarda) e **gente nos postos** (os seguidores do Marco 12, ou soldados), como na GDD 9.4.
+- **Obras que levam dias:** quem constrói são os seguidores e os batalhões no turno de obra. Cada construção gasta um pouco por dia.
+- **O resto do catálogo do acampamento** (GDD 9.5):
+  - **vida:** barracão, refeitório, forno, defumadouro, latrina, hospital, herbário e tenda do capitão;
+  - **moral:** taverna, mesa de dados, estandarte, mastro de troféus, cemitério, fogueira das histórias e altar;
+  - **ofício:** carpintaria (carroças, aríetes e escadas), selaria, alfaiataria (uniforme na cor do bando), lenhador, horta e curral;
+  - **militar:** picadeiro, arsenal, cercado de cativos, tenda de mapas, estrepes e posto de sentinela.
+
+**Pronto quando:**
+- cada uma das sete necessidades em falta se vê no acampamento antes do painel;
+- pôr um batalhão na obra em vez do treino é uma decisão que pesa;
+- a carpintaria faz o aríete e as escadas de um cerco.
+
+### 12.3. Marco 22, parte 3: a fortaleza
+**A fazer** (GDD 9.7):
+- **Fincar o estandarte,** com os requisitos de fama, soldados e construções.
+- **A terra por um de três caminhos:** carta de terra de um reino (vassalagem), ruínas reerguidas (antes, limpá-las) ou terra de ninguém (temor).
+- **A muralha do gerador** no contorno do quadrado de 34×34: madeira e depois pedra, com os portões e as torres dos fortes do mundo. Por dentro, a grade é livre.
+- **As construções da fortaleza:** torre de menagem, quartel, salão do Comandante, masmorra, cisterna, armazém fortificado, escola de oficiais, tesouraria, oficina de cerco, feira do castelo, pombal e templo.
+- **O castelão e a guarnição** ficam; o bando sai com o **acampamento de campo**, um kit de até 6 construções nas carroças.
+- **O cerco da sede:** reinos e calamidades atacam a fortaleza, também com o bando longe. Usa o modo "Você defende os muros".
+
+**Pronto quando:**
+- entre os dias 60 e 90 de uma campanha dá para fincar o estandarte por qualquer um dos três caminhos;
+- o bando sai em campanha com o acampamento de campo enquanto a fortaleza fica com o castelão;
+- a fortaleza aguenta (ou não) um cerco sem o bando.
+
+### 12.4. Marco 22, parte 4: a cidade que nasce sozinha
+**A fazer** (GDD 9.8):
+- **A população cresce** com seguidores, famílias, refugiados e mercadores, e com segurança, comida, comércio e fama.
+- **As etapas:** arraial, burgo, vila e cidade.
+- **O desenho:** o gerador de povoados monta a cidade do tamanho máximo, e as casas aparecem do portão para fora.
+- **A fortaleza vira um mapa à parte:** a partir do burgo, ela é entrada como a Cidade Alta das capitais (`CapitalScene`).
+  - No mapa da região, a fortaleza é a muralha interna, com o portão.
+  - Lá dentro fica tudo o que o bando construiu.
+- **Os decretos:** artesãos, feira, refugiados, impostos e terra para veteranos.
+- **A vila entra no reino** (Marco 9): impostos, recrutas, bens, guarnição e lealdade.
+
+**Pronto quando:**
+- depois do dia 120, o arraial vira burgo sem o jogador pôr nenhuma casa;
+- a cidade do bando se parece com as do mundo;
+- entrar pelo portão interno leva à fortaleza que o jogador construiu;
+- a cidade paga impostos e é cercada como as outras.
+
+## 13. G5: interface
 **Objetivo:** a interface em React ganha a mesma cara do jogo.
 - **Fonte** em pixel art, também no nome e no estandarte dos batalhões (hoje greybox).
 - **Molduras** dos painéis, da tenda e do diário.
@@ -401,7 +685,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 
 **Pronto quando:** abrir a tenda, o quadro de comando e o diário não mostra mais nenhum painel genérico.
 
-## 13. Marco 23: cultura, religião e língua
+## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.
 
 - **Cultura, por povoado e não só por continente:**
@@ -432,7 +716,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - um dia santo ou um preceito obriga o jogador a decidir;
 - a mistura de culturas e de fés do bando pesa na moral.
 
-## 14. G6: atmosfera
+## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.
 - **Noite e tochas:** luz em volta das tochas, das fogueiras e da forja (a chama que ficou do G3).
 - **Clima:** chuva, neve, nevoeiro e vento, com o chão molhado e as poças do G2.
@@ -441,7 +725,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 
 **Pronto quando:** uma batalha à noite, na chuva, se lê pela luz das tochas, e dá para ver de longe onde a investida bateu.
 
-## 15. Marco 19: magia do Comandante
+## 16. Marco 19: magia do Comandante
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.
 - **Dano em área** e **suporte e controle**, como previsto desde o início.
 - **Aprendizado pelo mundo:** grimórios e artefatos em ruínas antigas, magos da corte capturados e mestres de outro continente.
@@ -451,7 +735,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 
 **Pronto quando:** uma magia bem usada vira uma batalha difícil, mas usá-la tem um preço político e pessoal.
 
-## 16. Fechamento: jogar uma campanha inteira
+## 17. Fechamento: jogar uma campanha inteira
 **Objetivo:** fechar a fase jogando, e não só simulando.
 - Uma campanha do começo ao fim, anotando o que quebra e o que cansa.
 - Ajustar o equilíbrio dos Marcos 14 a 23, da progressão e das rações.
@@ -467,9 +751,9 @@ Levantamento feito depois do Marco 18 e atualizado nesta fase. Vale o que está 
 As notas de mecânica vêm das regras e dos números do código e de batalhas simuladas. **Ninguém jogou uma campanha inteira.** Elas dizem onde há decisão de verdade, não onde o jogo é divertido.
 
 ### Combinado e não feito
-- **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite; o que pesa agora é a simulação (combate, moral e empurra-empurra), de 25 a 60 ms por quadro com cerca de 1500 unidades. Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
+- **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
 - **Alcance dos arcos:** subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
-- **Magia do Comandante:** etapa 15.
+- **Magia do Comandante:** etapa 16.
 
 ### Sistemas incompletos
 | De onde veio | O que falta |
@@ -492,10 +776,14 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 - **Saves antigos:** não foram testados com os Marcos 16, 17 e 18, com a nova progressão nem com as mochilas e os capitães.
 - **Testes de confronto:** usam 6 lutas por caso, pouco para um resultado aleatório. Passam ou falham por sorte perto do limite ("cavaleiros vencem mais lanceiros montados" ficou em 2 a 4 de 6). Precisam de mais amostras ou de limites mais largos.
   - O mesmo vale para "nem o covarde larga a luta com a primeira baixa" (suíte `ia`): 3 lutas, cada uma com pelo menos 4 baixas. Numa rodada do G2, uma luta teve 3; sozinha, a suíte passou.
+  - E para "arqueiros treinados acertam menos os próprios homens que os novatos" (suíte `ia`): é uma batalha de cada lado. Repetida 6 vezes, os treinados acertam menos em todas, no código antigo e no novo (médias de 52 e 55 contra 98 e 84), mas uma batalha sozinha varia de 12 a 96. Numa rodada da etapa de desempenho deu 91 contra 84.
+  - "A guarda pesada aguenta brutamontes" (suíte `confrontos`) também passa ou falha por sorte.
 - **Assalto sem fim:** em 2 de 16 assaltos à Paliçada com jogador simulado, a batalha passou de 10 minutos com poucos sobreviventes dos dois lados. Não voltou a acontecer nas repetições, e a causa não foi encontrada. Numa partida, o menu de pausa permite sair.
 - **Defesa que demora a acabar:** defendendo o forte, os 2 ou 3 últimos arqueiros às vezes ficam parados na muralha e os orcs, já dentro, levam minutos para chegar neles. Em 5 repetições a batalha acabou entre 113 e 230 s; na suíte completa, 2 vezes não acabou nos 276 s do teste. Não vem das figuras: a mesma demora aparece sem elas.
+  - Na rodada de desempenho: 8 defesas sozinhas com cada código, contando da entrada dos orcs. O antigo levou de 69 a 273 s (1 passou dos 240 s do teste), e o novo, de 59 a 176 s. Na suíte, o novo passou do limite 2 vezes em 8.
 - **Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.
-- **`WorldScene.ts`:** passa de 6000 linhas. Virou a etapa 8.
+  - Por isso a verificação "com muralha vai melhor que em campo aberto" (suíte `cercos`, 4 lutas de cada lado) falha muitas vezes: na rodada de desempenho, falhou em 1 de 3 rodadas com o código antigo e em 6 de 8 com o novo. Medida com 12 defesas de cada código, a diferença é sorte: 16 pontos por luta no antigo e 20 no novo, e cada luta vai de 4 (cai) a 43 (repele).
+- **`WorldScene.ts`:** passava de 6000 linhas. Virou a etapa 8 ✅ OK: agora são 942 linhas e 13 partes em `src/game/scenes/worldScene/`.
 
 ### Avaliação das mecânicas
 | Mecânica | Nota | Por quê |
@@ -515,11 +803,11 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 | Corte e nobreza | **Amplo, sem prova** | 6 tipos de favor, tramas e duelos. É o sistema mais longe do que o jogador faz no dia a dia |
 | Reino | **Raso** | 11 construções são uma lista de efeitos. Rei com 4 povoados é cedo, e governar é abrir um menu |
 | Mar | **Raso** | Primeira versão: uma viagem são segundos assistindo, com 3 eventos, e navio é só capacidade |
-| **Comandante em si** | **Raso, o pior caso agora** | Anda, bate e grita. Não evolui. Os duelos (etapa 9) e a magia (etapa 15) são o que está planejado para ele |
+| **Comandante em si** | **Raso, o pior caso agora** | Anda, bate e grita. Não evolui. Os duelos (etapa 9) e a magia (etapa 16) são o que está planejado para ele |
 
 ### O que eu faria, em ordem de retorno
 1. ~~**Progressão:** escolha exclusiva, habilidades que mudam comportamento e promoção de tropa.~~ ✅ Feito nesta fase.
-2. **Jogar uma campanha inteira** e corrigir o que aparecer: nenhum teste substitui isso (etapa 16, mas vale antes, aos poucos).
+2. **Jogar uma campanha inteira** e corrigir o que aparecer: nenhum teste substitui isso (etapa 17, mas vale antes, aos poucos).
 3. **Comandante:** habilidades ativas ligadas aos traços, antes mesmo da magia.
 4. **Contratos em cadeia:** o que você fez para um cliente abre ou fecha o próximo.
 5. **Reino com decisão:** eventos de governo, com escolha e custo, em vez de só construções.

@@ -106,7 +106,6 @@ export class CapitalScene extends Phaser.Scene {
   private clock = 0;
   private lastFlush = 0;
   private lastSlow = 0;
-  private push = 0;
   /** Guardas no encalço (até este momento). */
   private chaseUntil = 0;
   /** Depois de um "Alto!", os guardas dão um tempo. */
@@ -127,7 +126,6 @@ export class CapitalScene extends Phaser.Scene {
     this.near = null;
     this.leaving = false;
     this.clock = 0;
-    this.push = 0;
     this.chaseUntil = 0;
     this.graceUntil = 0;
     this.openGates = new Set();
@@ -359,33 +357,18 @@ export class CapitalScene extends Phaser.Scene {
     if (k.D.isDown || k.RIGHT.isDown) vx += 1;
     if (k.W.isDown || k.UP.isDown) vy -= 1;
     if (k.S.isDown || k.DOWN.isDown) vy += 1;
-    if (vx === 0 && vy === 0) {
-      this.push = 0;
-      return;
-    }
+    if (vx === 0 && vy === 0) return;
     const len = Math.hypot(vx, vy);
     const step = (k.SHIFT.isDown ? RUN : WALK) * dt;
     const nx = { x: this.pos.x + (vx / len) * step, y: this.pos.y };
-    const bx = this.blocked(nx, RADIUS);
-    if (!bx) this.pos.x = nx.x;
+    if (!this.blocked(nx, RADIUS)) this.pos.x = nx.x;
     const ny = { x: this.pos.x, y: this.pos.y + (vy / len) * step };
-    const by = this.blocked(ny, RADIUS);
-    if (!by) this.pos.y = ny.y;
+    if (!this.blocked(ny, RADIUS)) this.pos.y = ny.y;
     this.facing = Math.atan2(vy, vx);
     this.commander.setPosition(this.pos.x, this.pos.y).setRotation(this.facing);
-    // Pisou no Portão Velho: sai da Cidade Alta
-    if (this.pos.y > CAPITAL_H - 60) {
-      this.leave();
-      return;
-    }
-    // Andar de encontro a uma porta entra; a um portão fechado, chama o guarda
-    if ((bx || by) && this.near) {
-      this.push += dt;
-      if (this.push > 0.25) {
-        this.push = 0;
-        if (this.near.kind === "GATE" || (this.near.kind === "DOOR" && this.near.door.enter)) this.interact();
-      }
-    } else this.push = 0;
+    // Pisou no Portão Velho: sai da Cidade Alta. Portas e portões, só com E: andar de encontro
+    // a eles entrava sem querer
+    if (this.pos.y > CAPITAL_H - 60) this.leave();
   }
 
   // --- Gente ---

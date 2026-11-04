@@ -17,6 +17,7 @@ import { StatBar } from "../components/StatBar";
 import { PrisonersPanel } from "../components/tent/PrisonersPanel";
 import { ScenarioBanner } from "../components/scenario/ScenarioOverlay";
 import { BattleBar } from "../components/battle/BattleBar";
+import { DuelControls, DuelPanel } from "../components/battle/DuelPanel";
 
 const SCOUT_MODE_TEXT: Record<ScoutMode, string> = {
   VANGUARD: "vanguarda",
@@ -387,6 +388,7 @@ export function FieldHudView() {
           ))}
         </div>
         <div className="absolute left-1/2 top-[4.5rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col items-center gap-1">
+          {hud?.duel && <DuelPanel duel={hud.duel} />}
           {hud && hud.slow.left > 0 && <div className="w-full rounded bg-sky-900/90 px-3 py-1.5 text-center text-sm font-bold text-sky-100">Câmera lenta: {Math.ceil(hud.slow.left / 1000)} s para decidir</div>}
           {hud?.tacticalPause && <div className="w-full rounded bg-amber-900/90 px-3 py-1.5 text-center text-sm font-bold text-amber-100">⏸ Pausa tática: dê as ordens e aperte P para continuar</div>}
           <ScenarioBanner />
@@ -395,7 +397,8 @@ export function FieldHudView() {
           <SummonsBanner />
           <SiegeBanner />
           <CaptivityBanner />
-          {hud && hud.feed.length > 0 && (
+          {/* No anel, o Comandante só vê o duelo: as notícias esperam */}
+          {hud && hud.feed.length > 0 && !(hud.duel && !hud.duel.auto) && (
             <ol className="flex w-full flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
               {hud.feed.map((line, i) => (
                 <li key={i} className={i === hud.feed.length - 1 ? "" : "opacity-60"}>
@@ -482,7 +485,8 @@ export function FieldHudView() {
       </div>
 
       {/* Base: comandos com ícones e cartões dos batalhões */}
-      <BattleBar hidden={!!report} />
+      <BattleBar hidden={!!report || (!!hud?.duel && !hud.duel.auto)} />
+      {hud?.duel && !hud.duel.auto && !report && <DuelControls />}
 
       {report && (
         <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/60">

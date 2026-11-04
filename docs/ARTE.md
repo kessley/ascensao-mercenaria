@@ -101,11 +101,12 @@ Interiores, interface e efeitos ainda são greybox.
 | Corpos depois do combate | `Corpses` | ✅ ficam no chão |
 | Guarnições, patrulhas e alcateias | `Enemy` | ✅ pixel art |
 | Tropa dormindo ou sentada no acampamento | `Unit.setPose` | ✅ deita (quadro da queda) ou fica mais baixa |
-| Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM) | greybox |
-| Carroças do bando | `Wagon` | greybox |
-| Escadas e aríete do jogador nos cercos | `SiegeWorks` | greybox |
+| Poses do duelo no campo (Marco 21): guarda erguida, pesado armando, esquiva e atordoado | `figures.ts` (colunas 12 a 15 da folha), `Unit.duelPose` | ✅ pixel art; o golpe leve usa as poses de ataque |
+| Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM), `vehicles.ts` | ✅ pixel art (G4): mula e toldo listrado na cor da caravana; aríete coberto na cor de quem assalta |
+| Carroças do bando | `Wagon`, `vehicles.ts` | ✅ pixel art (G4): carro de bois com lona e carroceiro; as rodas giram e o destroço fica no chão |
+| Escadas e aríete do jogador nos cercos | `SiegeWorks`, `ladderPiece` em `buildings.ts`, `vehicles.ts` | ✅ pixel art (G4): a viga do aríete bate no portão; as escadas encostam do lado de fora, nos quatro lados |
 | Harpias | `Harpy` | greybox |
-| Coluna de tropas em expedição | `ExpeditionParty` | greybox |
+| Coluna de tropas em expedição e comboio de suprimentos | `ExpeditionParty` | ✅ pixel art (G4): figuras do G1 em filas de três, o porta-estandarte na frente (dourado com capitão) e os carros de bois atrás |
 
 ### Gente que não luta
 | O quê | Onde no código | Estado |
@@ -125,6 +126,8 @@ Interiores, interface e efeitos ainda são greybox.
 | Textos que sobem ("esquiva", "flanqueados!") | `Unit.floatText` | texto |
 | Ordens, destinos, linha de batalha e seleção | `WorldScene`, `Battalion` | greybox (de propósito: são da interface) |
 | Estandarte e nome do batalhão | `Battalion.drawBanner` | greybox |
+| Anel do duelo e aviso dos golpes no campo (Marco 21) | `worldScene/duel.ts` | greybox (de propósito: são da interface) |
+| Estandarte do desafio (herói inimigo que procura duelo, Marco 21) | `duelBannerSprite` em `figures.ts`, `Enemy.makeHero` | ✅ pixel art: flâmula vermelha de duas pontas com espadas cruzadas |
 | Névoa de guerra | `FogOfWar` | greybox |
 | Noite e tochas | `NightLayer` | greybox |
 | Chuva, neve e nevoeiro | `WeatherLayer` | greybox |
@@ -159,7 +162,8 @@ Interiores, interface e efeitos ainda são greybox.
 ### Resto do elenco (G4)
 | O quê | Estado |
 | --- | --- |
-| Carroças, aríetes, escadas e harpias (ver acima) | greybox |
+| Carroças, aríetes e escadas (ver acima) | ✅ pixel art (G4, parte 1) |
+| Harpias (ver acima) | greybox |
 | Navios e convés | greybox |
 | Interiores das construções | greybox |
 | Cidade Alta das capitais | greybox |
@@ -181,11 +185,10 @@ Interiores, interface e efeitos ainda são greybox.
    - a água só se mexe de perto (100% e 200%), e não há onda que corre na praia;
    - o chão comum de baixo ainda é pintado na linha principal (barato agora: 1,5 ms por pedaço na mediana).
 3. **G3, construções ✅ OK.** Ficou para depois:
-   - as peças das construções novas do Marco 22, quando ele vier;
+   - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco:** carroças, aríetes, escadas, harpias, navios, convés, interiores e Cidade Alta. Gente do mapa e do acampamento com as figuras do G1.
-   - As carroças primeiro: com as rações refeitas, elas saem num comboio pelo mapa (hoje desenhado com a coluna das expedições), e o Marco 22 carrega as construções nelas.
-   - A coluna das expedições e do comboio, com o estandarte do capitão à frente (Marco 20).
+4. **G4, resto do elenco,** em seis partes. As duas primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio. Falta: harpias, navios, convés, interiores e Cidade Alta, e a gente do mapa e do acampamento com as figuras do G1.
+   - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface:** fonte, molduras, ícones e retratos.
 6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue).

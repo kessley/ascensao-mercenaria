@@ -5,7 +5,7 @@ import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/comba
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
-import { LOD_SCALE, skinOf, type Lod, type Skin } from "../art/atlas";
+import { LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
 import { ANIM, FRAMES, type Look } from "../art/figures";
 import type { Corpses } from "../art/corpses";
 
@@ -145,6 +145,11 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** Batedor: avistá-lo não arrasta o bando inteiro (ver Enemy.onSpot). */
   isScout = false;
   role: UnitRole = "TROOP";
+  /** Duelo no campo (Marco 21): os dois do anel saem da luta comum; quem está perto para e olha. */
+  dueling = false;
+  watching = false;
+  /** Coluna da pose do duelo (ver `ANIM`) no lugar da animação comum. */
+  duelPose: number | null = null;
 
   /** Última posição em terra firme (empurrões não jogam ninguém no rio). */
   safeX = NaN;
@@ -162,6 +167,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   private skin: Skin | null = null;
   private shownLod: Lod | null = null;
   private shownFrame = -1;
+  /** Quadros da folha que a figura usa agora, pelo número. */
+  private sheet: readonly Phaser.Textures.Frame[] = [];
   /** 0 = de frente, 1 = de lado (espelhado para a esquerda), 2 = de costas. */
   private dirRow = 0;
   private flipped = false;
@@ -258,6 +265,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     else if (lod === "MINI") img.setTexture(s.mini, 0).setOrigin(0.5, (s.mini2.h - 1) / s.mini2.h);
     else img.setTexture(s.dot, 0).setOrigin(0.5, 1);
     img.setScale(LOD_SCALE[lod] * (this.pose === "SIT" ? 0.85 : 1));
+    this.sheet = sheetOf(img.texture);
     this.shownFrame = -1;
   }
 
@@ -274,7 +282,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       this.lastMoveAt = now;
     }
     // Quem está mais embaixo na tela passa na frente
-    this.setDepth(this.y * 1e-6);
+    // (Mudar a profundidade pede ao Phaser para reordenar a cena inteira: só quando ela muda)
+    const depth = this.y * 1e-6;
+    if (this.depth !== depth) this.setDepth(depth);
     if (this.x < view.x - 64 || this.x > view.right + 64 || this.y < view.y - 64 || this.y > view.bottom + 96) return;
     const walking = now - this.lastMoveAt < 140;
     let frame: number;
@@ -286,8 +296,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
         col = ANIM.DIE + Math.min(2, Math.floor((now - this.diedAt) / 110));
       }
       else if (this.pose === "SLEEP") col = ANIM.DIE + 2;
+      else if (this.duelPose !== null) col = this.duelPose;
       else if (now - this.lastAttackAt < 330) col = ANIM.ATTACK + Math.min(2, Math.floor((now - this.lastAttackAt) / 110));
-      else if (walking) col = ANIM.WALK + (Math.floor(this.walked / (s.rides ? 18 : 11)) % 4);
+      else if (walking) col = ANIM.WALK + (Math.floor(this.walked / s.stride) % 4);
       else col = ANIM.IDLE + (Math.floor((now + this.phase) / 650) % 2);
       frame = this.dirRow * FRAMES + col;
       img.setFlipX(this.dirRow === 1 && this.flipped);
@@ -296,7 +307,11 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       img.setFlipX(Unit.lod === "MINI" && Math.cos(this.facing) < 0);
     }
     if (frame !== this.shownFrame) {
-      img.setFrame(frame);
+      // Os quadros da folha têm o mesmo tamanho: basta trocar o quadro. O setFrame do Phaser procura
+      // pelo nome e refaz tamanho e origem, e custa umas 14 vezes mais (é chamado por figura, por quadro)
+      const f = this.sheet[frame];
+      if (f) img.frame = f;
+      else img.setFrame(frame);
       this.shownFrame = frame;
     }
   }
@@ -628,7 +643,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   }
 
   /** Golpe recebido: a figura pisca branca (o greybox, transparente). */
-  private flashHit(): void {
+  flashHit(): void {
     const img = this.sprite;
     if (!img) {
       this.scene.tweens.add({ targets: this.bodyGfx, alpha: 0.35, duration: 60, yoyo: true });

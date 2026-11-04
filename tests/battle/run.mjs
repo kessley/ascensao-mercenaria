@@ -1,5 +1,6 @@
 import { ai } from "./ai.mjs";
 import { companies } from "./companies.mjs";
+import { duels } from "./duels.mjs";
 import { archery } from "./archery.mjs";
 import { openLab, scoreboard } from "./lab.mjs";
 import { matchups } from "./matchups.mjs";
@@ -9,12 +10,13 @@ import { missions } from "./missions.mjs";
 import { progression } from "./progression.mjs";
 import { sea } from "./sea.mjs";
 import { sieges } from "./sieges.mjs";
+import { sites } from "./sites.mjs";
 
 /**
  * Batalhas de verdade, medidas no jogo: `npm run test:battle` (com `npm run dev` rodando).
  * Para rodar só parte: `npm run test:battle -- arquearia`.
  */
-const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, cercos: sieges, mar: sea, lendas: legacy, progressao: progression };
+const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, duelos: duels, cercos: sieges, mar: sea, lendas: legacy, progressao: progression, locais: sites };
 
 const chosen = process.argv.slice(2);
 const names = chosen.length > 0 ? chosen : Object.keys(SUITES);

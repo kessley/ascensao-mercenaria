@@ -4,7 +4,10 @@ export interface Point {
 }
 
 export function distance(a: Point, b: Point): number {
-  return Math.hypot(b.x - a.x, b.y - a.y);
+  // Math.hypot é bem mais lento, e esta conta roda dezenas de milhares de vezes por quadro
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export function angleTo(from: Point, to: Point): number {

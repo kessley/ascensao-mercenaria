@@ -204,17 +204,21 @@ export class EnemySquad implements MoraleGroup {
     const reach = this.order.type === "MARCH" && this.command.disciplined ? 130 : Infinity;
     let best: Unit | null = null;
     let bestDist = Infinity;
+    const far = s.farthestSight;
     const consider = (u: Unit) => {
-      if (!u.isAlive || distance(u, s) > s.perceptionOf(u)) return;
+      if (!u.isAlive) return;
+      // Longe demais para qualquer luz e mata: descarta antes da conta inteira da percepção
+      const d = distance(u, s);
+      if (d > far * u.stealth || d > s.perceptionOf(u)) return;
       this.command.report(u, s);
       if (u.isScout && !s.huntsScouts) {
         this.command.spotted(s, u);
         if (!s.huntsScouts) return;
       }
-      const d = distance(u, s) * u.lure;
-      if (d < bestDist && distance(u, s) <= reach) {
+      const lured = d * u.lure;
+      if (lured < bestDist && d <= reach) {
         best = u;
-        bestDist = d;
+        bestDist = lured;
       }
     };
     if (fights) for (const a of allies) consider(a);

@@ -1,5 +1,6 @@
 import { Unit } from "../entities/Unit";
 import { COMBAT, TERRAIN, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
+import { forEachNearPair } from "./nearPairs";
 
 /**
  * "Peso" de `u` ao se separar de `other`: quem pesa mais é menos empurrado.
@@ -21,37 +22,38 @@ function massAgainst(u: Unit, other: Unit): number {
  * sobreposição por quadro: as linhas se apertam e se acomodam, em vez de uma jogar a outra longe.
  */
 export function separateUnits(units: readonly Unit[]): void {
-  for (let i = 0; i < units.length; i++) {
-    const a = units[i];
-    if (!a.isAlive) continue;
-    for (let j = i + 1; j < units.length; j++) {
-      const b = units[j];
-      if (!b.isAlive) continue;
-      const min = a.radius + b.radius + 2;
-      let dx = b.x - a.x;
-      let dy = b.y - a.y;
-      if (dx >= min || dx <= -min || dy >= min || dy <= -min) continue;
-      let d = Math.hypot(dx, dy);
-      if (d >= min) continue;
-      if (d < 0.001) {
-        dx = Math.random() - 0.5;
-        dy = Math.random() - 0.5;
-        d = Math.hypot(dx, dy);
-      }
-      // Divide a correção na proporção inversa do peso (peso infinito não se mexe)
-      const ma = massAgainst(a, b);
-      const mb = massAgainst(b, a);
-      if (ma === Infinity && mb === Infinity) continue;
-      const shareA = ma === Infinity ? 0 : mb === Infinity ? 1 : mb / (ma + mb);
-      const overlap = (min - d) * COMBAT.PUSH_RATE;
-      const nx = dx / d;
-      const ny = dy / d;
-      a.x -= nx * overlap * shareA;
-      a.y -= ny * overlap * shareA;
-      b.x += nx * overlap * (1 - shareA);
-      b.y += ny * overlap * (1 - shareA);
-    }
+  // Só se tocam vizinhos: a grade junta quem está a menos de um contato do maior
+  let reach = 0;
+  for (const u of units) if (u.radius > reach) reach = u.radius;
+  forEachNearPair(units, reach * 2 + 2, alive, separatePair);
+}
+
+const alive = (u: Unit): boolean => u.isAlive;
+
+function separatePair(a: Unit, b: Unit): void {
+  const min = a.radius + b.radius + 2;
+  let dx = b.x - a.x;
+  let dy = b.y - a.y;
+  if (dx >= min || dx <= -min || dy >= min || dy <= -min) return;
+  let d = Math.sqrt(dx * dx + dy * dy);
+  if (d >= min) return;
+  if (d < 0.001) {
+    dx = Math.random() - 0.5;
+    dy = Math.random() - 0.5;
+    d = Math.sqrt(dx * dx + dy * dy);
   }
+  // Divide a correção na proporção inversa do peso (peso infinito não se mexe)
+  const ma = massAgainst(a, b);
+  const mb = massAgainst(b, a);
+  if (ma === Infinity && mb === Infinity) return;
+  const shareA = ma === Infinity ? 0 : mb === Infinity ? 1 : mb / (ma + mb);
+  const overlap = (min - d) * COMBAT.PUSH_RATE;
+  const nx = dx / d;
+  const ny = dy / d;
+  a.x -= nx * overlap * shareA;
+  a.y -= ny * overlap * shareA;
+  b.x += nx * overlap * (1 - shareA);
+  b.y += ny * overlap * (1 - shareA);
 }
 
 /**

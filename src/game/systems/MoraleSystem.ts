@@ -70,7 +70,14 @@ export function updateMorale(
   battalion.pendingShock = 0;
 
   const center = battalion.center;
-  const threats = enemies.filter((e) => distance(e, center) <= M.THREAT_RADIUS).length;
+  // Conta sem raiz nem lista nova: roda para cada tropa contra todo o outro lado, a cada quadro
+  const r2 = M.THREAT_RADIUS * M.THREAT_RADIUS;
+  let threats = 0;
+  for (const e of enemies) {
+    const dx = e.x - center.x;
+    const dy = e.y - center.y;
+    if (dx * dx + dy * dy <= r2) threats++;
+  }
 
   if (threats >= battalion.soldiers.length * 2) {
     delta -= M.OUTNUMBERED_PER_SEC * dt;

@@ -187,6 +187,11 @@ export class Battalion {
     return !!this.captain && !this.captainDied;
   }
 
+  /** O capitão em campo, se vivo (o herói inimigo pode desafiá-lo, Marco 21). */
+  get captainSoldier(): Soldier | null {
+    return this.captainUnit?.isAlive ? this.captainUnit : null;
+  }
+
   /** Onde o capitão está (null sem capitão vivo em campo). */
   get captainAt(): Point | null {
     return this.captainUnit?.isAlive ? { x: this.captainUnit.x, y: this.captainUnit.y } : null;
@@ -650,7 +655,9 @@ export class Battalion {
     const w = 60;
 
     this.label.setPosition(c.x, top - 2);
-    this.label.setColor(this.panicking ? "#ff4d4d" : "#ffffff");
+    // setColor redesenha o texto e o manda de novo para a placa: só quando a cor muda
+    const color = this.panicking ? "#ff4d4d" : "#ffffff";
+    if (this.label.style.color !== color) this.label.setColor(color);
 
     const g = this.bannerGfx;
     g.clear();

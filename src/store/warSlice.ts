@@ -1,10 +1,11 @@
-import { PRISONERS, type TroopType } from "../utils/constants";
+import { CAPTAINS, PRISONERS, type TroopType } from "../utils/constants";
 import { nobleDies } from "../game/sim/kingdoms";
 import { RANSOM_OF, nobleName, remember } from "../game/sim/nobility";
 import type { RealmState } from "../game/sim/realm";
 import type { GameState } from "./useGameStore";
 import { newId } from "../utils/id";
 import { takeFieldFood } from "../game/sim/logistics";
+import { captainFromCaptive, joinChance, type HeroData } from "../game/data/heroes";
 
 /**
  * Prisioneiros e o preço da vitória (Marco 16): quem se rende, oficiais capturados e o Comandante
@@ -35,6 +36,10 @@ export interface CaptiveOfficer {
   ransom: number;
   day: number;
   questioned: boolean;
+  /** A ficha de herói (Marco 21): a mão que mostrou em campo. */
+  hero?: HeroData;
+  /** Já recusou servir ao bando. */
+  refused?: boolean;
 }
 
 /** O Comandante nas mãos do inimigo: um tenente leva o bando enquanto isso. */
@@ -62,11 +67,11 @@ export const INITIAL_WAR: WarState = {
 
 export interface WarActions {
   addCaptives: (groups: readonly Omit<CaptiveGroup, "id" | "day">[]) => void;
-  addCaptiveOfficer: (o: Omit<CaptiveOfficer, "id" | "day" | "questioned">) => void;
+  addCaptiveOfficer: (o: Omit<CaptiveOfficer, "id" | "day" | "questioned" | "refused">) => void;
   /** Resgatar, recrutar, libertar ou executar um grupo. */
   captiveChoice: (id: string, choice: "RANSOM" | "RECRUIT" | "FREE" | "EXECUTE") => string;
-  /** O mesmo para um oficial; interrogar conta o que ele sabe. */
-  officerChoice: (id: string, choice: "RANSOM" | "FREE" | "EXECUTE" | "QUESTION") => string;
+  /** O mesmo para um oficial; interrogar conta o que ele sabe, e recrutar oferece um lugar de capitão (Marco 21). */
+  officerChoice: (id: string, choice: "RANSOM" | "FREE" | "EXECUTE" | "QUESTION" | "RECRUIT") => string;
   /** Um dia: prisioneiros comem e alguns fogem. */
   captivesDay: () => void;
   /** O lorde de um exército caiu em campo: morre, é preso ou escapa ferido. */
@@ -190,6 +195,19 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
           passLetters: o.factionId && !s.passLetters.includes(o.factionId) ? [...s.passLetters, o.factionId] : s.passLetters,
         });
         return `${o.name} falou: ${text}`;
+      }
+      if (choice === "RECRUIT") {
+        if (noble) return `${o.name} é da nobreza: não troca a casa dele por um bando.`;
+        if (o.refused) return `${o.name} já disse que prefere a corda.`;
+        if (s.captains.length >= CAPTAINS.MAX_HIRED) return "O bando já tem todos os capitães que pode ter.";
+        if (Math.random() >= joinChance(o.hero, s.fame)) {
+          set({ captiveOfficers: s.captiveOfficers.map((x) => (x === o ? { ...x, refused: true } : x)) });
+          return `${o.name} cospe no chão: "Servir a quem me venceu? Prefiro a corda."`;
+        }
+        const captain = captainFromCaptive(o, s.day);
+        set({ captiveOfficers: left, captains: [...s.captains, captain] });
+        note(`${o.name} jurou servir ao bando como capitão. Ninguém confia nele ainda.`, "info");
+        return `${o.name} aceitou: agora é capitão do bando (veja o quadro de comando). A lealdade começa baixa.`;
       }
       if (choice === "RANSOM") {
         const gold = noble ? RANSOM_OF(noble) : o.ransom;
