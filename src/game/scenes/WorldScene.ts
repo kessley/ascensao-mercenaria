@@ -248,9 +248,6 @@ export class WorldScene extends Phaser.Scene {
   /** Dentro de um povoado, o Comandante vê os preços da praça: anota no Livro (uma vez por dia). */
   lastVisitNoteAt = -Infinity;
 
-  /** Como num mapa de Pokémon: andar de encontro à porta de um prédio é entrar nele. */
-  doorPush = 0;
-
   /** Lugar de onde o Comandante entrou num prédio (volta para lá ao sair). */
   interiorReturn: { x: number; y: number; facing: number } | null = null;
 
@@ -669,7 +666,6 @@ export class WorldScene extends Phaser.Scene {
     const walking = !duelLock && this.commander.handleMovement(k, dt);
     if (walking) this.walkPath = null;
     else this.followWalkPath(dt);
-    this.updateDoorPush(walking, dt);
     if (!duelLock && k.SPACE.isDown) this.commander.trySwing(this.activeEnemies(), time);
     // A câmera do jogador não entra na câmera lenta (no duelo, ela fica nos dois)
     if (!duelLock) this.updateFreeCamera(dt / timeRate());

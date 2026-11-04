@@ -206,25 +206,10 @@ export const campMethods = {
     s.notePrices(t.id, "VISIT");
   },
 
-  updateDoorPush(this: WorldScene, walking: boolean, dt: number): void {
-    const spot = this.nearestSpot;
-    const c = this.commander;
-    if (!walking || !spot?.enter || distance(c, spot.door) > 46) {
-      this.doorPush = 0;
-      return;
-    }
-    const to = { x: spot.bounds.centerX - spot.door.x, y: spot.bounds.centerY - spot.door.y };
-    const heading = (Math.cos(c.facing) * to.x + Math.sin(c.facing) * to.y) / (Math.hypot(to.x, to.y) || 1);
-    this.doorPush = heading >= 0.7 ? this.doorPush + dt : 0;
-    if (this.doorPush >= 0.18) {
-      this.doorPush = 0;
-      this.enterBuilding(spot);
-    }
-  },
-
   /**
    * Entra numa estrutura (Marco 14): o mundo escurece e dorme (o tempo para) e a cena do
-   * interior assume. Com inimigos por perto, não dá.
+   * interior assume. Com inimigos por perto, não dá. Só com E ou com um clique: andar de
+   * encontro à porta não entra mais (entrava sem querer).
    */
   enterBuilding(this: WorldScene, spot: Interactable): void {
     if (!spot.enter || this.interiorReturn) return;
@@ -291,7 +276,6 @@ export const campMethods = {
     this.interiorReturn = null;
     // Quem entrou segurando uma tecla soltou lá dentro: aqui ela ficaria "apertada" para sempre
     this.input.keyboard?.resetKeys();
-    this.doorPush = 0;
     const cam = this.cameras.main;
     cam.fadeIn(200, 0, 0, 0);
     if (r) {

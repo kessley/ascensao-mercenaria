@@ -185,7 +185,7 @@ Interiores, interface e efeitos ainda são greybox.
    - a água só se mexe de perto (100% e 200%), e não há onda que corre na praia;
    - o chão comum de baixo ainda é pintado na linha principal (barato agora: 1,5 ms por pedaço na mediana).
 3. **G3, construções ✅ OK.** Ficou para depois:
-   - as peças das construções novas do Marco 22, quando ele vier;
+   - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
 4. **G4, resto do elenco,** em seis partes. As duas primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio. Falta: harpias, navios, convés, interiores e Cidade Alta, e a gente do mapa e do acampamento com as figuras do G1.
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.

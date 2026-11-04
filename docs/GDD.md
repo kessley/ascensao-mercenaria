@@ -127,15 +127,20 @@ O jogador inicia como o líder de um pequeno bando de mercenários e deve ascend
     - **Forragem:** forragear completa a comida, mas esgota a região.
   - **Mercados:** cada povoado tem estoque, preços por oferta e procura e nível de vida; rações e cavalos vêm desses mercados (ver seção 8.8).
   - **Fadiga, feridos e doenças:** marchar e lutar cansam cada batalhão; marcha forçada troca cansaço por caminho. Parte dos que caem fica ferida e volta da enfermaria. Pântano, fome, frio e acampamento lotado espalham doenças.
-  - **Acampamento móvel:** pode ser levantado e montado em outro lugar. Paliçada reforçada, torres e fosso protegem o acampamento fixo e se perdem na mudança.
+  - **Acampamento móvel:** pode ser levantado e montado em outro lugar. Paliçada reforçada, torres e fosso protegem o acampamento fixo e se perdem na mudança. Com o Marco 22, o jogador constrói o acampamento peça por peça, a planta viaja nas carroças e o bando pode fincar o estandarte numa fortaleza (seção 9).
   - **Salários (Ouro):** Tropas exigem pagamento regular. Atrasar salários leva à perda de tropas por deserção e pode culminar em um Motim, forçando o Comandante a combater seus próprios soldados rebelados.
   - **Contratos:** São a principal fonte de injeção de recursos, pagando um adiantamento logístico e um bônus gordo na conclusão. Aceito na tenda, o contrato marca um local no mapa e um prazo; o bônus sai quando todos os inimigos do local caem. Vencido o prazo, o cliente contrata outro bando.
+    - **Locais sempre habitados** (planejado, Fase 3, etapa 10): cada local tem moradores fixos, com uns 60% da força que o contrato traria.
+      - **Sem contrato:** limpar o local rende saque e experiência, mas não paga.
+      - **Com contrato:** os moradores ganham reforço e o chefe, e a paga vem cheia.
+      - **Limpo,** o local fica vazio por alguns dias e volta a se encher devagar. Enquanto está vazio, não manda bandos contra a região.
   - **Motim:** acontece dentro do acampamento: o batalhão rebelado pega em armas ali mesmo, diante dos alojamentos.
 
 ## 7. A Transição para o Reino e Estrutura de Campanha
 
 - **De Acampamento para Reino:** O late-game muda o paradigma da gestão. Ao fundar/conquistar uma vila, o jogador ganha acesso a uma nova interface na Sala de Administração do castelo/fortaleza. O mapa top-down será usado para gerenciar as províncias, desenvolvimento da vila e a economia macro, complementando as mecânicas de mercenário.
   - **Fundar:** com ouro e ferro, o Comandante funda uma aldeia em qualquer lugar do campo longe de outros povoados. **Conquistar:** atacar um povoado faz a guarnição sair para lutar; vencê-la entrega o povoado ao bando (atacar um reino é declarar guerra; tomar aldeias livres assusta todas as coroas). Ruínas podem ser reconstruídas.
+  - **A sede do próprio bando** cresce de outro jeito: o acampamento vira fortaleza, e em volta dela nasce uma cidade sozinha (seção 9).
   - **Sala de Administração:** impostos (baixos fazem a cidade prosperar; altos rendem mais e a empobrecem), construções (fazendas, mina, mercado, muralhas, quartel) e milícia. Toda semana os povoados do bando pagam ouro, rações e ferro, crescem em população e treinam guarnição. Sem o exército por perto, é a guarnição (dobrada pelas muralhas) que enfrenta bandos, exércitos e hordas.
   - **Títulos:** o Comandante sobe de Capitão mercenário a Senhor, Barão e Rei conforme os povoados que governa.
 - **Reinos rivais:** cada reino tem governante, temperamento (belicoso, mercantil, devoto) e uma relação com o bando: sobe com contratos cumpridos e calamidades derrotadas, cai com ataques. Reinos com rancor declaram guerra e mandam exércitos (com a cor do reino) contra os povoados do jogador. Tributo compra a paz. Toda semana o mundo se mexe sozinho: reinos tomam aldeias uns dos outros, governantes morrem e são substituídos, feiras e febres mudam a prosperidade.
@@ -385,3 +390,231 @@ A magia (o último marco) aproveita os sistemas anteriores:
 - **Funções puras:** as regras ficam em funções puras, como em `sim/realm.ts`, testáveis e reaproveitadas pela história simulada da geração do mundo.
 - **Dois geradores aleatórios:** a geração do mundo usa a semente; a partida usa outro gerador, salvo junto com o jogo.
 - **Salvar e carregar** é obrigatório em campanhas longas. O save guarda a semente, o estado da simulação e o que mudou nos pedaços do Campo (pontes queimadas, vilas fundadas), não o mapa inteiro. Há autosave a cada dia e ao entrar no acampamento.
+
+## 9. Do bivaque à cidade: o bando que constrói (Fase 3, Marco 22)
+
+> Planejado, ainda não implementado. Combinado em 4 de novembro de 2026, depois de um brainstorm. Os números são pontos de partida para o balanceamento. As partes e o "Pronto quando" de cada uma estão no [Roadmap da Fase 3](ROADMAP_FASE_3.md), etapa 12.
+
+**A ideia:** o bando começa com quase nada e constrói a própria casa. A tenda vira acampamento, o acampamento vira fortaleza e, em volta da fortaleza, uma cidade nasce sozinha.
+- **O jogador só constrói dentro do que é do bando:** o bivaque, o acampamento e a fortaleza.
+- **Cidade não se constrói à mão.** Ela é desenhada pelo mesmo gerador das cidades do mundo, por três motivos:
+  - fica igual às outras cidades;
+  - continua servindo aos cercos, porque o aríete, as escadas e a defesa dependem do desenho do gerador;
+  - o jogo é de uma companhia de mercenários, não de um construtor de cidades.
+- **As vilas fundadas pelo bando** (seção 7) continuam como estão: geridas pela Sala de Administração e desenhadas pelo gerador, sem pôr peça no mapa.
+
+### 9.1 A escada: bivaque, acampamento, fortaleza e cidade
+| Patamar | Como é | Área | Anda? |
+| --- | --- | --- | --- |
+| **0. Bivaque** | A tenda do Comandante, a fogueira e uma barraca. Estacas e cordas marcam o limite | 10×10 células | Sim, em meio dia |
+| **1. Acampamento** | Paliçada de madeira em três tamanhos: pequena, média e grande | 16×16, 22×22 e 28×28 | Sim: levantar e montar |
+| **2. Fortaleza** | O bando finca o estandarte: muralha de madeira e depois de pedra, torre de menagem | 34×34 por dentro | Não |
+| **3. Arraial, burgo, vila e cidade** | Nasce sozinha do lado de fora dos muros | Cresce em volta | Não |
+
+**Subir de patamar pede mais que ouro:** fama, soldados e as construções principais do patamar de baixo (ver 9.9).
+
+### 9.2 A área quadrada e a grade
+- **A célula tem 40 px.** Construção pequena ocupa 2×2 células, média 3×3 e grande 4×4.
+- **Construir:** a peça fantasma fica verde ou vermelha, com o custo ao lado. Dá para mover uma construção e desmontá-la, devolvendo parte do custo.
+- **O portão** fica num lado do quadrado, e o jogador escolhe qual.
+- **Crescer não tira nada do lugar:** a paliçada cresce por igual nos quatro lados, 3 células de cada lado.
+- **Montar exige terreno onde o quadrado caiba.**
+  - Água e rocha impedem.
+  - As árvores de dentro são cortadas e viram madeira.
+  - Escolher onde acampar vira decisão: perto do rio não precisa de poço, e perto da floresta tem lenha.
+- **Levantar e montar** (Marco 13): a planta fica guardada na grade.
+  - Ao montar em outro lugar, tudo volta na mesma posição.
+  - Cada construção ocupa carga nas carroças: a ferraria pesa, a barraca não.
+  - O que não coube fica para trás e precisa ser refeito.
+
+### 9.3 Por que construir: as sete necessidades
+Cada construção resolve um problema que aparece no acampamento antes de aparecer no painel. O painel do acampamento mostra as sete:
+
+| Necessidade | Sem ela | Resolve |
+| --- | --- | --- |
+| **Leitos** (1 barraca abriga 1 batalhão) | Os soldados dormem no chão: a fadiga não zera e, no frio, adoecem. É o que limita o tamanho do exército | Barraca, barracão, quartel |
+| **Comida** | A fogueira cozinha para 2 batalhões. Quem come cru gasta 25% mais rações e ganha menos moral | Fogueira, cozinha, refeitório, forno |
+| **Salubridade** | Acampamento lotado vira doença (a regra de lotação que já existe) | Poço e latrina: o limite de lotação sobe |
+| **Cura** | Ferido sem leito na enfermaria sara no ritmo do campo, mais devagar e com mais mortes | Enfermaria, hospital, herbário |
+| **Moral** | O humor do acampamento cai: brigas e eventos ruins | Taverna, mesa de dados, estandarte, cemitério |
+| **Segurança** | Um ataque ao acampamento leva mais | Paliçada, torres, fosso, estrepes, posto de sentinela |
+| **Ofício** | Equipamento gasto não é consertado, e algumas tropas não aparecem | Ferraria, carpintaria, selaria, alfaiataria |
+
+**A falta aparece no acampamento antes do painel:**
+- soldados dormindo ao relento ao lado das barracas;
+- fila na fogueira;
+- doentes deitados no chão;
+- cavalos amarrados na paliçada quando não há estábulo.
+
+### 9.4 Turnos e gente nos postos
+- **Turnos dos batalhões:** a cada dia no acampamento, cada batalhão faz uma coisa: descanso, treino, obra ou guarda.
+  - Quem trabalha não treina.
+  - Sem guarda à noite, o ataque ao acampamento pega todos de surpresa.
+- **Gente nos postos:** a construção funciona com alguém nela: o cozinheiro na cozinha, a curandeira na enfermaria, o ferreiro na forja.
+  - Quem trabalha são os seguidores, que chegam com a fama (seção 8.7), ou soldados tirados do batalhão.
+  - Sem ninguém, a construção para.
+  - Os seguidores ocupam os postos sozinhos, e o jogador troca se quiser.
+- **Obras levam dias:** quem constrói são os seguidores e os batalhões no turno de obra. As peças de madeira saem da carpintaria.
+- **Manutenção:** cada construção gasta um pouco por dia, em ouro ou no trabalhador do posto. Junto com o quadrado limitado, isso impede encher o acampamento de tudo.
+
+### 9.5 O catálogo
+São cerca de 50 construções, a maioria com 2 ou 3 níveis.
+- As peças do G3 (tendas, cercas, poço, ferraria, torres) e as carroças do G4 servem a muitas delas.
+- Cada construção nova precisa da sua peça.
+
+**Já vem pronto:** a tenda do Comandante, a fogueira e uma barraca de soldados.
+- A tenda tem três níveis: tenda, pavilhão e, na fortaleza, salão.
+- A mesa de contratos fica na tenda.
+
+**No bivaque, antes da paliçada:**
+| Construção | O que faz |
+| --- | --- |
+| Barraca de soldados | Leitos para mais 1 batalhão |
+| Mastro de recrutamento | Atrai 1 recruta a cada poucos dias. Antes dele, só se recruta em taverna |
+| Carroça-depósito | Guarda rações e bens em cima da carroça |
+| Varal de armas | Conserto simples de equipamento |
+| Paliçada pequena | Leva ao patamar 1 |
+
+**No acampamento, vida:**
+| Construção | O que faz |
+| --- | --- |
+| Barracão (melhoria da barraca) | Leitos para 2 batalhões |
+| Tenda dos oficiais | Libera o 1º tenente, que aparece na taverna ou num evento. Cada nível abre mais uma vaga |
+| Tenda do capitão (Marco 20) | A companhia acampa junta e ganha coesão |
+| Cozinha, depois refeitório | Comida cozida para mais batalhões |
+| Forno de pão | O grão rende mais rações |
+| Defumadouro | Carne e sal viram rações de marcha, mais leves: a carroça leva mais dias de comida |
+| Poço | Necessário longe de rio |
+| Latrina | Sobe o limite de lotação e diminui a doença |
+| Enfermaria, depois hospital de campanha | Leitos para feridos |
+| Herbário | Ervas viram remédio contra febre e disenteria |
+
+**No acampamento, moral e vida social:**
+| Construção | O que faz |
+| --- | --- |
+| Taverna de campanha | A cerveja vira moral; traz boatos de contratos e recrutas |
+| Mesa de dados | Moral barata, mas às vezes gera briga |
+| Estandarte do bando | Aura de moral; mostra a fama |
+| Mastro de troféus | A cabeça dos chefes e os estandartes tomados dão fama todo dia. Dá motivo para matar o chefe dos locais |
+| Cemitério | Enterrar os mortos evita a queda de moral depois das baixas |
+| Fogueira das histórias | Um bardo espalha as façanhas: mais fama e mais lendas (Marco 18) |
+| Altar, depois capela (Marco 23) | Fé, cultura e cerimônias |
+
+**No acampamento, ofício e produção:**
+| Construção | O que faz |
+| --- | --- |
+| Ferraria, depois forja grande | Conserto e armas |
+| Carpintaria | A madeira vira peças de obra, flechas e escudos. Constrói carroças, aríetes e escadas antes de um cerco |
+| Selaria e curtume | Peles viram armadura de couro e selas |
+| Alfaiataria | O tecido vira uniforme na cor do bando, que dá moral e reconhecimento. O jogador escolhe a cor |
+| Posto do lenhador (fora da paliçada) | Madeira, se houver floresta perto |
+| Horta e curral | Um pouco de comida e carne, para acampamento parado |
+
+**No acampamento, militar e logística:**
+| Construção | O que faz |
+| --- | --- |
+| Campo de treino | Treina a infantaria |
+| Estande de tiro | Treina os atiradores |
+| Estábulo (baias) | Cavalo sem baia cansa e adoece |
+| Picadeiro | Treina a cavalaria |
+| Posto de recrutamento | Recrutas melhores e em maior número |
+| Intendência | Paga o soldo; sem ela, o soldo atrasa um dia |
+| Depósito, depois celeiro | Capacidade de rações e bens |
+| Arsenal | Guarda equipamento e troca armas entre batalhões |
+| Cercado de cativos | Os prisioneiros fogem menos |
+| Tenda de mapas | Batedores vão mais longe e mensageiros correm mais |
+| Paliçada (três tamanhos), portão reforçado, torres, fosso, estrepes e posto de sentinela | Defesa |
+
+**Na fortaleza (9.7):**
+| Construção | O que faz |
+| --- | --- |
+| Torre de menagem | Sede do bando e última defesa |
+| Quartel | Leitos para muitos batalhões |
+| Salão do Comandante | Recebe lordes e emissários (corte e diplomacia, seção 8.9) |
+| Masmorra | Resgates mais caros |
+| Cisterna e armazém fortificado | Aguentam cerco longo |
+| Escola de oficiais | Forma tenentes e capitães, em vez de só achá-los |
+| Tesouraria | O ouro guardado aqui não é saqueado |
+| Oficina de cerco | Aríetes e escadas melhores |
+| Feira do castelo | Traz mascates: é a semente da cidade (9.8) |
+| Pombal | Mensagens rápidas para longe |
+| Templo (melhoria da capela) | Fé (Marco 23) |
+
+### 9.6 Tropas e tenentes liberados por construção
+| Tropa ou cargo | Precisa de |
+| --- | --- |
+| Infantaria | Nada: vem desde o começo |
+| Lanceiros | Campo de treino |
+| Arqueiros | Estande de tiro |
+| Dardeiros | Estande de tiro, nível 2 |
+| Guarda pesada e besteiros | Ferraria |
+| Cavalaria | Estábulo |
+| Arqueiros montados | Estábulo e picadeiro |
+| Cavaleiros | Estábulo, picadeiro e fortaleza |
+| 1º tenente | Tenda dos oficiais (cada nível, mais uma vaga) |
+| Capitães (Marco 20) | Tenda do capitão; na fortaleza, a escola de oficiais forma novos |
+
+### 9.7 A fortaleza
+- **Fincar o estandarte** pede o acampamento grande, fama, soldados e as construções principais. Depois disso o bando tem uma sede, que pode ser cercada e saqueada.
+- **A terra vem por um de três caminhos:**
+  1. **Carta de terra:** um reino concede a terra. Sai barata, mas o bando vira vassalo e deve servir na guerra.
+  2. **Reerguer ruínas:** retomar um forte em ruínas do mapa. Sai mais barato, mas antes é preciso limpá-lo dos moradores.
+  3. **Terra de ninguém:** sai de graça, mas os vizinhos desconfiam (temor) e os ataques vêm mais cedo.
+- **A muralha vem do gerador,** no contorno do quadrado, com os mesmos portões e torres dos fortes do mundo.
+  - O cerco da sede usa o modo "Você defende os muros" que já existe.
+  - Por dentro, a grade é livre, como no acampamento.
+- **A fortaleza fica e o bando anda.**
+  - Ela fica com uma guarnição e um castelão: um tenente ou capitão deixado no comando.
+  - Em campanha, o bando leva o **acampamento de campo**: um kit de até 6 construções nas carroças (barracas, fogueira, cozinha, enfermaria...), montado como o acampamento de hoje.
+  - A fortaleza é a casa; o acampamento de campo é a mochila.
+
+### 9.8 A cidade que nasce sozinha
+- **A população:** seguidores, famílias dos soldados, refugiados (seção 8.7) e mercadores.
+- **O que faz crescer:** segurança, comida, comércio e fama.
+- **As etapas:**
+  - **Arraial:** barracas de mascates e famílias junto ao portão.
+  - **Burgo:** casas, mercado e taverna.
+  - **Vila:** paliçada de fora e igreja.
+  - **Cidade:** muralha de pedra e bairros.
+- **O desenho:**
+  - O gerador de povoados monta de uma vez a cidade inteira, do tamanho máximo que ela pode ter.
+  - As casas vão aparecendo do portão para fora, pelas ruas.
+  - É o mesmo desenho das cidades do mundo.
+- **A fortaleza vira um mapa à parte.** Quando o arraial vira burgo, a fortaleza passa a ser entrada como a Cidade Alta das capitais (seção 8.9).
+  - No mapa da região, ela aparece no meio do burgo como a muralha interna, com o portão.
+  - Atravessar o portão leva ao mapa da fortaleza, com tudo o que o bando construiu lá dentro.
+  - Assim a cidade cresce em volta sem esbarrar no que o jogador construiu, e a fortaleza pode ser maior por dentro do que parece no mapa.
+- **Decretos, em vez de pôr casas,** na Sala de Administração da fortaleza:
+  - incentivar artesãos: o ferro fica mais barato;
+  - feira semanal: mais comércio;
+  - abrigar refugiados: a cidade cresce rápido, com risco de doença;
+  - impostos: mais ouro ou mais crescimento;
+  - terra para veteranos: soldados velhos se aposentam na cidade e viram milícia. Num jogo com morte permanente, é um fim bom para quem sobreviveu.
+- **Entra no reino:** a partir da vila, ela entra no sistema de povoados do bando (seção 7), com impostos, recrutas, bens, guarnição e lealdade. Vira alvo dos cercos dos reinos e das calamidades.
+
+### 9.9 O começo da campanha e o ritmo
+- **A campanha começa com:**
+  - o Comandante, 1 batalhão de infantaria, 1 batedor e 1 mensageiro;
+  - 1 carroça, cerca de 80 de ouro e 20 rações;
+  - a tenda, a fogueira e uma barraca.
+- **Sem tenente:** o primeiro vem com a tenda dos oficiais.
+- **Antes era assim:** 120 de ouro, 30 rações, 2 carroças, um batalhão de infantaria e um de arqueiros, 1 tenente, 2 mensageiros e as 6 construções prontas.
+
+**Metas de ritmo** (para a simulação de balanceamento):
+| Quando | O que deve acontecer |
+| --- | --- |
+| Dias 1 a 3 | O 1º contrato pequeno (um local com 4 a 6 goblins) e o mastro de recrutamento |
+| Dias 3 a 5 | A 2ª barraca ou o estande de tiro: a primeira escolha de verdade |
+| Dia 10 | O 2º batalhão |
+| Dias 15 a 20 | A paliçada pequena: o bivaque vira acampamento |
+| Dias 25 a 35 | A tenda dos oficiais e o 1º tenente |
+| Dias 40 a 50 | A paliçada média, a ferraria e o estábulo |
+| Dias 60 a 90 | A fortaleza |
+| Depois do dia 120 | O arraial vira burgo |
+
+**Regras do balanceamento:**
+- As primeiras construções custam o pagamento de 1 ou 2 contratos fáceis. As seguintes pedem madeira, tecido e ferro, além de gente trabalhando.
+- Os contratos do começo ficam perto e são pequenos, para dar lucro com um batalhão só.
+- **A ameaça cresce com a fama, e não com o dia:** ataques ao acampamento, heróis atrás de duelo e bandos maiores.
+- Os locais de missão sempre habitados (seção 6) sustentam o começo: dá para ganhar saque sem contrato.
+- **Saves antigos** ficam com o que já têm: o acampamento fixo de hoje vira peças na grade.

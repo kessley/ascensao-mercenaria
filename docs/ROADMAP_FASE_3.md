@@ -1,6 +1,6 @@
 # Roadmap — Fase 3: O arcano
 
-Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador, cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
+Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador (que vira fortaleza e, em volta dela, cidade), cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
 **Onde estamos (4 de novembro de 2026):**
 - **Feito:**
@@ -11,7 +11,13 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - a `WorldScene` dividida em partes (etapa 8);
   - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-- **Em andamento:** o G4, o resto do elenco em pixel art (etapa 10), em seis partes. As duas primeiras (carroças, aríetes e escadas; a coluna das expedições e do comboio) estão feitas; a seguir, harpias, navios e convés.
+  - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer.
+- **Combinado em 4 de novembro, depois de um brainstorm:**
+  - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
+  - os locais de missão passam a ter moradores fixos (etapa 10).
+- **A seguir:** os locais habitados (etapa 10). Depois, o G4 continua (etapa 11, em seis partes).
+  - Já estão feitas as duas primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio.
+  - Faltam harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -39,13 +45,14 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
-| 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
-| 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
-| 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
-| 13 | [Marco 23: cultura, religião e língua](#13-marco-23-cultura-religião-e-língua) | recurso | | |
-| 14 | [G6: atmosfera](#14-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
-| 15 | [Marco 19: magia do Comandante](#15-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
-| 16 | [Fechamento: jogar uma campanha inteira](#16-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
+| 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
+| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
+| 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
+| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
+| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
+| 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
 
@@ -487,14 +494,32 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 - o capitão nosso que perde não é preso pelo inimigo, só levado para trás;
 - a figura do herói mostra a arma do tipo dele, que nem sempre é a da ficha: o chefe salteador luta de machado no duelo, mas aparece de espada.
 
-## 10. G4: resto do elenco
+## 10. Locais de missão sempre habitados
+**Objetivo:** um local de missão tem gente mesmo sem contrato. Pedido em 4 de novembro, jogando: no acampamento goblin não havia nenhum goblin para matar.
+
+**A causa:** hoje os inimigos de um local só aparecem enquanto há um contrato aceito para ele (`worldScene/army.ts`). Sem contrato, o local é só cenário.
+
+**A fazer** (GDD, seção 6, "Contratos"):
+- **Moradores fixos:** cada local tem moradores, com uns 60% da força que o contrato traria. Ficam dormentes até o bando chegar perto, como os grupos do contrato.
+- **Limpo,** o local fica vazio por alguns dias e depois volta a se encher devagar.
+- **Sem contrato:** saque e experiência, mas sem paga.
+- **Com contrato:** os moradores ganham reforço e o chefe, e a paga vem cheia. O contrato termina quando caem todos do local, moradores e reforço.
+- **Os locais mandam os bandos da região:** os bandos goblins já saem dos covis. O local limpo para de mandar bando até se encher de novo, o que dá motivo para limpar sem contrato.
+- **Saves antigos:** os locais ganham moradores na primeira vez que carregam.
+
+**Pronto quando:**
+- chegar a um acampamento goblin sem contrato acha goblins;
+- limpo, ele fica vazio por uns dias e depois volta a ter gente;
+- com contrato, o mesmo local vem mais forte e com o chefe.
+
+## 11. G4: resto do elenco
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.
 
 **Pronto quando:** numa marcha com comboio, num cerco e numa viagem por mar, nada em campo é mais círculo nem retângulo.
 
 São seis partes, uma por vez, como no Marco 21.
 
-### 10.1. Carroças, aríetes e escadas ✅ OK
+### 11.1. Carroças, aríetes e escadas ✅ OK
 As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 dependem delas.
 
 **Feito:**
@@ -520,7 +545,7 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 
 **Ficou para depois:** o carroceiro e a tripulação do aríete são gente pequena desenhada no veículo, não figuras do G1: não lutam e não fogem sozinhos.
 
-### 10.2. A coluna das expedições e do comboio ✅ OK
+### 11.2. A coluna das expedições e do comboio ✅ OK
 **Feito:**
 - **A coluna em figuras** (`ExpeditionParty`): cada soldado é uma figura do G1 com a tropa do batalhão. Acima de 36, vão 36, na mesma proporção de cada tropa.
   - As figuras são `Unit`s de enfeite: andam, viram para onde a coluna vai e trocam de tamanho com o zoom como todo mundo, mas não lutam e ninguém as ataca. A luta da expedição continua resolvida em conta.
@@ -530,61 +555,112 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - **Conserto no caminho:** a cena esquecia o comboio quando recomeçava (ao voltar de uma batalha, ao carregar o jogo), e ele sumia até sair outro. Agora o comboio é desenhado de novo.
 - **Testes:** a suíte `missoes` manda a companhia de um capitão para uma escolta e confere que a coluna marcha (28 de 28). Conferido também na tela.
 
-### 10.3. Harpias, navios e convés
+### 11.3. Harpias, navios e convés
 **A fazer:** as harpias em pixel art; os navios no mar e o convés da batalha no mar.
 
-### 10.4. Gente do mapa e do acampamento
+### 11.4. Gente do mapa e do acampamento
 **A fazer:** viajantes, caravanas, seguidores e quem trabalha nos postos, com as figuras do G1. O Marco 22 põe essa gente para construir.
 
-### 10.5. Interiores e a Cidade Alta
+### 11.5. Interiores e a Cidade Alta
 **A fazer:** o lado de dentro das construções e a Cidade Alta das capitais (de fora ela já é pixel art).
 
-### 10.6. Acabamento do G1
+### 11.6. Acabamento do G1
 **A fazer:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
 
-## 11. Marco 22: acampamento construído pelo bando (e construir nas vilas)
-**Objetivo:** o acampamento deixa de ser um layout fixo e passa a ser construído pelo jogador, peça por peça, como em *Cult of the Lamb*. As mesmas regras valem nas vilas que o bando funda.
+## 12. Marco 22: do bivaque à cidade
+**Objetivo:** o bando começa com quase nada e constrói a própria casa. A tenda vira acampamento, o acampamento vira fortaleza e, em volta da fortaleza, uma cidade nasce sozinha. O design inteiro, com o catálogo e os números, está na [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22).
 
-- **O começo:** só a tenda do Comandante, a fogueira e uma paliçada pequena. O resto o jogador põe onde quiser, dentro da paliçada.
-  - Encaixe numa grade de 20 px.
-  - Só o terreno firme serve: nada na água nem na rocha.
-  - A peça fantasma fica verde ou vermelha, com o custo ao lado.
-- **Construções do acampamento**, simples e de campanha:
-  - **as de hoje:** intendência, posto de recrutamento, campo de treino, estábulo, ferraria, alojamentos (1 por batalhão), torres, paliçada reforçada e fosso;
-  - **novas:**
-    - cozinha (as rações rendem mais);
-    - enfermaria (feridos voltam mais cedo);
-    - depósito (mais carga e mais reserva para os comboios);
-    - taverna de campanha (moral e boatos);
-    - tenda do capitão (a companhia acampa junta);
-    - capela ou altar (Marco 23);
-    - curral;
-    - horta;
-    - poço;
-    - latrina (menos doença);
-    - estandarte e tochas.
-  - **A paliçada cresce em degraus:** pequena, média e grande. Paliçada maior cabe mais coisas, mas custa mais e é mais difícil de guarnecer.
-- **Custo:** ouro e os bens do Marco 14 (madeira, tecido, ferro).
-  - Quem constrói são os seguidores (Marco 12) e os soldados de folga, em dias.
-  - Soldado trabalhando não treina nem descansa. Essa é a decisão.
-  - Os seguidores podem ficar fixos num posto: cozinheiro, ferreiro, curandeiro, como os seguidores de *Cult of the Lamb*.
-- **Levantar e montar (Marco 13):**
-  - Ao levantar o acampamento, as construções vão para as carroças. Cada uma ocupa carga: a ferraria pesa e a tenda não.
-  - A planta fica guardada. Ao montar em outro lugar, o jogo repõe as peças na mesma disposição, contornando a água e a rocha.
-  - O que não coube nas carroças fica para trás e precisa ser refeito.
-- **Nas vilas fundadas pelo bando (Marco 9):**
-  - As construções da Sala de Administração (fazendas, mina, mercado, muralhas, quartel, serraria, moinho, porto…) ganham lugar no mapa: o jogador escolhe o terreno dentro da planta da vila.
-  - As casas crescem sozinhas em volta, conforme a população.
-  - A muralha começa como paliçada e vira pedra.
-  - Os reinos constroem nas cidades deles pelas mesmas regras.
-- **Arte (parte do marco):** as peças do G3 (casas, tendas, cercas, ferraria, poço, torres) já servem. Cada construção nova precisa da sua peça.
+**O que mudou no plano** (combinado em 4 de novembro, depois de um brainstorm):
+- **Não se constrói cidade à mão,** nem nas vilas fundadas pelo bando. Uma cidade montada peça por peça não ficaria parecida com as do gerador e quebraria os cercos.
+  - O jogador constrói só dentro do que é do bando: o bivaque, o acampamento e a fortaleza.
+  - A cidade nasce sozinha, desenhada pelo gerador.
+  - As vilas fundadas (Marco 9) continuam geridas pela Sala de Administração.
+- **A área é quadrada,** com grade de 40 px, em vez da paliçada oval de hoje.
+- **O começo é humilde** e sem tenente: o tenente vem com a tenda dos oficiais.
+- **Sete necessidades** justificam construir: Leitos, Comida, Salubridade, Cura, Moral, Segurança e Ofício.
+
+São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se a quarta ficar grande demais, vai para a Fase 4.
+
+**Arte:** as peças do G3 (casas, tendas, cercas, ferraria, poço, torres) e as carroças do G4 servem a muitas construções. Cada construção nova precisa da sua peça, feita junto com a parte que a usa. Os ícones das construções ficam para o G5.
+
+### 12.1. Marco 22, parte 1: o bivaque e a grade
+**A fazer:**
+- **O começo novo** (GDD 9.9): o Comandante, 1 batalhão de infantaria, 1 batedor, 1 mensageiro, 1 carroça, cerca de 80 de ouro e 20 rações. Só a tenda, a fogueira e uma barraca, e nenhum tenente.
+- **A grade quadrada** (GDD 9.2):
+  - células de 40 px, com a peça fantasma verde ou vermelha e o custo ao lado;
+  - mover e desmontar;
+  - o portão no lado que o jogador escolher.
+- **Os patamares 0 e 1:** o bivaque de 10×10 células e a paliçada em três tamanhos (16×16, 22×22 e 28×28), crescendo por igual nos quatro lados.
+- **Quatro das sete necessidades no painel:** Leitos, Comida, Cura e Segurança.
+- **As primeiras construções,** cerca de 16:
+  - as 6 de hoje, viradas peças: intendência, posto de recrutamento, campo de treino, estábulo, ferraria e barraca (o alojamento de hoje);
+  - as novas: mastro de recrutamento, tenda dos oficiais, cozinha, enfermaria, poço e estande de tiro;
+  - a defesa: a paliçada nos três tamanhos, as torres e o fosso. As obras de hoje (`CAMP_WORKS`) viram peças.
+- **As tropas e o tenente liberados por construção** (GDD 9.6).
+- **Levantar e montar com a planta:**
+  - a planta viaja nas carroças, e cada construção ocupa carga;
+  - ao montar, o quadrado precisa caber: as árvores de dentro viram madeira, e água ou rocha impedem;
+  - o que não coube fica para trás.
+- **Balanceamento:**
+  - uma simulação dos primeiros 30 dias, com as metas de ritmo da GDD 9.9;
+  - a ameaça cresce com a fama, e não com o dia.
+- **Saves antigos:** o acampamento de hoje vira peças na grade, com tudo o que já tinha.
 
 **Pronto quando:**
-- uma campanha nova começa com o acampamento quase vazio, e nos primeiros dias o jogador escolhe o que construir primeiro (enfermaria ou ferraria?);
-- levantar e montar o acampamento em outro lugar mantém o que coube nas carroças;
-- dá para pôr construções numa vila fundada pelo bando.
+- uma campanha nova começa com três peças, e nos dias 3 a 5 o jogador faz a primeira escolha de verdade (a 2ª barraca ou o estande de tiro?);
+- o 2º batalhão chega por volta do dia 10, e a paliçada pequena entre os dias 15 e 20;
+- levantar e montar em outro lugar mantém a planta e o que coube nas carroças;
+- um save antigo abre com o acampamento dele.
 
-## 12. G5: interface
+### 12.2. Marco 22, parte 2: a vida no acampamento
+**A fazer:**
+- **As sete necessidades completas no painel:** entram Salubridade, Moral e Ofício (GDD 9.3).
+- **A falta aparece no acampamento:** soldados dormindo ao relento, fila na fogueira, doentes no chão, cavalos amarrados na paliçada.
+- **Turnos dos batalhões** (descanso, treino, obra e guarda) e **gente nos postos** (os seguidores do Marco 12, ou soldados), como na GDD 9.4.
+- **Obras que levam dias:** quem constrói são os seguidores e os batalhões no turno de obra. Cada construção gasta um pouco por dia.
+- **O resto do catálogo do acampamento** (GDD 9.5):
+  - **vida:** barracão, refeitório, forno, defumadouro, latrina, hospital, herbário e tenda do capitão;
+  - **moral:** taverna, mesa de dados, estandarte, mastro de troféus, cemitério, fogueira das histórias e altar;
+  - **ofício:** carpintaria (carroças, aríetes e escadas), selaria, alfaiataria (uniforme na cor do bando), lenhador, horta e curral;
+  - **militar:** picadeiro, arsenal, cercado de cativos, tenda de mapas, estrepes e posto de sentinela.
+
+**Pronto quando:**
+- cada uma das sete necessidades em falta se vê no acampamento antes do painel;
+- pôr um batalhão na obra em vez do treino é uma decisão que pesa;
+- a carpintaria faz o aríete e as escadas de um cerco.
+
+### 12.3. Marco 22, parte 3: a fortaleza
+**A fazer** (GDD 9.7):
+- **Fincar o estandarte,** com os requisitos de fama, soldados e construções.
+- **A terra por um de três caminhos:** carta de terra de um reino (vassalagem), ruínas reerguidas (antes, limpá-las) ou terra de ninguém (temor).
+- **A muralha do gerador** no contorno do quadrado de 34×34: madeira e depois pedra, com os portões e as torres dos fortes do mundo. Por dentro, a grade é livre.
+- **As construções da fortaleza:** torre de menagem, quartel, salão do Comandante, masmorra, cisterna, armazém fortificado, escola de oficiais, tesouraria, oficina de cerco, feira do castelo, pombal e templo.
+- **O castelão e a guarnição** ficam; o bando sai com o **acampamento de campo**, um kit de até 6 construções nas carroças.
+- **O cerco da sede:** reinos e calamidades atacam a fortaleza, também com o bando longe. Usa o modo "Você defende os muros".
+
+**Pronto quando:**
+- entre os dias 60 e 90 de uma campanha dá para fincar o estandarte por qualquer um dos três caminhos;
+- o bando sai em campanha com o acampamento de campo enquanto a fortaleza fica com o castelão;
+- a fortaleza aguenta (ou não) um cerco sem o bando.
+
+### 12.4. Marco 22, parte 4: a cidade que nasce sozinha
+**A fazer** (GDD 9.8):
+- **A população cresce** com seguidores, famílias, refugiados e mercadores, e com segurança, comida, comércio e fama.
+- **As etapas:** arraial, burgo, vila e cidade.
+- **O desenho:** o gerador de povoados monta a cidade do tamanho máximo, e as casas aparecem do portão para fora.
+- **A fortaleza vira um mapa à parte:** a partir do burgo, ela é entrada como a Cidade Alta das capitais (`CapitalScene`).
+  - No mapa da região, a fortaleza é a muralha interna, com o portão.
+  - Lá dentro fica tudo o que o bando construiu.
+- **Os decretos:** artesãos, feira, refugiados, impostos e terra para veteranos.
+- **A vila entra no reino** (Marco 9): impostos, recrutas, bens, guarnição e lealdade.
+
+**Pronto quando:**
+- depois do dia 120, o arraial vira burgo sem o jogador pôr nenhuma casa;
+- a cidade do bando se parece com as do mundo;
+- entrar pelo portão interno leva à fortaleza que o jogador construiu;
+- a cidade paga impostos e é cercada como as outras.
+
+## 13. G5: interface
 **Objetivo:** a interface em React ganha a mesma cara do jogo.
 - **Fonte** em pixel art, também no nome e no estandarte dos batalhões (hoje greybox).
 - **Molduras** dos painéis, da tenda e do diário.
@@ -593,7 +669,7 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 
 **Pronto quando:** abrir a tenda, o quadro de comando e o diário não mostra mais nenhum painel genérico.
 
-## 13. Marco 23: cultura, religião e língua
+## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.
 
 - **Cultura, por povoado e não só por continente:**
@@ -624,7 +700,7 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - um dia santo ou um preceito obriga o jogador a decidir;
 - a mistura de culturas e de fés do bando pesa na moral.
 
-## 14. G6: atmosfera
+## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.
 - **Noite e tochas:** luz em volta das tochas, das fogueiras e da forja (a chama que ficou do G3).
 - **Clima:** chuva, neve, nevoeiro e vento, com o chão molhado e as poças do G2.
@@ -633,7 +709,7 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 
 **Pronto quando:** uma batalha à noite, na chuva, se lê pela luz das tochas, e dá para ver de longe onde a investida bateu.
 
-## 15. Marco 19: magia do Comandante
+## 16. Marco 19: magia do Comandante
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.
 - **Dano em área** e **suporte e controle**, como previsto desde o início.
 - **Aprendizado pelo mundo:** grimórios e artefatos em ruínas antigas, magos da corte capturados e mestres de outro continente.
@@ -643,7 +719,7 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 
 **Pronto quando:** uma magia bem usada vira uma batalha difícil, mas usá-la tem um preço político e pessoal.
 
-## 16. Fechamento: jogar uma campanha inteira
+## 17. Fechamento: jogar uma campanha inteira
 **Objetivo:** fechar a fase jogando, e não só simulando.
 - Uma campanha do começo ao fim, anotando o que quebra e o que cansa.
 - Ajustar o equilíbrio dos Marcos 14 a 23, da progressão e das rações.
@@ -661,7 +737,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 ### Combinado e não feito
 - **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
 - **Alcance dos arcos:** subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
-- **Magia do Comandante:** etapa 15.
+- **Magia do Comandante:** etapa 16.
 
 ### Sistemas incompletos
 | De onde veio | O que falta |
@@ -711,11 +787,11 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 | Corte e nobreza | **Amplo, sem prova** | 6 tipos de favor, tramas e duelos. É o sistema mais longe do que o jogador faz no dia a dia |
 | Reino | **Raso** | 11 construções são uma lista de efeitos. Rei com 4 povoados é cedo, e governar é abrir um menu |
 | Mar | **Raso** | Primeira versão: uma viagem são segundos assistindo, com 3 eventos, e navio é só capacidade |
-| **Comandante em si** | **Raso, o pior caso agora** | Anda, bate e grita. Não evolui. Os duelos (etapa 9) e a magia (etapa 15) são o que está planejado para ele |
+| **Comandante em si** | **Raso, o pior caso agora** | Anda, bate e grita. Não evolui. Os duelos (etapa 9) e a magia (etapa 16) são o que está planejado para ele |
 
 ### O que eu faria, em ordem de retorno
 1. ~~**Progressão:** escolha exclusiva, habilidades que mudam comportamento e promoção de tropa.~~ ✅ Feito nesta fase.
-2. **Jogar uma campanha inteira** e corrigir o que aparecer: nenhum teste substitui isso (etapa 16, mas vale antes, aos poucos).
+2. **Jogar uma campanha inteira** e corrigir o que aparecer: nenhum teste substitui isso (etapa 17, mas vale antes, aos poucos).
 3. **Comandante:** habilidades ativas ligadas aos traços, antes mesmo da magia.
 4. **Contratos em cadeia:** o que você fez para um cliente abre ou fecha o próximo.
 5. **Reino com decisão:** eventos de governo, com escolha e custo, em vez de só construções.
