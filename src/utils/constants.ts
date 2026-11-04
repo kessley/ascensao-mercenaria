@@ -989,6 +989,48 @@ export const CAPTAINS = {
   TACTICS_LOSSES: 0.08,
 } as const;
 
+/**
+ * Duelo, um contra um (Marco 21; a Liça do Marco 15 usa as mesmas regras). Distâncias no tamanho
+ * da Liça; no campo, as figuras são menores e tudo encolhe junto (`DuelState.scale`).
+ */
+export const DUEL = {
+  /** Duelo longo demais: os dois são separados pelos seus homens. */
+  TIMEOUT_S: 90,
+  /** Corpo de cada um: os dois não se atravessam. */
+  BODY: 20,
+  /** Passo do Comandante, por segundo. */
+  STEP: 190,
+  STAMINA: 100,
+  /** Fôlego que volta por segundo: parado, bloqueando, e no meio de um golpe. */
+  REGEN: 24,
+  REGEN_BLOCK: 6,
+  REGEN_BUSY: 12,
+  LIGHT: { COST: 14, DAMAGE: 30, RECOVER: 0.32, ARC: 1.05, STUN: 0.3, PUSH: 22 },
+  HEAVY: { COST: 26, DAMAGE: 50, RECOVER: 0.5, ARC: 1.2, STUN: 0.5, PUSH: 34 },
+  /** Empurrão: curto e sem dano; abre a guarda de quem só bloqueia. */
+  SHOVE: { COST: 12, WINDUP: 0.18, RECOVER: 0.3, REACH: 56, ARC: 0.9, PUSH: 40, STUN: 0.25, OPEN: 0.55 },
+  /** Bloqueio: só de frente, até este ângulo. */
+  BLOCK_ARC: 1.3,
+  /** Fôlego que cada golpe aparado custa e a parte do dano que passa pela guarda. */
+  BLOCK_COST: { LIGHT: 12, HEAVY: 22 },
+  CHIP: { LIGHT: 0.08, HEAVY: 0.25 },
+  /** Aparar: a guarda erguida até este tanto antes do golpe chegar atordoa quem atacou. */
+  PARRY_WINDOW: 0.18,
+  PARRY_STUN: 0.8,
+  /** Quem solta e ergue a guarda de novo antes disto não apara (não adianta martelar a tecla). */
+  PARRY_REARM: 0.35,
+  /** Postura (equilíbrio, de 0 a 100): cada golpe bloqueado enche; cheia, a guarda quebra. */
+  POSTURE: { LIGHT: 22, HEAVY: 46, SHOVE: 40, HIT: 10, PARRY_RELIEF: 15, DECAY: 12, BROKEN_S: 1.3 },
+  /** Esquiva: um passo curto, com um instante em que nada acerta. */
+  DODGE: { COST: 20, TIME: 0.24, DISTANCE: 64, UNTOUCHABLE: 0.2, RECOVER: 0.12 },
+  /** Um aperto de tecla espera este tanto pela vez (dá para emendar o próximo golpe). */
+  BUFFER_S: 0.25,
+  /** No meio do aviso, quem ataca só vira este tanto por segundo: o passo para o lado tira do arco. */
+  WINDUP_TURN: 3,
+  /** O pesado fingido vira leve quando falta esta parte do aviso. */
+  FEINT_AT: 0.45,
+} as const;
+
 /** Economia do acampamento (Marco 3). */
 export const ECONOMY = {
   START_GOLD: 120,

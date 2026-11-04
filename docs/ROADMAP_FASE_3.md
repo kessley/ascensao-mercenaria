@@ -10,7 +10,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - os capitães (Marco 20 ✅ OK, no acampamento e na batalha);
   - a `WorldScene` dividida em partes (etapa 8);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-- **A seguir:** os duelos no meio da batalha (Marco 21).
+- **Em andamento:** os duelos no meio da batalha (Marco 21), em três partes. A primeira (as regras do duelo, já na Liça) está feita; a seguir, os heróis do outro lado.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -37,7 +37,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
-| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | |
+| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | parte 1 de 3 ✅ OK |
 | 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
 | 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
 | 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
@@ -368,6 +368,67 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - um capitão inimigo de nível alto que chega ao Comandante abre o duelo sem perguntar, e os soldados abrem o anel e param;
 - lendo os avisos, esquivando e aparando, dá para vencer um herói melhor;
 - perder custa caro, mas não acaba a campanha.
+
+O marco foi dividido em três partes: as regras (que a Liça já usa), os heróis do outro lado e o duelo no campo.
+
+### 9.1. Marco 21, parte 1: as regras do duelo ✅ OK
+**Feito:**
+- **As regras saíram da Liça** para um módulo puro, `src/game/sim/duel.ts`, e a Liça (`DuelScene`) passou a usá-lo. O duelo no campo (parte 3) usa o mesmo.
+- **Golpes** (no ritmo do Comandante; todos avisam antes com o arco vermelho, e o do pesado é largo e escuro):
+  - **leve:** avisa em 0,24 s e tira 30 de vida;
+  - **pesado:** avisa em 0,56 s, tira 50 e enche a postura de quem bloqueia duas vezes mais;
+  - **empurrão:** curto e sem dano; abre a guarda de quem só bloqueia.
+- **Defesa:**
+  - **bloquear:** de frente, segura quase todo o dano, mas cada golpe aparado gasta fôlego e enche a postura;
+  - **aparar:** a guarda erguida até 0,18 s antes de o golpe chegar atordoa quem atacou por 0,8 s. Martelar a tecla não apara: quem solta e ergue de novo em menos de 0,35 s só bloqueia;
+  - **esquiva:** um passo curto, com 0,2 s em que nada acerta; gasta fôlego.
+  - **Postura cheia** (ou o fôlego zerado bloqueando): a guarda quebra, 1,3 s atordoado, e o próximo golpe entra.
+- **Pé no chão:**
+  - 100 de vida: 4 ou 5 golpes limpos decidem;
+  - a armadura segura parte do dano;
+  - ferimentos e cansaço de antes entram como vida e fôlego menores.
+- **Armas:** a espada é rápida; a lança alcança mais e avisa mais devagar; o machado bate mais e quebra a guarda; espada e escudo bloqueia melhor e esquiva pior.
+- **A IA luta pelo temperamento:**
+  - o agressivo emenda golpes;
+  - o firme alterna;
+  - o paciente guarda distância, espera o erro e castiga;
+  - o traiçoeiro finge o pesado, que vira leve no meio do aviso.
+  - A mão (1 a 10) dá o ritmo (a mais fraca avisa 1,9 vez mais devagar que o Comandante; a melhor, 1,3), a leitura do aviso e a precisão da distância.
+- **Fim:**
+  - 90 s sem vencedor separam os dois;
+  - quem cai se rende, sai ferido ou, raramente, morre (bem mais com vencedor cruel ou ferida de antes). A parte 3 usa isso.
+- **A Liça com os controles novos:**
+  - WASD anda;
+  - Espaço ou clique: golpe leve;
+  - Q ou botão direito: golpe pesado;
+  - Shift segura a guarda (na hora certa, apara);
+  - F esquiva, e E empurra.
+  - A barra de postura fica embaixo da de fôlego.
+- **Testes:** 23 de regras (`tests/unit/duel.test.ts`):
+  - cada golpe, o bloqueio, aparar, a esquiva, o empurrão, a postura, as armas e o fim por tempo;
+  - IA contra IA: a mão melhor vence quase sempre (8 contra 4, mais de 80%), mãos iguais ficam perto da metade, e os duelos acabam em 5 a 10 s;
+  - alguém nas teclas que lê o aviso com 0,25 s de reação (e deixa passar 1 em 5) vence um herói de mão 10 em mais de 60% das vezes; quem quase não lê perde para um de mão 8.
+
+**Ficou para depois:** a Liça segue em greybox (círculos), porque as poses das figuras vêm com a parte 3.
+
+### 9.2. Marco 21, parte 2: os heróis do outro lado
+**A fazer:**
+- Os capitães e chefes das forças inimigas ganham uma ficha de herói: nome, Duelo (1 a 5), temperamento e arma.
+- **Quem procura duelo** (Duelo 3 ou mais, e bravo, orgulhoso ou cruel) leva estandarte próprio, e os batedores avisam quando o veem. Chefes de calamidade que lutam de perto também procuram.
+- **Capturar, resgatar e recrutar:** o oficial capturado guarda a ficha, e quem muda de lado vira capitão do bando (origem "capturado").
+
+**Pronto quando:** num exército inimigo dá para ver quem é o herói antes do contato, e um capitão capturado pode virar capitão do bando.
+
+### 9.3. Marco 21, parte 3: o duelo no campo
+**A fazer:**
+- O herói a 60 px do Comandante abre o duelo; os soldados recuam até a borda do anel e param; flechas não entram.
+- Fora do anel, a batalha anda em câmera lenta, com os capitães agindo sozinhos; a câmera vai a 200%.
+- Os mesmos controles da Liça, as poses novas das figuras (leve, pesado, bloqueio, esquiva, atordoado) e as barras do duelo na interface.
+- O fim: rendição (prisioneiro), ferimento ou morte; o Comandante vencido é arrastado para fora; a moral, a Fama e a Honra reagem.
+- O herói contra um capitão nosso: as duas IAs lutam no anel, e o resultado vai para o diário.
+- Testes em batalha: o herói puxa o Comandante, ninguém entra no anel, a moral reage e a batalha não trava.
+
+**Pronto quando:** os três itens do "Pronto quando" do marco, lá em cima.
 
 ## 10. G4: resto do elenco
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.

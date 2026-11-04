@@ -38,7 +38,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | — | Rações refeitas: mochilas por batalhão e comboio de carroças | feito, falta jogar uma campanha |
 | | 20 | Capitães: a cadeia de comando | ✅ OK |
 | | G2 | Pixel art: chão | ✅ OK |
-| | 21 | Duelos no meio da batalha | |
+| | 21 | Duelos no meio da batalha | parte 1 de 3 (as regras, já na Liça) ✅ OK |
 | | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | |
 | | 22 | Acampamento construído pelo bando (e construir nas vilas) | |
 | | G5 | Pixel art: interface | |
