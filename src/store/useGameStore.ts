@@ -247,6 +247,25 @@ export interface SupplyConvoy {
 
 export type BattalionStatus = "READY" | "MOVING" | "ENGAGED" | "FLEEING" | "DESTROYED";
 
+/** As barras de um duelista: vida, fôlego e postura de 0 a 1. */
+export interface DuelistHud {
+  name: string;
+  hp: number;
+  stamina: number;
+  posture: number;
+  /** Do nosso lado. */
+  ally: boolean;
+}
+
+/** O duelo no campo: quem luta e quanto falta para os homens separarem os dois. */
+export interface DuelHud {
+  /** Sem o Comandante (um capitão nosso): as duas cabeças lutam sozinhas. */
+  auto: boolean;
+  /** Segundos até o fim do tempo. */
+  left: number;
+  fighters: [DuelistHud, DuelistHud];
+}
+
 /** Snapshot publicado pela BattleScene (~10 Hz) para o HUD React. */
 export interface BattleHud {
   commanderHp: number;
@@ -324,6 +343,8 @@ export interface BattleHud {
   escort: { x: number; y: number; waiting: boolean } | null;
   /** Câmera lenta: ms que faltam e ms de espera até poder usar de novo. */
   slow: { left: number; wait: number };
+  /** Duelo no campo (Marco 21) em andamento, ou null. */
+  duel: DuelHud | null;
   /** Comandante muito ferido: o estandarte vacila. */
   bannerFaltering: boolean;
   /** Inimigos visíveis agora. */

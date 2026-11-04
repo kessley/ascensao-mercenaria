@@ -145,6 +145,11 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** Batedor: avistá-lo não arrasta o bando inteiro (ver Enemy.onSpot). */
   isScout = false;
   role: UnitRole = "TROOP";
+  /** Duelo no campo (Marco 21): os dois do anel saem da luta comum; quem está perto para e olha. */
+  dueling = false;
+  watching = false;
+  /** Coluna da pose do duelo (ver `ANIM`) no lugar da animação comum. */
+  duelPose: number | null = null;
 
   /** Última posição em terra firme (empurrões não jogam ninguém no rio). */
   safeX = NaN;
@@ -291,6 +296,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
         col = ANIM.DIE + Math.min(2, Math.floor((now - this.diedAt) / 110));
       }
       else if (this.pose === "SLEEP") col = ANIM.DIE + 2;
+      else if (this.duelPose !== null) col = this.duelPose;
       else if (now - this.lastAttackAt < 330) col = ANIM.ATTACK + Math.min(2, Math.floor((now - this.lastAttackAt) / 110));
       else if (walking) col = ANIM.WALK + (Math.floor(this.walked / (s.rides ? 18 : 11)) % 4);
       else col = ANIM.IDLE + (Math.floor((now + this.phase) / 650) % 2);
@@ -637,7 +643,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   }
 
   /** Golpe recebido: a figura pisca branca (o greybox, transparente). */
-  private flashHit(): void {
+  flashHit(): void {
     const img = this.sprite;
     if (!img) {
       this.scene.tweens.add({ targets: this.bodyGfx, alpha: 0.35, duration: 60, yoyo: true });

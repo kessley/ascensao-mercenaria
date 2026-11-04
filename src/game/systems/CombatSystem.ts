@@ -38,9 +38,10 @@ function chargeImpact(unit: Unit, target: Unit, units: readonly Unit[], time: nu
 /** Resolve os ataques automáticos de todas as unidades que já estão no alcance do alvo. */
 export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time: number): void {
   for (const unit of units) {
-    if (!unit.autoAttack || !unit.isAlive || unit.unitState === "FLEEING") continue;
+    if (!unit.autoAttack || !unit.isAlive || unit.unitState === "FLEEING" || unit.watching || unit.dueling) continue;
     const target = unit.target;
-    if (!target || !target.isAlive) continue;
+    // Ninguém mexe nos dois do anel (Marco 21), nem em quem parou para olhar
+    if (!target || !target.isAlive || target.dueling || target.watching) continue;
     if (!unit.inRange(target) || !unit.canAttack(time)) continue;
 
     unit.lastAttackAt = time;

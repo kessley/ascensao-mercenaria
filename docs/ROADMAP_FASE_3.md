@@ -2,15 +2,16 @@
 
 Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador, cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
-**Onde estamos (3 de novembro de 2026):**
+**Onde estamos (4 de novembro de 2026):**
 - **Feito:**
   - a progressão dos batalhões;
   - a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3);
   - as rações refeitas (mochilas e comboio);
   - os capitães (Marco 20 ✅ OK, no acampamento e na batalha);
   - a `WorldScene` dividida em partes (etapa 8);
+  - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
-- **Em andamento:** os duelos no meio da batalha (Marco 21), em três partes. As duas primeiras (as regras do duelo, já na Liça, e os heróis do outro lado) estão feitas; a seguir, o duelo no campo.
+- **A seguir:** o G4, o resto do elenco em pixel art (etapa 10): carroças, aríetes, escadas, harpias, navios e a gente do mapa e do acampamento.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -37,7 +38,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 6 | [Marco 20, parte 2: capitães na batalha](#6-marco-20-parte-2-capitães-na-batalha) | recurso | | ✅ OK; falta jogar uma campanha |
 | 7 | [G2: o resto do chão](#7-g2-o-resto-do-chão--ok) | arte | Árvores, margens e pontes mudam o campo onde as companhias manobram, e o duelo põe a câmera a 200% em cima do chão | ✅ OK |
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
-| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha) | recurso e arte | Traz as poses de golpe das figuras | partes 1 e 2 de 3 ✅ OK |
+| 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [G4: resto do elenco](#10-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | |
 | 11 | [Marco 22: acampamento construído](#11-marco-22-acampamento-construído-pelo-bando-e-construir-nas-vilas) | recurso | Usa as peças do G3 e a gente do G4 | |
 | 12 | [G5: interface](#12-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
@@ -74,7 +75,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - chefes no dobro do tamanho, corpos que ficam no chão e escala inteira da tela;
   - a barra de vida saiu de cima das unidades.
 - **Medido:** o desenho de cerca de 1500 unidades caiu de 20 a 35 ms por quadro para 0 a 12 ms. O gargalo agora é a simulação, de 25 a 60 ms.
-- **O que ficou para depois:** o cavalo de frente e de costas (a pose mais fraca) e as poses de duelo, que entram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
+- **O que ficou para depois:** o cavalo de frente e de costas (a pose mais fraca). As poses de duelo entraram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
 
 ## 3. G3: construções ✅ OK
 - **Povoados** (`src/game/art/buildings.ts`, `src/game/world/TownArt.ts`): casas, Casa do Conselho, castelo, templo, muralhas, paliçadas, portões, mercado, poço, pátios da guarnição, ruínas e a Cidade Alta vista de fora, nas 4 culturas:
@@ -310,7 +311,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 
 **Pronto quando** (vale agora): nenhum arquivo da cena passa de 2000 linhas (o maior, `WorldScene.ts`, tem 942), e as suítes passam.
 
-## 9. Marco 21: duelos no meio da batalha
+## 9. Marco 21: duelos no meio da batalha ✅ OK
 **Objetivo:** quando um herói inimigo de nível alto chega ao Comandante, a batalha em volta para e os dois lutam sozinhos, como nos duelos de *Total War: Three Kingdoms*. A diferença: **ninguém aceita nem recusa, o Comandante é puxado**. É uma luta de ação no chão, com esquiva e bloqueio, curta e perigosa, sem nada de fantasia.
 
 - **Antes, os capitães do outro lado** (vieram do Marco 20): os exércitos dos reinos ganham capitães com nome, nível e Duelo, e não só o chefe da força. Dá para capturar, pedir resgate e recrutar quem muda de lado.
@@ -436,16 +437,55 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 - só o chefe que cai pode virar prisioneiro, como antes; os capitães inimigos, não. Na parte 3, o herói que se rende num duelo vira prisioneiro;
 - o resgate pedido não depende da mão do herói.
 
-### 9.3. Marco 21, parte 3: o duelo no campo
-**A fazer:**
-- O herói a 60 px do Comandante abre o duelo; os soldados recuam até a borda do anel e param; flechas não entram.
-- Fora do anel, a batalha anda em câmera lenta, com os capitães agindo sozinhos; a câmera vai a 200%.
-- Os mesmos controles da Liça, as poses novas das figuras (leve, pesado, bloqueio, esquiva, atordoado) e as barras do duelo na interface.
-- O fim: rendição (prisioneiro), ferimento ou morte; o Comandante vencido é arrastado para fora; a moral, a Fama e a Honra reagem.
-- O herói contra um capitão nosso: as duas IAs lutam no anel, e o resultado vai para o diário.
-- Testes em batalha: o herói puxa o Comandante, ninguém entra no anel, a moral reage e a batalha não trava.
+### 9.3. Marco 21, parte 3: o duelo no campo ✅ OK
+**Feito:**
+- **O herói vai atrás do Comandante:** quem procura duelo e tem o Comandante a até 600 px larga o esquadrão e vai até ele, derrubando quem estiver no caminho. Com o Comandante longe demais, ou com outro duelo no campo, volta para os seus. É assim que dá para fugir dele.
+- **A 60 px, o duelo abre sem perguntar.** É um modo da cena do mundo, numa parte nova (`src/game/scenes/worldScene/duel.ts`):
+  - **o anel tem 90 px.** Quem estava dentro recua até a borda. Quem está a até 150 px do centro para de lutar e fica olhando para os dois;
+  - golpe e flecha de fora não tocam nos dois, e ninguém escolhe os dois como alvo;
+  - **o tempo:** fora do anel, a batalha anda na metade do tempo; o duelo anda no tempo de verdade;
+  - **a câmera** vai a 200% em cima dos dois. A barra de ordens dá lugar aos controles do duelo, e as notícias esperam o fim;
+  - **o comando:** a voz do Comandante não chega à tropa, e os capitães decidem sozinhos (parte 2 do Marco 20).
+- **As regras e os controles da Liça,** com as distâncias do campo (60% das da Liça). O herói luta com a vida da ficha (80, mais 5 por ponto de mão) e com o jeito do temperamento dele.
+- **As poses novas das figuras:**
+  - guarda erguida: o escudo vem para a frente do peito e a lâmina fica de pé;
+  - pesado armando, esquiva e atordoado;
+  - o golpe leve usa as poses de ataque que já existiam;
+  - são 4 colunas novas na folha de cada figura.
+- **As barras na interface:** vida, fôlego e postura dos dois, e o tempo que falta.
+- **O fim:**
+  - **O Comandante vence:** o herói se rende (vai para a lista de prisioneiros, com a ficha), sai ferido ou morre.
+    - A moral da tropa sobe 12, e o dobro para quem estava a até 320 px do anel. A dos esquadrões do herói cai 20, também em dobro perto do anel.
+    - A Fama sobe 3. Executar o herói rendido depois custa Honra, como qualquer oficial preso.
+  - **O herói vence:** o Comandante cede ou cai ferido (ferido, leva mais uma cicatriz). A guarda o arrasta 260 px para trás, com 30% da vida (ferido, com 15%).
+    - A moral da tropa cai, a do inimigo sobe, e a Fama cai 1.
+    - Se ele morre, vale a regra do herdeiro (Marco 18).
+  - **90 s sem vencedor:** os homens de cada um separam os dois.
+  - **Limites:** um duelo por herói em cada batalha, e 15 s entre um duelo e outro.
+- **O herói contra um capitão nosso:** quando ele encosta num capitão e não no Comandante, as duas cabeças lutam no anel, sem câmera lenta nem zoom, e o resultado vai para o diário.
+  - O capitão vencido é levado para trás, ferido.
+  - Se ele morre, é a morte de capitão de sempre.
+- **Testes:**
+  - **1 de regras novo:** nas distâncias do campo, quem lê os avisos vence um herói de Duelo 5 em mais de 60% das vezes (de 73% a 100%, conforme o temperamento), e quem não lê perde para um de Duelo 4;
+  - **a suíte de batalha `duelos`** (`npm run test:battle -- duelos`, 17 verificações):
+    - o herói larga os seus e puxa o Comandante, e o duelo abre a 60 px;
+    - tempo pela metade e câmera a 200%;
+    - um esquadrão e um batalhão mandados para dentro do anel param na borda: o mais perto ficou a 98 px do centro, e 18 a 25 soldados ficaram olhando;
+    - nada de fora toca nos dois, e as barras vão para a interface;
+    - no fim, o tempo e a câmera voltam;
+    - a moral reage para os dois lados: com o Comandante vencendo, a nossa subiu 14 e a deles caiu 40; com o herói vencendo, a nossa caiu 33;
+    - a batalha vai até o fim depois do duelo, e o duelo contra um capitão acaba no diário;
+  - **as outras suítes de batalha** passam todas (218 de 218), inclusive as verificações de sorte da [Dívida](#dívida) nesta rodada.
 
-**Pronto quando:** os três itens do "Pronto quando" do marco, lá em cima.
+**Pronto quando**, os três itens do marco:
+- o duelo abre sem perguntar e o anel para: conferido pela suíte `duelos`;
+- quem lê os avisos vence um herói melhor, na Liça e no campo: conferido pelos testes de regras;
+- perder custa moral, Fama, vida e às vezes uma cicatriz, e só mata pela regra do herdeiro.
+
+**Ficou para depois:**
+- a Liça continua em greybox: as poses existem, mas a `DuelScene` ainda desenha círculos;
+- o capitão nosso que perde não é preso pelo inimigo, só levado para trás;
+- a figura do herói mostra a arma do tipo dele, que nem sempre é a da ficha: o chefe salteador luta de machado no duelo, mas aparece de espada.
 
 ## 10. G4: resto do elenco
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.

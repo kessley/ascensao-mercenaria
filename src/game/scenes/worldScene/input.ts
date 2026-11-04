@@ -60,38 +60,42 @@ export const inputMethods = {
   setupInput(this: WorldScene): void {
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Teclado indisponível");
-    this.keys = keyboard.addKeys("W,A,S,D,SPACE,F,Q,ESC,ONE,TWO,THREE,FOUR,C,H,UP,DOWN,LEFT,RIGHT,R,E,TAB,T,V,G,P,X,Z,B,N,J,L") as BattleKeys;
+    this.keys = keyboard.addKeys("W,A,S,D,SPACE,SHIFT,F,Q,ESC,ONE,TWO,THREE,FOUR,C,H,UP,DOWN,LEFT,RIGHT,R,E,TAB,T,V,G,P,X,Z,B,N,J,L") as BattleKeys;
+    // No duelo (Marco 21), Espaço é o golpe leve; fora dele, o golpe do Comandante é lido a cada quadro
+    this.keys.SPACE.on("down", () => {
+      if (this.inDuel()) this.duelPress("light");
+    });
 
     // V: marcha forçada; G: forragear (Marco 13)
     this.keys.V.on("down", () => {
-      if (!this.ended) this.setForced(!this.forced);
+      if (!this.ended && !this.inDuel()) this.setForced(!this.forced);
     });
     this.keys.G.on("down", () => {
-      if (!this.ended) this.forage();
+      if (!this.ended && !this.inDuel()) this.forage();
     });
     // P: pausa tática; X: selecionados correm ou voltam ao passo; Ctrl+A: seleciona todo o exército
     this.keys.P.on("down", () => {
       if (!this.ended) this.setTacticalPause(!this.tacticalPause);
     });
     this.keys.X.on("down", () => {
-      if (!this.ended) this.toggleRun();
+      if (!this.ended && !this.inDuel()) this.toggleRun();
     });
     this.keys.Z.on("down", () => this.startSlowMotion());
     // J: diário de missões
     this.keys.J.on("down", () => {
       const store = useGameStore.getState();
-      if (this.run || store.worldMapOpen || store.interior) return;
+      if (this.run || store.worldMapOpen || store.interior || this.inDuel()) return;
       store.setCampPanel(store.campPanel?.kind === "MISSIONS" ? null : { kind: "MISSIONS" });
     });
     // B: cessar fogo; N: investida em ciclo
     this.keys.B.on("down", () => {
-      if (!this.ended) this.toggleHoldFire();
+      if (!this.ended && !this.inDuel()) this.toggleHoldFire();
     });
     this.keys.N.on("down", () => {
-      if (!this.ended) this.toggleCycle();
+      if (!this.ended && !this.inDuel()) this.toggleCycle();
     });
     keyboard.on("keydown-A", (e: KeyboardEvent) => {
-      if (!e.ctrlKey || this.ended) return;
+      if (!e.ctrlKey || this.ended || this.inDuel()) return;
       e.preventDefault();
       this.select(this.battalions.filter((b) => !b.isDestroyed), [], false);
       this.publishHud();
@@ -100,6 +104,7 @@ export const inputMethods = {
     // E: interagir com o local mais próximo (tenda, alojamento, mercado de uma cidade...);
     // estruturas com lado de dentro (Marco 14): entrar
     this.keys.E.on("down", () => {
+      if (this.inDuel()) return this.duelPress("shove");
       const store = useGameStore.getState();
       if (store.worldMapOpen || store.battleReport || store.interior) return;
       if (store.campPanel) store.setCampPanel(null);
@@ -109,7 +114,7 @@ export const inputMethods = {
     // Tab: Mapa do Continente (viagem rápida e observação de exércitos)
     this.keys.TAB.on("down", (e: Phaser.Input.Keyboard.Key) => {
       const store = useGameStore.getState();
-      if (store.battleReport || this.run) return;
+      if (store.battleReport || this.run || this.inDuel()) return;
       store.setCampPanel(null);
       // Shift+Tab: o Mapa Múndi, com os outros continentes (Marco 17)
       if (e.shiftKey) {
@@ -124,13 +129,13 @@ export const inputMethods = {
     // L: Livro do Bando (Marco 18)
     this.keys.L.on("down", () => {
       const store = useGameStore.getState();
-      if (this.run || store.voyage || store.battleReport) return;
+      if (this.run || store.voyage || store.battleReport || this.inDuel()) return;
       store.setCampPanel(store.campPanel?.kind === "SAGA" ? null : { kind: "SAGA" });
     });
 
     // T: acender ou apagar as tochas do bando
     this.keys.T.on("down", () => {
-      if (!this.ended) this.setTorches(!this.torches);
+      if (!this.ended && !this.inDuel()) this.setTorches(!this.torches);
     });
 
     this.input.mouse?.disableContextMenu();
@@ -144,9 +149,15 @@ export const inputMethods = {
       .setVisible(false);
 
     // --- Câmera: C prende/solta, H centraliza, roda = zoom, botão do meio arrasta ---
-    this.keys.C.on("down", () => this.setCameraLocked(!this.cameraLocked));
-    this.keys.H.on("down", () => this.centerOnCommander());
+    // No duelo, a câmera é dos dois
+    this.keys.C.on("down", () => {
+      if (!this.inDuel()) this.setCameraLocked(!this.cameraLocked);
+    });
+    this.keys.H.on("down", () => {
+      if (!this.inDuel()) this.centerOnCommander();
+    });
     this.input.on("wheel", (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.inDuel()) return;
       // Pixel art só fica firme em degraus inteiros: a roda pula de um degrau para o vizinho
       const cam = this.cameras.main;
       const steps = CAMERA.ZOOM_STEPS;
@@ -160,6 +171,12 @@ export const inputMethods = {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.ended) return;
+      // No duelo: clique é o golpe leve, o botão direito, o pesado
+      if (this.inDuel()) {
+        if (pointer.rightButtonDown()) this.duelPress("heavy");
+        else if (pointer.leftButtonDown()) this.duelPress("light");
+        return;
+      }
       useGameStore.getState().setContextMenu(null);
 
       if (pointer.middleButtonDown()) {
@@ -243,6 +260,7 @@ export const inputMethods = {
     });
 
     this.keys.F.on("down", () => {
+      if (this.inDuel()) return this.duelPress("dodge");
       if (this.ended) return;
       this.withOrderBatch(() => {
         for (const b of this.commandTargets()) this.dispatch(b, "Reunir ao estandarte", () => b.orderFollow(this.commander), "BASIC_VISUAL");
@@ -250,6 +268,7 @@ export const inputMethods = {
     });
 
     this.keys.Q.on("down", () => {
+      if (this.inDuel()) return this.duelPress("heavy");
       if (this.ended) return;
       const near = this.battalions.filter(
         (b) => !b.isDestroyed && distance(b.center, this.commander) <= BALANCE.NEARBY_SELECT_RADIUS,
@@ -274,12 +293,14 @@ export const inputMethods = {
       this.publishHud();
     });
 
-    this.keys.R.on("down", () => this.warCry());
+    this.keys.R.on("down", () => {
+      if (!this.inDuel()) this.warCry();
+    });
 
     // 1–4: formação dos selecionados (cada tipo de tropa ignora as que não sabe fazer)
     for (const [key, formation] of FORMATION_KEYS) {
       this.keys[key].on("down", () => {
-        if (this.ended) return;
+        if (this.ended || this.inDuel()) return;
         this.withOrderBatch(() => {
           for (const b of this.commandTargets()) {
             if (b.canUseFormation(formation)) {
@@ -403,7 +424,7 @@ export const inputMethods = {
 
   /** Câmera lenta: alguns segundos para decidir, depois uma espera até poder usar de novo. */
   startSlowMotion(this: WorldScene): void {
-    if (this.ended || this.tacticalPause || this.slowLeft > 0 || this.slowWait > 0) return;
+    if (this.ended || this.tacticalPause || this.inDuel() || this.slowLeft > 0 || this.slowWait > 0) return;
     this.slowLeft = COMBAT.SLOW_MS;
     this.setRate(COMBAT.SLOW_RATE);
     this.publishHud();

@@ -78,6 +78,8 @@ export interface LegacyActions {
   dropAmbition: (id: AmbitionId) => void;
   /** O Comandante caiu em combate: as cicatrizes ficam, e às vezes ele não levanta. Devolve true se morreu. */
   commanderFell: (cause: string) => boolean;
+  /** Ferido sem cair (um duelo perdido, Marco 21): mais uma cicatriz. */
+  commanderScarred: (cause: string) => void;
   /** O bando passa ao herdeiro. */
   passStandard: (cause: string) => void;
   closeSuccession: () => void;
@@ -123,6 +125,12 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
       set({ leader: { ...s.leader, wounds: s.leader.wounds + 1 } });
       links.note(`${s.leader.name} sobreviveu, mas a queda deixou mais uma cicatriz.`, "bad");
       return false;
+    },
+
+    commanderScarred: (cause) => {
+      const s = get();
+      set({ leader: { ...s.leader, wounds: s.leader.wounds + 1 } });
+      links.note(`${s.leader.name} ${cause}: mais uma cicatriz.`, "bad");
     },
 
     passStandard: (cause) => {

@@ -175,12 +175,14 @@ export const combatMethods = {
       }
       return;
     }
-    eng?.notes.push(chief ? `${name}, que comandava o ${host.band?.name ?? "bando"}, caiu em combate.` : `O capitão ${name} caiu em combate.`);
+    // Quem saiu do campo por um duelo já tem a nota dele (e não se rende de novo no fim)
+    const dueled = this.duelTaken.has(name);
+    if (!dueled) eng?.notes.push(chief ? `${name}, que comandava o ${host.band?.name ?? "bando"}, caiu em combate.` : `O capitão ${name} caiu em combate.`);
     if (this.run) {
       this.run.officers.push(name);
       if (chief && host.band === this.run.prey) this.run.chiefDown = true;
     }
-    eng?.officers.push({ name, factionId: host.band?.ownerId ?? null, hero: hero ?? undefined });
+    if (!dueled) eng?.officers.push({ name, factionId: host.band?.ownerId ?? null, hero: hero ?? undefined });
   },
 
   /** Quem se rendeu: uma parte dos que caíram e dos que fugiam perto da tropa (Marco 16). */

@@ -187,6 +187,11 @@ export class Battalion {
     return !!this.captain && !this.captainDied;
   }
 
+  /** O capitão em campo, se vivo (o herói inimigo pode desafiá-lo, Marco 21). */
+  get captainSoldier(): Soldier | null {
+    return this.captainUnit?.isAlive ? this.captainUnit : null;
+  }
+
   /** Onde o capitão está (null sem capitão vivo em campo). */
   get captainAt(): Point | null {
     return this.captainUnit?.isAlive ? { x: this.captainUnit.x, y: this.captainUnit.y } : null;

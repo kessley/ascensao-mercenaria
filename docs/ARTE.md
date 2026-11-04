@@ -101,6 +101,7 @@ Interiores, interface e efeitos ainda são greybox.
 | Corpos depois do combate | `Corpses` | ✅ ficam no chão |
 | Guarnições, patrulhas e alcateias | `Enemy` | ✅ pixel art |
 | Tropa dormindo ou sentada no acampamento | `Unit.setPose` | ✅ deita (quadro da queda) ou fica mais baixa |
+| Poses do duelo no campo (Marco 21): guarda erguida, pesado armando, esquiva e atordoado | `figures.ts` (colunas 12 a 15 da folha), `Unit.duelPose` | ✅ pixel art; o golpe leve usa as poses de ataque |
 | Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM) | greybox |
 | Carroças do bando | `Wagon` | greybox |
 | Escadas e aríete do jogador nos cercos | `SiegeWorks` | greybox |
@@ -125,6 +126,7 @@ Interiores, interface e efeitos ainda são greybox.
 | Textos que sobem ("esquiva", "flanqueados!") | `Unit.floatText` | texto |
 | Ordens, destinos, linha de batalha e seleção | `WorldScene`, `Battalion` | greybox (de propósito: são da interface) |
 | Estandarte e nome do batalhão | `Battalion.drawBanner` | greybox |
+| Anel do duelo e aviso dos golpes no campo (Marco 21) | `worldScene/duel.ts` | greybox (de propósito: são da interface) |
 | Estandarte do desafio (herói inimigo que procura duelo, Marco 21) | `duelBannerSprite` em `figures.ts`, `Enemy.makeHero` | ✅ pixel art: flâmula vermelha de duas pontas com espadas cruzadas |
 | Névoa de guerra | `FogOfWar` | greybox |
 | Noite e tochas | `NightLayer` | greybox |

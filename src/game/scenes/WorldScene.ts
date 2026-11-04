@@ -62,6 +62,8 @@ import { ordersMethods, type OrdersMethods } from "./worldScene/orders";
 import { inputMethods, type InputMethods } from "./worldScene/input";
 import { scoutsMethods, type ScoutsMethods } from "./worldScene/scouts";
 import { hudMethods, type HudMethods } from "./worldScene/hud";
+import { duelMethods, type DuelMethods, type FieldDuel } from "./worldScene/duel";
+import type { DuelInput } from "../sim/duel";
 
 /** A cena do mundo mais recente (ao carregar um jogo, a antiga ainda vive por um quadro). */
 let activeScene: WorldScene | null = null;
@@ -254,6 +256,22 @@ export class WorldScene extends Phaser.Scene {
 
   scenarioStance = new WeakMap<Warband, ScenarioForce["stance"]>();
 
+  // --- Duelo no campo (Marco 21) ---
+  fieldDuel: FieldDuel | null = null;
+  /** Espera até o próximo duelo e a próxima olhada por quem chegou perto (relógio da cena). */
+  duelCooldownUntil = -Infinity;
+  duelLookAt = 0;
+  /** Heróis que já duelaram nesta batalha: um duelo por herói. */
+  duelDone = new WeakSet<Enemy>();
+  /** Heróis que saíram do campo por um duelo (o fim do combate não os conta de novo). */
+  duelTaken = new Set<string>();
+  /** Heróis que largaram o esquadrão para ir atrás do Comandante. */
+  duelSeekers = new Set<Enemy>();
+  /** Apertos do jogador desde o último passo do duelo. */
+  duelPressed: Pick<DuelInput, "light" | "heavy" | "shove" | "dodge"> = {};
+  /** O anel no chão e o aviso dos golpes. */
+  duelGfx!: Phaser.GameObjects.Graphics;
+
   /** Comboio de suprimentos (rações refeitas): uma coluna com carroça, do acampamento ao exército (ou de volta). */
   convoyParty: { id: string; party: ExpeditionParty } | null = null;
   /** Escolta que acabou de chegar com o comboio: onde aparecer (ver reconcileArmy). */
@@ -424,7 +442,8 @@ export class WorldScene extends Phaser.Scene {
     this.companies = new Companies({
       commander: () => this.commander,
       feed: (text) => this.pushFeed(text),
-      inVoice: (p) => !!this.run?.def.directOrders || distance(p, this.commander) <= SUPPORT.COMMAND_RADIUS,
+      // No anel, o Comandante não comanda: os capitães decidem sozinhos
+      inVoice: (p) => !this.inDuel() && (!!this.run?.def.directOrders || distance(p, this.commander) <= SUPPORT.COMMAND_RADIUS),
     });
 
     // Marco 16: bando que entra na bolha ganha comando em campo
@@ -485,6 +504,7 @@ export class WorldScene extends Phaser.Scene {
     this.wildlife = new WildlifeManager((x, y, kind) => this.spawnEnemy(x, y, kind), despawn);
 
     this.missionGfx = this.add.graphics().setDepth(14);
+    this.resetDuels();
     this.fog = new FogOfWar(this, WORLD_WIDTH, WORLD_HEIGHT);
     // Lugares conhecidos desde o início: o acampamento e as cidades (destinos da viagem rápida)
     this.fog.revealExplored(this.world.camp.center, WORLD.KNOWN_RADIUS + 300);
@@ -639,22 +659,27 @@ export class WorldScene extends Phaser.Scene {
     }
     this.updateSlowMotion(delta);
     if (this.armyDirty && !this.engagement) this.reconcileArmy();
+    // Marco 21: o herói que chegou perto abre o duelo antes de todo mundo se mexer
+    this.checkDuelTriggers(time);
+    const duelLock = this.inDuel();
 
     const prev = { x: this.commander.x, y: this.commander.y };
-    const walking = this.commander.handleMovement(k, dt);
+    const walking = !duelLock && this.commander.handleMovement(k, dt);
     if (walking) this.walkPath = null;
     else this.followWalkPath(dt);
     this.updateDoorPush(walking, dt);
-    if (k.SPACE.isDown) this.commander.trySwing(this.activeEnemies(), time);
-    // A câmera do jogador não entra na câmera lenta
-    this.updateFreeCamera(dt / timeRate());
+    if (!duelLock && k.SPACE.isDown) this.commander.trySwing(this.activeEnemies(), time);
+    // A câmera do jogador não entra na câmera lenta (no duelo, ela fica nos dois)
+    if (!duelLock) this.updateFreeCamera(dt / timeRate());
 
-    const allies = this.allAllies();
+    // Os dois do anel saem da batalha comum: ninguém os escolhe como alvo, empurra ou move
+    const seen = this.allAllies();
+    const allies = this.fieldDuel ? seen.filter((u) => !u.dueling) : seen;
     if (time - this.lastFogAt >= SUPPORT.FOG_UPDATE_MS) this.updateVision(time);
-    else this.updateReveal(allies, time);
+    else this.updateReveal(seen, time);
     this.updateHostility();
     this.works?.update(dt);
-    const active = this.activeEnemies();
+    const active = this.fieldDuel ? this.activeEnemies().filter((e) => !e.dueling) : this.activeEnemies();
     // Só os hostis contam para alvos automáticos, moral e combate (patrulhas em paz, refugiados e mensageiros não)
     const hostiles = active.filter((e) => e.hostile);
     const visibleEnemies = hostiles.filter((e) => e.revealed);
@@ -681,6 +706,7 @@ export class WorldScene extends Phaser.Scene {
       return extra ? [...base(e), ...extra] : base(e);
     };
     const hostWorld: HostWorld = { time, dt, allies, rivalsOf, bonus: WAR_AI.DIFFICULTY[store.warDifficulty].competence };
+    this.seekDuels(active);
     this.hosts.update(hostWorld);
     for (const e of active) e.think(dt, allies, rivalsOf(e));
     this.handleWarbandEvents(this.warbands.update(dt));
@@ -699,6 +725,7 @@ export class WorldScene extends Phaser.Scene {
     for (const s of this.scouts) s.think(dt, scoutWorld);
     this.updateHarpies(dt, time, active);
     this.updateMessengers(dt);
+    this.updateFieldDuel(dt);
 
     const everyone: Unit[] = [...allies, ...active];
     setArrowField(everyone);
@@ -712,6 +739,7 @@ export class WorldScene extends Phaser.Scene {
     this.watchGroups(time);
 
     separateUnits(everyone);
+    this.keepRingClear(everyone);
     clampToWorld(everyone);
     if (this.commander.isAlive) this.campArea.collide(this.commander, prev);
     this.commandRing.setPosition(this.commander.x, this.commander.y);
@@ -938,5 +966,5 @@ export class WorldScene extends Phaser.Scene {
  * A cena passava de 6000 linhas: as partes moram em `./worldScene/`, cada uma um objeto de métodos
  * com `this: WorldScene`, e entram aqui no protótipo. A interface diz ao TypeScript que são da cena.
  */
-export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods {}
-Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods);
+export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods {}
+Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods);

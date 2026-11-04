@@ -21,7 +21,7 @@ import {
   type DuelWeapon,
   type FighterSpec,
 } from "../../src/game/sim/duel";
-import { DUEL } from "../../src/utils/constants";
+import { DUEL, FIELD_DUEL } from "../../src/utils/constants";
 import { distance } from "../../src/utils/math";
 
 const DT = 1 / 30;
@@ -332,7 +332,7 @@ function reader(o: { reaction: number; miss: number }) {
       else out.light = true;
     }
     const keep = foe.stance === "STAGGER" ? reach * 0.7 : reach * 0.95;
-    const dir = gap > keep + 6 ? 1 : gap < keep - 12 ? -1 : 0;
+    const dir = gap > keep + 6 * d.scale ? 1 : gap < keep - 12 * d.scale ? -1 : 0;
     const a = Math.atan2(foe.y - me.y, foe.x - me.x);
     out.dx = Math.cos(a) * dir;
     out.dy = Math.sin(a) * dir;
@@ -341,10 +341,13 @@ function reader(o: { reaction: number; miss: number }) {
 }
 
 describe("duelo: o Comandante nas teclas", () => {
-  const record = (o: { reaction: number; miss: number }, skill: number, temper: DuelTemper) => {
+  /** No campo (Marco 21), as distâncias encolhem e o herói tem a vida da ficha (80 + 5 por ponto de mão). */
+  const record = (o: { reaction: number; miss: number }, skill: number, temper: DuelTemper, field = false) => {
     let wins = 0;
+    const s = field ? FIELD_DUEL.SCALE : 1;
     for (let i = 0; i < 30; i++) {
-      const d = startDuel(makeFighter({ name: "C", x: -60, y: 0, armor: 0.1 }), hero("H", skill, 60), { center: { x: 0, y: 0 }, radius: 276, rng: seeded(i * 13 + skill) });
+      const foe = field ? makeFighter({ name: "H", x: 60 * s, y: 0, maxHp: 80 + skill * 5, armor: 0.1, pace: aiPace(skill), speed: aiSpeed(skill) }) : hero("H", skill, 60);
+      const d = startDuel(makeFighter({ name: "C", x: -60 * s, y: 0, armor: 0.1 }), foe, { center: { x: 0, y: 0 }, radius: field ? FIELD_DUEL.RING - 16 : 276, scale: s, rng: seeded(i * 13 + skill) });
       const mind = makeMind(temper, skill);
       const me = reader(o);
       while (!d.winner && !d.timedOut) {
@@ -358,6 +361,11 @@ describe("duelo: o Comandante nas teclas", () => {
 
   it("lendo os avisos e aparando, dá para vencer um herói melhor", () => {
     for (const t of ["AGGRESSIVE", "PATIENT", "TREACHEROUS"] as DuelTemper[]) expect(record({ reaction: 0.25, miss: 0.2 }, 10, t)).toBeGreaterThan(0.6);
+  });
+
+  it("no campo, com as distâncias menores e o herói mais inteiro, vale o mesmo", () => {
+    for (const t of ["AGGRESSIVE", "PATIENT", "TREACHEROUS"] as DuelTemper[]) expect(record({ reaction: 0.25, miss: 0.2 }, 10, t, true)).toBeGreaterThan(0.6);
+    expect(record({ reaction: 0.3, miss: 0.6 }, 8, "STEADY", true)).toBeLessThan(0.3);
   });
 
   it("quem não lê o aviso perde para um herói bom", () => {

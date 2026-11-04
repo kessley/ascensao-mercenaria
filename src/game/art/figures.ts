@@ -43,8 +43,11 @@ export interface Look {
 }
 
 export const DIRS: readonly Dir[] = ["S", "E", "N"];
-export const FRAMES = 12;
-export const ANIM = { IDLE: 0, WALK: 2, ATTACK: 6, DIE: 9 } as const;
+export const FRAMES = 16;
+/** Colunas da folha. As do duelo (Marco 21) vêm depois da queda: guarda, pesado armando, esquiva e atordoado. */
+export const ANIM = { IDLE: 0, WALK: 2, ATTACK: 6, DIE: 9, GUARD: 12, HEAVY: 13, DODGE: 14, STAGGER: 15 } as const;
+/** As três colunas da queda (a última é o corpo no chão). */
+const isFall = (frame: number) => frame >= ANIM.DIE && frame < ANIM.DIE + 3;
 
 export const lookKey = (l: Look): string =>
   [l.beast ?? "", l.body, l.head, l.armor, l.weapon, l.shield, l.mount, l.color.toString(16), l.trim?.toString(16) ?? "", l.cape?.toString(16) ?? "", l.horns ? "h" : "", l.eyes?.toString(16) ?? "", l.scale ?? 1].join(".");
@@ -126,6 +129,8 @@ interface Pose {
   lean: number;
   /** 0 = nada, 1 = armando o golpe (puxando a corda), 2 = golpe (soltando). */
   act: 0 | 1 | 2;
+  /** Guarda erguida (duelo): o escudo sobe para a frente do corpo e a lâmina fica de pé. */
+  guard?: boolean;
 }
 
 function poseOf(frame: number): Pose {
@@ -147,6 +152,14 @@ function poseOf(frame: number): Pose {
       return { ...base, arm: 5, lean: 1, stride: [2, -1], act: 2 };
     case 8:
       return { ...base, arm: -50, lean: 1, stride: [1, 0], act: 0 };
+    case ANIM.GUARD:
+      return { ...base, bob: 1, arm: 60, lean: -1, stride: [1, -1], guard: true };
+    case ANIM.HEAVY:
+      return { ...base, bob: 1, arm: 150, lean: -2, stride: [-1, 1], act: 1 };
+    case ANIM.DODGE:
+      return { ...base, bob: 2, lift: [1, 0], stride: [-2, 2], arm: -60, lean: -2 };
+    case ANIM.STAGGER:
+      return { ...base, bob: 1, lift: [0, 1], stride: [-1, 1], arm: -80, lean: -2 };
     default:
       return base;
   }
@@ -556,13 +569,16 @@ function drawFront(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look
   headFront(g, m, cx, yh, l);
   const hx = armX0 + Math.floor(m.armW / 2);
   const hy = y0 + armH + 2;
-  if (l.shield === "ROUND") roundShield(g, armX1, y0 + 4, team);
-  if (l.shield === "KITE") kiteShield(g, armX1 - 1, y0 + 1, team, l.trim);
+  // Na guarda, o escudo vem para a frente do peito
+  const up = p.guard ? 2 : 0;
+  if (l.shield === "ROUND") roundShield(g, armX1 - up, y0 + 4 - up, team);
+  if (l.shield === "KITE") kiteShield(g, armX1 - 1 - up, y0 + 1 - up / 2, team, l.trim);
   switch (l.weapon) {
     case "SWORD":
     case "AXE": {
       const axe = l.weapon === "AXE";
-      if (p.act === 1) blade(g, hx - 1, y0 - 1, 100, -1, axe);
+      if (p.guard) blade(g, hx + 1, y0 + 3, 70, -1, axe);
+      else if (p.act === 1) blade(g, hx - 1, y0 - 1, 100, -1, axe);
       else if (p.act === 2) blade(g, hx + 1, hy, -60, -1, axe);
       else blade(g, hx, hy, p.arm + 150, -1, axe);
       break;
@@ -572,6 +588,7 @@ function drawFront(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look
     case "JAVELIN": {
       const len = l.weapon === "JAVELIN" ? 11 : 16;
       if (p.act === 2) pole(g, hx, y0 + 2, -70, 10, -1, IRON.light);
+      else if (p.guard) pole(g, hx, y0 + 4, 60, len, -1, IRON.light);
       else if (p.act === 1 && l.weapon === "JAVELIN") pole(g, hx, y0 - 2, 80, len, -1, IRON.light);
       else pole(g, hx, hy, 88, len, -1, IRON.light);
       break;
@@ -668,7 +685,7 @@ function drawSide(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look)
   const sy = y0 + 2;
   const skin = SKIN[l.body];
   const arm = sleeve(l);
-  if (l.shield !== "NONE") sideShield(g, x0 + w, y0 + 3, team, l.shield === "KITE");
+  if (l.shield !== "NONE") sideShield(g, x0 + w + (p.guard ? 1 : 0), y0 + (p.guard ? 1 : 3), team, l.shield === "KITE");
   const reach = (deg: number) => {
     const [hx, hy] = polar(sx, sy, deg, 5);
     g.line(sx, sy, hx, hy, arm.dark);
@@ -685,8 +702,8 @@ function drawSide(g: Grid, m: Metrics, cx: number, fy: number, p: Pose, l: Look)
     }
     case "SPEAR":
     case "LANCE": {
-      const deg = p.act === 1 ? 12 : p.act === 2 ? 2 : 72;
-      const [hx, hy] = reach(p.act === 1 ? -40 : p.act === 2 ? 0 : -30);
+      const deg = p.act === 1 ? 12 : p.act === 2 ? 2 : p.guard ? 30 : 72;
+      const [hx, hy] = reach(p.act === 1 ? -40 : p.act === 2 || p.guard ? 0 : -30);
       pole(g, hx + (p.act === 2 ? 2 : 0), hy, deg, 14, 1, IRON.light);
       break;
     }
@@ -1078,7 +1095,7 @@ function frameGrid(l: Look, dir: Dir, frame: number): Grid {
   const cx = cell.feetX;
   const fy = cell.feetY;
   const mounted = rides(l);
-  if (frame >= ANIM.DIE) {
+  if (isFall(frame)) {
     if (mounted) drawMountedFall(g, m, cx, fy, frame - ANIM.DIE, l);
     else drawFall(g, m, cx, fy, frame - ANIM.DIE, l);
   } else if (mounted) drawMounted(g, m, cx, fy, dir, frame, l);
@@ -1088,7 +1105,8 @@ function frameGrid(l: Look, dir: Dir, frame: number): Grid {
   g = grow(g, l);
   g.outline();
   const k = big(l) ? 2 : 1;
-  if (frame < FRAMES - 1) g.shadow(cx * k, (fy + 1) * k, (mounted ? 9 : Math.floor(m.torsoW * 0.7)) * k, 2 * k);
+  // Quem já está no chão não faz sombra
+  if (frame !== ANIM.DIE + 2) g.shadow(cx * k, (fy + 1) * k, (mounted ? 9 : Math.floor(m.torsoW * 0.7)) * k, 2 * k);
   return g;
 }
 

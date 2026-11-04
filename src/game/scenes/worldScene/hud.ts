@@ -83,6 +83,7 @@ export const hudMethods = {
       position: { x: Math.round(this.commander.x), y: Math.round(this.commander.y) },
       escort: this.escortAt(),
       slow: { left: Math.round(this.slowLeft), wait: Math.round(this.slowWait) },
+      duel: this.duelHud(),
       warCryIn: Math.max(0, Math.ceil((SUPPORT.WAR_CRY.COOLDOWN_MS - (this.time.now - this.warCryAt)) / 1000)),
       bannerFaltering: this.commander.hp / this.commander.maxHp < SUPPORT.BANNER_FALTER_HP,
       enemiesInSight: this.visibleEnemies().length,

@@ -1031,6 +1031,35 @@ export const DUEL = {
   FEINT_AT: 0.45,
 } as const;
 
+/** O duelo no campo (Marco 21, parte 3): o anel, o tempo de fora e o que o fim muda na batalha. */
+export const FIELD_DUEL = {
+  /** O herói a esta distância do Comandante (ou de um capitão nosso) abre o duelo. */
+  TRIGGER: 60,
+  /** Raio do anel: ninguém entra; quem estava dentro recua até a borda. */
+  RING: 90,
+  /** Quem está até aqui do centro para de lutar e fica olhando. */
+  WATCH: 150,
+  /** O herói vai atrás do Comandante que está até aqui e à vista dele. */
+  SEEK: 600,
+  /** Ritmo da batalha fora do anel e o zoom da câmera durante o duelo. */
+  SLOW: 0.5,
+  ZOOM: 2,
+  /** Tamanho das distâncias do duelo no campo (as figuras são menores que na Liça). */
+  SCALE: 0.6,
+  /** Espera entre um duelo e outro (ms do jogo). */
+  COOLDOWN_MS: 15000,
+  /** Moral de quem venceu e de quem perdeu o seu duelista; quem estava perto do anel sente o dobro. */
+  MORALE_WIN: 12,
+  MORALE_LOSS: 20,
+  NEAR: 320,
+  /** O Comandante vencido sai com esta fração da vida (ferido, menos) e é levado este tanto para trás. */
+  BEATEN_HP: 0.3,
+  WOUNDED_HP: 0.15,
+  DRAG: 260,
+  /** Fama de quem perde um duelo em campo. */
+  LOSS_FAME: 1,
+} as const;
+
 /** Economia do acampamento (Marco 3). */
 export const ECONOMY = {
   START_GOLD: 120,

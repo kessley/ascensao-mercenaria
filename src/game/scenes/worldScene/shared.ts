@@ -17,6 +17,8 @@ import type { Point } from "../../../utils/math";
 export type BattleKeys = CommanderKeys & {
   L: Phaser.Input.Keyboard.Key;
   SPACE: Phaser.Input.Keyboard.Key;
+  /** Guarda no duelo (Marco 21). */
+  SHIFT: Phaser.Input.Keyboard.Key;
   F: Phaser.Input.Keyboard.Key;
   Q: Phaser.Input.Keyboard.Key;
   ESC: Phaser.Input.Keyboard.Key;
