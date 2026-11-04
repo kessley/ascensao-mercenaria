@@ -128,6 +128,9 @@ const WOLF: Ramp = { light: 0xaeaea6, base: 0x7c7c78, dark: 0x52524e };
 const DEER: Ramp = { light: 0xc0905a, base: 0x9a6a3c, dark: 0x6a4626 };
 const ANTLER = 0xd8c8a0;
 const DEER_TAIL = 0xf0e8d8;
+/** A lista clara na testa do cavalo e o fio mais claro do rabo. */
+const BLAZE = 0xe8dccc;
+const MANE_LIGHT = 0x4a3628;
 
 interface Pose {
   bob: number;
@@ -918,95 +921,162 @@ function horseSide(g: Grid, cx: number, fy: number, frame: number, l: Look): num
 /** No passo, de frente ou de costas, um par de patas sobe de cada vez. */
 const stepOf = (frame: number) => (frame >= ANIM.WALK && frame < ANIM.ATTACK ? ((frame - ANIM.WALK) % 2 === 0 ? 1 : 0) : 0);
 
-/** Pata vista de frente ou de costas, com o casco escuro. */
-function hoof(g: Grid, x: number, top: number, bottom: number, w: number, shade: number): void {
-  g.rect(x, top, w, bottom - top, shade);
-  g.rect(x, bottom - 1, w, 1, MANE);
+/** Pata vista de frente ou de costas: a de perto tem luz de um lado; o casco é escuro. */
+function hoof(g: Grid, x: number, top: number, bottom: number, c: Ramp, near: boolean): void {
+  g.rect(x, top, 2, bottom - top, near ? c.base : c.dark);
+  if (near) g.rect(x, top, 1, bottom - top - 1, c.light);
+  g.rect(x, bottom - 1, 2, 1, MANE);
 }
 
-/** Lombo atrás (ou à frente) do cavaleiro: é ele que diz "isto é um cavalo" de frente e de costas. */
-function barrel(g: Grid, cx: number, y: number, c: Ramp, l: Look): void {
-  const cover = l.mount === "BARDED" ? ramp(l.color) : c;
-  g.oval(cx, y, 5, 3, cover.base);
-  g.rect(cx - 3, y - 3, 6, 1, cover.light);
-  g.rect(cx + 3, y - 1, 2, 3, cover.dark);
+/**
+ * Fileiras centradas entre as colunas cx - 1 e cx, o meio do cavaleiro: com largura par, o
+ * bicho fica simétrico com quem vai em cima.
+ */
+function rows(g: Grid, cx: number, y: number, widths: readonly number[], c: number): void {
+  widths.forEach((w, i) => g.rect(cx - w / 2, y + i, w, 1, c));
 }
 
-/** Cavalo de frente: patas, lombo e peito largo. A cabeça vem depois do cavaleiro, por cima dele. */
+/** Coberta da montaria: a cor da tropa no cavalo com barda; senão, o pelo. */
+const coverOf = (l: Look, c: Ramp): Ramp => (l.mount === "BARDED" ? ramp(l.color) : c);
+
+/**
+ * Cavalo de frente: o corpo foge para trás do cavaleiro (para cima na tela), e a barriga
+ * sobra dos dois lados; na frente, o peito e as patas, as de perto mais grossas. A cabeça
+ * vem depois do cavaleiro, por cima dele.
+ */
 function horseFront(g: Grid, cx: number, fy: number, frame: number, l: Look): number {
   const c = mountRamp(l);
+  const cover = coverOf(l, c);
   const step = stepOf(frame);
   const chestY = fy - 13 + poseOf(frame).bob;
-  // As de trás ficam mais longe, então terminam mais alto
-  hoof(g, cx - 5, chestY + 5, fy - 1 - (1 - step), 1, c.dark);
-  hoof(g, cx + 4, chestY + 5, fy - 1 - step, 1, c.dark);
-  barrel(g, cx, chestY - 2, c, l);
-  hoof(g, cx - 3, chestY + 5, fy + 1 - step, 2, c.base);
-  hoof(g, cx + 1, chestY + 5, fy + 1 - (1 - step), 2, c.base);
-  g.box(cx - 5, chestY, 10, 6, c);
-  if (l.mount === "BARDED") {
-    const t = ramp(l.color);
-    g.box(cx - 5, chestY, 10, 6, t);
-    g.rect(cx - 5, chestY + 5, 10, 1, l.trim ?? t.light);
+  // Lá atrás, o rabo escapa de um lado e balança no passo
+  if (l.beast !== "DEER") {
+    g.line(cx + 4, chestY - 7, cx + 8, chestY - 4 + step, MANE);
+    g.line(cx + 5, chestY - 7, cx + 8, chestY - 3 + step, MANE);
   }
+  // As de trás ficam mais longe: terminam mais alto e por fora das da frente
+  hoof(g, cx - 7, chestY - 1, fy - 1 - (1 - step), c, false);
+  hoof(g, cx + 5, chestY - 1, fy - 1 - step, c, false);
+  // O lombo e a barriga, com a luz no dorso
+  rows(g, cx, chestY - 8, [8, 12, 14, 14, 14, 14, 12, 10], cover.base);
+  rows(g, cx, chestY - 8, [8, 10], cover.light);
+  g.rect(cx + 5, chestY - 6, 2, 5, cover.dark);
+  if (l.mount === "BARDED") rows(g, cx, chestY - 2, [12], l.trim ?? cover.light);
+  // As da frente, de perto, descem até o chão
+  hoof(g, cx - 4, chestY + 5, fy + 1 - step, c, true);
+  hoof(g, cx + 2, chestY + 5, fy + 1 - (1 - step), c, true);
+  // O peito, largo, com a sombra embaixo
+  const chest = l.mount === "BARDED" ? ramp(l.color) : c;
+  g.box(cx - 5, chestY, 10, 6, chest);
+  g.rect(cx - 4, chestY, 8, 1, chest.light);
+  g.rect(cx - 4, chestY + 5, 8, 1, l.mount === "BARDED" ? (l.trim ?? chest.light) : chest.dark);
   return chestY;
 }
 
-/** Pescoço e cabeça de frente, por cima da barriga do cavaleiro: orelhas, testa e focinho. */
+/**
+ * Pescoço e cara de frente. Com cavaleiro, a cara cobre a barriga dele e o focinho desce até
+ * entre as patas da frente; sem ninguém em cima, a cabeça fica no alto, acima do lombo.
+ * Orelhas em V, topete, olhos dos lados, a lista clara na testa e o focinho escuro. Um traço
+ * escuro de cada lado separa a cara do peito, que é do mesmo pelo.
+ */
 function horseHead(g: Grid, cx: number, chestY: number, l: Look): void {
   const c = mountRamp(l);
-  g.rect(cx - 3, chestY - 2, 6, 3, c.dark);
-  g.rect(cx - 2, chestY - 3, 4, 8, c.base);
-  g.rect(cx - 2, chestY - 3, 1, 6, c.light);
-  g.rect(cx - 2, chestY + 3, 4, 2, c.dark);
-  g.px(cx - 1, chestY + 4, OUTLINE);
-  g.px(cx, chestY + 4, OUTLINE);
-  g.px(cx - 2, chestY - 1, OUTLINE);
-  g.px(cx + 1, chestY - 1, OUTLINE);
-  g.px(cx - 2, chestY - 4, c.dark);
-  g.px(cx + 1, chestY - 4, c.dark);
-  if (l.beast === "DEER") {
+  const deer = l.beast === "DEER";
+  const neck = coverOf(l, c);
+  const up = l.beast ? 6 : 0;
+  const top = chestY - 3 - up;
+  // O pescoço, mais largo e mais escuro que a cara, e a crina caindo de um lado
+  const length = 3 + up;
+  rows(g, cx, top, Array.from({ length }, (_, i) => (i === 0 ? 6 : 8)), neck.dark);
+  if (up) rows(g, cx, top + 1, Array.from({ length: length - 1 }, () => 6), neck.base);
+  if (!deer) g.rect(cx - 4, top - 1, 1, length, MANE);
+  // As orelhas
+  g.rect(cx - 2, top - 2, 1, 2, c.dark);
+  g.rect(cx + 1, top - 2, 1, 2, c.dark);
+  // A cara, comprida, com o traço dos lados e o focinho escuro
+  g.rect(cx - 3, top + 1, 1, 8, MANE);
+  g.rect(cx + 2, top + 1, 1, 8, MANE);
+  g.box(cx - 2, top, 4, 7, c);
+  g.rect(cx - 2, top + 7, 4, 2, c.dark);
+  g.px(cx - 2, top + 1, OUTLINE);
+  g.px(cx + 1, top + 1, OUTLINE);
+  g.px(cx - 2, top + 8, OUTLINE);
+  g.px(cx + 1, top + 8, OUTLINE);
+  if (deer) {
     // A galhada aberta em V e o focinho claro
-    g.line(cx - 2, chestY - 4, cx - 4, chestY - 8, ANTLER);
-    g.line(cx + 1, chestY - 4, cx + 3, chestY - 8, ANTLER);
-    g.px(cx - 5, chestY - 7, ANTLER);
-    g.px(cx + 4, chestY - 7, ANTLER);
-    g.rect(cx - 1, chestY + 3, 2, 1, DEER_TAIL);
-  } else g.rect(cx - 1, chestY - 3, 2, 1, MANE);
-  if (l.mount === "BARDED") g.rect(cx - 1, chestY - 2, 2, 4, IRON.light);
+    g.line(cx - 2, top - 2, cx - 4, top - 6, ANTLER);
+    g.line(cx + 1, top - 2, cx + 3, top - 6, ANTLER);
+    g.px(cx - 5, top - 5, ANTLER);
+    g.px(cx + 4, top - 5, ANTLER);
+    g.rect(cx - 1, top + 7, 2, 1, DEER_TAIL);
+    return;
+  }
+  g.rect(cx - 1, top - 1, 2, 1, MANE);
+  if (l.mount === "BARDED") {
+    // A testeira de ferro no lugar da lista
+    g.rect(cx - 1, top, 2, 6, IRON.light);
+    g.rect(cx, top, 1, 6, IRON.base);
+  } else {
+    g.rect(cx - 1, top + 1, 2, 2, BLAZE);
+    g.rect(cx - 1, top + 3, 1, 3, BLAZE);
+  }
 }
 
-/** Cavalo de costas: garupa larga e rabo na frente, lombo atrás do cavaleiro. */
+/**
+ * Cavalo de costas: na frente, a garupa em duas ancas partidas pelo rabo; atrás do cavaleiro,
+ * o lombo. Sem cavaleiro, aparecem também o pescoço e as orelhas lá na frente do bicho.
+ */
 function horseBack(g: Grid, cx: number, fy: number, frame: number, l: Look): number {
   const c = mountRamp(l);
+  const cover = coverOf(l, c);
   const step = stepOf(frame);
   const rumpY = fy - 14 + poseOf(frame).bob;
+  const deer = l.beast === "DEER";
+  if (l.beast) {
+    // Sem ninguém em cima, a cabeça aparece lá na frente, por cima do lombo
+    g.rect(cx - 2, rumpY - 11, 4, 6, c.dark);
+    g.rect(cx - 2, rumpY - 13, 1, 2, c.dark);
+    g.rect(cx + 1, rumpY - 13, 1, 2, c.dark);
+    if (deer) {
+      g.line(cx - 2, rumpY - 13, cx - 4, rumpY - 17, ANTLER);
+      g.line(cx + 1, rumpY - 13, cx + 3, rumpY - 17, ANTLER);
+    } else g.rect(cx - 1, rumpY - 12, 2, 7, MANE);
+  }
   // As da frente do bicho ficam longe, entre as de trás
-  hoof(g, cx - 2, rumpY + 6, fy - 1 - step, 1, c.dark);
-  hoof(g, cx + 1, rumpY + 6, fy - 1 - (1 - step), 1, c.dark);
-  barrel(g, cx, rumpY - 1, c, l);
-  hoof(g, cx - 5, rumpY + 6, fy + 1 - (1 - step), 2, c.base);
-  hoof(g, cx + 3, rumpY + 6, fy + 1 - step, 2, c.base);
-  // Garupa mais larga que o cavaleiro, partida ao meio pelo rabo
-  const cover = l.mount === "BARDED" ? ramp(l.color) : c;
-  g.oval(cx, rumpY + 3, 7, 3, cover.base);
-  g.rect(cx - 6, rumpY + 1, 4, 1, cover.light);
-  g.rect(cx + 2, rumpY + 1, 4, 1, cover.light);
-  g.rect(cx + 5, rumpY + 3, 2, 3, cover.dark);
-  if (l.mount === "BARDED") g.rect(cx - 6, rumpY + 6, 13, 1, l.trim ?? cover.light);
-  if (l.beast === "DEER") {
-    // O traseiro branco e o rabo curto; a galhada aparece por cima da garupa
+  hoof(g, cx - 3, rumpY + 5, fy - 1 - step, c, false);
+  hoof(g, cx + 1, rumpY + 5, fy - 1 - (1 - step), c, false);
+  // O lombo, que segue para longe, atrás do cavaleiro
+  rows(g, cx, rumpY - 7, [8, 12, 14, 14, 14, 14], cover.base);
+  rows(g, cx, rumpY - 7, [8, 10], cover.light);
+  g.rect(cx + 5, rumpY - 5, 2, 4, cover.dark);
+  // As de trás, de perto: a coxa grossa embaixo da anca e a canela fina
+  for (const [x, lift] of [[cx - 5, 1 - step], [cx + 3, step]] as const) {
+    g.rect(x - (x < cx ? 1 : 0), rumpY + 5, 3, 2, c.base);
+    hoof(g, x, rumpY + 7, fy + 1 - lift, c, true);
+  }
+  // A garupa: duas ancas com a luz em cima de cada uma
+  rows(g, cx, rumpY - 1, [10, 14, 16, 16, 16, 16, 14, 10], cover.base);
+  g.rect(cx - 6, rumpY, 4, 1, cover.light);
+  g.rect(cx + 2, rumpY, 4, 1, cover.light);
+  g.rect(cx - 7, rumpY + 1, 2, 1, cover.light);
+  g.rect(cx + 6, rumpY + 1, 2, 4, cover.dark);
+  rows(g, cx, rumpY + 6, [10], cover.dark);
+  g.rect(cx - 1, rumpY + 1, 2, 6, cover.dark);
+  if (l.mount === "BARDED") rows(g, cx, rumpY + 5, [16], l.trim ?? cover.light);
+  if (deer) {
+    // O traseiro branco e o rabo curto
     g.oval(cx, rumpY + 3, 3, 2, DEER_TAIL);
     g.rect(cx - 1, rumpY + 1, 2, 2, c.dark);
-    g.line(cx - 2, rumpY - 3, cx - 4, rumpY - 7, ANTLER);
-    g.line(cx + 1, rumpY - 3, cx + 3, rumpY - 7, ANTLER);
     return rumpY;
   }
-  // Rabo: balança no passo e abre na ponta
+  // O rabo: grosso na raiz, balança no passo e abre na ponta
   const sway = step ? 1 : 0;
-  g.rect(cx - 1, rumpY, 2, 6, MANE);
-  g.rect(cx - 1 + sway, rumpY + 6, 2, 3, MANE);
-  g.rect(cx - 2 + sway, rumpY + 9, 4, 1, MANE);
+  g.rect(cx - 1, rumpY - 1, 2, 4, MANE);
+  g.rect(cx - 1 + sway, rumpY + 3, 2, 4, MANE);
+  g.rect(cx - 2 + sway, rumpY + 7, 4, 2, MANE);
+  g.rect(cx - 1 + sway, rumpY + 9, 3, 1, MANE);
+  g.px(cx - 1, rumpY, MANE_LIGHT);
+  g.px(cx + sway, rumpY + 4, MANE_LIGHT);
   return rumpY;
 }
 

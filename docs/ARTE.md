@@ -2,11 +2,12 @@
 
 Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel art** (já convertido) ou **greybox** (formas de código, como era). Por que pixel art, perspectiva e etapas: [PLANO_GRAFICO.md](PLANO_GRAFICO.md). Etapas no roadmap: [Fase 3](ROADMAP_FASE_3.md).
 
-**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão) e G3 (construções) ✅ OK. Já são pixel art:
+**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão), G3 (construções) e G4 (resto do elenco) ✅ OK. Já são pixel art:
 - todo soldado, inimigo e bicho que luta;
 - o chão, em todos os degraus do zoom, com água que se mexe, pontes, vaus, balsas e picos;
 - as matas: árvores, moitas e pedras;
 - as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades;
+- as carroças, os aríetes, as escadas, as harpias, os navios e a gente do mapa e do acampamento (G4);
 - os interiores das construções, a Cidade Alta das capitais e a Liça dos duelos (G4, parte 5).
 
 A interface e os efeitos ainda são greybox.
@@ -97,7 +98,8 @@ A interface e os efeitos ainda são greybox.
 | --- | --- | --- |
 | 9 tropas do jogador (infantaria, lanceiros, guarda pesada, arqueiros, besteiros, dardeiros, cavalaria, cavaleiros, arqueiros montados) | `Soldier` | ✅ pixel art |
 | Comandante (penacho e capa), batedor e mensageiro | `Commander`, `Scout`, `Messenger` | ✅ pixel art |
-| 53 dos 55 tipos de inimigo: goblins, orcs, esqueletos, salteadores, piratas, soldados dos reinos, tropas de ultramar, amotinados, civis, mercadores, arautos, lobos e cavaleiros de lobo | `Enemy` | ✅ pixel art |
+| 53 dos 55 tipos de inimigo: goblins, orcs, esqueletos, salteadores, piratas, soldados dos reinos, tropas de ultramar, amotinados, civis, mercadores, arautos, lobos e cavaleiros de lobo (os outros 2, a carroça e o aríete, vieram no G4) | `Enemy` | ✅ pixel art |
+| Cavalo de frente e de costas | `figures.ts` | ✅ pixel art, refeito no G4 (parte 6): de frente, a cara comprida com a lista branca e a barriga dos dois lados; de costas, as duas ancas e o rabo que balança |
 | Chefes de calamidade (Necromante, Senhor da Guerra orc) | `Enemy` | ✅ pixel art no dobro do tamanho, ampliada com Scale2x e retocada: Necromante com olhos acesos e friso violeta, Senhor da Guerra com chifres e capa escura |
 | Corpos depois do combate | `Corpses` | ✅ ficam no chão |
 | Guarnições, patrulhas e alcateias | `Enemy` | ✅ pixel art |
@@ -181,16 +183,14 @@ A interface e os efeitos ainda são greybox.
 | Mapa do Continente e Mapa Múndi | greybox |
 
 ## O que falta, por etapa
-1. **G1, acabamento** (feito: chefes no dobro, corpos no chão, escala inteira da tela). Continua fraco:
-   - cavalo de frente e de costas: lê como cavalo, mas ainda é a pose mais fraca;
-   - estandarte e nome do batalhão ainda são greybox (ficam para o G5, com a fonte).
+1. **G1, acabamento ✅ OK** (chefes no dobro, corpos no chão, escala inteira da tela e, no G4, o cavalo de frente e de costas). Ficou para depois: o estandarte e o nome do batalhão ainda são greybox (ficam para o G5, com a fonte).
 2. **G2, chão ✅ OK.** Ficou para depois:
    - a água só se mexe de perto (100% e 200%), e não há onda que corre na praia;
    - o chão comum de baixo ainda é pintado na linha principal (barato agora: 1,5 ms por pedaço na mediana).
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco,** em seis partes. As cinco primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta. Falta o acabamento do G1.
+4. **G4, resto do elenco ✅ OK,** em seis partes: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1 (o cavalo de frente e de costas).
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface:** fonte, molduras, ícones e retratos.

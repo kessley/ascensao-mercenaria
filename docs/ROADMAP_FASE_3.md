@@ -13,13 +13,13 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
   - os locais de missão sempre habitados (etapa 10 ✅ OK);
-  - o G4 até a parte 5: harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça.
+  - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G4 termina (etapa 11, em seis partes) com a parte 6: o acabamento do G1 (os 2 tipos de inimigo que faltam e o cavalo de frente e de costas).
-  - Já estão feitas as cinco primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta.
-  - Depois dele vem o Marco 22 (etapa 12).
+- **A seguir:** o Marco 22 (etapa 12, em quatro partes), pela parte 1: o bivaque e a grade.
+  - A campanha nova começa só com a tenda, a fogueira e uma barraca. O jogador monta o resto numa grade quadrada de 40 px, com as primeiras 16 construções.
+  - Depois vêm a vida no acampamento, a fortaleza e a cidade que nasce sozinha.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -48,7 +48,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
-| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 a 5 de 6 ✅ OK |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
@@ -78,13 +78,13 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **G0, decidido:** vista 3/4, soldado de 16×24 e arte gerada por código, depois de uma prova com até 6400 soldados nos três níveis de zoom.
 - **G1, feito** (`src/game/art/`):
   - figuras em camadas: 4 corpos, 7 cabeças, 3 armaduras, 8 armas, 2 escudos e 3 montarias, na cor da tropa;
-  - as 9 tropas do jogador, o Comandante, batedores, mensageiros e 53 dos 55 tipos de inimigo;
+  - as 9 tropas do jogador, o Comandante, batedores, mensageiros e 53 dos 55 tipos de inimigo (os outros 2, a carroça de mercador e o aríete, vieram no G4);
   - 3 direções e uma espelhada, com as poses parado, andando, atacando e caindo;
   - zoom em degraus (25%, 50%, 100% e 200%), com 3 níveis de detalhe;
   - chefes no dobro do tamanho, corpos que ficam no chão e escala inteira da tela;
   - a barra de vida saiu de cima das unidades.
 - **Medido:** o desenho de cerca de 1500 unidades caiu de 20 a 35 ms por quadro para 0 a 12 ms. O gargalo agora é a simulação, de 25 a 60 ms.
-- **O que ficou para depois:** o cavalo de frente e de costas (a pose mais fraca). As poses de duelo entraram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
+- **O que ficou para depois:** o cavalo de frente e de costas, a pose mais fraca. Ele foi refeito no G4, parte 6, e as poses de duelo entraram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
 
 ## 3. G3: construções ✅ OK
 - **Povoados** (`src/game/art/buildings.ts`, `src/game/world/TownArt.ts`): casas, Casa do Conselho, castelo, templo, muralhas, paliçadas, portões, mercado, poço, pátios da guarnição, ruínas e a Cidade Alta vista de fora, nas 4 culturas:
@@ -529,7 +529,7 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 - limpo, ele fica vazio por uns dias e depois volta a ter gente;
 - com contrato, o mesmo local vem mais forte e com o chefe.
 
-## 11. G4: resto do elenco
+## 11. G4: resto do elenco ✅ OK
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.
 
 **Pronto quando:** numa marcha com comboio, num cerco e numa viagem por mar, nada em campo é mais círculo nem retângulo.
@@ -670,8 +670,27 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - os prédios muito grandes, como a estalagem e a Casa dos Mercadores, ainda têm muito telhado liso;
 - o povo da arquibancada faz parte do chão: não se mexe nem torce.
 
-### 11.6. Acabamento do G1
-**A fazer:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
+### 11.6. Acabamento do G1 ✅ OK
+**Feito:**
+- **Os 2 tipos de inimigo que faltavam** eram a carroça de mercador e o aríete. Eles entraram na parte 1, e agora os 55 tipos têm figura.
+- **O cavalo de frente e de costas** (`art/figures.ts`), que era a pose mais fraca do G1:
+  - **De frente:**
+    - o corpo foge para trás do cavaleiro, e a barriga sobra dos dois lados;
+    - o peito é largo, e as patas de perto são mais grossas que as de trás;
+    - a cara é comprida e desce até entre as patas da frente, com orelhas, topete, olhos dos lados, a lista branca na testa e o focinho escuro;
+    - um traço escuro separa a cara do peito, que é do mesmo pelo;
+    - o rabo escapa de um lado, lá atrás.
+  - **De costas:**
+    - a garupa tem duas ancas, cada uma com a luz em cima;
+    - o rabo cheio desce entre elas e balança no passo;
+    - as coxas são grossas e as canelas, finas.
+  - **O cavalo de barda** leva a testeira de ferro no lugar da lista. A coberta na cor da tropa vai no peito, no pescoço, no lombo e na garupa.
+  - **Sem ninguém em cima,** como os cavalos do estábulo: de frente, a cabeça fica no alto; de costas, o pescoço e as orelhas aparecem lá na frente.
+  - O cavalo agora fica simétrico com o cavaleiro.
+  - O cervo usa o mesmo desenho, com a galhada e o traseiro branco.
+- **Testes:**
+  - 4 testes de regras novos: o cavalo é mais largo que o cavaleiro, a lista e a testeira, a cabeça no alto sem cavaleiro, e o rabo, que balança no passo;
+  - conferido na tela, numa batalha com cavalaria, cavaleiros e arqueiros montados, a 200% e a 400%.
 
 ## 12. Marco 22: do bivaque à cidade
 **Objetivo:** o bando começa com quase nada e constrói a própria casa. A tenda vira acampamento, o acampamento vira fortaleza e, em volta da fortaleza, uma cidade nasce sozinha. O design inteiro, com o catálogo e os números, está na [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22).
