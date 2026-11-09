@@ -2,6 +2,7 @@ import { BALANCE, ECONOMY, PROGRESSION, SUPPLY, TROOPS } from "./constants";
 import type { BattalionData } from "../store/useGameStore";
 import { PASSIVES, type LieutenantData } from "../game/data/lieutenants";
 import { followerRations, hasFollower, type Follower } from "../game/sim/campEvents";
+import { chaplainBonus, faithOf, type FaithId } from "../game/sim/faith";
 
 /**
  * Rações consumidas por dia: 1 para cada SOLDIERS_PER_RATION soldados, mais 1 do Comandante e
@@ -14,9 +15,16 @@ export function dailyRations(battalions: readonly BattalionData[], followers: re
   return Math.ceil(1 + troops + followerRations(followers));
 }
 
-/** Bônus de moral vindo do acampamento: o humor do dia e o capelão. */
-export function campMoraleBonus(campMood: number, followers: readonly Follower[]): number {
-  return campMood + (hasFollower(followers, "CHAPLAIN") ? 10 : 0);
+/**
+ * Bônus de moral vindo do acampamento: o humor do dia e o capelão. Com a fé do batalhão
+ * (Marco 23), o capelão dá muito aos da fé dele, pouco aos outros e nada aos rivais; sem ela,
+ * conta como se fosse da mesma fé.
+ */
+export function campMoraleBonus(campMood: number, followers: readonly Follower[], faith?: FaithId): number {
+  const chaplain = followers.find((f) => f.role === "CHAPLAIN");
+  if (!chaplain) return campMood;
+  const his = chaplain.faith ?? faithOf(null);
+  return campMood + chaplainBonus(his, faith ?? his);
 }
 
 /** Salário semanal do batalhão: veteranos (nível alto) cobram mais. */

@@ -9,7 +9,7 @@ import type { Point } from "./math";
  */
 
 /** Dia do ano (0 a 4×DAYS−1) de um dia da campanha. */
-function dayOfYear(day: number): number {
+export function dayOfYear(day: number): number {
   const year = SEASONS.DAYS * 4;
   return (((day - 1 + SEASONS.START_OFFSET) % year) + year) % year;
 }

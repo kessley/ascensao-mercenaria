@@ -243,7 +243,8 @@ export const campMethods = {
     const store = useGameStore.getState();
     const spot = this.nearestSpot;
     const verb = spot?.enter && spot.enter !== "seat:out" ? "Entrar: " : "";
-    store.setCampPrompt(spot && !store.campPanel ? `E — ${verb}${spot.label}` : null);
+    // Com o relatório do combate aberto, o aviso cobriria os botões dele
+    store.setCampPrompt(spot && !store.campPanel && !store.battleReport ? `E — ${verb}${spot.label}` : null);
   },
 
   houseSpots(this: WorldScene): Interactable[] {

@@ -6,6 +6,8 @@ import { xpToNextLevel } from "../../../utils/progression";
 import { PixelIcon } from "../PixelIcon";
 import { TroopIcon } from "../battle/BattleIcons";
 import { cultureOf, peopleOf } from "../../../game/sim/culture";
+import { FAITHS, faithOf } from "../../../game/sim/faith";
+import { TONGUE, orderVoice } from "../../../game/sim/language";
 
 /** Um batalhão: efetivo, tropa, formação, salário e reforço de soldados perdidos. */
 export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
@@ -13,6 +15,8 @@ export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
   // O tenente da mesma gente da tropa segura mais a moral (Marco 23)
   const lieutenant = useGameStore((s) => s.lieutenants.find((l) => l.battalionId === b.id));
   const kin = !!lieutenant && cultureOf(lieutenant) === cultureOf(b);
+  // A tropa entende a voz do Comandante, ou o tenente fala as duas línguas? (Marco 23)
+  const lost = useGameStore((s) => !orderVoice(s.leader, cultureOf(b), lieutenant ?? null));
   const reinforceBattalion = useGameStore((s) => s.reinforceBattalion);
   const missing = b.maxSoldiers - b.soldiers;
   const per = reinforceCostPerSoldier(b);
@@ -53,7 +57,13 @@ export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
           <span data-origin={cultureOf(b)} title={kin ? "O tenente é da mesma gente: a tropa perde menos moral" : undefined} className={kin ? "text-emerald-300" : undefined}>
             {peopleOf(cultureOf(b))}
             {kin ? " (tenente da terra)" : ""}
-          </span>
+          </span>{" "}
+          · <span data-faith={faithOf(b)}>fé {FAITHS[faithOf(b)].of}</span>
+          {lost && (
+            <span className="block text-yellow-300" data-lost-orders title="As trombetas e as bandeiras não precisam de língua">
+              Fala {TONGUE[cultureOf(b)].label}: as ordens de viva voz e pelo mensageiro demoram a ser entendidas. Um tenente que fale as duas línguas resolve.
+            </span>
+          )}
         </span>
         {missing > 0 && (
           <button

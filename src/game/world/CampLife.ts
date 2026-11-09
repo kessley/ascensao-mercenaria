@@ -212,6 +212,7 @@ export class CampLife {
       CHAPLAIN: spot({ x: f.x + 100, y: f.y - 80 }),
       FAMILY: spot({ x: f.x - 140, y: f.y + 140 }),
       SMITH: spot(this.sites.FORGE),
+      INTERPRETER: spot({ x: f.x - 90, y: f.y - 70 }),
     };
     this.trainingLabel.setPosition(this.yard.x, this.yard.y - 110);
   }
@@ -616,6 +617,9 @@ export class CampLife {
         if (st.iron && distance(at, home) < 30 && Math.random() < 0.3) return { to: store, wait: 1200 };
         return { to: near(home, 12), wait: 2500 + Math.random() * 2500 };
       }
+      case "INTERPRETER":
+        // Vai e volta entre a fogueira e a tenda do Comandante
+        return Math.random() < 0.5 ? { to: near(this.sites.TENT, 60), wait: 3000 + Math.random() * 3000 } : { to: near(home, 30), wait: 2500 + Math.random() * 2500 };
     }
   }
 

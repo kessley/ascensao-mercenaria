@@ -123,6 +123,14 @@ export function nameIn(id: TongueId, female: boolean, r: () => number = Math.ran
   return list[Math.floor(r() * list.length)];
 }
 
+/** Uma palavra qualquer da língua (Marco 23): as sílabas dos lugares, em minúsculas. */
+export function wordIn(id: TongueId, r: () => number = Math.random): string {
+  const t = TONGUES[id];
+  const start = t.start[Math.floor(r() * t.start.length)];
+  const end = t.end[Math.floor(r() * t.end.length)];
+  return (start + end).toLowerCase();
+}
+
 /** O nome é de mulher? (reis e rainhas vêm da história como texto). */
 export function isFemaleName(name: string): boolean {
   return Object.values(TONGUES).some((t) => t.female.includes(name.split(" ")[0]));

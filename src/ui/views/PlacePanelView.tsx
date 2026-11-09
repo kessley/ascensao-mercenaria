@@ -20,6 +20,7 @@ import { SettlementPanel } from "../components/SettlementPanel";
 import { FerryPanel } from "../components/FerryPanel";
 import { DiplomacyPanel, WorldChronicle } from "../components/tent/RealmPanels";
 import { FollowersPanel } from "../components/tent/FollowersPanel";
+import { FaithPanel } from "../components/tent/FaithPanel";
 import { GamePanel } from "../components/SavePanel";
 import { BridgePanel } from "../components/BridgePanel";
 import { InfirmaryPanel, PeddlerPanel, WagonPanel } from "../components/tent/LogisticsPanels";
@@ -172,6 +173,7 @@ function PanelBody({
           <CommandBoard />
           <LieutenantRoster />
           <FollowersPanel />
+          <FaithPanel />
           <InfirmaryPanel />
           <BattalionList />
           {noQuartermaster && (

@@ -15,6 +15,11 @@ export function DialogBox({ dialog }: { dialog: Dialog }) {
         <div className="min-w-0 flex-1">
           <div className="mb-1 text-sm font-bold text-amber-300">{dialog.speaker}</div>
           <p className="text-sm leading-relaxed text-neutral-100">{dialog.text}</p>
+          {dialog.tongue && (
+            <p className="mt-1 text-xs italic text-sky-300" data-dialog-tongue>
+              {dialog.tongue}
+            </p>
+          )}
         </div>
       </div>
       <div className="mt-3 flex max-h-72 flex-col gap-1 overflow-y-auto">

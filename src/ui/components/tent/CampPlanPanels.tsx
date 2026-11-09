@@ -1,11 +1,15 @@
+import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   campNeeds,
   campStaffing,
   inCampOf,
+  interpreterTongue,
   shiftOf,
   useGameStore,
 } from "../../../store/useGameStore";
+import { TONGUE } from "../../../game/sim/language";
+import { LANGUAGE } from "../../../utils/constants";
 import {
   BUILD_GROUPS,
   CAMP_BUILDINGS,
@@ -672,6 +676,13 @@ export function TavernHire({ settlementId }: { settlementId: string }) {
   const day = useGameStore((s) => s.day);
   const gold = useGameStore((s) => s.gold);
   const hire = useGameStore((s) => s.hireAtTavern);
+  // O intérprete (Marco 23): de uma língua que se fala ali e o Comandante ainda não fala
+  const tongue = useGameStore((s) => {
+    const t = s.settlements.find((x) => x.id === settlementId);
+    return t ? interpreterTongue(s, t) : null;
+  });
+  const hireInterpreter = useGameStore((s) => s.hireInterpreter);
+  const [said, setSaid] = useState<string | null>(null);
   const cost = Math.round(TROOPS.INFANTRY.cost * TAVERN_HIRE.COST);
   const wait =
     last === undefined ? 0 : Math.max(0, TAVERN_HIRE.EVERY_DAYS - (day - last));
@@ -689,6 +700,17 @@ export function TavernHire({ settlementId }: { settlementId: string }) {
       >
         Contratar um batalhão ({cost} ouro)
       </Button>
+      {tongue && (
+        <>
+          <p className="text-xs text-neutral-400">
+            Num canto, alguém que fala {TONGUE[tongue].label} oferece os serviços: fala pelo Comandante nos mercados, nas cortes e com os presos, e ensina a língua mais depressa.
+          </p>
+          <Button data-hire-interpreter={tongue} disabled={gold < LANGUAGE.INTERPRETER_COST} onClick={() => setSaid(hireInterpreter(settlementId))}>
+            Contratar um intérprete de {TONGUE[tongue].short} ({LANGUAGE.INTERPRETER_COST} ouro)
+          </Button>
+        </>
+      )}
+      {said && <p className="text-xs text-yellow-300">{said}</p>}
     </section>
   );
 }

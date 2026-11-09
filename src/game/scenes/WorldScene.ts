@@ -47,7 +47,8 @@ import { type ScenarioForce } from "../data/scenarios";
 import { isSick } from "../sim/realm";
 import { registerFieldCapture, unregisterFieldCapture } from "../save/saveGame";
 import { useGameStore } from "../../store/useGameStore";
-import { BALANCE, COMBAT, SUPPORT, GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, FATIGUE, SEASONS, WEATHER, SIEGE, WAR_AI, setWorldSize, type Season, type TerrainType, type Weather } from "../../utils/constants";
+import { BALANCE, COMBAT, SUPPORT, GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, FATIGUE, FAITH, SEASONS, WEATHER, SIEGE, WAR_AI, setWorldSize, type Season, type TerrainType, type Weather } from "../../utils/constants";
+import { NO_FAITH_DAY, keptToday } from "../sim/faith";
 import { AudioEngine } from "../../audio/AudioEngine";
 import { sfx, startCampfireAmbience, stopCampfireAmbience } from "../../audio/sounds";
 import { distance, type Point } from "../../utils/math";
@@ -774,6 +775,9 @@ export class WorldScene extends Phaser.Scene {
     resolveAttacks(this, everyone, time);
     this.hosts.afterCombat(hostWorld);
     const faltering = this.commander.hp / this.commander.maxHp < SUPPORT.BANNER_FALTER_HP;
+    // Dia santo e jejum de cada fé (Marco 23)
+    const today = useGameStore.getState();
+    Battalion.faithToday = this.run ? NO_FAITH_DAY : keptToday(today.day, today.fastBroken);
     for (const b of this.battalions) {
       const seen = !b.isDestroyed && this.seesBanner(b.center);
       updateMorale(b, hostiles, this.commander, dt, time, { seen, faltering });
@@ -822,7 +826,16 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.lastHudAt >= BALANCE.HUD_UPDATE_MS * timeRate()) {
       this.lastHudAt = time;
       this.publishHud();
+      this.watchDead();
     }
+  }
+
+  /** O exército se afastou dos mortos sem enterrá-los (Marco 23): os fiéis não perdoam. */
+  watchDead(): void {
+    const s = useGameStore.getState();
+    const u = s.unburied;
+    if (!u || this.engagement || s.battleReport || this.run) return;
+    if (distance(this.commander, u) > FAITH.BURY_LEAVE) s.leaveDead();
   }
 
   /** O que as tropas percebem umas das outras: quem começou a fugir e quem foi pego de lado. */

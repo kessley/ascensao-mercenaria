@@ -2,9 +2,10 @@ import Phaser from "phaser";
 import { Soldier } from "./Soldier";
 import type { Unit } from "./Unit";
 import type { Commander } from "./Commander";
-import { BALANCE, CAPTAINS, COLORS, COMBAT, CULTURE, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import { BALANCE, CAPTAINS, COLORS, COMBAT, CULTURE, FAITH, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
 import type { CultureId } from "../data/planet";
 import { cultureOf } from "../sim/culture";
+import { faithOf, type FaithId, type FaithToday } from "../sim/faith";
 import type { CaptainData } from "../data/captains";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
@@ -29,6 +30,8 @@ export type BattalionOrder =
 export class Battalion {
   /** Sem inimigo à vista: a tropa viaja no passo normal (a cena atualiza a cada quadro). */
   static calm = false;
+  /** O que cada fé guarda hoje (Marco 23): a cena atualiza a cada quadro. */
+  static faithToday: Pick<FaithToday, "holy" | "fasting"> = { holy: new Set(), fasting: new Set() };
 
   readonly id: string;
   readonly name: string;
@@ -105,6 +108,8 @@ export class Battalion {
   captainAura = 1;
   /** De onde a tropa veio (Marco 23). */
   readonly culture: CultureId;
+  /** A fé da tropa (Marco 23). */
+  readonly faith: FaithId;
 
   constructor(
     scene: Phaser.Scene,
@@ -118,6 +123,7 @@ export class Battalion {
     this.lieutenant = lieutenant;
     this.captain = captain;
     this.culture = cultureOf(data);
+    this.faith = faithOf(data);
     this.id = data.id;
     this.name = data.name;
     this.troopType = data.troopType;
@@ -217,7 +223,14 @@ export class Battalion {
   }
 
   get fatigueDamage(): number {
-    return 1 - (this.fatigue / 100) * FATIGUE.MAX_DAMAGE_LOSS;
+    // Em jejum, o braço pesa (Marco 23)
+    const fast = Battalion.faithToday.fasting.has(this.faith) ? FAITH.FAST_DAMAGE : 1;
+    return (1 - (this.fatigue / 100) * FATIGUE.MAX_DAMAGE_LOSS) * fast;
+  }
+
+  /** No dia santo da sua fé, a tropa luta de má vontade e perde a moral mais depressa (> 1; Marco 23). */
+  get devotion(): number {
+    return Battalion.faithToday.holy.has(this.faith) ? FAITH.HOLY_RELUCTANCE : 1;
   }
 
   /** Recuperação de moral conforme a fadiga. */

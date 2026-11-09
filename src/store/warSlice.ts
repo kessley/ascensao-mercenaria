@@ -7,6 +7,8 @@ import { newId } from "../utils/id";
 import { takeFieldFood } from "../game/sim/logistics";
 import { captainFromCaptive, joinChance, type HeroData } from "../game/data/heroes";
 import { ready } from "../game/data/campGrid";
+import { TONGUE, barrierOf, losesDetail, voiceFor } from "../game/sim/language";
+import { BAND_HOME } from "../game/sim/culture";
 
 /**
  * Prisioneiros e o preço da vitória (Marco 16): quem se rende, oficiais capturados e o Comandante
@@ -189,6 +191,12 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
         const f = s.factions.find((x) => x.id === o.factionId);
         const towns = s.settlements.filter((t) => t.owner === o.factionId);
         const garrison = towns.reduce((n, t) => n + t.garrison, 0);
+        // Sem quem fale a língua dele, o preso diz menos: nem os planos, nem a senha dos portões (Marco 23)
+        const tongue = s.world?.culture ?? BAND_HOME;
+        if (f && losesDetail(barrierOf(voiceFor(tongue, s)))) {
+          set({ captiveOfficers: get().captiveOfficers.map((x) => (x === o ? { ...x, questioned: true } : x)) });
+          return `${o.name} falou, mas ninguém no bando sabe ${TONGUE[tongue].label}: só deu para entender que o reino tem ${towns.length} povoado(s). Um intérprete arrancaria mais.`;
+        }
         const text = f ? `${towns.length} povoado(s), ${garrison} homens de guarnição${f.plan ? `; o plano do reino: ${f.plan.reason}` : ""}. Os exércitos dele estão marcados no mapa.` : "um covil, meia dúzia de nomes e nada que valha a pena.";
         set({
           captiveOfficers: get().captiveOfficers.map((x) => (x === o ? { ...x, questioned: true } : x)),

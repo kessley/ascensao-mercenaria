@@ -1,5 +1,7 @@
 import { supportWages } from "../../../game/data/riders";
-import { useGameStore } from "../../../store/useGameStore";
+import { townBarrier, townTongue, useGameStore } from "../../../store/useGameStore";
+import { TONGUE, garble, losesDetail } from "../../../game/sim/language";
+import { hashString } from "../../../utils/hash";
 import { WORLD } from "../../../utils/constants";
 import { DIFFICULTY, type Contract, type Difficulty } from "../../../game/data/contracts";
 import { dailyRations, daysUntilPayday, weeklyWages } from "../../../utils/economy";
@@ -30,6 +32,16 @@ function ContractOffer({ c }: { c: Contract }) {
   const world = useGameStore((s) => s.world);
   const army = useArmyAt();
   const plan = useMissionPlan(c);
+  // O contrato vem na língua de quem paga: sem quem a fale, chega com menos detalhe (Marco 23)
+  const tongue = useGameStore((s) => {
+    const t = s.settlements.find((x) => x.id === c.clientId);
+    return t ? townTongue(s, t) : null;
+  });
+  const barrier = useGameStore((s) => {
+    const t = s.settlements.find((x) => x.id === c.clientId);
+    return t ? townBarrier(s, t) : 0;
+  });
+  const vague = !!tongue && losesDetail(barrier);
 
   const perDay = dailyRations(battalions, followers);
   const wages = weeklyWages(battalions, lieutenants) + riders;
@@ -45,10 +57,15 @@ function ContractOffer({ c }: { c: Contract }) {
           <h3 className="font-semibold">{c.title}</h3>
           <div className="text-xs text-neutral-400">{c.client}</div>
         </div>
-        <span className={`text-xs font-bold ${DIFFICULTY_COLOR[c.difficulty]}`}>{DIFFICULTY[c.difficulty].label}</span>
+        <span className={`text-xs font-bold ${vague ? "text-neutral-400" : DIFFICULTY_COLOR[c.difficulty]}`}>{vague ? "perigo: ?" : DIFFICULTY[c.difficulty].label}</span>
       </header>
-      <p className="text-xs text-neutral-300">{c.description}</p>
-      {plan && world && (
+      <p className="text-xs text-neutral-300">{vague && tongue ? garble(c.description, tongue, barrier, hashString(c.id)) : c.description}</p>
+      {vague && tongue && (
+        <p className="text-xs italic text-yellow-300" data-contract-vague={tongue}>
+          Veio {TONGUE[tongue].in}, e ninguém no bando a fala bem: sem o perigo nem o caminho. Um intérprete ou um oficial que a fale traria o detalhe.
+        </p>
+      )}
+      {plan && world && !vague && (
         <div className="flex flex-col gap-2">
           <MissionSteps plan={plan} army={army} />
           <MissionMap world={world} plan={plan} army={army} />

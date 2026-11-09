@@ -2,7 +2,8 @@ import { Battalion } from "../../entities/Battalion";
 import { Messenger, type MissionStop } from "../../entities/Messenger";
 import { Unit } from "../../entities/Unit";
 import { useGameStore, type TrumpetCall } from "../../../store/useGameStore";
-import { BALANCE, COLORS, SUPPORT } from "../../../utils/constants";
+import { BALANCE, COLORS, LANGUAGE, SUPPORT } from "../../../utils/constants";
+import { orderVoice } from "../../sim/language";
 import { sfx } from "../../../audio/sounds";
 import { distance, type Point } from "../../../utils/math";
 import { FEED_SIZE, type OrderRecipient, type OrderChannel, type Reach, type PendingDelivery, TRUMPET_LABEL } from "./shared";
@@ -12,6 +13,9 @@ import type { WorldScene } from "../WorldScene";
  * O raio de comando, os sinais (voz, trombeta, estandarte) e os mensageiros.
  * Uma parte da `WorldScene`: os métodos entram no protótipo dela (ver o fim de `WorldScene.ts`).
  */
+/** Quando cada batalhão avisou por último que não entendeu (para não encher o relato). */
+const lostNoted = new WeakMap<Battalion, number>();
+
 export const ordersMethods = {
   // --- Raio de comando e mensageiros ---
 
@@ -181,6 +185,16 @@ export const ordersMethods = {
     }
     const name = this.recipientName(recipient);
     const reach = this.reachOf(recipient, channel);
+    // Marco 23: a ordem falada (de viva voz ou pelo mensageiro) a um batalhão que não fala a língua
+    // do Comandante precisa do tenente que fale as duas; sem ele, a tropa demora a entender.
+    // A trombeta e as bandeiras não precisam de língua.
+    if (recipient instanceof Battalion && reach !== "TRUMPET" && reach !== "BANNER") {
+      const lieutenant = recipient.lieutenant && !recipient.lieutenantDied ? recipient.lieutenant : null;
+      if (!orderVoice(useGameStore.getState().leader, recipient.culture, lieutenant)) {
+        const heard = apply;
+        apply = () => this.lostInTranslation(recipient, order, heard);
+      }
+    }
     // Batalhão destacado muito longe: a harpia leva a ordem ao batedor que está perto dele
     const relay = !reach && recipient instanceof Battalion ? this.relayFor(recipient) : null;
     if (relay && recipient instanceof Battalion) {
@@ -228,6 +242,21 @@ export const ordersMethods = {
       return true;
     }
     return this.sendMessengers(order, [{ order, stop, recipient }]);
+  },
+
+  /** A ordem chegou, mas a tropa não fala a língua do Comandante: entende depois de um tempo, por gestos. */
+  lostInTranslation(this: WorldScene, b: Battalion, order: string, apply: () => void): void {
+    b.pendingOrder = order;
+    const now = this.time.now;
+    if (now - (lostNoted.get(b) ?? -Infinity) > 8000) {
+      lostNoted.set(b, now);
+      this.pushFeed(`${b.name} não entende de primeira "${order}": ninguém ali fala a língua do Comandante.`);
+    }
+    this.time.delayedCall(LANGUAGE.ORDER_DELAY_MS, () => {
+      if (b.isDestroyed) return;
+      if (b.pendingOrder === order) b.pendingOrder = null;
+      apply();
+    });
   },
 
   /** Destinatário de uma missão: na entrega, a autoridade do mensageiro age antes da ordem. */

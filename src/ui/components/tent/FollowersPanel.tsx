@@ -1,5 +1,7 @@
 import { useGameStore } from "../../../store/useGameStore";
 import { FOLLOWERS, followerCap } from "../../../game/sim/campEvents";
+import { FAITHS } from "../../../game/sim/faith";
+import { TONGUE } from "../../../game/sim/language";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -29,6 +31,8 @@ export function FollowersPanel() {
             <li key={f.id} className="flex items-center justify-between gap-2 rounded bg-neutral-800 px-3 py-1.5 text-xs">
               <span>
                 <b>{f.name}</b> · {FOLLOWERS[f.role].label}
+                {f.role === "CHAPLAIN" && ` ${FAITHS[f.faith ?? "FLAME"].of}`}
+                {f.role === "INTERPRETER" && f.tongue && ` de ${TONGUE[f.tongue].short}`}
                 <span className="block text-neutral-400">
                   {FOLLOWERS[f.role].effect} · come {FOLLOWERS[f.role].rations} ração/dia · desde o dia {f.since}
                 </span>
