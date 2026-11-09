@@ -8,7 +8,7 @@ import type { Piece } from "./buildings";
  * Peças como as do G3: o ponto de apoio é o pé da peça, e quem está mais embaixo passa na frente.
  */
 
-export type StationRole = "COOK" | "PEDDLER" | "HEALER" | "CHAPLAIN" | "FAMILY" | "SMITH";
+export type StationRole = "COOK" | "PEDDLER" | "HEALER" | "CHAPLAIN" | "FAMILY" | "SMITH" | "INTERPRETER";
 
 const WOOD = ramp(0x7a5432);
 const WOOD_DARK = 0x4e3420;
@@ -220,6 +220,9 @@ export function stationPieces(role: StationRole): { dx: number; dy: number; make
     // As famílias andam na frente do varal
     case "FAMILY":
       return [{ dx: 0, dy: -10, make: clothesline }];
+    // O intérprete anda com o Comandante: não tem posto
+    case "INTERPRETER":
+      return [];
   }
 }
 

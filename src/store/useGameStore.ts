@@ -103,18 +103,21 @@ import {
   type PriceNote,
   type TradeLot,
 } from "../game/sim/trade";
-import { ofRealm, settlementName } from "../game/worldgen/names";
+import { nameIn, ofRealm, settlementName } from "../game/worldgen/names";
+import { TONGUE, barrierOf, garble, heardNote, interpreterTitle, isFluent, learnDay, priceMargin, voiceFor, type Voice } from "../game/sim/language";
+import { hashString } from "../utils/hash";
 import { continentWorld, generateWorld } from "../game/worldgen/generateWorld";
 import { generatePlanet, type CultureId } from "../game/data/planet";
-import { BAND_HOME, cultureOf, folkOf, mainCulture, nearestFolk, officerCulture, pickCulture } from "../game/sim/culture";
+import { BAND_HOME, CULTURE_IDS, cultureOf, folkOf, mainCulture, nearestFolk, officerCulture, pickCulture } from "../game/sim/culture";
 import { FAITHS, addFavor, decayFavor, factionFaith, faithMix, faithOf, faithToday, fastEnds, fastKey, friction, isFasting, isHolyDay, keeps, pickFaith, preacherShare, townFaith, type FaithFavor, type FaithId } from "../game/sim/faith";
-import { LEGACY } from "../utils/constants";
+import { LANGUAGE, LEGACY } from "../utils/constants";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
 import {
   FOLLOWERS,
   applyCampEvent,
   driftBonds,
   hasFollower,
+  newFollower,
   pickCampEvent,
   shareVictory,
   type CampContext,
@@ -473,6 +476,8 @@ export interface Dialog {
   options: { id: string; label: string }[];
   /** Quando quem fala é um nobre: a caixa mostra o retrato dele (G5). */
   nobleId?: string;
+  /** Em que língua veio a fala, e quem traduziu (Marco 23). */
+  tongue?: string;
 }
 
 /** Prédio onde o Comandante entrou (Marco 14). */
@@ -1028,6 +1033,10 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   formVolunteers: () => string | null;
   /** Taverna de um povoado: um batalhão de infantaria por semana, mais caro. */
   hireAtTavern: (settlementId: string) => string | null;
+  /** Taverna: um intérprete de uma língua que se fala ali e o Comandante não fala (Marco 23). */
+  hireInterpreter: (settlementId: string) => string | null;
+  /** Os dias passados num lugar: o Comandante aprende a língua de lá (Marco 23). */
+  languageDay: (days: number) => void;
   /** O turno de um batalhão no acampamento. */
   setShift: (battalionId: string, shift: Shift) => void;
   /** Fecha ou abre um posto (o trabalhador fica livre). */
@@ -1209,6 +1218,45 @@ export function templeFaith(s: Pick<GameState, "factions" | "world">, t: Settlem
   return townFaith(mainCulture(folkOf(t, land)), owner ? factionFaith(owner, land) : null);
 }
 
+// --- As línguas (Marco 23, parte 3) ---
+
+/** A língua de um povoado: a da gente de mais gente lá. */
+export function townTongue(s: Pick<GameState, "world">, t: Settlement): CultureId {
+  return mainCulture(folkOf(t, s.world?.culture ?? BAND_HOME));
+}
+
+/** A língua de onde se está: a do povoado mais perto, ou a da terra. */
+export function placeTongue(s: Pick<GameState, "world" | "settlements">, at: Point | null | undefined): CultureId {
+  const land = s.world?.culture ?? BAND_HOME;
+  if (!at) return land;
+  const t = nearestFolk(s.settlements.filter((x) => x.owner !== "RUINED"), at);
+  return t && distance(t, at) < LANGUAGE.PLACE_RADIUS ? townTongue(s, t) : land;
+}
+
+type Speakers = Pick<GameState, "leader" | "lieutenants" | "captains" | "followers">;
+
+/** Quem fala pelo bando numa língua (o Comandante, o intérprete, um oficial ou ninguém). */
+export const voiceIn = (s: Speakers, t: CultureId): Voice => voiceFor(t, s);
+
+/** O quanto o bando não entende numa língua (0 a 1). */
+export const barrierIn = (s: Speakers, t: CultureId): number => barrierOf(voiceFor(t, s));
+
+/** A barreira no povoado: a da língua da gente de lá. */
+export const townBarrier = (s: Speakers & Pick<GameState, "world">, t: Settlement): number => barrierIn(s, townTongue(s, t));
+
+/** Uma fala de gente de lá, como o Comandante a entende (com quem traduziu). */
+export function heardIn(s: Speakers, t: CultureId, text: string, seed = ""): { text: string; tongue?: string } {
+  const v = voiceFor(t, s);
+  const note = heardNote(t, v);
+  return { text: garble(text, t, barrierOf(v), hashString(seed)), ...(note ? { tongue: note } : {}) };
+}
+
+/** A língua do intérprete que a taverna oferece: a de mais gente ali que o Comandante ainda não fala. */
+export function interpreterTongue(s: Pick<GameState, "world" | "leader">, t: Settlement): CultureId | null {
+  const mix = folkOf(t, s.world?.culture ?? BAND_HOME);
+  return CULTURE_IDS.filter((c) => mix[c] >= 0.05 && !isFluent(s.leader, c)).sort((a, b) => mix[b] - mix[a])[0] ?? null;
+}
+
 /** O exército deixou os mortos sem enterro: os templos dos fiéis que guardam o preceito não perdoam. */
 function abandonDead(s: { unburied: Unburied | null; faithFavor: FaithFavor; campMood: number; day: number }): { faithFavor: FaithFavor; campMood: number; line: LogEntry } | null {
   const u = s.unburied;
@@ -1273,7 +1321,7 @@ function faithDay(s: DayState, worship: { altar: boolean; temple: boolean }, log
 
 /** Candidatos a tenente: gente da terra onde o bando está, e uns da terra natal (Marco 23). */
 function freshLieutenants(day: number, land: CultureId = BAND_HOME): LieutenantData[] {
-  return Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(day, officerCulture(Math.random(), land)));
+  return Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(day, officerCulture(Math.random(), land), land));
 }
 
 /** Bando inicial (Marco 22, GDD 9.9): um batalhão de infantaria só. */
@@ -2632,15 +2680,23 @@ export const useGameStore = create<GameState>()((set, get) => ({
       // As notícias chegam a quem escuta pelo bando: o Comandante, as feitorias e os povoados do bando
       const ears: Ear[] = [];
       const near = (p: Point) => realm.settlements.find((t) => t.owner !== "RUINED" && distance(t, p) < 2600);
+      let commanderEar: Ear | null = null;
       if (s.commanderAt) {
         const t = near(s.commanderAt);
         const inCamp = distance(s.commanderAt, world.camp.center) < 1600;
-        ears.push({ ...s.commanderAt, to: inCamp ? "ao acampamento" : t ? `a ${t.name}` : "ao bando, na estrada" });
+        commanderEar = { ...s.commanderAt, to: inCamp ? "ao acampamento" : t ? `a ${t.name}` : "ao bando, na estrada" };
+        ears.push(commanderEar);
       }
       for (const t of realm.settlements) if (t.owner === "PLAYER" || posts.includes(t.id)) ears.push({ x: t.x, y: t.y, to: `a ${t.name}` });
       const news = hearRumors(rumors, day, ears);
       rumors = news.left;
-      for (const h of news.heard) entries.push(entry(day, rumorLine(h), h.rumor.tone));
+      // O que chega ao Comandante vem na língua do lugar: sem quem a fale, chega truncado (Marco 23)
+      const earTongue = commanderEar ? placeTongue({ world, settlements: realm.settlements }, commanderEar) : null;
+      const earBarrier = earTongue ? barrierIn(s, earTongue) : 0;
+      for (const h of news.heard) {
+        const lost = !!earTongue && h.ear === commanderEar && earBarrier > 0;
+        entries.push(entry(day, rumorLine(lost && earTongue ? { ...h, rumor: { ...h.rumor, text: garble(h.rumor.text, earTongue, earBarrier, h.rumor.id) } } : h), h.rumor.tone));
+      }
       // Convocação do suserano: o bando precisa estar na capital até o prazo
       const lord = realm.liege ? realm.factions.find((f) => f.id === realm.liege) : undefined;
       if (summons && day > summons.deadline) {
@@ -2743,7 +2799,30 @@ export const useGameStore = create<GameState>()((set, get) => ({
     get().returnExpeditions();
     get().farTick();
     get().legacyDay(whole);
+    get().languageDay(whole);
     get().fortressDays(s.day, get().day);
+  },
+
+  languageDay: (days) => {
+    const s = get();
+    if (!s.world || days <= 0) return;
+    const place = placeTongue(s, s.commanderAt ?? s.world.camp.center);
+    const v = voiceFor(place, s);
+    // A língua do lugar (mais depressa com quem a fale ao lado), e a de cada intérprete, que ensina
+    // um pouco todo dia onde quer que o bando esteja
+    const lessons: { t: CultureId; helped: boolean; days: number }[] = [{ t: place, helped: v.by === "INTERPRETER" || v.by === "OFFICER", days }];
+    for (const f of s.followers) if (f.role === "INTERPRETER" && f.tongue && f.tongue !== place) lessons.push({ t: f.tongue, helped: false, days: days * LANGUAGE.TUTOR_SHARE });
+    let leader = s.leader;
+    const lines: LogEntry[] = [];
+    for (const l of lessons) {
+      const learned = learnDay(leader, l.t, l.helped, l.days);
+      if (!learned) continue;
+      leader = { ...leader, tongues: learned.tongues };
+      if (learned.reached === "FLUENT") lines.push(entry(s.day, `${s.leader.name} já fala ${TONGUE[l.t].label} sem ajuda.`, "good"));
+      if (learned.reached === "BASIC") lines.push(entry(s.day, `${s.leader.name} já entende o básico: ${TONGUE[l.t].label} não é mais só barulho.`, "good"));
+    }
+    if (leader === s.leader) return;
+    set({ leader, ...(lines.length > 0 ? { log: appendLog(s.log, lines) } : {}) });
   },
 
   ...courtSlice((partial) => set(partial), get),
@@ -4120,6 +4199,25 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return null;
   },
 
+  hireInterpreter: (settlementId) => {
+    const s = get();
+    const t = s.settlements.find((v) => v.id === settlementId);
+    if (!t) return "Povoado desconhecido.";
+    const tongue = interpreterTongue(s, t);
+    if (!tongue) return "Ninguém aqui fala uma língua que o Comandante já não fale.";
+    const mine = s.followers.filter((f) => f.role === "INTERPRETER");
+    if (mine.some((f) => f.tongue === tongue)) return `O bando já tem quem fale ${TONGUE[tongue].label}.`;
+    if (mine.length >= LANGUAGE.INTERPRETERS) return `O bando já leva ${LANGUAGE.INTERPRETERS} intérpretes.`;
+    if (s.gold < LANGUAGE.INTERPRETER_COST) return `Faltam ${LANGUAGE.INTERPRETER_COST - s.gold} de ouro.`;
+    const f: Follower = { ...newFollower("INTERPRETER", s.day), name: nameIn(tongue, Math.random() < 0.5), tongue };
+    set({
+      gold: s.gold - LANGUAGE.INTERPRETER_COST,
+      followers: [...s.followers, f],
+      log: appendLog(s.log, [entry(s.day, `Na taverna de ${t.name}, ${interpreterTitle(f.name)} do bando, assinou: fala ${TONGUE[tongue].label}.`, "good")]),
+    });
+    return null;
+  },
+
   hireAtTavern: (settlementId) => {
     const s = get();
     const t = s.settlements.find((v) => v.id === settlementId);
@@ -4215,7 +4313,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (!t || qty === 0) return "Nada a negociar.";
     if (t.owner === "RUINED" || isCalamityOwner(t.owner)) return "Não há mercado aqui.";
     if (s.factions.some((f) => f.id === t.owner && f.atWar)) return "Em guerra: o mercado está fechado para o bando.";
-    const margin = s.posts.includes(t.id) ? TRADE.POST_MARGIN : 0;
+    // A feitoria melhora a margem; sem quem fale a língua de lá, ela piora (Marco 23)
+    const margin = (s.posts.includes(t.id) ? TRADE.POST_MARGIN : 0) + priceMargin(townBarrier(s, t));
     const label = GOODS[good].label.toLowerCase();
     const note = addNote(s.priceBook, t.id, noteOf(t.econ, s.day, "VISIT"));
     if (qty > 0) {

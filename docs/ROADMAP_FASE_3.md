@@ -18,10 +18,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - o G5 inteiro (etapa 13 ✅ OK): a fonte de pixel, as molduras e os botões, os ícones e os retratos.
   - a parte 1 do Marco 23 (etapa 14.1): a gente de cada lugar, de onde vem cada um no bando e o povoado governado por gente de fora.
   - a parte 2 do Marco 23 (etapa 14.2): as fés, com os preceitos que obrigam a decidir, o atrito no bando e a voz dos templos na corte.
+  - a parte 3 do Marco 23 (etapa 14.3): as línguas, com o intérprete, o aprendizado do Comandante e o que se perde sem quem fale a língua.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** a parte 3 do Marco 23 (etapa 14.3): as línguas.
+- **A seguir:** a parte 4 do Marco 23 (etapa 14.4): outra terra.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -1109,6 +1110,45 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Testes:**
   - 8 de regras em `tests/unit/faith.test.ts`;
   - 11 verificações novas na suíte `cultura`, que fica com 18.
+
+**Feito na parte 3, as línguas:**
+- **As regras** ficam em `src/game/sim/language.ts`. São quatro línguas, uma por cultura: a dos reinos, a das areias, a dos fiordes e a de jade.
+- **O que cada um fala:**
+  - o Comandante fala a língua da terra dele inteira, e as outras de 0 a 100. Com 30, entende o básico; com 60, fala sem ajuda;
+  - cada tenente e cada capitão fala a língua dele. Quem é de fora já pegou a língua da terra onde vive, e 35% rodaram o mundo e sabem mais uma (de preferência a dos reinos);
+  - o tenente promovido a capitão leva as línguas dele, e o herdeiro fala de nascença as línguas que já falava;
+  - quem é de save antigo fala só a língua da terra dele.
+- **A língua de cada lugar** é a da gente de mais gente no povoado mais perto (até 2600 px); mais longe, a da terra.
+- **Quem fala pelo bando**, nesta ordem:
+  - o Comandante, se já fala a língua;
+  - o intérprete dela, que traduz tudo;
+  - um tenente ou um capitão que fale a língua de lá e uma que o Comandante fale. Ele se vira, mas não traduz tudo (85%);
+  - ninguém: o que o Comandante já aprendeu vale em parte.
+- **O intérprete** é um seguidor novo, contratado na taverna por 80 de ouro, da língua de mais gente ali que o Comandante ainda não fala. O bando leva até 2 e cada um come meia ração por dia. Ele não aparece pedindo no portão.
+- **O Comandante aprende:**
+  - por dia, 1 ponto da língua do lugar, ou 1,5 com o intérprete ou um oficial dela ao lado;
+  - cada intérprete ensina a língua dele aos poucos (meio ponto por dia), onde quer que o bando esteja;
+  - o relato avisa quando ele entende o básico e quando passa a falar sem ajuda.
+- **Sem quem fale a língua:**
+  - **os preços:** a margem do mercador piora até 12%;
+  - **os contratos:** vêm sem o perigo, sem o caminho e com a descrição truncada;
+  - **os boatos:** o que chega ao Comandante vem com palavras de lá. O que chega aos povoados do bando e às feitorias vem inteiro, porque são gente de lá;
+  - **os presos:** dizem só quantos povoados o reino tem. Não dão os planos nem a senha dos portões, e o mapa não marca os exércitos;
+  - **as falas:** nos interiores dos povoados e na Cidade Alta, parte das palavras sai na língua de lá (as sílabas do gerador de nomes). Os números ficam. A caixa diz em que língua veio e quem traduziu.
+- **Na batalha:** a ordem falada (de viva voz ou pelo mensageiro) a um batalhão que não fala a língua do Comandante passa pelo tenente, que precisa falar as duas.
+  - Sem ele, a tropa demora 1,5 s a entender, e o relato avisa.
+  - A trombeta e as bandeiras não precisam de língua.
+- **Na tela:**
+  - o painel do povoado diz a língua de lá e quem fala pelo bando;
+  - o mercado avisa quanto o mercador cobra a mais;
+  - a taverna oferece o intérprete;
+  - as fichas dos oficiais dizem as línguas de cada um;
+  - o cartão do batalhão avisa quando a tropa não entende a voz do Comandante;
+  - o Livro do Bando mostra as línguas do Comandante;
+  - o seguidor intérprete diz a língua dele.
+- **Testes:**
+  - 8 de regras em `tests/unit/language.test.ts`;
+  - 15 verificações novas na suíte `cultura`, que fica com 33.
 
 ## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.

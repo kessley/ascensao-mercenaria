@@ -136,6 +136,7 @@ export type FolkKind =
   | "CHAPLAIN"
   | "FAMILY"
   | "SMITH"
+  | "INTERPRETER"
   // Dos interiores e da Cidade Alta
   | "GUARD"
   | "NOBLE"
@@ -160,6 +161,7 @@ const FOLK: Record<FolkKind, Omit<Look, "color"> & { color: number }> = {
   CHAPLAIN: { body: "HUMAN", head: "BARE", armor: 0, weapon: "STICK", shield: "NONE", mount: "NONE", color: 0x2b2b2b },
   FAMILY: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0xb08a6a },
   SMITH: { body: "HUMAN", head: "BARE", armor: 0, weapon: "AXE", shield: "NONE", mount: "NONE", color: 0x4a3a2a },
+  INTERPRETER: { body: "HUMAN", head: "HAIR", armor: 0, weapon: "NONE", shield: "NONE", mount: "NONE", color: 0x3a6a8a, cape: 0x2a4a5a },
   // A guarda dos povoados e da corte: elmo, malha e lança
   GUARD: { body: "HUMAN", head: "HELM", armor: 1, weapon: "SPEAR", shield: "NONE", mount: "NONE", color: 0x7f8c8d },
   // Nobres: a capa e o friso de ouro (a coroa, para quem reina, vem de `nobleLook`)

@@ -1,4 +1,6 @@
-import { marchingIds, templeFaith, useGameStore, wagonsWithArmy } from "../../store/useGameStore";
+import { marchingIds, templeFaith, townTongue, useGameStore, voiceIn, wagonsWithArmy } from "../../store/useGameStore";
+import { TONGUE, barrierOf, fluencyOf, interpreterTitle } from "../../game/sim/language";
+import { LANGUAGE } from "../../utils/constants";
 import { FAITHS, favorText } from "../../game/sim/faith";
 import { packCapacity, packOf } from "../../game/sim/logistics";
 import { RESOURCE_LABEL, SETTLEMENT_KIND_LABEL } from "../../game/data/world";
@@ -202,6 +204,9 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const nobles = useGameStore((s) => s.nobles);
   const leader = useGameStore((s) => s.leader);
   const faithFavor = useGameStore((s) => s.faithFavor);
+  const lieutenants = useGameStore((s) => s.lieutenants);
+  const captains = useGameStore((s) => s.captains);
+  const followers = useGameStore((s) => s.followers);
   if (!t || !world) return <p className="text-sm text-neutral-400">Este povoado não existe mais.</p>;
 
   const prosperity = prosperityLabel(t.prosperity);
@@ -216,6 +221,10 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   // O templo da cidade e o que ele pensa do bando (Marco 23)
   const temple = templeFaith({ factions, world }, t);
   const templeFavor = faithFavor[temple] ?? 0;
+  // A língua da gente de lá e quem fala pelo bando (Marco 23)
+  const tongue = townTongue({ world }, t);
+  const voice = voiceIn({ leader, lieutenants, captains, followers }, tongue);
+  const barrier = barrierOf(voice);
 
   return (
     <>
@@ -233,6 +242,20 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
         {t.owner !== "RUINED" && (
           <p className="text-xs text-neutral-400" data-temple={temple}>
             Templo: {FAITHS[temple].label}, dos {FAITHS[temple].clergy} · o templo {favorText(templeFavor)}
+          </p>
+        )}
+        {t.owner !== "RUINED" && (
+          <p className="text-xs text-neutral-400" data-tongue={tongue} data-voice={voice.by}>
+            Língua: {TONGUE[tongue].label}
+            {voice.by === "SELF" && " · o Comandante fala"}
+            {voice.by === "INTERPRETER" && ` · ${interpreterTitle(voice.who ?? "?")}, fala pelo bando`}
+            {voice.by === "OFFICER" && ` · ${voice.who} fala pelo bando, como pode`}
+            {voice.by === "NONE" && (
+              <b className="text-yellow-300">
+                {" "}
+                · ninguém no bando fala (o Comandante sabe {Math.floor(fluencyOf(leader, tongue))} de {LANGUAGE.FLUENT}): preços {Math.round(LANGUAGE.PRICE * barrier * 100)}% piores, contratos com menos detalhe e boatos truncados
+              </b>
+            )}
           </p>
         )}
         {(at === "CAMP" || at === "GATE") && t.owner !== "RUINED" && (

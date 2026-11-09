@@ -2,6 +2,7 @@ import type { BattalionData } from "../../store/useGameStore";
 import { fullName, type LieutenantData, type TraitId } from "../data/lieutenants";
 import { newId } from "../../utils/id";
 import { FAITHS, faithMix, friction, mainFaith, type FaithId } from "./faith";
+import type { CultureId } from "../data/planet";
 
 /**
  * Vida no acampamento (Marco 12), em funções puras usadas pelo store:
@@ -16,7 +17,7 @@ import { FAITHS, faithMix, friction, mainFaith, type FaithId } from "./faith";
 
 // --- Seguidores ---
 
-export type FollowerRole = "COOK" | "PEDDLER" | "HEALER" | "CHAPLAIN" | "FAMILY" | "SMITH";
+export type FollowerRole = "COOK" | "PEDDLER" | "HEALER" | "CHAPLAIN" | "FAMILY" | "SMITH" | "INTERPRETER";
 
 export const FOLLOWERS: Record<FollowerRole, { label: string; effect: string; rations: number; max: number; pitch: string }> = {
   COOK: { label: "Cozinheiro", effect: "−20% de rações gastas", rations: 0.5, max: 1, pitch: "um cozinheiro de taverna falida" },
@@ -25,7 +26,12 @@ export const FOLLOWERS: Record<FollowerRole, { label: string; effect: string; ra
   CHAPLAIN: { label: "Capelão", effect: "+10 na moral com que saem as tropas da fé dele, +4 nas outras (nada nas rivais)", rations: 0.5, max: 1, pitch: "um capelão sem paróquia" },
   FAMILY: { label: "Família de soldado", effect: "deserções pela metade", rations: 1, max: 4, pitch: "a família de um dos soldados" },
   SMITH: { label: "Ajudante de ferreiro", effect: "−25% no ouro e no ferro da Ferraria", rations: 0.5, max: 1, pitch: "um ajudante de ferreiro com o próprio martelo" },
+  // Contratado na taverna (Marco 23): não chega pedindo no portão
+  INTERPRETER: { label: "Intérprete", effect: "fala pelo Comandante numa língua de fora, e ele a aprende mais depressa", rations: 0.5, max: 2, pitch: "um intérprete" },
 };
+
+/** Quem só se contrata na taverna (não aparece pedindo no portão). */
+const HIRED_ONLY: readonly FollowerRole[] = ["INTERPRETER"];
 
 /**
  * Quantos seguidores o bando atrai: crescem com o tamanho dele (soldados) e com a fama
@@ -48,6 +54,8 @@ export interface Follower {
   since: number;
   /** A fé do capelão (Marco 23): a de mais gente no bando quando ele chegou. */
   faith?: FaithId;
+  /** A língua de fora que o intérprete fala (Marco 23). */
+  tongue?: CultureId;
 }
 
 const FOLLOWER_NAMES = ["Ermelinda", "Bento", "Guida", "Tadeu", "Rosalva", "Anselmo", "Filipa", "Crispim", "Joana", "Lourenço", "Marta", "Simão"];
@@ -334,7 +342,7 @@ function victoryFeast(ctx: CampContext): CampEvent {
 function followerOffer(ctx: CampContext): CampEvent | null {
   const cap = followerCap(ctx.battalions);
   const roles = (Object.keys(FOLLOWERS) as FollowerRole[]).filter(
-    (r) => ctx.followers.filter((f) => f.role === r).length < (r === "FAMILY" ? cap.families : FOLLOWERS[r].max),
+    (r) => !HIRED_ONLY.includes(r) && ctx.followers.filter((f) => f.role === r).length < (r === "FAMILY" ? cap.families : FOLLOWERS[r].max),
   );
   if (roles.length === 0) return null;
   const role = pick(roles);

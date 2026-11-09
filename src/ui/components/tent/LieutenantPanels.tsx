@@ -9,6 +9,7 @@ import { allCaptains } from "../../../store/captainSlice";
 import { PixelIcon } from "../PixelIcon";
 import { LieutenantPortrait } from "../Portrait";
 import { cultureOf, peopleOf } from "../../../game/sim/culture";
+import { officerTongues, tonguesText } from "../../../game/sim/language";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -99,7 +100,9 @@ export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData 
                 {l.wage}/sem. · {l.kills} abates
               </span>
             </div>
-            <p className="text-xs text-neutral-400">{peopleOf(cultureOf(l))}</p>
+            <p className="text-xs text-neutral-400" data-tongues={officerTongues(l).join(",")}>
+              {peopleOf(cultureOf(l))} · fala {tonguesText(officerTongues(l))}
+            </p>
             <p className="text-xs italic text-neutral-300">{l.backstory}</p>
           </div>
         </div>
@@ -250,7 +253,9 @@ export function LieutenantCandidates() {
                   {c.hireCost} ouro · {c.wage}/sem.
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">{peopleOf(cultureOf(c))}</p>
+              <p className="text-xs text-neutral-400" data-tongues={officerTongues(c).join(",")}>
+                {peopleOf(cultureOf(c))} · fala {tonguesText(officerTongues(c))}
+              </p>
               <p className="text-xs italic text-neutral-300">{c.backstory}</p>
             </div>
           </div>

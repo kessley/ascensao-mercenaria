@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGameStore } from "../../../store/useGameStore";
 import { CAPTAINS, PRISONERS } from "../../../utils/constants";
 import { heroWords, joinChance } from "../../../game/data/heroes";
+import { barrierOf, losesDetail, voiceFor } from "../../../game/sim/language";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -15,6 +16,8 @@ export function PrisonersPanel() {
   const captiveChoice = useGameStore((s) => s.captiveChoice);
   const officerChoice = useGameStore((s) => s.officerChoice);
   const send = useGameStore((s) => s.sendBattleCommand);
+  // Sem quem fale a língua dos presos, o interrogatório rende menos (Marco 23)
+  const lost = useGameStore((s) => losesDetail(barrierOf(voiceFor(s.world?.culture ?? "REALMS", s))));
   const fame = useGameStore((s) => s.fame);
   const full = useGameStore((s) => s.captains.length >= CAPTAINS.MAX_HIRED);
   const [message, setMessage] = useState<string | null>(null);
@@ -54,7 +57,8 @@ export function PrisonersPanel() {
           <span className="flex flex-wrap gap-1">
             <button type="button" className={button} disabled={o.questioned} title="Rotas, planos, quem marcha" onClick={() => {
                 setMessage(officerChoice(o.id, "QUESTION"));
-                if (o.factionId) send({ type: "REVEAL", ids: [o.factionId] });
+                // Quem não foi entendido não marca os exércitos no mapa (Marco 23)
+                if (o.factionId && !lost) send({ type: "REVEAL", ids: [o.factionId] });
               }}>
               Interrogar
             </button>

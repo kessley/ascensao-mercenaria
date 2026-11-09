@@ -1513,6 +1513,34 @@ export const FAITH = {
   HOLY_WAR_CHANCE: 0.04,
 } as const;
 
+export const LANGUAGE = {
+  /** De 0 a 100: com isto o Comandante fala sem ajuda; com o básico, já pega metade. */
+  FLUENT: 60,
+  BASIC: 30,
+  /** Pontos por dia no lugar; com um intérprete ou um oficial da língua ao lado, mais depressa. */
+  LEARN_PER_DAY: 1,
+  LEARN_HELPED: 1.5,
+  /** O intérprete ensina a língua dele aos poucos, onde quer que o bando esteja (parte do dia). */
+  TUTOR_SHARE: 0.5,
+  /** Um oficial que fale as duas línguas se vira, mas não traduz tudo. */
+  OFFICER_LEVEL: 0.85,
+  /** Sem a língua, a margem do mercador piora este tanto (vezes a barreira). */
+  PRICE: 0.12,
+  /** Parte das palavras que chega na língua de lá (vezes a barreira). */
+  GARBLE: 0.75,
+  /** Acima desta barreira, os contratos vêm sem detalhe e os prisioneiros dizem menos. */
+  DETAIL_BARRIER: 0.5,
+  /** A ordem de viva voz a um batalhão que não entende: o tempo até ele entender (ms). */
+  ORDER_DELAY_MS: 1500,
+  /** O intérprete: o preço na taverna e quantos o bando leva. */
+  INTERPRETER_COST: 80,
+  INTERPRETERS: 2,
+  /** Oficiais que rodaram o mundo e sabem mais uma língua. */
+  WELL_TRAVELED: 0.35,
+  /** Até esta distância de um povoado, a língua do lugar é a dele; mais longe, a da terra. */
+  PLACE_RADIUS: 2600,
+} as const;
+
 export const LEGACY = {
   START_AGE: [30, 38] as const,
   HEIR_AGE: [24, 40] as const,

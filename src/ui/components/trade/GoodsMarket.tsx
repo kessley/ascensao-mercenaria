@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useGameStore, wagonsWithArmy } from "../../../store/useGameStore";
+import { townBarrier, useGameStore, wagonsWithArmy } from "../../../store/useGameStore";
+import { priceMargin } from "../../../game/sim/language";
 import { INDUSTRIES, industriesOf, quote, strata } from "../../../game/sim/market";
 import { freightOf, freightWeight, isContraband } from "../../../game/sim/trade";
 import type { Settlement } from "../../../game/sim/realm";
@@ -26,8 +27,10 @@ export function GoodsMarket({ t }: { t: Settlement }) {
   const post = useGameStore((s) => s.posts.includes(t.id));
   const wars = useGameStore((s) => s.wars);
   const tradeGood = useGameStore((s) => s.tradeGood);
+  // Sem quem fale a língua de lá, o mercador cobra mais (Marco 23)
+  const barrier = useGameStore((s) => townBarrier(s, t));
   const [msg, setMsg] = useState<string | null>(null);
-  const margin = post ? TRADE.POST_MARGIN : 0;
+  const margin = (post ? TRADE.POST_MARGIN : 0) + priceMargin(barrier);
   const cap = near ? cargoCapacity(wagons) : TRADE.PURSE_CAPACITY;
   const used = cargo + freightWeight(freight);
   const room = Math.max(0, cap - used);
@@ -42,6 +45,12 @@ export function GoodsMarket({ t }: { t: Settlement }) {
         {t.econ.famine && <b className="text-red-400"> · FOME</b>}
         {short.length > 0 && <> · falta {short.map((g) => GOODS[g].label.toLowerCase()).join(", ")}</>}
         {post && <span className="text-violet-300"> · feitoria do bando (margem melhor)</span>}
+        {barrier > 0 && (
+          <span className="text-yellow-300" data-market-barrier={barrier}>
+            {" "}
+            · ninguém no bando fala bem a língua daqui: o mercador cobra {Math.round(-priceMargin(barrier) * 100)}% a mais
+          </span>
+        )}
       </p>
       <p className="text-xs text-neutral-400">
         {near ? "Carroças" : "Sem as carroças por perto: só a bolsa do Comandante"} — carga {used}/{cap} (cabe mais {room} de peso).

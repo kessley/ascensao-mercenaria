@@ -25,6 +25,8 @@ export interface Leader {
   face?: string;
   /** De onde ele vem (Marco 23); sem o campo, da terra natal do bando. */
   culture?: CultureId;
+  /** Quanto ele já aprendeu das línguas de fora, de 0 a 100 (Marco 23). */
+  tongues?: Partial<Record<CultureId, number>>;
 }
 
 export interface FormerLeader {

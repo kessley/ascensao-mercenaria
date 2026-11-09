@@ -9,6 +9,7 @@ import { PixelIcon } from "../PixelIcon";
 import { TroopIcon } from "../battle/BattleIcons";
 import { CaptainPortrait, LieutenantPortrait } from "../Portrait";
 import { cultureOf, peopleOf } from "../../../game/sim/culture";
+import { officerTongues, tonguesText } from "../../../game/sim/language";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -71,8 +72,8 @@ export function CaptainSheet({ captain: c }: { captain: CaptainData }) {
                 {c.wage}/sem. · {c.kills} abates · {c.battles} batalha(s)
               </span>
             </div>
-            <p className="text-xs text-neutral-400">
-              {ORIGIN_LABEL[c.origin]} · {peopleOf(cultureOf(c))}
+            <p className="text-xs text-neutral-400" data-tongues={officerTongues(c).join(",")}>
+              {ORIGIN_LABEL[c.origin]} · {peopleOf(cultureOf(c))} · fala {tonguesText(officerTongues(c))}
             </p>
             <p className="text-xs italic text-neutral-300">{c.backstory}</p>
           </div>
@@ -296,8 +297,8 @@ export function CaptainCandidates() {
                   {c.hireCost} ouro · {c.wage}/sem.
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">
-                {ORIGIN_LABEL[c.origin]} · {peopleOf(cultureOf(c))}
+              <p className="text-xs text-neutral-400" data-tongues={officerTongues(c).join(",")}>
+                {ORIGIN_LABEL[c.origin]} · {peopleOf(cultureOf(c))} · fala {tonguesText(officerTongues(c))}
               </p>
               <p className="text-xs italic text-neutral-300">{c.backstory}</p>
             </div>

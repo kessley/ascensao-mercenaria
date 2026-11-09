@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { buildInterior, type Furniture, type InteriorDef, type Npc, type Spot, type Talk } from "../data/interiors";
 import { registerDialogHandler } from "../interiorBridge";
 import { courtChoice, nobleTalk } from "../data/courtTalk";
-import { useGameStore, type CampPanel } from "../../store/useGameStore";
+import { heardIn, townTongue, useGameStore, type CampPanel } from "../../store/useGameStore";
 import { GOODS, GOOD_LIST, WORLD } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 import { Extra } from "../entities/Extra";
@@ -397,7 +397,11 @@ export class InteriorScene extends Phaser.Scene {
   private say(speaker: string, talk: Talk, nobleId?: string): void {
     if (nobleId) this.lastNoble = { speaker, id: nobleId };
     const face = nobleId ?? (this.lastNoble?.speaker === speaker ? this.lastNoble.id : undefined);
-    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face });
+    const s = useGameStore.getState();
+    // Num povoado, quem fala é gente de lá, na língua de lá (Marco 23)
+    const town = this.def.settlementId ? s.settlements.find((t) => t.id === this.def.settlementId) : undefined;
+    const heard = town ? heardIn(s, townTongue(s, town), talk.text, speaker) : { text: talk.text };
+    s.setDialog({ speaker, text: heard.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face, ...(heard.tongue ? { tongue: heard.tongue } : {}) });
   }
 
   /** Resposta escolhida na caixa de diálogo. */

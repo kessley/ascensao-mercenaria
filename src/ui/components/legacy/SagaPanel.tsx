@@ -8,7 +8,9 @@ import { TRAITS } from "../../../game/data/lieutenants";
 import { Button } from "../Button";
 import { PixelIcon } from "../PixelIcon";
 import { CaptainPortrait, CommanderPortrait, FormerPortrait, LieutenantPortrait } from "../Portrait";
-import { cultureOf, peopleOf } from "../../../game/sim/culture";
+import { CULTURE_IDS, cultureOf, peopleOf } from "../../../game/sim/culture";
+import { TONGUE, fluencyOf } from "../../../game/sim/language";
+import { LANGUAGE } from "../../../utils/constants";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -42,6 +44,15 @@ export function SagaPanel() {
               {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es) · {leader.origin} · {peopleOf(cultureOf(leader))}
             </p>
             <p className="text-xs text-neutral-400">Chance de não se levantar se cair em combate: {Math.round(fallDeathChance(age, leader.wounds) * 100)}%.</p>
+            <p className="text-xs text-neutral-400" data-leader-tongues>
+              Línguas:{" "}
+              {CULTURE_IDS.filter((t) => fluencyOf(leader, t) > 0)
+                .map((t) => {
+                  const n = Math.floor(fluencyOf(leader, t));
+                  return `${TONGUE[t].short} ${n >= 100 ? "(a dele)" : n >= LANGUAGE.FLUENT ? `(fala, ${n}%)` : n >= LANGUAGE.BASIC ? `(o básico, ${n}%)` : `(aprendendo, ${n}%)`}`;
+                })
+                .join(" · ")}
+            </p>
           </div>
         </div>
         {leader.traits.map((t) => (

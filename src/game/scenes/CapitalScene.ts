@@ -13,7 +13,7 @@ import { hasCourtEvent } from "../sim/courtEvents";
 import { COURT_EVENT_LABEL } from "../sim/kingdoms";
 import { scheduleOf, type CourtPlace } from "../sim/nobility";
 import { STANDING_LABEL, standingIn, type AccessPlace } from "../sim/reputation";
-import { useGameStore, type CampPanel, type GameState } from "../../store/useGameStore";
+import { heardIn, townTongue, useGameStore, type CampPanel, type GameState } from "../../store/useGameStore";
 import { COLORS, COURT, TIME, WORLD } from "../../utils/constants";
 import { seasonOf } from "../../utils/season";
 import { darknessAt, daysUntilHour, hourOf } from "../../utils/time";
@@ -821,7 +821,11 @@ export class CapitalScene extends Phaser.Scene {
   private say(speaker: string, talk: Talk, nobleId?: string): void {
     if (nobleId) this.lastNoble = { speaker, id: nobleId };
     const face = nobleId ?? (this.lastNoble?.speaker === speaker ? this.lastNoble.id : undefined);
-    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face });
+    const s = useGameStore.getState();
+    // A corte fala a língua da cidade (Marco 23)
+    const town = s.settlements.find((t) => t.id === this.townId);
+    const heard = town ? heardIn(s, townTongue(s, town), talk.text, speaker) : { text: talk.text };
+    s.setDialog({ speaker, text: heard.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face, ...(heard.tongue ? { tongue: heard.tongue } : {}) });
   }
 
   private interact(): void {
