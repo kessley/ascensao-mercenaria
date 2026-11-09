@@ -32,7 +32,7 @@ export const armyMethods = {
     const pos = at ?? slot ?? { x: spawn.x - 120, y: spawn.y + 80 * index };
     const b = new Battalion(this, data, pos.x, pos.y, this.commander, lieutenant, captain);
     // Fome, salários atrasados e o humor do acampamento: os batalhões já saem animados ou desanimados
-    b.morale = startingMorale(store.hungryDays, store.arrearsWeeks, campMoraleBonus(store.campMood, store.followers)).value;
+    b.morale = startingMorale(store.hungryDays, store.arrearsWeeks, campMoraleBonus(store.campMood, store.followers, b.faith)).value;
     if ((data.turncoatUntil ?? 0) > store.day) b.morale = Math.max(30, b.morale - PRISONERS.TURNCOAT_MORALE);
     b.fatigue = this.fatigueById.get(data.id) ?? 0;
     if (!at && slot) this.quarter(b, index, slot);

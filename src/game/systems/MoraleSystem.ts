@@ -37,6 +37,8 @@ export interface MoraleGroup {
   readonly captainAura?: number;
   /** Tenente da mesma gente da tropa (< 1 = perde menos moral; Marco 23). */
   readonly kinship?: number;
+  /** Dia santo da fé da tropa (> 1 = perde mais moral; Marco 23). */
+  readonly devotion?: number;
   readonly fatigueRecovery: number;
   panic(): void;
   rally(): void;
@@ -103,7 +105,7 @@ export function updateMorale(
   }
   // Disciplina (habilidade) e um tenente Inabalável amortecem todas as perdas
   const passive = battalion.leaderPassive;
-  delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1) * (battalion.rankSupport ?? 1) * (battalion.steadiness ?? 1) * (delta < 0 ? (battalion.captainAura ?? 1) * (battalion.kinship ?? 1) : 1);
+  delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1) * (battalion.rankSupport ?? 1) * (battalion.steadiness ?? 1) * (delta < 0 ? (battalion.captainAura ?? 1) * (battalion.kinship ?? 1) * (battalion.devotion ?? 1) : 1);
   // Estandarte à vista: os soldados seguem e protegem a bandeira do seu senhor
   if (banner.seen && !banner.faltering) {
     delta *= SUPPORT.BANNER_MORALE_LOSS;

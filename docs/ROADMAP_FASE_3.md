@@ -17,10 +17,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - o Marco 22 inteiro (etapa 12 ✅ OK): o bivaque e a grade, a vida no acampamento, a fortaleza e a cidade que nasce sozinha em volta dela.
   - o G5 inteiro (etapa 13 ✅ OK): a fonte de pixel, as molduras e os botões, os ícones e os retratos.
   - a parte 1 do Marco 23 (etapa 14.1): a gente de cada lugar, de onde vem cada um no bando e o povoado governado por gente de fora.
+  - a parte 2 do Marco 23 (etapa 14.2): as fés, com os preceitos que obrigam a decidir, o atrito no bando e a voz dos templos na corte.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** a parte 2 do Marco 23 (etapa 14.2): as fés.
+- **A seguir:** a parte 3 do Marco 23 (etapa 14.3): as línguas.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -1056,6 +1057,58 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Testes:**
   - 6 de regras em `tests/unit/culture.test.ts`: a gente de cada povoado, o sorteio, a lealdade, a origem dos oficiais, a moral com o tenente da mesma gente e a mistura do bando;
   - a suíte nova `cultura`, com 7 verificações.
+
+**Feito na parte 2, as fés:**
+- **As regras** ficam em `src/game/sim/faith.ts`. São cinco fés, cada uma com clero, cor, preceitos e calendário:
+
+  | Fé | Terra | Preceitos | Calendário |
+  |---|---|---|---|
+  | Chama Eterna | Reinos | o dia santo; enterrar os mortos | Festa das Colheitas |
+  | Véu das Estrelas | Areias | o jejum; o dia santo | Jejum das Estrelas; Noite das Estrelas |
+  | Deuses do Mar | Ilhas | enterrar os mortos; não tocar em magia | Festa da Primeira Vela |
+  | Caminho dos Ancestrais | Jade | o jejum; enterrar os mortos | Jejum dos Ancestrais; Festa das Lanternas |
+  | Palavra Nova | sem terra (os pregadores) | não tocar em magia; o dia santo | Dia da Aurora |
+
+  - Quem guarda o dia santo tem um a cada 10 dias, cada fé no seu dia.
+  - O jejum dura 5 dias por ano. A festa é uma por ano.
+  - A Palavra Nova briga com todas as outras, e a Chama briga com o Véu.
+- **No bando:** cada batalhão guarda a sua fé (o campo `faith`).
+  - Quem se alista segue a fé da sua terra, ou a Palavra Nova: 6% dos recrutas em toda parte, 46% onde o rei se converteu.
+  - Quem é de save antigo segue a fé da sua terra.
+- **Os preceitos que obrigam a decidir:**
+  - **O dia santo:**
+    - quem luta no dia santo da sua fé perde moral 25% mais depressa;
+    - depois do combate, o templo perde 5 de favor e o acampamento 3 de humor;
+    - o HUD avisa no dia.
+  - **Enterrar os mortos:** depois de um combate com mortos, os fiéis da Chama, do Mar e do Caminho não querem marchar antes de enterrá-los.
+    - O relatório e o HUD dão o botão de enterrar: 6 horas no relógio, e +2 de favor e de humor.
+    - Se o exército se afasta mais de 1500 px, ou se passa um dia inteiro, o templo perde 4 de favor e o humor cai 6.
+  - **O jejum:** por 5 dias, os fiéis comem a metade (a mochila dura mais) e batem 10% mais fraco.
+    - Cumprido, dá +3 de favor.
+    - Dá para quebrá-lo na tenda, por −6 de favor e −4 de humor.
+  - **Não tocar em magia:** está no calendário e nas fichas, mas só vale quando a magia chegar (Marco 19).
+- **As festas:** no dia da festa de uma fé, os fiéis comem um dia de rações a mais, e o humor sobe 5. Sem comida para a festa, o humor cai 3.
+- **O atrito:**
+  - fés que brigam, cada uma com 15% do bando ou mais, puxam o humor do acampamento 4 pontos para baixo por par;
+  - o altar do acampamento acalma metade da briga, e o templo acalma tudo;
+  - um evento novo do acampamento, a briga de fé, pede uma decisão, e o capelão pode acalmar os dois lados.
+- **O capelão** é da fé de mais gente no bando quando chega.
+  - Ele dá +10 de moral aos da fé dele, +4 aos de outras fés e nada aos das fés rivais.
+  - Toda semana ele soma favor ao templo dele, e mais ainda com o templo do acampamento.
+- **Os templos e a corte:** cada fé guarda o que pensa do bando, de −100 a 100.
+  - O favor sobe com as esmolas nos templos das cidades (1 ponto a cada 20 de ouro), as festas, os jejuns cumpridos e os mortos enterrados. Com o tempo, volta devagar a zero.
+  - A relação de cada reino com o bando tende ao favor da fé do rei vezes 0,25: é o sacerdote falando na corte.
+  - Uma coroa pode abraçar a Palavra Nova (as devotas e as letradas, com mais chance), mas nunca mais da metade dos reinos.
+  - Reinos de fés que brigam podem ir à guerra santa (os reinos devotos, com o dobro da chance). Na guerra santa, a paz leva o dobro do tempo para chegar.
+- **Na tela:**
+  - a tenda ganhou o painel das fés do bando: a parte de cada fé, os preceitos, o calendário, o jejum com o botão de quebrar, as fés que brigam, o capelão, os mortos por enterrar e o favor de cada templo e de cada corte;
+  - o cartão de cada batalhão diz a fé dele;
+  - o painel do povoado mostra o templo da cidade;
+  - o capelão mostra a fé dele.
+- **Junto:** o aviso "E — Entrar" não cobre mais os botões do relatório do combate.
+- **Testes:**
+  - 8 de regras em `tests/unit/faith.test.ts`;
+  - 11 verificações novas na suíte `cultura`, que fica com 18.
 
 ## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.

@@ -1,4 +1,4 @@
-import { BUILDINGS, COURT, KINGDOM, REALM, type BuildingId } from "../../utils/constants";
+import { BUILDINGS, COURT, FAITH, KINGDOM, REALM, type BuildingId } from "../../utils/constants";
 import { seasonOf } from "../../utils/season";
 import type { FactionDef, WorldDef } from "../data/world";
 import { distance, type Point } from "../../utils/math";
@@ -6,6 +6,7 @@ import { createRng, randomSeed, type Rng } from "../worldgen/rng";
 import { TheRealm, inRealm, ofRealm, theRealm, toRealm } from "../worldgen/names";
 import { canHost } from "./trade";
 import { BAND_HOME, folkOf, foreignRule, rulerCulture } from "./culture";
+import { FAITHS, clash, convertChance, factionFaith } from "./faith";
 import { isCalamityOwner, isFactionOwner, kingdomsAtWar, plunder, settlementDefense, type FactionState, type KingdomWar, type RealmLog, type RealmState, type Settlement } from "./realm";
 import {
   crown,
@@ -348,7 +349,8 @@ export function kingdomsWeek(s: RealmState, world: WorldDef, day: number): Realm
       continue;
     }
     const weary = Math.max(fa.weariness ?? 0, fb.weariness ?? 0);
-    if (weary >= KINGDOM.WEARINESS_PEACE && r.chance(0.2 + (weary - KINGDOM.WEARINESS_PEACE) / 80)) makePeace(s, world, day, w, log);
+    // Na guerra santa, os templos seguram a paz (Marco 23)
+    if (weary >= KINGDOM.WEARINESS_PEACE && r.chance((0.2 + (weary - KINGDOM.WEARINESS_PEACE) / 80) * (w.holy ? 0.5 : 1))) makePeace(s, world, day, w, log);
   }
 
   // Guerras novas: nunca em inverno, nunca em trégua; belicosos e cruéis começam mais
@@ -370,6 +372,8 @@ export function kingdomsWeek(s: RealmState, world: WorldDef, day: number): Realm
       break;
     }
   }
+
+  faithsWeek(s, world, day, r, living, winter, log);
 
   // Alianças e casamentos entre reinos em paz
   if (living.length >= 2 && r.chance(KINGDOM.ALLIANCE_CHANCE * 2)) {
@@ -397,6 +401,38 @@ export function kingdomsWeek(s: RealmState, world: WorldDef, day: number): Realm
     }
   }
   return log;
+}
+
+/**
+ * Fés (Marco 23): de vez em quando uma coroa ouve os pregadores e abraça a Palavra Nova (nunca
+ * mais da metade dos reinos); reinos de fés que brigam podem ir à guerra santa, os devotos mais.
+ */
+function faithsWeek(s: RealmState, world: WorldDef, day: number, r: Rng, living: readonly FactionState[], winter: boolean, log: RealmLog[]): void {
+  const faithOf = (f: FactionState) => factionFaith(f, world.culture);
+  const converted = living.filter((f) => faithOf(f) === "WORD").length;
+  for (const f of r.shuffle([...living])) {
+    if (faithOf(f) === "WORD" || (converted + 1) * 2 > living.length) continue;
+    if (!r.chance(convertChance(rulerOf(s.nobles, f.id)?.traits ?? []))) continue;
+    f.faith = "WORD";
+    log.push({ text: `${TheRealm(realmName(world, f.id))} abraçou a Palavra Nova: a coroa ouviu os pregadores, e o templo da capital mudou de dono.`, tone: "info", where: here(seatOf(s, f)) });
+    break;
+  }
+  if (winter || living.length < 2 || s.wars.filter((w) => w.peace === undefined).length >= 3) return;
+  for (const f of r.shuffle([...living])) {
+    if (warsOf(s, f.id).length > 0 || (f.weariness ?? 0) > 25) continue;
+    const mine = faithOf(f);
+    const zeal = world.factions.find((x) => x.id === f.id)?.temperament === "PIOUS" ? 2 : 1;
+    if (!r.chance(FAITH.HOLY_WAR_CHANCE * zeal)) continue;
+    const seat = seatOf(s, f);
+    const foe = living
+      .filter((o) => o !== f && clash(mine, faithOf(o)) && !allied(s, f.id, o.id) && !onTruce(s, f.id, o.id) && !kingdomsAtWar(s.wars, f.id, o.id))
+      .sort((a, b) => distance(seatOf(s, a), seat) - distance(seatOf(s, b), seat))[0];
+    if (!foe) continue;
+    declareWar(s, world, day, f.id, foe.id, `guerra santa contra os hereges ${FAITHS[faithOf(foe)].of}`, log);
+    const war = s.wars.find((w) => w.a === f.id && w.b === foe.id && w.peace === undefined);
+    if (war) war.holy = true;
+    break;
+  }
 }
 
 /** Filhos adultos e solteiros de duas coroas casam: nasce uma aliança e uma festa na capital. */

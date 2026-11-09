@@ -28,6 +28,7 @@ import {
   KINGDOM,
   REPUTE,
   COURT,
+  FAITH,
   setWorldSize,
   type Good,
   type Weather,
@@ -105,7 +106,8 @@ import {
 import { ofRealm, settlementName } from "../game/worldgen/names";
 import { continentWorld, generateWorld } from "../game/worldgen/generateWorld";
 import { generatePlanet, type CultureId } from "../game/data/planet";
-import { BAND_HOME, cultureOf, folkOf, nearestFolk, officerCulture, pickCulture } from "../game/sim/culture";
+import { BAND_HOME, cultureOf, folkOf, mainCulture, nearestFolk, officerCulture, pickCulture } from "../game/sim/culture";
+import { FAITHS, addFavor, decayFavor, factionFaith, faithMix, faithOf, faithToday, fastEnds, fastKey, friction, isFasting, isHolyDay, keeps, pickFaith, preacherShare, townFaith, type FaithFavor, type FaithId } from "../game/sim/faith";
 import { LEGACY } from "../utils/constants";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
 import {
@@ -187,7 +189,7 @@ import {
   type SiegeKit,
   type Staffing,
 } from "../game/sim/campDays";
-import { seasonOf } from "../utils/season";
+import { seasonDay, seasonOf } from "../utils/season";
 import { canPromote, canTrain, promotionCost, trainingCost, canLearn, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
 import { SKILLS, type SkillId } from "../game/data/skills";
 import { fullName, generateLieutenant, opinionOn, PASSIVES, type LieutenantData } from "../game/data/lieutenants";
@@ -279,6 +281,17 @@ export interface BattalionData {
   sickness?: Sickness;
   /** De onde a tropa veio (Marco 23); sem o campo, da terra natal do bando. */
   culture?: CultureId;
+  /** A fé da tropa (Marco 23); sem o campo, a da terra de onde veio. */
+  faith?: FaithId;
+}
+
+/** Mortos do bando esperando enterro no campo (Marco 23): quem guarda o preceito não quer marchar antes. */
+export interface Unburied {
+  x: number;
+  y: number;
+  day: number;
+  dead: number;
+  faiths: FaithId[];
 }
 
 /** O que o mascate vende na banca dele (Marco 12). */
@@ -599,6 +612,8 @@ export interface EngagementInfo {
   mutinyOver: boolean;
   /** Outras linhas para o relatório (povoado tomado, calamidade derrotada...). */
   notes?: string[];
+  /** Onde foi o combate (os mortos ficam ali; Marco 23). */
+  at?: { x: number; y: number };
 }
 
 /** Bando inimigo como aparece no Mapa do Continente. */
@@ -780,6 +795,12 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   honor: number;
   /** Humor do acampamento (−30..+30): soma na moral inicial e volta devagar ao normal. */
   campMood: number;
+  /** O que cada templo pensa do bando (Marco 23): o sacerdote fala por ele, ou contra, na corte. */
+  faithFavor: FaithFavor;
+  /** Mortos do último combate esperando enterro (Marco 23). */
+  unburied: Unburied | null;
+  /** Jejuns quebrados ("FÉ:ano"). */
+  fastBroken: string[];
   /** Cozinheiro, mascate, curandeira, capelão, famílias. */
   followers: Follower[];
   /** Relação entre cada par de tenentes (−100..100; chave "idA|idB"). */
@@ -1057,6 +1078,12 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   buyRound: (settlementId: string) => string;
   /** Esmola no templo (honra; a febre da cidade passa mais depressa). */
   donateTemple: (settlementId: string, gold: number) => boolean;
+  /** Enterrar os mortos do último combate: leva horas, e os fiéis agradecem (Marco 23). */
+  buryDead: () => string | null;
+  /** O exército se afastou dos mortos sem enterrá-los. */
+  leaveDead: () => void;
+  /** Quebrar o jejum de uma fé: os fiéis comem e lutam inteiros, e o templo não perdoa. */
+  breakFast: (faith: FaithId) => string | null;
   /** Dá uma unidade de grão ou carne da carga a uma família com fome (honra). */
   giveFood: (settlementId: string) => boolean;
 
@@ -1142,7 +1169,7 @@ const BATTALION_NAMES = [
   "Martelos Rubros",
 ];
 
-function newBattalion(existing: BattalionData[], troopType: TroopType, culture?: CultureId): BattalionData {
+function newBattalion(existing: BattalionData[], troopType: TroopType, origin?: { culture?: CultureId; faith?: FaithId }): BattalionData {
   const used = new Set(existing.map((b) => b.name));
   const name = BATTALION_NAMES.find((n) => !used.has(n)) ?? `Companhia ${existing.length + 1}`;
   return {
@@ -1158,15 +1185,90 @@ function newBattalion(existing: BattalionData[], troopType: TroopType, culture?:
     totalKills: 0,
     soldiers: BALANCE.BATTALION_SIZE,
     maxSoldiers: BALANCE.BATTALION_SIZE,
-    ...(culture ? { culture } : {}),
+    ...(origin?.culture ? { culture: origin.culture } : {}),
+    ...(origin?.faith ? { faith: origin.faith } : {}),
   };
 }
 
-/** Quem se alista perto de um ponto: a gente do povoado mais perto (Marco 23). */
-function localRecruits(s: Pick<GameState, "settlements" | "world">, at: { x: number; y: number } | undefined): CultureId {
+/**
+ * Quem se alista perto de um ponto: a gente do povoado mais perto, com a fé da sua terra ou a
+ * dos pregadores (mais onde o rei se converteu) (Marco 23).
+ */
+function localRecruits(s: Pick<GameState, "settlements" | "world" | "factions">, at: { x: number; y: number } | undefined): { culture: CultureId; faith: FaithId } {
   const land = s.world?.culture ?? BAND_HOME;
   const town = at ? nearestFolk(s.settlements.filter((t) => t.owner !== "RUINED"), at) : null;
-  return town ? pickCulture(folkOf(town, land), Math.random()) : land;
+  const culture = town ? pickCulture(folkOf(town, land), Math.random()) : land;
+  const owner = town ? s.factions.find((f) => f.id === town.owner) : undefined;
+  return { culture, faith: pickFaith(culture, preacherShare(owner ? factionFaith(owner, land) : null), Math.random()) };
+}
+
+/** O templo de um povoado (Marco 23): o do rei, ou o da gente de lá. */
+export function templeFaith(s: Pick<GameState, "factions" | "world">, t: Settlement): FaithId {
+  const land = s.world?.culture ?? BAND_HOME;
+  const owner = s.factions.find((f) => f.id === t.owner);
+  return townFaith(mainCulture(folkOf(t, land)), owner ? factionFaith(owner, land) : null);
+}
+
+/** O exército deixou os mortos sem enterro: os templos dos fiéis que guardam o preceito não perdoam. */
+function abandonDead(s: { unburied: Unburied | null; faithFavor: FaithFavor; campMood: number; day: number }): { faithFavor: FaithFavor; campMood: number; line: LogEntry } | null {
+  const u = s.unburied;
+  if (!u) return null;
+  let favor = s.faithFavor;
+  for (const f of u.faiths) favor = addFavor(favor, f, FAITH.UNBURIED_FAVOR);
+  const who = u.faiths.map((f) => FAITHS[f].of).join(" e ");
+  return {
+    faithFavor: favor,
+    campMood: Math.max(-30, s.campMood + FAITH.UNBURIED_MOOD),
+    line: entry(s.day, `${u.dead} morto(s) do bando ficaram sem enterro. Os fiéis ${who} não perdoam: o humor do acampamento azedou.`, "bad"),
+  };
+}
+
+/**
+ * O dia das fés (Marco 23): as festas (um dia de rações a mais para os fiéis), o começo e o fim
+ * dos jejuns, os mortos que ficaram sem enterro e, uma vez por semana, o capelão, o templo do
+ * acampamento e os templos que esquecem devagar.
+ */
+function faithDay(s: DayState, worship: { altar: boolean; temple: boolean }, log: LogEntry[]): void {
+  const today = faithToday(s.day);
+  const present = new Set(s.battalions.filter((b) => b.soldiers > 0).map(faithOf));
+  for (const f of present) {
+    const def = FAITHS[f];
+    if (today.feast.has(f)) {
+      const faithful = s.battalions.filter((b) => faithOf(b) === f);
+      const extra = Math.max(1, dailyRations(faithful, []) - 1);
+      const field = s.exposure.away && !s.campPacked;
+      if ((field ? s.cargo : s.rations) >= extra) {
+        if (field) s.cargo -= extra;
+        else s.rations -= extra;
+        s.campMood = Math.min(30, s.campMood + FAITH.FEAST_MOOD);
+        s.faithFavor = addFavor(s.faithFavor, f, FAITH.FEAST_FAVOR);
+        log.push(entry(s.day, `${def.feast.label}: os fiéis ${def.of} comem e bebem (${extra} rações a mais), e o acampamento canta.`, "good"));
+      } else {
+        s.campMood = Math.max(-30, s.campMood + FAITH.FEAST_MISSED_MOOD);
+        log.push(entry(s.day, `${def.feast.label}, e não há comida para a festa: os fiéis ${def.of} reclamam.`, "bad"));
+      }
+    }
+    const fast = def.fast;
+    if (fast && today.fasting.has(f) && !s.fastBroken.includes(fastKey(f, s.day))) {
+      if (seasonDay(s.day) === fast.from) log.push(entry(s.day, `Começou o ${fast.label}: por ${fast.days} dias os fiéis ${def.of} comem a metade e batem com menos força. Dá para quebrar o jejum na tenda, mas o templo não perdoa.`, "info"));
+      if (fastEnds(f, s.day)) {
+        s.faithFavor = addFavor(s.faithFavor, f, FAITH.FAST_KEPT_FAVOR);
+        log.push(entry(s.day, `Os fiéis ${def.of} cumpriram o ${fast.label}. O templo fala bem do bando.`, "good"));
+      }
+    }
+  }
+  // Os mortos de anteontem ficaram no campo (sem marchar, dá um dia para cavar)
+  const left = s.unburied && s.day > s.unburied.day + 1 ? abandonDead(s) : null;
+  if (left) {
+    s.unburied = null;
+    s.faithFavor = left.faithFavor;
+    s.campMood = left.campMood;
+    log.push(left.line);
+  }
+  if (s.day % ECONOMY.PAYDAY_INTERVAL !== 0) return;
+  s.faithFavor = decayFavor(s.faithFavor);
+  const chaplain = s.followers.find((x) => x.role === "CHAPLAIN");
+  if (chaplain) s.faithFavor = addFavor(s.faithFavor, chaplain.faith ?? faithOf(null), FAITH.CHAPLAIN_FAVOR + (worship.temple ? FAITH.TEMPLE_FAVOR : 0));
 }
 
 /** Candidatos a tenente: gente da terra onde o bando está, e uns da terra natal (Marco 23). */
@@ -1341,6 +1443,9 @@ type DayState = Pick<
   | "messengers"
   | "followers"
   | "campMood"
+  | "faithFavor"
+  | "unburied"
+  | "fastBroken"
   | "bonds"
   | "cargo"
   | "train"
@@ -1408,7 +1513,10 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     const unbedded = staffing ? new Set(inCamp.filter((b) => !inBed.has(b.id)).map((b) => b.id)) : new Set<string>();
     // O humor do acampamento anda para o que as construções dão (levantado, volta ao normal);
     // tenentes convivendo se aproximam ou se afastam
-    s.campMood = driftMood(s.campMood, staffing ? moodTarget(moodOf(s.campPlan, staffing.working), inCamp.length, unbedded.size) : 0);
+    // Fés em conflito no bando azedam o humor; o altar e o templo do acampamento acalmam (Marco 23)
+    const worship = { altar: !!staffing && running(s.campPlan, "ALTAR", staffing.working), temple: !!staffing && running(s.campPlan, "TEMPLE", staffing.working) };
+    const quarrel = friction(faithMix(s.battalions), worship);
+    s.campMood = driftMood(s.campMood, (staffing ? moodTarget(moodOf(s.campPlan, staffing.working), inCamp.length, unbedded.size) : 0) + quarrel.mood);
     s.bonds = driftBonds(s.bonds, s.lieutenants);
 
     // Comida (soldados, Comandante e seguidores; o cozinheiro aproveita melhor). Em campo, o
@@ -1438,7 +1546,10 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     if (milled > 0) log.push(entry(s.day, `As rações acabaram: ${milled} de grão e carne da carga viraram comida.`, "info"));
     // O defumadouro faz rações de marcha: em campo, o exército gasta menos
     const smoked = staffing && running(s.campPlan, "SMOKEHOUSE", staffing.working) ? SMOKED_SHARE : 1;
-    const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked, smoked);
+    // Quem guarda o jejum da sua fé come a metade (Marco 23)
+    const holy = faithToday(s.day);
+    const fasting = new Set(s.battalions.filter((b) => holy.fasting.has(faithOf(b)) && !s.fastBroken.includes(fastKey(faithOf(b), s.day))).map((b) => b.id));
+    const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked, smoked, fasting);
     // Comida cozida (Marco 22): a fogueira e as cozinhas dão conta de tantos batalhões; o resto come cru e gasta mais
     if (!s.campPacked) {
       const eating = s.exposure.away ? s.battalions.filter((b) => training.has(b.id)) : s.battalions;
@@ -1519,6 +1630,8 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
         log.push(entry(s.day, `${leaving.name} (${FOLLOWERS[leaving.role].label.toLowerCase()}) foi embora: não há o que comer.`, "bad"));
       }
     }
+
+    faithDay(s, worship, log);
 
     // Pagamento
     if (s.day % ECONOMY.PAYDAY_INTERVAL !== 0) continue;
@@ -1660,6 +1773,9 @@ function dayState(s: GameState): DayState {
     messengers: s.messengers,
     followers: s.followers,
     campMood: s.campMood,
+    faithFavor: s.faithFavor,
+    unburied: s.unburied,
+    fastBroken: s.fastBroken,
     bonds: s.bonds,
     cargo: s.cargo,
     train: s.train,
@@ -1924,6 +2040,9 @@ function campaignState(world: WorldDef | null): CampaignState {
     burnedBridges: [],
     honor: 50,
     campMood: 0,
+    faithFavor: {},
+    unburied: null,
+    fastBroken: [],
     followers: [],
     bonds: {},
     campEvent: null,
@@ -2169,7 +2288,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
   recruitCaptives: (troop, count, label) => {
     const s = get();
     const n = Math.min(count, BALANCE.BATTALION_SIZE);
-    const b: BattalionData = { ...newBattalion(s.battalions, troop, s.world?.culture), soldiers: n, turncoatUntil: s.day + PRISONERS.TURNCOAT_DAYS };
+    const land = s.world?.culture ?? BAND_HOME;
+    const b: BattalionData = { ...newBattalion(s.battalions, troop, { culture: land, faith: pickFaith(land, preacherShare(null), Math.random()) }), soldiers: n, turncoatUntil: s.day + PRISONERS.TURNCOAT_DAYS };
     set({ battalions: [...s.battalions, b], log: appendLog(s.log, [entry(s.day, `${n} ${label} formam ${b.name}. Ninguém confia neles ainda.`)]) });
     return n;
   },
@@ -2414,6 +2534,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       spouseId: s.spouseId,
       wanted: s.wanted,
       bandCulture: cultureOf(s.leader),
+      faithFavor: s.faithFavor,
     };
     const entries: LogEntry[] = [];
     // Notícias na estrada (Marco 15)
@@ -3477,9 +3598,32 @@ export const useGameStore = create<GameState>()((set, get) => ({
         return { ...x, deliveries, level };
       });
 
+    // --- Fés (Marco 23): lutar no dia santo, e os mortos que pedem enterro ---
+    const inBattle = [...new Set(s.battalions.filter((b) => byId.has(b.id)).map(faithOf))];
+    let faithFavor = s.faithFavor;
+    let campMood = s.campMood;
+    const sinners = inBattle.filter((f) => isHolyDay(f, s.day));
+    for (const f of sinners) faithFavor = addFavor(faithFavor, f, FAITH.HOLY_BROKEN_FAVOR);
+    if (sinners.length > 0) {
+      campMood = Math.max(-30, campMood + FAITH.HOLY_BROKEN_MOOD);
+      const who = sinners.map((f) => FAITHS[f].of).join(" e ");
+      notes.push(`Os fiéis ${who} lutaram no dia santo: o templo não esquece.`);
+      logEntries.push(entry(s.day, `O bando lutou no dia santo ${who}. Os fiéis resmungam, e o templo não esquece.`, "bad"));
+    }
+    let unburied = s.unburied;
+    const buriers = inBattle.filter((f) => keeps(f, "BURY"));
+    if (casualties > 0 && buriers.length > 0 && info.at) {
+      const faiths = [...new Set([...(unburied?.faiths ?? []), ...buriers])];
+      unburied = { x: Math.round(info.at.x), y: Math.round(info.at.y), day: s.day, dead: casualties + (unburied?.dead ?? 0), faiths };
+      notes.push(`${unburied.dead} morto(s) esperam no campo: os fiéis ${faiths.map((f) => FAITHS[f].of).join(" e ")} querem enterrá-los antes de marchar.`);
+    }
+
     // Vitória: festa no acampamento e tenentes que lutaram lado a lado mais próximos
     const together = lieutenants.filter((l) => fought.has(l.id)).map((l) => l.id);
     set({
+      faithFavor,
+      campMood,
+      unburied,
       gold,
       iron,
       freight,
@@ -4462,14 +4606,56 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const t = s.settlements.find((x) => x.id === settlementId);
     if (!t || gold <= 0 || s.gold < gold) return false;
     const sick = isSick(t, s.day);
+    // O templo da cidade lembra da esmola (Marco 23)
+    const faith = templeFaith(s, t);
     set({
       gold: s.gold - gold,
       honor: Math.min(100, s.honor + Math.min(6, Math.round(gold / 10))),
       campMood: Math.min(30, s.campMood + 2),
+      faithFavor: addFavor(s.faithFavor, faith, gold / FAITH.GOLD_PER_FAVOR),
       settlements: s.settlements.map((x) => (x.id === t.id && sick ? { ...x, sickUntil: Math.max(s.day, (x.sickUntil ?? s.day) - 3) } : x)),
       log: appendLog(s.log, [entry(s.day, `O Comandante deu ${gold} de ouro ao templo de ${t.name}.${sick ? " Os monges cuidam melhor dos febris." : ""}`, "good")]),
     });
     return true;
+  },
+
+  buryDead: () => {
+    const s = get();
+    const u = s.unburied;
+    if (!u) return "Não há mortos esperando enterro.";
+    let favor = s.faithFavor;
+    for (const f of u.faiths) favor = addFavor(favor, f, FAITH.BURY_FAVOR);
+    set({
+      unburied: null,
+      faithFavor: favor,
+      campMood: Math.min(30, s.campMood + FAITH.BURY_MOOD),
+      log: appendLog(s.log, [entry(s.day, `O bando enterrou os seus ${u.dead} morto(s) antes de marchar. Os fiéis ${u.faiths.map((f) => FAITHS[f].of).join(" e ")} rezaram por eles.`, "good")]),
+    });
+    // Cavar leva horas: o relógio anda (e o inimigo também)
+    get().advanceTime(FAITH.BURY_DAYS);
+    return null;
+  },
+
+  leaveDead: () => {
+    const s = get();
+    const left = abandonDead(s);
+    if (!left) return;
+    set({ unburied: null, faithFavor: left.faithFavor, campMood: left.campMood, log: appendLog(s.log, [left.line]) });
+  },
+
+  breakFast: (faith) => {
+    const s = get();
+    if (!isFasting(faith, s.day)) return "Não é tempo de jejum.";
+    const key = fastKey(faith, s.day);
+    if (s.fastBroken.includes(key)) return "O jejum já foi quebrado.";
+    const def = FAITHS[faith];
+    set({
+      fastBroken: [...s.fastBroken.filter((k) => !k.startsWith(`${faith}:`)), key],
+      faithFavor: addFavor(s.faithFavor, faith, FAITH.FAST_BROKEN_FAVOR),
+      campMood: Math.max(-30, s.campMood + FAITH.FAST_BROKEN_MOOD),
+      log: appendLog(s.log, [entry(s.day, `O Comandante mandou quebrar o ${def.fast?.label ?? "jejum"}: os fiéis ${def.of} comem e lutam inteiros, mas o templo não perdoa.`, "bad")]),
+    });
+    return null;
   },
 
   giveFood: (settlementId) => {

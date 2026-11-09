@@ -1,4 +1,4 @@
-import { ECONOMY, HEALTH, SUPPLY, WORLD } from "../../utils/constants";
+import { ECONOMY, FAITH, HEALTH, SUPPLY, WORLD } from "../../utils/constants";
 import { cargoCapacity, dailyRations } from "../../utils/economy";
 import type { BattalionData } from "../../store/useGameStore";
 import { hasFollower, type Follower } from "./campEvents";
@@ -126,6 +126,8 @@ export function eatDay(
   packed: boolean,
   /** Rações de marcha (defumadouro): o exército em campo gasta só esta fração. */
   fieldShare = 1,
+  /** Batalhões em jejum (Marco 23): comem só FAITH.FAST_SHARE. */
+  fasting: ReadonlySet<string> = new Set(),
 ): Meal {
   const cook = hasFollower(followers, "COOK");
   const { camp, field } = split(battalions, home, away);
@@ -136,7 +138,7 @@ export function eatDay(
     const fieldIds = new Set(field.map((b) => b.id));
     for (const b of out) {
       if (!fieldIds.has(b.id)) continue;
-      let need = battalionRations(b, cook) * fieldShare;
+      let need = battalionRations(b, cook) * fieldShare * (fasting.has(b.id) ? FAITH.FAST_SHARE : 1);
       const fromPack = Math.min(packOf(b), need);
       b.pack = packOf(b) - fromPack;
       need -= fromPack;
@@ -158,7 +160,10 @@ export function eatDay(
     else fieldShort = meal.short;
   }
   // No acampamento (sem o Comandante, se ele saiu): seguidores, quem treina e quem ficou de guarda
-  const campNeed = packed ? 0 : away ? Math.max(0, dailyRations(camp, followers) - 1) : dailyRations(battalions, followers);
+  const fullNeed = packed ? 0 : away ? Math.max(0, dailyRations(camp, followers) - 1) : dailyRations(battalions, followers);
+  // Quem jejua no acampamento deixa a sua parte no depósito
+  const fasted = packed ? [] : (away ? camp : battalions).filter((b) => fasting.has(b.id));
+  const campNeed = fasted.length > 0 ? Math.max(0, fullNeed - Math.floor((dailyRations(fasted, []) - 1) * (1 - FAITH.FAST_SHARE))) : fullNeed;
   const campEat = Math.min(rations, campNeed);
   rations -= campEat;
   // Quem está no acampamento enche a mochila do depósito, sem tirar a reserva de quem fica

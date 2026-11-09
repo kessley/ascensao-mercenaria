@@ -1459,6 +1459,60 @@ export const CULTURE = {
   KIN_CAPTAIN: 0.94,
 } as const;
 
+/**
+ * Fés (Marco 23, parte 2): cinco fés, uma de cada cultura e a Palavra Nova, dos pregadores.
+ * Os preceitos criam decisões (o dia santo, enterrar os mortos, o jejum); a mistura de fés pesa
+ * no humor do acampamento, e o favor dos templos fala por (ou contra) o bando nas cortes.
+ */
+export const FAITH = {
+  /** Cada fé tem um dia santo a cada tantos dias do ano. */
+  HOLY_EVERY: 10,
+  /** Quem luta no dia santo da sua fé perde a moral mais depressa. */
+  HOLY_RELUCTANCE: 1.25,
+  /** Lutar no dia santo: favor do templo e humor do acampamento. */
+  HOLY_BROKEN_FAVOR: -5,
+  HOLY_BROKEN_MOOD: -3,
+  /** Enterrar os mortos leva tantas horas (fração do dia). */
+  BURY_DAYS: 0.25,
+  BURY_FAVOR: 2,
+  BURY_MOOD: 2,
+  /** O exército se afastou tanto dos mortos sem enterrá-los (ou passou um dia). */
+  BURY_LEAVE: 1500,
+  UNBURIED_FAVOR: -4,
+  UNBURIED_MOOD: -6,
+  /** No jejum, os fiéis comem esta fração e batem com menos força. */
+  FAST_SHARE: 0.5,
+  FAST_DAMAGE: 0.9,
+  FAST_KEPT_FAVOR: 3,
+  FAST_BROKEN_FAVOR: -6,
+  FAST_BROKEN_MOOD: -4,
+  /** A festa de uma fé: um dia de rações a mais para os fiéis, e humor. */
+  FEAST_MOOD: 5,
+  FEAST_FAVOR: 2,
+  FEAST_MISSED_MOOD: -3,
+  /** Fés em conflito no bando (cada lado com pelo menos esta parte) azedam o humor. */
+  FRICTION_SHARE: 0.15,
+  FRICTION_MOOD: 4,
+  /** O capelão: moral para os da fé dele e para os de fés que não brigam com a dele. */
+  CHAPLAIN_SAME: 10,
+  CHAPLAIN_OTHER: 4,
+  /** Favor por semana: o capelão e o templo do acampamento; o favor volta devagar a zero. */
+  CHAPLAIN_FAVOR: 0.5,
+  TEMPLE_FAVOR: 1,
+  FAVOR_DECAY: 0.02,
+  /** Ouro dado no templo por ponto de favor. */
+  GOLD_PER_FAVOR: 20,
+  /** A voz do templo na corte: a relação do reino tende a favor × isto. */
+  COURT_VOICE: 0.25,
+  /** Pregadores da Palavra Nova em cada povoado, e onde o rei se converteu. */
+  PREACHER_SHARE: 0.06,
+  CONVERTED_SHARE: 0.4,
+  /** Chance por semana de um rei abraçar a Palavra Nova (devotos e letrados, o triplo). */
+  CONVERT_CHANCE: 0.004,
+  /** Chance por semana de uma guerra santa entre reinos de fés que brigam. */
+  HOLY_WAR_CHANCE: 0.04,
+} as const;
+
 export const LEGACY = {
   START_AGE: [30, 38] as const,
   HEIR_AGE: [24, 40] as const,

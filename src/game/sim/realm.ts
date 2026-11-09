@@ -9,6 +9,7 @@ import { diffuse, initEconomy, marketDay, needsOf, quote, rationPackPrice, type 
 import { courtCalendar, kingdomsWeek, loyaltyDay, noblesWeek, siegesDay, type Alliance, type CourtEvent, type FieldArmy, type KingdomPlan } from "./kingdoms";
 import type { Noble, Plot } from "./nobility";
 import type { CultureId } from "../data/planet";
+import { courtVoice, factionFaith, type FaithFavor, type FaithId } from "./faith";
 
 /**
  * Simulação do reino e do mundo vivo (Marco 9), em funções puras usadas pelo store:
@@ -67,6 +68,8 @@ export interface KingdomWar {
   peace?: number;
   /** Guerra civil: `b` é o lado do pretendente. */
   civil?: boolean;
+  /** Guerra santa (Marco 23): os templos não deixam a paz chegar tão cedo. */
+  holy?: boolean;
 }
 
 const pairCache = new Map<string, [number, number][]>();
@@ -106,6 +109,8 @@ export interface FactionState {
   weariness?: number;
   /** Sem nenhum povoado: o reino acabou. */
   fallen?: boolean;
+  /** A fé do rei (Marco 23); sem ela, a da terra. */
+  faith?: FaithId;
 }
 
 export type CalamityKind = "NECROMANCER" | "ORC_HORDE";
@@ -153,6 +158,8 @@ export interface RealmState {
   wanted: Record<string, number>;
   /** A cultura de quem governa pelo bando: a do Comandante (Marco 23). */
   bandCulture?: CultureId;
+  /** O que cada templo pensa do bando: o sacerdote fala na corte (Marco 23). */
+  faithFavor?: FaithFavor;
 }
 
 /**
@@ -347,9 +354,13 @@ export function realmDay(input: RealmState, world: WorldDef, day: number, camp: 
   // Reinos vivos (Marco 15): cercos, lealdade dos povoados e o calendário da corte
   log.push(...siegesDay(s, world, day), ...loyaltyDay(s, world, day), ...courtCalendar(s, world, day));
 
-  // Relações esfriam (ou esquentam) devagar rumo à neutralidade, fora de guerra
+  // Relações esfriam (ou esquentam) devagar rumo à neutralidade, fora de guerra. O sacerdote
+  // da corte puxa para o que o templo pensa do bando (Marco 23)
   for (const f of s.factions) {
-    if (!f.atWar && f.relation !== 0) f.relation += f.relation > 0 ? -0.25 : 0.5;
+    if (f.atWar) continue;
+    const target = courtVoice(s.faithFavor, factionFaith(f, world.culture));
+    if (f.relation > target) f.relation = Math.max(target, f.relation - 0.25);
+    else if (f.relation < target) f.relation = Math.min(target, f.relation + 0.5);
   }
 
   // Semana: renda do reino do jogador (antes do pagamento de salários do mesmo dia)

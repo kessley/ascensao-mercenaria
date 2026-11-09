@@ -6,6 +6,8 @@ import { WEATHER_ICON } from "../../game/art/icons";
 import { IconText, PixelIcon } from "../components/PixelIcon";
 import { CommanderPortrait } from "../components/Portrait";
 import { titleFor } from "../../game/sim/realm";
+import { FAITHS, FAITH_IDS, faithOf, keptToday } from "../../game/sim/faith";
+import { FAITH } from "../../utils/constants";
 import { isFemaleName } from "../../game/worldgen/names";
 import { NOBLE_TRAITS } from "../../game/sim/nobility";
 import { nextStep, wayTo } from "../../game/data/missionGuide";
@@ -274,11 +276,51 @@ function SiegeBanner() {
   );
 }
 
+/**
+ * O que as fés do bando guardam hoje (Marco 23): o dia santo (quem luta, luta de má vontade),
+ * o jejum e os mortos que esperam enterro, com o botão de enterrar.
+ */
+function FaithToday() {
+  const day = useGameStore((s) => s.day);
+  const broken = useGameStore((s) => s.fastBroken);
+  const battalions = useGameStore((s) => s.battalions);
+  const unburied = useGameStore((s) => s.unburied);
+  const report = useGameStore((s) => s.battleReport);
+  const buryDead = useGameStore((s) => s.buryDead);
+  const today = keptToday(day, broken);
+  const present = new Set(battalions.map(faithOf));
+  const holy = FAITH_IDS.filter((f) => present.has(f) && today.holy.has(f));
+  const fasting = FAITH_IDS.filter((f) => present.has(f) && today.fasting.has(f));
+  if (holy.length === 0 && fasting.length === 0 && !unburied) return null;
+  return (
+    <div className="flex flex-col gap-1 text-xs" data-faith-today>
+      {holy.map((f) => (
+        <span key={f} className="text-amber-300">
+          Dia santo {FAITHS[f].of}: os fiéis lutam de má vontade.
+        </span>
+      ))}
+      {fasting.map((f) => (
+        <span key={f} className="text-sky-200">
+          {FAITHS[f].fast?.label}: os fiéis {FAITHS[f].of} batem com menos força.
+        </span>
+      ))}
+      {unburied && !report && (
+        <button type="button" data-bury onClick={() => buryDead()} className="btn-pixel btn-blue pointer-events-auto px-2 py-1 text-left text-xs">
+          Enterrar os {unburied.dead} morto(s) ({Math.round(FAITH.BURY_DAYS * 24)} h)
+          <span className="block text-[10px]">Os fiéis {unburied.faiths.map((f) => FAITHS[f].of).join(" e ")} não querem marchar antes.</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function FieldHudView() {
   const hud = useGameStore((s) => s.battleHud);
   const day = useGameStore((s) => s.day);
   const report = useGameStore((s) => s.battleReport);
   const clearReport = useGameStore((s) => s.clearReport);
+  const unburied = useGameStore((s) => s.unburied);
+  const buryDead = useGameStore((s) => s.buryDead);
   const sendBattleCommand = useGameStore((s) => s.sendBattleCommand);
   const setWorldMapOpen = useGameStore((s) => s.setWorldMapOpen);
   const setCampPanel = useGameStore((s) => s.setCampPanel);
@@ -316,6 +358,7 @@ export function FieldHudView() {
               {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
             </div>
           </div>
+          {!scenario && <FaithToday />}
           {hud && !hud.inCamp && !scenario && (
             <button
               type="button"
@@ -589,7 +632,17 @@ export function FieldHudView() {
               ))}
             </ul>
             <PrisonersPanel />
-            <Button onClick={clearReport}>Continuar</Button>
+            {unburied && (
+              <Button
+                onClick={() => {
+                  buryDead();
+                  clearReport();
+                }}
+              >
+                Enterrar os mortos e seguir ({Math.round(FAITH.BURY_DAYS * 24)} h)
+              </Button>
+            )}
+            <Button onClick={clearReport}>{unburied ? "Seguir sem enterrar" : "Continuar"}</Button>
           </div>
         </div>
       )}

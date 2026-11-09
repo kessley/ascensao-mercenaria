@@ -1,6 +1,7 @@
 import type { BattalionData } from "../../store/useGameStore";
 import { fullName, type LieutenantData, type TraitId } from "../data/lieutenants";
 import { newId } from "../../utils/id";
+import { FAITHS, faithMix, friction, mainFaith, type FaithId } from "./faith";
 
 /**
  * Vida no acampamento (Marco 12), em funções puras usadas pelo store:
@@ -21,7 +22,7 @@ export const FOLLOWERS: Record<FollowerRole, { label: string; effect: string; ra
   COOK: { label: "Cozinheiro", effect: "−20% de rações gastas", rations: 0.5, max: 1, pitch: "um cozinheiro de taverna falida" },
   PEDDLER: { label: "Mascate", effect: "+25% no ouro do saque; vende vinho, ataduras e cobertores na banca", rations: 0.5, max: 1, pitch: "um mascate com uma carroça de bugigangas" },
   HEALER: { label: "Curandeira", effect: "mais caídos ficam feridos em vez de mortos, e os feridos saram mais depressa", rations: 0.5, max: 1, pitch: "uma curandeira de ervas e agulha" },
-  CHAPLAIN: { label: "Capelão", effect: "+10 na moral com que as tropas saem", rations: 0.5, max: 1, pitch: "um capelão sem paróquia" },
+  CHAPLAIN: { label: "Capelão", effect: "+10 na moral com que saem as tropas da fé dele, +4 nas outras (nada nas rivais)", rations: 0.5, max: 1, pitch: "um capelão sem paróquia" },
   FAMILY: { label: "Família de soldado", effect: "deserções pela metade", rations: 1, max: 4, pitch: "a família de um dos soldados" },
   SMITH: { label: "Ajudante de ferreiro", effect: "−25% no ouro e no ferro da Ferraria", rations: 0.5, max: 1, pitch: "um ajudante de ferreiro com o próprio martelo" },
 };
@@ -45,6 +46,8 @@ export interface Follower {
   name: string;
   /** Dia em que se juntou ao bando. */
   since: number;
+  /** A fé do capelão (Marco 23): a de mais gente no bando quando ele chegou. */
+  faith?: FaithId;
 }
 
 const FOLLOWER_NAMES = ["Ermelinda", "Bento", "Guida", "Tadeu", "Rosalva", "Anselmo", "Filipa", "Crispim", "Joana", "Lourenço", "Marta", "Simão"];
@@ -139,7 +142,8 @@ export type CampEventKind =
   | "FOLLOWER"
   | "PILGRIMS"
   | "ARREARS_GRUMBLE"
-  | "HUNGER_GRUMBLE";
+  | "HUNGER_GRUMBLE"
+  | "FAITH_QUARREL";
 
 export interface CampEventOption {
   label: string;
@@ -207,6 +211,9 @@ export function pickCampEvent(ctx: CampContext): CampEvent | null {
   const pairs = lieutenantPairs(ctx);
   if (pairs.rivals.length > 0) options.push({ w: 4, make: () => brawl(ctx, pick(pairs.rivals)) });
   if (pairs.friends.length > 0) options.push({ w: 3, make: () => camaraderie(ctx, pick(pairs.friends)) });
+  // Fés que brigam no mesmo bando (Marco 23)
+  const quarrels = friction(faithMix(bats), { altar: false, temple: false }).pairs;
+  if (quarrels.length > 0) options.push({ w: 3, make: () => faithQuarrel(ctx, pick(quarrels)) });
   const total = options.reduce((n, o) => n + o.w, 0);
   let r = Math.random() * total;
   for (const o of options) {
@@ -356,6 +363,20 @@ function pilgrims(ctx: CampContext): CampEvent {
   );
 }
 
+function faithQuarrel(ctx: CampContext, [a, b]: [FaithId, FaithId]): CampEvent {
+  const chaplain = ctx.followers.some((f) => f.role === "CHAPLAIN");
+  return ev(
+    "FAITH_QUARREL",
+    "Briga de fé",
+    `Perto da fogueira, soldados ${FAITHS[a].of} e ${FAITHS[b].of} discutem aos gritos sobre os deuses. Já tem gente de punhos fechados.`,
+    [
+      { label: "Separar e pôr os dois lados de guarda", hint: "humor −2, a briga para" },
+      chaplain ? { label: "Chamar o capelão para falar aos dois", hint: "humor +2" } : { label: "Deixar que se resolvam", hint: "humor −5" },
+    ],
+    { a, b, chaplain: chaplain ? "1" : "" },
+  );
+}
+
 function arrearsGrumble(ctx: CampContext): CampEvent {
   const biggest = [...ctx.battalions].sort((a, b) => b.soldiers - a.soldiers)[0];
   const part = Math.min(ctx.gold, Math.ceil(ctx.debt / 2));
@@ -490,10 +511,26 @@ export function applyCampEvent(ctx0: CampContext, e: CampEvent, option: number):
       const role = e.data.role as FollowerRole;
       if (option === 0 && FOLLOWERS[role]) {
         const f = newFollower(role, ctx.day);
+        // O capelão é da fé de mais gente no bando (Marco 23)
+        if (role === "CHAPLAIN") f.faith = mainFaith(faithMix(ctx.battalions));
         ctx.followers.push(f);
-        log.push({ text: `${f.name} (${FOLLOWERS[role].label.toLowerCase()}) agora segue o bando.`, tone: "good" });
+        log.push({ text: `${f.name} (${FOLLOWERS[role].label.toLowerCase()}${f.faith ? ` ${FAITHS[f.faith].of}` : ""}) agora segue o bando.`, tone: "good" });
       } else {
         log.push({ text: "O pedido para seguir o bando foi recusado.", tone: "info" });
+      }
+      break;
+    }
+    case "FAITH_QUARREL": {
+      const who = `${FAITHS[e.data.a as FaithId]?.of ?? "?"} e ${FAITHS[e.data.b as FaithId]?.of ?? "?"}`;
+      if (option === 0) {
+        mood(-2);
+        log.push({ text: `Os brigões ${who} pegaram guarda dobrada. Ninguém gostou, mas a briga parou.`, tone: "info" });
+      } else if (e.data.chaplain) {
+        mood(2);
+        log.push({ text: `O capelão falou aos fiéis ${who} dos deuses de todos: a noite terminou em paz.`, tone: "good" });
+      } else {
+        mood(-5);
+        log.push({ text: `Ninguém acalmou os fiéis ${who}: a discussão acabou em socos e dois soldados machucados.`, tone: "bad" });
       }
       break;
     }

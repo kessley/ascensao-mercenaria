@@ -6,6 +6,7 @@ import { xpToNextLevel } from "../../../utils/progression";
 import { PixelIcon } from "../PixelIcon";
 import { TroopIcon } from "../battle/BattleIcons";
 import { cultureOf, peopleOf } from "../../../game/sim/culture";
+import { FAITHS, faithOf } from "../../../game/sim/faith";
 
 /** Um batalhão: efetivo, tropa, formação, salário e reforço de soldados perdidos. */
 export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
@@ -53,7 +54,8 @@ export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
           <span data-origin={cultureOf(b)} title={kin ? "O tenente é da mesma gente: a tropa perde menos moral" : undefined} className={kin ? "text-emerald-300" : undefined}>
             {peopleOf(cultureOf(b))}
             {kin ? " (tenente da terra)" : ""}
-          </span>
+          </span>{" "}
+          · <span data-faith={faithOf(b)}>fé {FAITHS[faithOf(b)].of}</span>
         </span>
         {missing > 0 && (
           <button

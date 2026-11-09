@@ -395,6 +395,8 @@ export const combatMethods = {
       contractDone,
       mutinyOver,
       notes: eng?.notes ?? [],
+      // Os mortos ficam onde o Comandante lutou (Marco 23)
+      at: { x: this.commander.x, y: this.commander.y },
     });
     // Flechas dos muros num cerco: é o dia a dia, não uma batalha com relatório
     if (this.works && result === "RETREAT" && killed === 0 && !contractDone) {

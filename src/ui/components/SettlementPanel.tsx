@@ -1,4 +1,5 @@
-import { marchingIds, useGameStore, wagonsWithArmy } from "../../store/useGameStore";
+import { marchingIds, templeFaith, useGameStore, wagonsWithArmy } from "../../store/useGameStore";
+import { FAITHS, favorText } from "../../game/sim/faith";
 import { packCapacity, packOf } from "../../game/sim/logistics";
 import { RESOURCE_LABEL, SETTLEMENT_KIND_LABEL } from "../../game/data/world";
 import {
@@ -200,6 +201,7 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const rebuild = useGameStore((s) => s.rebuildSettlement);
   const nobles = useGameStore((s) => s.nobles);
   const leader = useGameStore((s) => s.leader);
+  const faithFavor = useGameStore((s) => s.faithFavor);
   if (!t || !world) return <p className="text-sm text-neutral-400">Este povoado não existe mais.</p>;
 
   const prosperity = prosperityLabel(t.prosperity);
@@ -211,6 +213,9 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const land = world.culture ?? BAND_HOME;
   const folk = folkOf(t, land, cultureOf(leader));
   const foreign = foreignRule(folk, rulerCulture(t.owner, land, cultureOf(leader)));
+  // O templo da cidade e o que ele pensa do bando (Marco 23)
+  const temple = templeFaith({ factions, world }, t);
+  const templeFavor = faithFavor[temple] ?? 0;
 
   return (
     <>
@@ -223,6 +228,11 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
           <p className="text-xs text-neutral-400" data-folk>
             Gente: {mixText(folk)}
             {foreign > 0 && <b className="text-yellow-300"> · governada por gente de fora: lealdade −{Math.round(foreign)}</b>}
+          </p>
+        )}
+        {t.owner !== "RUINED" && (
+          <p className="text-xs text-neutral-400" data-temple={temple}>
+            Templo: {FAITHS[temple].label}, dos {FAITHS[temple].clergy} · o templo {favorText(templeFavor)}
           </p>
         )}
         {(at === "CAMP" || at === "GATE") && t.owner !== "RUINED" && (
