@@ -64,6 +64,7 @@ import {
 import { brazierPiece, gravePiece, hutPiece, postsPiece, spikesPiece, totemPiece } from "../art/wilds";
 import { tombPiece } from "../art/cityArt";
 import { bushPiece } from "../art/trees";
+import { PIXEL_FONT } from "../art/font";
 
 /** Raio sólido da fogueira (pedras em volta). */
 const FIRE_RADIUS = 30;
@@ -111,7 +112,7 @@ export const CAMP_COLORS = {
 
 export const worldLabel = (scene: Phaser.Scene, x: number, y: number, text: string, color = "#ffffff") =>
   scene.add
-    .text(x, y, text, { fontFamily: "monospace", fontSize: "13px", color, stroke: "#000000", strokeThickness: 3 })
+    .text(x, y, text, { fontFamily: PIXEL_FONT, fontSize: "12px", color, stroke: "#000000", strokeThickness: 3 })
     .setOrigin(0.5)
     .setDepth(20);
 
@@ -131,8 +132,8 @@ function sameButProgress(a: CampPlan, b: CampPlan): boolean {
 const planLabel = (scene: Phaser.Scene, r: Rect & { center: Point }, text: string, color: string) =>
   scene.add
     .text(r.center.x, r.y + 2, text, {
-      fontFamily: "monospace",
-      fontSize: r.w <= 2 * CELL ? "11px" : "13px",
+      fontFamily: PIXEL_FONT,
+      fontSize: "12px",
       color,
       stroke: "#000000",
       strokeThickness: 3,
@@ -532,7 +533,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     if (!this.ghost) this.ghost = this.scene.add.graphics().setDepth(19);
     if (!this.ghostText) {
       this.ghostText = this.scene.add
-        .text(0, 0, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffffff", stroke: "#000000", strokeThickness: 3, align: "left" })
+        .text(0, 0, "", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3, align: "left" })
         .setOrigin(0, 0.5)
         .setDepth(21);
     }

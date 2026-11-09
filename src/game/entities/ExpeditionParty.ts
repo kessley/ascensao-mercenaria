@@ -5,6 +5,7 @@ import { COLORS, TROOPS, type TroopType } from "../../utils/constants";
 import type { Point } from "../../utils/math";
 import { troopLook, vehicleLook } from "../art/looks";
 import { LOD_SCALE, standardKey, type StandardGlyph } from "../art/atlas";
+import { PIXEL_FONT } from "../art/font";
 
 /** Mais que isso não cabe na coluna sem virar um borrão. */
 const MAX_MARCHERS = 36;
@@ -72,7 +73,7 @@ export class ExpeditionParty {
     this.marchers = list.map((t) => new Extra(scene, at.x, at.y, troopLook(t), TROOPS[t].stats.radius));
     this.standard = list.length > 0 ? scene.add.image(at.x, at.y, standardKey(scene, captain ? COLORS.CAPTAIN : 0x38bdf8, glyphOf(list[0]))).setOrigin(2.5 / 19, 1) : null;
     this.label = scene.add
-      .text(at.x, at.y, tag ? `${name} · ${tag}` : name, { fontFamily: "monospace", fontSize: "12px", color: "#bfe3ff", stroke: "#10202e", strokeThickness: 3 })
+      .text(at.x, at.y, tag ? `${name} · ${tag}` : name, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#bfe3ff", stroke: "#10202e", strokeThickness: 3 })
       .setOrigin(0.5, 1)
       .setDepth(6);
     this.place();

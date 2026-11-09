@@ -8,6 +8,7 @@ import type { NavGrid } from "../systems/NavGrid";
 import { LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
 import { ANIM, FRAMES, type Look } from "../art/figures";
 import type { Corpses } from "../art/corpses";
+import { PIXEL_FONT } from "../art/font";
 
 export type Team = "ALLY" | "ENEMY";
 /** Quem passa pelos portões: todos (inimigos, gente do mundo), tropa do bando ou gente avulsa do bando. */
@@ -685,8 +686,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   floatText(text: string, color: string): void {
     const t = this.scene.add
       .text(this.x, this.y + (this.sprite ? this.headY - 12 : -this.radius - 14), text, {
-        fontFamily: "monospace",
-        fontSize: "11px",
+        fontFamily: PIXEL_FONT,
+        fontSize: "12px",
         color,
         stroke: "#000000",
         strokeThickness: 3,

@@ -11,6 +11,8 @@ import { battalionMods, soldierStats, type BattalionMods } from "../../utils/pro
 import { formationOffset, formationSize, frontOf } from "../systems/formation";
 import { cycleStep, type CycleState } from "../sim/combatRules";
 import { nearestWithin } from "../systems/nearIndex";
+import { PIXEL_FONT } from "../art/font";
+import { OUTLINE, ramp } from "../art/pixel";
 
 export type BattalionOrder =
   | { type: "HOLD"; point: Point }
@@ -163,7 +165,7 @@ export class Battalion {
     // ★ = batalhão comandado por um tenente; ⚑ = a guarda do capitão (os nomes aparecem no card do HUD)
     const title = `${captain ? "⚑ " : ""}${data.name} · Nv ${data.level}${lieutenant ? " ★" : ""}`;
     this.label = scene.add
-      .text(x, y, title, { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
+      .text(x, y, title, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#1a1522", strokeThickness: 3 })
       .setOrigin(0.5, 1)
       .setDepth(10);
     this.bannerGfx = scene.add.graphics().setDepth(10);
@@ -656,17 +658,29 @@ export class Battalion {
     const top = Math.min(...this.soldiers.map((s) => s.y + s.headY)) - 8;
     const w = 60;
 
-    this.label.setPosition(c.x, top - 2);
+    // Em pixel inteiro: a fonte de pixel (G5) só fica nítida assim
+    this.label.setPosition(Math.round(c.x), Math.round(top - 2));
     // setColor redesenha o texto e o manda de novo para a placa: só quando a cor muda
     const color = this.panicking ? "#ff4d4d" : "#ffffff";
     if (this.label.style.color !== color) this.label.setColor(color);
 
+    // O estandarte (G5): a moral numa moldura de pixel, com a luz na linha de cima
     const g = this.bannerGfx;
     g.clear();
-    g.fillStyle(COLORS.HP_BG, 0.85);
-    g.fillRect(c.x - w / 2, top, w, 4);
-    g.fillStyle(this.panicking ? COLORS.PANIC : COLORS.MORALE, 1);
-    g.fillRect(c.x - w / 2, top, w * (this.morale / BALANCE.MORALE.MAX), 4);
+    const x0 = Math.round(c.x - w / 2);
+    const y0 = Math.round(top);
+    const fill = Math.round(w * Math.max(0, Math.min(1, this.morale / BALANCE.MORALE.MAX)));
+    const tone = this.panicking ? COLORS.PANIC : COLORS.MORALE;
+    g.fillStyle(OUTLINE, 0.9);
+    g.fillRect(x0 - 1, y0 - 1, w + 2, 6);
+    g.fillStyle(COLORS.HP_BG, 1);
+    g.fillRect(x0, y0, w, 4);
+    g.fillStyle(tone, 1);
+    g.fillRect(x0, y0, fill, 4);
+    g.fillStyle(ramp(tone).light, 1);
+    g.fillRect(x0, y0, fill, 1);
+    g.fillStyle(ramp(tone).dark, 1);
+    g.fillRect(x0, y0 + 3, fill, 1);
 
     const sel = this.selectionGfx;
     sel.clear();

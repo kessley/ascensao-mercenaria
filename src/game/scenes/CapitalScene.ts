@@ -26,6 +26,7 @@ import { CAPITAL_H, CAPITAL_W, capitalLayout, cityPath, districtAt, zoneAt, type
 import { paintCapitalBase, paveCapital } from "../world/capitalPaint";
 import { createRng, seedFromText } from "../worldgen/rng";
 import type { WorldScene } from "./WorldScene";
+import { PIXEL_FONT } from "../art/font";
 
 export interface CapitalData {
   townId: string;
@@ -703,7 +704,7 @@ export class CapitalScene extends Phaser.Scene {
       fig.setFacing(Math.PI / 2);
       fig.setAlpha(first ? 1 : 0);
       const name = courtName(s, n);
-      const label = this.add.text(from.x, from.y - LABEL_UP, name, { fontFamily: "monospace", fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(8);
+      const label = this.add.text(from.x, from.y - LABEL_UP, name, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(8);
       this.nobles.set(id, { id, place: w.place, name, x: from.x, y: from.y, tx: p.x, ty: p.y, fig, label });
     }
   }

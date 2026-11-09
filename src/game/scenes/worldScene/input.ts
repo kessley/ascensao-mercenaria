@@ -12,6 +12,7 @@ import { BALANCE, CAMERA, COLORS, COMBAT, FORMATIONS } from "../../../utils/cons
 import { angleTo, centroid, distance, nearest, type Point } from "../../../utils/math";
 import { type BattleKeys, FORMATION_KEYS, COMBAT_RUN_COLOR, DRAG_THRESHOLD, isShiftHeld } from "./shared";
 import type { WorldScene } from "../WorldScene";
+import { PIXEL_FONT } from "../../art/font";
 
 /**
  * A entrada: teclado, mouse, as ordens da interface, a seleção e a câmera.
@@ -143,7 +144,7 @@ export const inputMethods = {
     this.linePreview = this.add.graphics().setDepth(19);
     this.destinationGfx = this.add.graphics().setDepth(-4);
     this.lineLabel = this.add
-      .text(0, 0, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 })
+      .text(0, 0, "", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 })
       .setOrigin(0.5, 1)
       .setDepth(21)
       .setVisible(false);

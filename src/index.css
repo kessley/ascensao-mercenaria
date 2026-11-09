@@ -1,5 +1,49 @@
 @import "tailwindcss";
 
+/*
+ * A fonte de pixel (G5, parte 1): desenhada por código em `src/game/art/font.ts` e registrada
+ * antes de o jogo abrir. Vale para os números (font-mono), os títulos (font-serif), os rótulos
+ * de seção (h1 a h4) e os botões do componente Button. O texto corrido fica na fonte comum.
+ */
+@theme {
+  --font-pixel: "Mercenaria Pixel", ui-monospace, monospace;
+  --font-mono: "Mercenaria Pixel", ui-monospace, monospace;
+  --font-serif: "Mercenaria Pixel", Georgia, serif;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-pixel);
+    font-synthesis: none;
+  }
+}
+
+/* A fonte só fica nítida em 12 px e nos múltiplos: os tamanhos dela encaixam no degrau mais perto */
+@layer utilities {
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4) {
+    font-synthesis: none;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-\[9px\], .text-\[10px\], .text-\[11px\], .text-xs, .text-sm) {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-base, .text-lg) {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-xl, .text-2xl) {
+    font-size: 24px;
+    line-height: 30px;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-3xl, .text-4xl) {
+    font-size: 36px;
+    line-height: 44px;
+  }
+}
+
 /* Remove as margens padrão e impede a barra de rolagem no Canvas do jogo */
 html,
 body,

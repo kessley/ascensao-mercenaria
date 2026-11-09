@@ -13,6 +13,7 @@ import { BACK_FACE, FLAT_FURNITURE, ROOM_WALL, furniturePiece, roomGrid } from "
 import { commanderLook, folkLook, nobleLook, troopLook } from "../art/looks";
 import type { Look } from "../art/figures";
 import { seedFromText } from "../worldgen/rng";
+import { PIXEL_FONT } from "../art/font";
 
 /** Ao entrar: qual prédio e para onde o Comandante volta ao sair. */
 export interface InteriorData {
@@ -258,8 +259,8 @@ export class InteriorScene extends Phaser.Scene {
     const zoom = this.cameras.main.zoom;
     const label = this.add
       .text(pos.x, pos.y + fig.headY - 6, npc.mark === "SLEEP" ? "z z z" : npc.name, {
-        fontFamily: "monospace",
-        fontSize: `${Math.round(15 / zoom)}px`,
+        fontFamily: PIXEL_FONT,
+        fontSize: `${12 / zoom}px`,
         color: "#ffe9b0",
         stroke: "#000000",
         strokeThickness: Math.max(2, Math.round(4 / zoom)),

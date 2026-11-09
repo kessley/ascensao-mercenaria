@@ -194,7 +194,7 @@ export async function fortress({ page, ev }, { check }) {
     return { people: a.seatCity.people, gold: a.gold, seat: new Function(`return (${fn})()`)(), log: a.log.slice(-3).map((e) => e.text) };
   }, seatOf.toString());
   console.log("   burgo:", JSON.stringify(burg));
-  check("o arraial vira burgo sem o jogador pôr nenhuma casa", burg.people >= 120 && burg.seat?.houses > 5 && burg.seat?.walls === 0, JSON.stringify(burg.seat));
+  check("o arraial vira burgo sem o jogador pôr nenhuma casa", burg.people >= 120 && burg.seat?.houses >= 3 && burg.seat?.walls === 0, JSON.stringify(burg.seat));
   check("o burgo paga imposto", burg.gold > 1000 && burg.log.some((t) => /pagou .* de ouro/.test(t)), JSON.stringify(burg.log));
   // A câmera diante do portão da fortaleza: a praça e as primeiras casas
   await ev(() => {

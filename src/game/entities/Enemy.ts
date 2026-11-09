@@ -6,6 +6,7 @@ import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad
 import { enemyLook } from "../art/looks";
 import { duelBannerKey } from "../art/atlas";
 import { BOSS_HEROES, seeksDuel, type HeroData } from "../data/heroes";
+import { PIXEL_FONT } from "../art/font";
 
 /**
  * Goblin: quadrado vermelho. IA simples de aggro → perseguição → ataque, com coleira.
@@ -108,7 +109,7 @@ export class Enemy extends Unit {
     this.titleText?.destroy();
     this.titleText = null;
     if (!title) return;
-    this.titleText = this.scene.add.text(0, this.sprite ? Math.round(this.headY) - 16 : -this.radius - 20, title, { fontFamily: "monospace", fontSize: "11px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
+    this.titleText = this.scene.add.text(0, this.sprite ? Math.round(this.headY) - 16 : -this.radius - 20, title, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffe0a0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5);
     this.add(this.titleText);
   }
 

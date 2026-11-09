@@ -12,6 +12,7 @@ import { bitmapKey } from "../art/atlas";
 import { ironLoadBitmap, stationPieces } from "../art/campProps";
 import type { ArtJob } from "./TownArt";
 import { distance, type Point } from "../../utils/math";
+import { PIXEL_FONT } from "../art/font";
 
 type Activity =
   | "SLEEP"
@@ -168,14 +169,14 @@ export class CampLife {
     private readonly camp: CampArea,
   ) {
     this.trainingLabel = scene.add
-      .text(0, 0, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 })
+      .text(0, 0, "", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 })
       .setOrigin(0.5)
       .setDepth(20);
     this.relayout();
     for (let i = 0; i < MAX_BUBBLES; i++) {
       this.bubbles.push(
         scene.add
-          .text(0, 0, "", { fontFamily: "monospace", fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 })
+          .text(0, 0, "", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 })
           .setOrigin(0.5)
           .setDepth(21)
           .setVisible(false),

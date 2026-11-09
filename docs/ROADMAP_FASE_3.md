@@ -18,7 +18,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G5 (etapa 13, a interface): fonte, molduras, ícones e retratos em pixel art.
+- **A seguir:** o G5 (etapa 13, a interface), em quatro partes. A parte 1 (a fonte) está feita; a seguir, a parte 2, as molduras e os botões.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -49,7 +49,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
-| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
+| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | parte 1 (a fonte) feita; a seguir, as molduras |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
@@ -931,6 +931,25 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Retratos** do Comandante, dos capitães, dos tenentes e dos nobres, gerados por código como as figuras, com as cicatrizes do Marco 18.
 
 **Pronto quando:** abrir a tenda, o quadro de comando e o diário não mostra mais nenhum painel genérico.
+
+**Em quatro partes,** cada uma com o seu commit. Tudo é feito por código, como as figuras, sem fonte nem pacote baixado de fora:
+1. **A fonte:** uma fonte de pixel desenhada letra a letra, com todos os acentos do português, montada em TrueType no próprio jogo. Vale para títulos, rótulos, botões e números do HUD, e para o nome e o estandarte dos batalhões no mapa. O texto corrido dos painéis fica numa fonte comum, para ler sem cansar.
+2. **As molduras e os botões:** bordas de madeira, ferro e pergaminho em pixel art, para os painéis, a tenda, o diário e os botões.
+3. **Os ícones:** as tropas, os bens, as construções do Marco 22 e os botões de batalha, no lugar dos ícones de linha.
+4. **Os retratos:** o Comandante, os capitães, os tenentes e os nobres, com a cultura, a idade e as cicatrizes do Marco 18.
+
+**Feito na parte 1, a fonte:**
+- **A fonte "Mercenaria Pixel"** fica em `src/game/art/font.ts`. Cada letra é desenhada numa grade de 12 linhas: as maiúsculas têm 7 de altura, as minúsculas 5, as pernas 2, e os acentos vêm em cima, sem encostar.
+  - Tem o alfabeto, os algarismos (todos da mesma largura), a pontuação, todas as letras acentuadas do português e os sinais que os textos usam (· — … × ★ ✓ ✗ ⚑ ▲ ▼ →).
+  - O que ela não tem (os emojis) cai na fonte seguinte, até os ícones da parte 3.
+- **O TrueType é montado no próprio jogo:** cada pixel vira um quadrado do contorno. O negrito engrossa as hastes sem fechar os vãos de 1 pixel, como as pernas do m.
+  - `ui/pixelFont.ts` registra as duas faces antes de o jogo abrir.
+- **Onde ela entra:**
+  - os títulos (`font-serif`), os números (`font-mono`), os rótulos de seção (h1 a h4) e os botões do componente `Button`;
+  - os textos do mapa: nomes dos batalhões, das construções e da gente, e os da Liça, dos interiores e da Cidade Alta.
+- **Os tamanhos:** a fonte só fica nítida em 12 px e nos múltiplos, e o CSS encaixa cada tamanho no degrau mais perto (12, 18, 24 ou 36). O texto corrido dos painéis continua na fonte comum.
+- **O estandarte dos batalhões:** o nome tem contorno escuro, e a barra da moral tem moldura de pixel, com luz em cima e sombra embaixo.
+- **Testes:** 6 de regras (`tests/unit/pixelFont.test.ts`): as tabelas e as somas do arquivo, a cobertura do português, os contornos e o negrito. A suíte de navegador `interface` confere que o navegador aceita as duas faces e onde a fonte aparece, e tira as fotos `.shots-g5-*.png`.
 
 ## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.

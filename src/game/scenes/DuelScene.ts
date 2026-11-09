@@ -11,6 +11,7 @@ import { paintStands } from "../world/capitalPaint";
 import { poseOf } from "./worldScene/duel";
 import { useGameStore } from "../../store/useGameStore";
 import { DUEL, GAME_HEIGHT, GAME_WIDTH } from "../../utils/constants";
+import { PIXEL_FONT } from "../art/font";
 
 const ARENA_R = 300;
 const CX = 640;
@@ -109,12 +110,12 @@ export class DuelScene extends Phaser.Scene {
       this.figs.set(f, fig);
     }
     const round = spec.tournament ? ` · ${spec.tournament.round}ª rodada do torneio` : "";
-    this.title = this.add.text(CX, 24, `Liça${round}`, { fontFamily: "monospace", fontSize: "18px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 4 }).setOrigin(0.5).setDepth(6);
-    const small = { fontFamily: "monospace", fontSize: "13px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 };
+    this.title = this.add.text(CX, 24, `Liça${round}`, { fontFamily: PIXEL_FONT, fontSize: "24px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 4 }).setOrigin(0.5).setDepth(6);
+    const small = { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 };
     this.add.text(170, 36, "Comandante", small).setDepth(6);
     this.add.text(1110, 36, spec.opponent, small).setOrigin(1, 0).setDepth(6);
     this.tip = this.add
-      .text(CX, 694, "WASD anda · Espaço ou clique: golpe leve · Q ou botão direito: pesado · Shift: bloquear (na hora certa, apara)\nF: esquiva · E: empurrão · o arco vermelho avisa o golpe; o largo e escuro é o pesado", { fontFamily: "monospace", fontSize: "13px", color: "#d8d8d8", stroke: "#000000", strokeThickness: 3, align: "center" })
+      .text(CX, 694, "WASD anda · Espaço ou clique: golpe leve · Q ou botão direito: pesado · Shift: bloquear (na hora certa, apara)\nF: esquiva · E: empurrão · o arco vermelho avisa o golpe; o largo e escuro é o pesado", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#d8d8d8", stroke: "#000000", strokeThickness: 3, align: "center" })
       .setOrigin(0.5)
       .setDepth(6);
     const keyboard = this.input.keyboard;
@@ -162,7 +163,7 @@ export class DuelScene extends Phaser.Scene {
 
   /** Uma palavra que sobe e some em cima de quem fez o lance. */
   private float(f: DuelFighter, text: string): void {
-    const t = this.add.text(f.x, f.y - 74, text, { fontFamily: "monospace", fontSize: "14px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(6);
+    const t = this.add.text(f.x, f.y - 74, text, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(6);
     this.tweens.add({ targets: t, y: t.y - 26, alpha: 0, duration: 800, onComplete: () => t.destroy() });
   }
 
