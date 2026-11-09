@@ -3,7 +3,7 @@ import { SETTLEMENT_KIND_LABEL, type SiteDef, type WorldDef } from "../data/worl
 import { isCalamityOwner, ownerLabel, type Calamity, type Settlement } from "../sim/realm";
 import { worldLabel, type Interactable } from "./CampArea";
 import type { StaticCuller } from "./StaticCuller";
-import { COLORS } from "../../utils/constants";
+import { COLORS, TIME } from "../../utils/constants";
 import type { Point } from "../../utils/math";
 import { specialHouses, templeDoor, townLayout, type Rect, type TownLayout } from "./townLayout";
 import { TownArt, type ArtJob } from "./TownArt";
@@ -36,11 +36,13 @@ const MARKET_RADIUS = 190;
 const HALL_RADIUS = 120;
 const CAMP_RADIUS = 150;
 
-/** Luz de um povoado à noite (praça, portões, janelas). */
+/** Luz de um povoado à noite (praça, portões, janelas), com o halo quente das janelas (G6). */
 export interface TownLight {
   x: number;
   y: number;
   radius: number;
+  glow?: number;
+  flicker?: number;
 }
 
 interface DrawnTown {
@@ -297,10 +299,12 @@ const rectAround = (p: Point, r: number) => new Phaser.Geom.Rectangle(p.x - r, p
 /** Luzes de um povoado: a praça, os portões e algumas janelas (sempre as mesmas). */
 function townLights(id: string, layout: TownLayout): TownLight[] {
   const rnd = new Phaser.Math.RandomDataGenerator([`janelas-${id}`]);
+  const F = TIME.FIRE;
+  // A praça só clareia (o halo dela cobriria a vila inteira); portões têm tocha, janelas e fogueiras têm fogo
   const lights: TownLight[] = [{ x: layout.cx, y: layout.cy, radius: 460 }];
-  for (const g of layout.gates) lights.push({ x: g.outside.x, y: g.outside.y, radius: 230 }, { x: g.inside.x, y: g.inside.y, radius: 200 });
-  for (const hs of layout.houses) if (rnd.frac() < 0.35) lights.push({ x: hs.door.x, y: hs.door.y, radius: 150 });
-  lights.push({ x: layout.hall.x, y: layout.hall.y, radius: 220 });
-  for (const c of layout.camps) lights.push({ x: c.fire.x, y: c.fire.y, radius: 240 });
+  for (const g of layout.gates) lights.push({ x: g.outside.x, y: g.outside.y, radius: 230, ...F.TORCH }, { x: g.inside.x, y: g.inside.y, radius: 200, ...F.TORCH });
+  for (const hs of layout.houses) if (rnd.frac() < 0.35) lights.push({ x: hs.door.x, y: hs.door.y, radius: 150, ...F.WINDOW });
+  lights.push({ x: layout.hall.x, y: layout.hall.y, radius: 220, ...F.WINDOW });
+  for (const c of layout.camps) lights.push({ x: c.fire.x, y: c.fire.y, radius: 240, ...F.CAMPFIRE });
   return lights;
 }

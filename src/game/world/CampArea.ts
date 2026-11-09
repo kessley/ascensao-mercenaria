@@ -65,9 +65,12 @@ import { brazierPiece, gravePiece, hutPiece, postsPiece, spikesPiece, totemPiece
 import { tombPiece } from "../art/cityArt";
 import { bushPiece } from "../art/trees";
 import { PIXEL_FONT } from "../art/font";
+import { flameSprite } from "./flames";
 
 /** Raio sólido da fogueira (pedras em volta). */
 const FIRE_RADIUS = 30;
+/** Do pé do poste da tocha até o pano enrolado, onde a chama nasce (ver `campPropPiece`). */
+const TORCH_HEAD = 21;
 /** O quadrado tem esta folga por dentro da cerca (estacas). */
 const FENCE_INSET = 14;
 /** Estacas da paliçada: uma a cada STAKE px, em grupos de STAKE_GROUP (cada grupo com a própria profundidade). */
@@ -229,6 +232,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     this.obstacles = [];
     this.quarterRects = [];
     this.torches.length = 0;
+    this.forges.length = 0;
     this.interactables.length = 0;
     this.drawPlan();
     this.buildQuarters(state, away);
@@ -331,6 +335,8 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
   onSolidsChanged: (() => void) | null = null;
   /** Tochas fincadas ao longo dos caminhos (acesas à noite). */
   readonly torches: Point[] = [];
+  /** Bocas das forjas: a brasa acende um pouco da noite em volta (G6). */
+  readonly forges: Point[] = [];
 
   /**
    * Tudo o que bloqueia no acampamento, para todo mundo (soldados, inimigos, cavaleiros), não
@@ -362,6 +368,15 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
   /** Peça com a âncora no ponto do mundo (o pé de um mastro, de um boneco, de uma tocha). */
   private anchor(list: ArtJob[], x: number, y: number, make: () => Piece): void {
     list.push({ x: Math.round(x), y: Math.round(y), depth: Math.round(y), make });
+  }
+
+  /** Tocha no poste (G6): o poste vai na montagem e a chama animada, por cima, acende a noite ali. */
+  private torchPost(list: ArtJob[], x: number, y: number, c: Culture, seed: number): void {
+    const ax = Math.round(x);
+    const ay = Math.round(y);
+    this.anchor(list, ax, ay, () => campPropPiece("TORCH", c, seed));
+    this.planObjects.push(flameSprite(this.scene, "TORCH", ax, ay - TORCH_HEAD, ay * 1e-6 + 1e-7));
+    this.torches.push({ x: ax, y: ay - TORCH_HEAD - 4 });
   }
 
   /** Manda as peças para a montagem (a antiga fica na tela até a nova acabar). */
@@ -686,13 +701,8 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         const fr = 26;
         this.foot(jobs, r.center.x - fr, r.center.y - fr, 2 * fr, () => bonfirePiece(fr, 5));
         // A chama (forma simples, pisca) por cima da lenha: quem está atrás da fogueira some atrás dela
-        const flame = this.scene.add.graphics({ x: r.center.x, y: r.center.y - 6 }).setDepth((r.center.y + fr) * 1e-6 + 1e-7);
-        flame.fillStyle(CAMP_COLORS.FIRE, 0.9);
-        flame.fillCircle(0, 0, 11);
-        flame.fillStyle(CAMP_COLORS.FIRE_CORE, 1);
-        flame.fillCircle(0, 2, 5);
-        this.scene.tweens.add({ targets: flame, scale: 1.25, alpha: 0.75, duration: 280, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
-        this.planObjects.push(flame);
+        // (G6: a chama em pixel art animada, com o pé na lenha)
+        this.planObjects.push(flameSprite(this.scene, "BONFIRE", r.center.x, r.center.y + 4, (r.center.y + fr) * 1e-6 + 1e-7));
         break;
       }
       case "BARRACK":
@@ -740,11 +750,10 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         footed(fw, fh, () => forgePiece(fw, fh, c, 44));
         // A brasa do fogão pisca (por cima da ferraria, que fica atrás de quem passa na frente)
         const at = forgeGlow(fw);
-        const glow = this.scene.add.graphics({ x: r.center.x - fw / 2 + at.x, y: box.y + box.h - fh + at.y }).setDepth((box.y + box.h) * 1e-6 + 1e-7);
-        glow.fillStyle(CAMP_COLORS.FIRE, 0.55);
-        glow.fillCircle(0, 0, 7);
-        this.scene.tweens.add({ targets: glow, alpha: 0.25, duration: 500, yoyo: true, repeat: -1 });
-        this.planObjects.push(glow);
+        const gx = r.center.x - fw / 2 + at.x;
+        const gy = box.y + box.h - fh + at.y;
+        this.planObjects.push(flameSprite(this.scene, "EMBER", gx, gy + 4, (box.y + box.h) * 1e-6 + 1e-7));
+        this.forges.push({ x: gx, y: gy });
         solid();
         break;
       }
@@ -818,6 +827,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
       case "STORY_FIRE": {
         const fr = 18;
         this.foot(jobs, r.center.x - fr, r.center.y - fr, 2 * fr, () => bonfirePiece(fr, seed));
+        this.planObjects.push(flameSprite(this.scene, "BONFIRE", r.center.x, r.center.y + 3, (r.center.y + fr) * 1e-6 + 1e-7));
         for (const [dx, dy] of [[-30, 12], [30, 12], [0, 30]]) this.anchor(jobs, r.center.x + dx, r.center.y + dy, () => propPiece("CRATE", c, seed + dx));
         this.torches.push(r.center);
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - fr, r.center.y - fr / 2, 2 * fr, fr));
@@ -876,8 +886,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
       case "SENTRY":
         this.anchor(jobs, r.center.x, r.center.y + 16, () => postsPiece(seed));
         this.anchor(jobs, r.center.x + 10, r.center.y + 14, () => bannerPiece(CAMP_COLORS.BANNER, true, 60, 16));
-        this.anchor(jobs, r.center.x - 14, r.center.y + 14, () => campPropPiece("TORCH", c, seed));
-        this.torches.push({ x: r.center.x - 14, y: r.center.y - 6 });
+        this.torchPost(jobs, r.center.x - 14, r.center.y + 14, c, seed);
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 10, r.center.y + 2, 20, 14));
         break;
       // --- Parte 3: a fortaleza (pedra, do jeito das cidades) ---
@@ -905,7 +914,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         footed(hw, hh, () => housePiece(hw, hh, c, ROOF[b.kind] ?? 0, door, seed, false, b.kind === "GREAT_HALL" || b.kind === "DOVECOTE"));
         if (b.kind === "GREAT_HALL") this.anchor(jobs, box.x + 6, box.y + box.h - 4, () => bannerPiece(COLORS.ALLY, true, 64));
         if (b.kind === "STOREHOUSE") for (const k of [0, 1]) this.anchor(jobs, box.x + box.w - 10 - k * 16, box.y + box.h + 2, () => propPiece("BARREL", c, seed + k));
-        if (b.kind === "DUNGEON") this.anchor(jobs, box.x + 8, box.y + box.h + 2, () => campPropPiece("TORCH", c, seed));
+        if (b.kind === "DUNGEON") this.torchPost(jobs, box.x + 8, box.y + box.h + 2, c, seed);
         solid();
         break;
       }
@@ -943,9 +952,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
     // Tochas nas portas das construções grandes
     const door = this.doors.get(b.id);
     if (door && def.size >= 3 && !OPEN_YARD.has(b.kind)) {
-      const tx = door.x + CELL * 0.6;
-      this.anchor(jobs, tx, door.y, () => campPropPiece("TORCH", c, seed));
-      this.torches.push({ x: tx, y: door.y - 20 });
+      this.torchPost(jobs, door.x + CELL * 0.6, door.y, c, seed);
     }
 
     // O rótulo e o ponto de conversa (as barracas são dos batalhões: ver buildQuarters)

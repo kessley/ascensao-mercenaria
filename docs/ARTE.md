@@ -132,7 +132,7 @@ A interface e os efeitos ainda são greybox.
 | Anel do duelo e aviso dos golpes no campo (Marco 21) | `worldScene/duel.ts` | greybox (de propósito: são da interface) |
 | Estandarte do desafio (herói inimigo que procura duelo, Marco 21) | `duelBannerSprite` em `figures.ts`, `Enemy.makeHero` | ✅ pixel art: flâmula vermelha de duas pontas com espadas cruzadas |
 | Névoa de guerra | `FogOfWar` | greybox |
-| Noite e tochas | `NightLayer` | greybox |
+| Noite e tochas | `NightLayer`, `worldScene/camp.ts` (`carryTorches`), `Unit.setTorch` | ✅ G6, parte 1. A escuridão tem buracos de luz que tremulam, e por cima vai o halo quente das chamas, que deixa a noite alaranjada perto do fogo. Levam a tocha na mão: o Comandante, os mensageiros, um em cada seis de quem marcha (até 5 por batalhão), a guarda do acampamento e as sentinelas dos povoados |
 | Chuva, neve e nevoeiro | `WeatherLayer` | greybox |
 
 ### Chão (G2)
@@ -161,7 +161,7 @@ A interface e os efeitos ainda são greybox.
 | Bandeiras dos povoados (paço, portões, guarnição), na cor do dono | `Settlements`, `TownArt` | ✅ pixel art |
 | Locais de contrato: barracas de bandidos, choupanas goblins, ruínas assombradas, vau do pântano | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão pisado pintado no chão |
 | Covis das calamidades: torre negra do necromante com sepulturas; acampamento de guerra orc com barracas de couro, totens e cavalos-de-frisa | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão do covil |
-| Chama da fogueira e brilho da forja | `CampArea` | greybox (G6) |
+| Chama da fogueira, brasa da forja e tochas dos postes | `fire.ts`, `world/flames.ts`, `CampArea`, `FieldCampArt` | ✅ pixel art animada (G6, parte 1), sem contorno escuro, porque o fogo brilha. A fogueira tem 6 quadros; a tocha, a tocha da mão e a brasa têm 4 cada. Cada chama começa num quadro, e as tochas de uma rua não piscam juntas |
 
 ### Resto do elenco (G4)
 | O quê | Estado |
@@ -190,9 +190,11 @@ A interface e os efeitos ainda são greybox.
    - o chão comum de baixo ainda é pintado na linha principal (barato agora: 1,5 ms por pedaço na mediana).
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
-   - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
+   - a chama da fogueira e o brilho da forja: feitos no G6, parte 1.
 4. **G4, resto do elenco ✅ OK,** em seis partes: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1 (o cavalo de frente e de costas).
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
 5. **G5, interface ✅ OK,** em quatro partes: a fonte, as molduras e os botões, os ícones e os retratos.
-6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue).
+6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue). Em quatro partes:
+   - a parte 1, a noite e o fogo, está feita;
+   - faltam o clima, os efeitos de combate e o que a magia mexe.

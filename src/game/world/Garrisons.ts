@@ -11,6 +11,9 @@ const MATERIALIZE = 2600;
 /** Mais longe que isso de todos (e ninguém lutando): volta a ser só um número. */
 const DEMATERIALIZE = 3600;
 
+/** Quem leva a tocha à noite: sentinelas, rondas, vigias e quem anda na muralha. */
+const TORCH_ROLES: ReadonlySet<GarrisonPost["role"]> = new Set(["SENTRY", "PATROL", "WATCH", "WALL"]);
+
 interface Guard {
   unit: Enemy;
   post: GarrisonPost;
@@ -93,9 +96,14 @@ export class GarrisonManager {
   lights(): Point[] {
     const out: Point[] = [];
     for (const g of this.towns.values()) {
-      for (const x of g.guards) if (x.unit.isAlive && (x.post.role === "SENTRY" || x.post.role === "PATROL" || x.post.role === "WATCH" || x.post.role === "WALL")) out.push({ x: x.unit.x, y: x.unit.y });
+      for (const x of g.guards) if (x.unit.isAlive && TORCH_ROLES.has(x.post.role)) out.push({ x: x.unit.x, y: x.unit.y });
     }
     return out;
+  }
+
+  /** Com a noite escura, as sentinelas e as rondas levam a tocha na mão (G6). */
+  setTorches(dark: boolean): void {
+    for (const g of this.towns.values()) for (const x of g.guards) x.unit.setTorch(dark && x.unit.isAlive && TORCH_ROLES.has(x.post.role));
   }
 
   /** Papel de cada soldado no mapa (para os testes). */

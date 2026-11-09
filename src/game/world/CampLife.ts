@@ -346,6 +346,11 @@ export class CampLife {
     return out;
   }
 
+  /** A guarda leva a tocha na mão à noite (G6); quem descansa, não. */
+  setTorches(dark: boolean): void {
+    for (const [s, t] of this.tasks) s.setTorch(dark && t.activity === "GUARD" && s.isAlive);
+  }
+
   // --- Soldados ---
 
   private drive(b: Battalion, s: Soldier, i: number, dt: number): boolean {

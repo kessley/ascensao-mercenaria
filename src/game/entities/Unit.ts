@@ -5,7 +5,8 @@ import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/comba
 import { sfx } from "../../audio/sounds";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
-import { LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
+import { flameKey, LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
+import { FLAMES } from "../art/fire";
 import { ANIM, FRAMES, type Look } from "../art/figures";
 import type { Corpses } from "../art/corpses";
 import { PIXEL_FONT } from "../art/font";
@@ -186,6 +187,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   private diedAt = NaN;
   /** Cada um respira num tempo, para a tropa parada não piscar junta. */
   private readonly phase = Math.random() * 1200;
+  /** A tocha na mão (G6): acesa à noite, quando o bando anda de tocha. */
+  private torch: Phaser.GameObjects.Image | null = null;
+  private torchSheet: readonly Phaser.Textures.Frame[] = [];
 
   constructor(scene: Phaser.Scene, x: number, y: number, team: Team, stats: UnitStats) {
     super(scene, x, y);
@@ -247,6 +251,39 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** Veste uma figura em pixel art (false = greybox). */
   get hasFigure(): boolean {
     return this.sprite !== null;
+  }
+
+  /** Acende ou apaga a tocha na mão (só em quem tem figura). Chamar a cada quadro não custa nada. */
+  setTorch(on: boolean): void {
+    const want = on && this.sprite !== null;
+    if (want === (this.torch !== null)) return;
+    if (!want) {
+      this.torch?.destroy();
+      this.torch = null;
+      return;
+    }
+    const cell = FLAMES.HELD;
+    this.torch = new Phaser.GameObjects.Image(this.scene, 0, 0, flameKey(this.scene, "HELD"), 0).setOrigin(cell.footX / cell.w, 1);
+    this.add(this.torch);
+    this.torchSheet = sheetOf(this.torch.texture);
+  }
+
+  get hasTorch(): boolean {
+    return this.torch !== null;
+  }
+
+  /** A tocha acompanha a mão: do lado para onde a figura olha, na altura da cintura; some deitado, sentado e no duelo. */
+  private holdTorch(torch: Phaser.GameObjects.Image, now: number, lod: Lod, s: Skin): void {
+    const shown = lod !== "DOT" && this.isAlive && this.pose === "STAND" && this.duelPose === null;
+    torch.setVisible(shown);
+    if (!shown) return;
+    const tall = lod === "FULL" ? s.height : s.mini2.h * LOD_SCALE[lod];
+    // De frente, a mão direita fica à esquerda da tela; de costas, à direita; de lado, à frente
+    const side = this.dirRow === 1 ? (this.flipped ? -1 : 1) : this.dirRow === 0 ? -1 : 1;
+    torch.setPosition(side * (lod === "FULL" ? 5 : 4), this.feetY - Math.round(tall * 0.4));
+    const cell = FLAMES.HELD;
+    const f = this.torchSheet[Math.floor((now + this.phase) / (1000 / cell.fps)) % cell.frames];
+    if (f && torch.frame !== f) torch.frame = f;
   }
 
   /** Os pés da figura, abaixo do centro do círculo de colisão (o corpo sobe a partir dali). */
@@ -331,6 +368,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       else img.setFrame(frame);
       this.shownFrame = frame;
     }
+    if (this.torch) this.holdTorch(this.torch, now, lod, s);
   }
 
   get isAlive(): boolean {

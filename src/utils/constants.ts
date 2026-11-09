@@ -1829,6 +1829,25 @@ export const TIME = {
   DARKNESS_COLOR: 0x050a1f,
   /** Raio das luzes (px de mundo): tocha, fogueira, janelas dos povoados. */
   LIGHT: { TORCH: 170, BATTALION: 230, CAMPFIRE: 520, TOWN: 380, LAIR: 300 },
+  /**
+   * O halo quente das chamas (G6): até onde ele passa do buraco de luz, a cor e a força. Cada luz
+   * diz o seu `glow` (0 a 1) e o seu tremor.
+   */
+  GLOW: { SPREAD: 1.15, COLOR: 0xff7a1e, ALPHA: 0.24 },
+  /** Força do halo e tremor de cada luz: a fogueira, a tocha, a janela, o lampião e o covil. */
+  FIRE: {
+    CAMPFIRE: { glow: 1, flicker: 0.05 },
+    TORCH: { glow: 0.75, flicker: 0.08 },
+    BATTALION: { glow: 0.6, flicker: 0.06 },
+    WINDOW: { glow: 0.45, flicker: 0.02 },
+    LANTERN: { glow: 0.55, flicker: 0.04 },
+    FORGE: { glow: 0.8, flicker: 0.05 },
+    LAIR: { glow: 0.7, flicker: 0.05, tint: 0x9a4dd8 },
+  },
+  /** A tocha na mão aparece com a noite já escura; um em cada tanto da tropa a leva, até o teto. */
+  TORCH_SHOWN: 0.2,
+  TORCH_EVERY: 6,
+  TORCH_MAX: 5,
 } as const;
 
 /** Salvar e carregar (Marco 10). */

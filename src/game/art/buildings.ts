@@ -1697,10 +1697,9 @@ export function campPropPiece(kind: "HAY" | "WOODPILE" | "TORCH", culture: Cultu
       const g = new Grid(M + 6 + M, M + 26 + M);
       const x = M + 2;
       const base = M + 26;
+      // Só o poste e o pano enrolado: a chama é animada, por cima (G6, `flameSprite`)
       g.rect(x, base - 18, 2, 18, st.wood);
       g.rect(x - 1, base - 21, 4, 3, 0x3a2a1c);
-      g.rect(x - 1, base - 24, 4, 3, 0xf08020);
-      g.rect(x, base - 26, 2, 3, 0xf8d050);
       g.outline();
       return { grid: g, dx: -x - 1, dy: -base };
     }

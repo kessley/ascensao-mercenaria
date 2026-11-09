@@ -685,7 +685,29 @@ export const campMethods = {
     // Tochas denunciam o bando de longe; no escuro ele passa despercebido
     Enemy.perception = 1 + d * ((this.torches ? TIME.NIGHT_AGGRO_TORCHES : TIME.NIGHT_AGGRO_DARK) - 1);
     Enemy.darkPerception = 1 + d * (TIME.NIGHT_AGGRO_DARK - 1);
-    this.night.update(this.cameras.main, d, d > 0.01 ? this.nightLights() : []);
+    this.carryTorches(d);
+    this.night.update(this.cameras.main, d, d > 0.01 ? this.nightLights() : [], this.time.now);
+  },
+
+  /**
+   * A chama na mão (G6): com a noite escura e as tochas acesas, o Comandante, os mensageiros e um em
+   * cada tanto de cada batalhão em marcha levam a tocha. No acampamento, só os de guarda; nos
+   * povoados, as sentinelas e as rondas.
+   */
+  carryTorches(this: WorldScene, d: number): void {
+    const dark = d > TIME.TORCH_SHOWN;
+    const lit = dark && this.torches;
+    this.commander.setTorch(lit && this.commander.isAlive);
+    for (const m of this.messengers) m.setTorch(lit && m.isAlive);
+    for (const b of this.battalions) {
+      // Os aquartelados ficam por conta da vida do acampamento (a guarda leva a tocha)
+      if (this.quartered.has(b.id)) continue;
+      const carry = lit && !b.isDestroyed;
+      let n = 0;
+      b.soldiers.forEach((s, i) => s.setTorch(carry && s.isAlive && i % TIME.TORCH_EVERY === 0 && n++ < TIME.TORCH_MAX));
+    }
+    this.campLife.setTorches(dark);
+    this.garrisons.setTorches(dark);
   },
 
   /** Raio de visão do bando em relação ao dia (tochas ajudam a enxergar no escuro). */
@@ -695,18 +717,24 @@ export const campMethods = {
 
   nightLights(this: WorldScene): Light[] {
     const L = TIME.LIGHT;
-    const out: Light[] = [{ x: this.campArea.campfire.x, y: this.campArea.campfire.y, radius: L.CAMPFIRE }];
+    const F = TIME.FIRE;
+    const out: Light[] = [{ x: this.campArea.campfire.x, y: this.campArea.campfire.y, radius: L.CAMPFIRE, ...F.CAMPFIRE }];
     if (this.torches) {
-      if (this.commander.isAlive) out.push({ x: this.commander.x, y: this.commander.y, radius: L.TORCH });
-      for (const b of this.battalions) if (!b.isDestroyed) out.push({ ...b.center, radius: L.BATTALION });
-      for (const m of this.messengers) if (m.isAlive) out.push({ x: m.x, y: m.y, radius: L.TORCH * 0.6 });
+      if (this.commander.isAlive) out.push({ x: this.commander.x, y: this.commander.y, radius: L.TORCH, ...F.TORCH });
+      for (const b of this.battalions) if (!b.isDestroyed) out.push({ ...b.center, radius: L.BATTALION, ...F.BATTALION });
+      for (const m of this.messengers) if (m.isAlive) out.push({ x: m.x, y: m.y, radius: L.TORCH * 0.6, ...F.TORCH });
     }
     const store = useGameStore.getState();
     out.push(...this.settlementLayer.lights);
-    for (const p of this.campLife.lights()) out.push({ x: p.x, y: p.y, radius: L.TORCH });
-    for (const p of this.mapLife.lanterns()) out.push({ x: p.x, y: p.y, radius: 140 });
-    for (const p of this.garrisons.lights()) out.push({ x: p.x, y: p.y, radius: L.TORCH });
-    for (const c of store.calamities) if (!c.defeated) out.push({ ...c.lair, radius: L.LAIR });
+    // As tochas nos postes do acampamento e a boca das forjas (G6)
+    for (const p of this.campArea.torches) out.push({ x: p.x, y: p.y, radius: L.TORCH * 0.8, ...F.TORCH });
+    for (const p of this.campArea.forges) out.push({ x: p.x, y: p.y, radius: L.TORCH * 0.7, ...F.FORGE });
+    // A fogueira do acampamento de campo montado
+    if (store.fieldCamp) out.push({ x: store.fieldCamp.x, y: store.fieldCamp.y, radius: L.CAMPFIRE * 0.7, ...F.CAMPFIRE });
+    for (const p of this.campLife.lights()) out.push({ x: p.x, y: p.y, radius: L.TORCH, ...F.TORCH });
+    for (const p of this.mapLife.lanterns()) out.push({ x: p.x, y: p.y, radius: 140, ...F.LANTERN });
+    for (const p of this.garrisons.lights()) out.push({ x: p.x, y: p.y, radius: L.TORCH, ...F.TORCH });
+    for (const c of store.calamities) if (!c.defeated) out.push({ ...c.lair, radius: L.LAIR, ...F.LAIR });
     return out;
   },
 

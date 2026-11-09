@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "./canvasTexture";
+import { FLAMES, flameSheet, type FlameKind } from "./fire";
 import { bannerSprite, cellOf, dotOf, dotSprite, duelBannerSprite, figureSheet, lookKey, miniOf, miniSheet, rides, type Look } from "./figures";
 import { HARPY_CELL, harpyShadow, harpySheet } from "./harpy";
 import type { Bitmap } from "./pixel";
@@ -75,6 +76,13 @@ export function bitmapKey(scene: Phaser.Scene, key: string, make: () => Bitmap):
     const b = make();
     addSheet(scene, key, b, b.width, b.height);
   }
+  return key;
+}
+
+/** A folha de uma chama (G6): os quadros da fogueira, da tocha ou da brasa, feitos uma vez. */
+export function flameKey(scene: Phaser.Scene, kind: FlameKind): string {
+  const key = `fire:${kind}`;
+  if (!scene.textures.exists(key)) addSheet(scene, key, flameSheet(kind), FLAMES[kind].w, FLAMES[kind].h);
   return key;
 }
 

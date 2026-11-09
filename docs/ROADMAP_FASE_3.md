@@ -24,7 +24,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G6 (etapa 15): atmosfera.
+- **Em andamento:** o G6 (etapa 15), atmosfera. A parte 1, a noite e o fogo, está feita.
+- **A seguir:** a parte 2 do G6: o clima.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -57,7 +58,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
-| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
+| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | parte 1 de 4 |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
@@ -1181,6 +1182,38 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Já pensando na magia:** nevoeiro, tocha apagada, rio congelado e fogo são efeitos que o Marco 19 liga e desliga.
 
 **Pronto quando:** uma batalha à noite, na chuva, se lê pela luz das tochas, e dá para ver de longe onde a investida bateu.
+
+**Em quatro partes,** cada uma com o seu commit. Tudo feito por código, como as figuras, e sem barra de vida em cima de ninguém:
+1. **A noite e o fogo:** a chama da fogueira, a brasa da forja e as tochas viram pixel art animada. As luzes ganham um halo quente que tremula e, perto das chamas, a escuridão fica alaranjada. O Comandante e os batalhões de tocha acesa levam a chama na mão.
+2. **O clima:** a chuva cai em gotas de pixel que respingam no chão, e com ela o chão escurece e as poças aparecem. A neve cobre o chão aos poucos, o nevoeiro passa em bancos e o vento entorta a chuva e as bandeiras.
+3. **Os efeitos de combate:** flechas, virotes e dardos de pixel, que voam em arco e ficam fincados no chão; o golpe em meia-lua; a poeira da investida; e o sangue, que respinga e mancha o chão.
+4. **O que a magia mexe, e o fechamento:** nevoeiro, tocha apagada, rio congelado e fogo viram efeitos que se ligam e se desligam num lugar, prontos para o Marco 19. Uma batalha de teste à noite, na chuva, confere o "Pronto quando".
+
+**Feito na parte 1, a noite e o fogo:**
+- **As chamas em pixel art:** as folhas saem de `src/game/art/fire.ts`, e não têm contorno escuro, porque o fogo brilha.
+  - Cada chama é feita de línguas de fogo, largas no pé e finas na ponta. A ponta balança mais que o pé.
+  - O miolo claro fica embaixo e a ponta é vermelha. Faíscas e pedaços de chama se soltam e sobem.
+  - Os quadros dão a volta sem emenda.
+  - São quatro folhas: a fogueira (6 quadros), a tocha do poste, a tocha da mão (com o cabo e o pano enrolado) e a brasa da forja (4 quadros cada).
+- **No acampamento** (`src/game/world/flames.ts`):
+  - a chama animada fica por cima da lenha da fogueira, da fogueira das histórias e da fogueira do acampamento de campo;
+  - a brasa fica na boca do fogão da forja;
+  - a chama fica no pano das tochas dos postes (portas das construções grandes, sentinela, masmorra). O poste perdeu a chama parada que tinha.
+  - Cada chama começa num quadro, e as tochas de uma rua não piscam juntas.
+- **O halo quente** (`NightLayer`): por cima da escuridão vai uma segunda camada, somada à cena.
+  - O halo passa um pouco da borda do buraco de luz, e ali a noite fica alaranjada.
+  - Cada luz tem a sua força de halo e o seu tremor (`TIME.FIRE`). A fogueira e as tochas tremulam; as janelas quase não tremem; o covil tem halo roxo.
+  - A praça dos povoados só clareia: o halo dela cobriria a vila inteira.
+  - Os postes do acampamento, a forja e o acampamento de campo passaram a acender a noite. Antes, só a fogueira acendia.
+- **A tocha na mão** (`Unit.setTorch`, `carryTorches`): com a noite escura e as tochas acesas, levam a chama:
+  - o Comandante e os mensageiros;
+  - um em cada seis de quem marcha, até 5 por batalhão;
+  - no acampamento, só quem está de guarda;
+  - nos povoados, as sentinelas e as rondas.
+  - A tocha vai do lado para onde a figura olha. Ela some com a figura sentada, deitada, no duelo e de longe (no bloquinho).
+- **Testes:**
+  - 5 de regras em `tests/unit/fire.test.ts`;
+  - a suíte nova `atmosfera`, com 9 verificações. Ela confere que as chamas mexem, que as tochas não piscam juntas, que o halo deixa a cor mais quente perto da fogueira (o mesmo chão, com e sem halo) e que a tocha vai para a mão e sai dela com as tochas, a hora e a saída do acampamento. As fotos ficam em `tests/battle/.shots-g6-*.png`.
 
 ## 16. Marco 19: magia do Comandante
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.

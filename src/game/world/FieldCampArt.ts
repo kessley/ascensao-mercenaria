@@ -4,6 +4,7 @@ import { bannerPiece, bonfirePiece, forgePiece, stallPiece, tentPiece, type Cult
 import { COLORS } from "../../utils/constants";
 import type { Point } from "../../utils/math";
 import { pieceImage } from "./TownArt";
+import { flameSprite } from "./flames";
 import { CAMP_COLORS } from "./CampArea";
 
 /**
@@ -40,6 +41,8 @@ export class FieldCampArt {
     put("tenda", tentPiece(96, 64, CAMP_COLORS.COMMAND_TENT, 0xb8902c, 41), at.x - 48, at.y - 120, 64);
     put("bandeira", bannerPiece(COLORS.ALLY, true, 60), at.x + 52, at.y - 60, 0);
     put("fogo", bonfirePiece(18, 7), at.x - 18, at.y - 18, 36);
+    // A chama animada por cima da lenha (G6)
+    this.objects.push(flameSprite(this.scene, "BONFIRE", at.x, at.y + 3, Math.round(at.y + 18) * 1e-6 + 1e-7));
     this.solids = [{ x: at.x - 44, y: at.y - 90, w: 88, h: 34 }];
     kit.forEach((kind, i) => {
       const a = Math.PI * 0.15 + (i / Math.max(1, kit.length)) * Math.PI * 1.7;

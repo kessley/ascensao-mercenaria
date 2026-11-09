@@ -331,7 +331,7 @@ export class CapitalScene extends Phaser.Scene {
     this.drawCrowd();
     this.art.update(this.cameras.main);
     Unit.animateAll(time, this.cameras.main.worldView, this);
-    this.night.update(this.cameras.main, darknessAt(s.dayProgress), this.nightLights());
+    this.night.update(this.cameras.main, darknessAt(s.dayProgress), this.nightLights(), time);
     if (time - this.lastSlow > 500) {
       this.lastSlow = time;
       this.updateGates(false);
@@ -752,9 +752,10 @@ export class CapitalScene extends Phaser.Scene {
 
   private nightLights(): Light[] {
     const v = this.cameras.main.worldView;
+    const F = TIME.FIRE;
     const out: Light[] = [{ x: this.pos.x, y: this.pos.y, radius: TIME.LIGHT.TORCH * 1.2 }];
-    for (const p of this.layout.lamps) if (p.x > v.x - 300 && p.x < v.right + 300 && p.y > v.y - 300 && p.y < v.bottom + 300) out.push({ x: p.x, y: p.y, radius: 230 });
-    for (const g of this.guards) if (g.x > v.x - 200 && g.x < v.right + 200 && g.y > v.y - 200 && g.y < v.bottom + 200) out.push({ x: g.x, y: g.y, radius: 130 });
+    for (const p of this.layout.lamps) if (p.x > v.x - 300 && p.x < v.right + 300 && p.y > v.y - 300 && p.y < v.bottom + 300) out.push({ x: p.x, y: p.y, radius: 230, ...F.LANTERN });
+    for (const g of this.guards) if (g.x > v.x - 200 && g.x < v.right + 200 && g.y > v.y - 200 && g.y < v.bottom + 200) out.push({ x: g.x, y: g.y, radius: 130, ...F.TORCH });
     return out;
   }
 
