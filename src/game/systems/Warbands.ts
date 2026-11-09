@@ -177,6 +177,12 @@ export function bandSize(band: Warband): number {
  * (fogem de um povoado atacado para o mais próximo que ainda está de pé). Toda marcha deixa
  * rastros no chão.
  */
+/** Tamanho de um bando goblin novo: a ameaça cresce com a fama do bando do jogador (Marco 22, GDD 9.9). */
+export function goblinBandSize(fame: number): number {
+  const W = WORLD.WARBAND;
+  return W.BASE_SIZE + Math.floor(Math.max(0, fame) / W.FAME_STEP) * W.GROWTH;
+}
+
 export class WarbandManager {
   bands: Warband[] = [];
   private lastGoblinDay = 0;
@@ -221,15 +227,15 @@ export class WarbandManager {
     private readonly clock: () => number = () => 0,
   ) {}
 
-  /** Goblins: um bando novo a cada poucos dias, num covil que ninguém está vendo. */
-  maybeSpawnGoblins(day: number, lairs: readonly Point[], canSee: (p: Point) => boolean, everyMult = 1): Warband | null {
+  /** Goblins: um bando novo a cada poucos dias, num covil que ninguém está vendo; maior quanto mais fama o bando tem. */
+  maybeSpawnGoblins(day: number, lairs: readonly Point[], canSee: (p: Point) => boolean, everyMult = 1, fame = 0): Warband | null {
     const W = WORLD.WARBAND;
     const goblins = this.bands.filter((b) => b.kind === "GOBLIN").length;
     if (day < W.FIRST_DAY || day - this.lastGoblinDay < W.EVERY_DAYS * everyMult || goblins >= W.MAX) return null;
     const hidden = lairs.filter((p) => !canSee(p));
     if (hidden.length === 0) return null;
     this.lastGoblinDay = day;
-    const size = W.BASE_SIZE + Math.floor(day / 7) * W.GROWTH_PER_WEEK;
+    const size = goblinBandSize(fame);
     const archers = Math.round(size * W.ARCHER_SHARE);
     return this.spawnBand({
       name: `Bando de ${chiefName()}`,

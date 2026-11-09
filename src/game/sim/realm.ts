@@ -8,6 +8,7 @@ import { distance, type Point } from "../../utils/math";
 import { diffuse, initEconomy, marketDay, needsOf, quote, rationPackPrice, type Economy } from "./market";
 import { courtCalendar, kingdomsWeek, loyaltyDay, noblesWeek, siegesDay, type Alliance, type CourtEvent, type FieldArmy, type KingdomPlan } from "./kingdoms";
 import type { Noble, Plot } from "./nobility";
+import type { CultureId } from "../data/planet";
 
 /**
  * Simulação do reino e do mundo vivo (Marco 9), em funções puras usadas pelo store:
@@ -53,6 +54,8 @@ export interface Settlement {
   conqueredDay?: number;
   /** Cerco em andamento: o reino que acampou diante dos muros. */
   besiegedBy?: string;
+  /** A vila que nasceu em volta da fortaleza do bando (Marco 22, parte 4): a planta é a da cidade da sede. */
+  seat?: boolean;
 }
 
 /** Guerra entre dois reinos (Marco 14): embargo, armas caras e escaramuças na fronteira. */
@@ -148,6 +151,8 @@ export interface RealmState {
   liege: string | null;
   spouseId: string | null;
   wanted: Record<string, number>;
+  /** A cultura de quem governa pelo bando: a do Comandante (Marco 23). */
+  bandCulture?: CultureId;
 }
 
 /**

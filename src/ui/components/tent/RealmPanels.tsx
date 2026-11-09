@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGameStore } from "../../../store/useGameStore";
 import { titleFor } from "../../../game/sim/realm";
 import { REALM } from "../../../utils/constants";
+import { PixelIcon } from "../PixelIcon";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
@@ -68,7 +69,9 @@ export function DiplomacyPanel() {
 
       {active.map((c) => (
         <div key={c.id} className="rounded border border-red-700 bg-red-950/40 p-3 text-sm">
-          <div className="font-semibold text-red-300">☠ {c.name}</div>
+          <div className="font-semibold text-red-300">
+            <PixelIcon id="SKULL" /> {c.name}
+          </div>
           <div className="text-xs text-neutral-300">
             {c.revealed ? `Covil em ${c.region} (marcado no Mapa do Continente).` : `Rumores vindos de ${c.region}. O covil ainda não foi encontrado.`} Força {c.power}:
             as hordas crescem a cada {REALM.CALAMITY_POWER_EVERY_DAYS} dias e a cada povoado que cai. Mate {c.leader} para acabar com isso.

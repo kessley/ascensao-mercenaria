@@ -1,5 +1,11 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "../art/canvasTexture";
+import { gatePiece, type Culture } from "../art/buildings";
+import { PAVING, pavingTile, type Paving } from "../art/cityArt";
+import type { Look } from "../art/figures";
+import { commanderLook, folkLook, nobleLook } from "../art/looks";
+import { Extra } from "../entities/Extra";
+import { Unit } from "../entities/Unit";
 import { courtChoice, courtName, gateTalk, nobleTalk } from "../data/courtTalk";
 import { townGossip, type Talk } from "../data/interiors";
 import { registerDialogHandler } from "../interiorBridge";
@@ -9,13 +15,18 @@ import { scheduleOf, type CourtPlace } from "../sim/nobility";
 import { STANDING_LABEL, standingIn, type AccessPlace } from "../sim/reputation";
 import { useGameStore, type CampPanel, type GameState } from "../../store/useGameStore";
 import { COLORS, COURT, TIME, WORLD } from "../../utils/constants";
+import { seasonOf } from "../../utils/season";
 import { darknessAt, daysUntilHour, hourOf } from "../../utils/time";
 import { distance, type Point } from "../../utils/math";
+import { GroundFilter } from "../world/GroundFilter";
 import { NightLayer, type Light } from "../world/NightLayer";
+import { TownArt, pieceImage } from "../world/TownArt";
+import { capitalJobs } from "../world/capitalArt";
 import { CAPITAL_H, CAPITAL_W, capitalLayout, cityPath, districtAt, zoneAt, type CapitalLayout, type CityDoor, type CityGate, type CityZone } from "../world/capitalLayout";
-import { paintCapitalChunk } from "../world/capitalPaint";
+import { paintCapitalBase, paveCapital } from "../world/capitalPaint";
 import { createRng, seedFromText } from "../worldgen/rng";
 import type { WorldScene } from "./WorldScene";
+import { PIXEL_FONT } from "../art/font";
 
 export interface CapitalData {
   townId: string;
@@ -31,6 +42,7 @@ interface Walker {
   wait: number;
   /** Cada um anda no seu lado da rua. */
   lane: Point;
+  fig: Extra;
 }
 
 interface Guard extends Walker {
@@ -48,19 +60,44 @@ interface NobleView {
   y: number;
   tx: number;
   ty: number;
-  gfx: Phaser.GameObjects.Graphics;
+  fig: Extra;
   label: Phaser.GameObjects.Text;
 }
 
 type Near = { kind: "NOBLE"; v: NobleView } | { kind: "DOOR"; door: CityDoor } | { kind: "GATE"; gate: CityGate } | { kind: "FOLK"; w: Walker } | null;
 
-const CHUNK = 1200;
-const TEX = 900;
+/** Pedaços do chão: 1 px de textura por px de mundo, com folga em volta para o filtro não deixar emenda. */
+const CHUNK = 600;
+const PAD = 12;
+/** Quantos pedaços podem estar no filtro ao mesmo tempo. */
+const IN_FILTER = 6;
 const RADIUS = 14;
+/** O nome dos nobres, acima da cabeça. */
+const LABEL_UP = 30;
 const WALK = 230;
 const RUN = 340;
 const CELL = 300;
 const FOLK = [0xd8c8a8, 0xa88a6a, 0x8a6a4a, 0xc89a7a, 0x9a8a7a, 0xb8a888, 0x8a7a9a, 0x7a9a8a];
+const COURT_COLORS = [0x8080d0, 0xd080b0, 0x6a9a6a, 0xb08a4a, 0x9a4a4a, 0x4a7a9a];
+const PAVINGS: Paving[] = ["COBBLE", "AVENUE", "FLAG", "MARKET", "NOBLE", "BAILEY", "PLANKS"];
+
+/** Quem anda pelas ruas de cada zona: o povo, os mercadores e os ladrões do Bairro Baixo; criados e cortesãos atrás dos portões. */
+function passerLook(zone: CityZone, slums: boolean): Look {
+  const r = Math.random();
+  const color = FOLK[Math.floor(Math.random() * FOLK.length)];
+  if (zone === "COMMON") {
+    if (slums && r < 0.12) return folkLook("THIEF");
+    if (r < 0.6) return folkLook("TOWNSFOLK", color);
+    if (r < 0.74) return folkLook("WORKER");
+    if (r < 0.84) return folkLook("MERCHANT");
+    if (r < 0.91) return folkLook("TRAVELER");
+    if (r < 0.96) return folkLook("PEDDLER");
+    return folkLook("PRIEST");
+  }
+  if (r < 0.35) return folkLook("CLERK");
+  if (r < 0.65) return folkLook("TOWNSFOLK", color);
+  return nobleLook(COURT_COLORS[Math.floor(Math.random() * COURT_COLORS.length)], false);
+}
 
 /** O que o sargento diz a quem chega pela primeira vez: o lugar do Comandante e os portões. */
 function firstVisit(s: GameState, townId: string): string {
@@ -83,10 +120,16 @@ export class CapitalScene extends Phaser.Scene {
   private townId = "";
   private owner = "";
   private pos: Point = { x: 0, y: 0 };
-  private facing = -Math.PI / 2;
-  private commander!: Phaser.GameObjects.Graphics;
-  private crowd!: Phaser.GameObjects.Graphics;
-  private gateGfx!: Phaser.GameObjects.Graphics;
+  private commander!: Extra;
+  private art!: TownArt;
+  private filter!: GroundFilter;
+  private tiles = new Map<Paving, HTMLCanvasElement>();
+  /** Pedaços do chão no filtro (ainda sem textura). */
+  private pending = new Set<number>();
+  /** A janela de pedaços que a câmera quer agora (para descartar o que chega tarde). */
+  private window = { c0: 0, c1: 0, r0: 0, r1: 0 };
+  private flowers = 1;
+  private gateViews = new Map<AccessPlace, { open: Phaser.GameObjects.Image; shut: Phaser.GameObjects.Image }>();
   private night!: NightLayer;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private cells = new Map<number, Phaser.Geom.Rectangle[]>();
@@ -132,6 +175,8 @@ export class CapitalScene extends Phaser.Scene {
     this.loaded = new Map();
     this.cells = new Map();
     this.doorCells = new Map();
+    this.pending = new Set();
+    this.gateViews = new Map();
   }
 
   create(): void {
@@ -149,9 +194,25 @@ export class CapitalScene extends Phaser.Scene {
     this.doors = [...l.doors, ...this.palaceDoors()];
     for (const d of this.doors) this.addDoor(d);
     this.pos = { ...l.spawn };
-    this.crowd = this.add.graphics().setDepth(4);
-    this.gateGfx = this.add.graphics().setDepth(3);
-    this.commander = this.add.graphics().setDepth(6);
+    const culture: Culture = store.world?.culture ?? "REALMS";
+    const realm = this.realmColor();
+    const season = seasonOf(store.day);
+    this.flowers = season === "WINTER" ? 0 : 1;
+    this.filter = new GroundFilter();
+    for (const k of PAVINGS) {
+      const b = pavingTile(k);
+      const canvas = document.createElement("canvas");
+      canvas.width = PAVING;
+      canvas.height = PAVING;
+      canvas.getContext("2d")?.putImageData(new ImageData(b.rgba, b.width, b.height), 0, 0);
+      this.tiles.set(k, canvas);
+    }
+    // Os prédios, as muralhas e os enfeites, montados aos poucos conforme a câmera chega perto
+    this.art = new TownArt(this);
+    for (const [key, jobs] of capitalJobs(l, culture, realm, season, seedFromText(this.townId))) this.art.setJobs(`cidade:${key}`, jobs);
+    this.buildGates(culture);
+    this.commander = new Extra(this, this.pos.x, this.pos.y, commanderLook(), RADIUS);
+    this.commander.setOwnLod("FULL");
     this.drawCommander();
     this.night = new NightLayer(this);
     this.spawnGuards();
@@ -159,7 +220,8 @@ export class CapitalScene extends Phaser.Scene {
     this.refreshNobles(true);
 
     const cam = this.cameras.main;
-    cam.setZoom(0.85);
+    // Zoom inteiro: 1 pixel da arte é 1 pixel da tela
+    cam.setZoom(1);
     cam.startFollow(this.commander, true, 0.14, 0.14);
     cam.centerOn(this.pos.x, this.pos.y);
     cam.fadeIn(260, 0, 0, 0);
@@ -188,6 +250,14 @@ export class CapitalScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.WAKE, this.onWake, this);
       unregister();
       for (const [i, c] of this.loaded) this.unload(i, c);
+      this.filter.destroy();
+      for (const v of this.gateViews.values()) {
+        for (const img of [v.open, v.shut]) {
+          const key = img.texture.key;
+          img.destroy();
+          if (this.textures.exists(key)) this.textures.remove(key);
+        }
+      }
       this.night.destroy();
       useGameStore.getState().setCity(null);
     });
@@ -259,6 +329,8 @@ export class CapitalScene extends Phaser.Scene {
     this.updateNobleViews(dt);
     this.updateNear();
     this.drawCrowd();
+    this.art.update(this.cameras.main);
+    Unit.animateAll(time, this.cameras.main.worldView, this);
     this.night.update(this.cameras.main, darknessAt(s.dayProgress), this.nightLights());
     if (time - this.lastSlow > 500) {
       this.lastSlow = time;
@@ -296,16 +368,21 @@ export class CapitalScene extends Phaser.Scene {
     const c1 = Math.min(cols - 1, Math.floor(v.right / CHUNK) + 1);
     const r0 = Math.max(0, Math.floor(v.y / CHUNK) - 1);
     const r1 = Math.min(rows - 1, Math.floor(v.bottom / CHUNK) + 1);
-    let budget = 2;
+    this.window = { c0, c1, r0, r1 };
+    // Primeiro os pedaços na tela, depois a margem em volta
+    const want: { c: number; r: number; i: number; visible: boolean }[] = [];
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         const i = r * cols + c;
-        if (this.loaded.has(i)) continue;
+        if (this.loaded.has(i) || this.pending.has(i)) continue;
         const visible = c * CHUNK < v.right && (c + 1) * CHUNK > v.x && r * CHUNK < v.bottom && (r + 1) * CHUNK > v.y;
-        if (!visible && budget <= 0) continue;
-        if (!visible) budget--;
-        this.loadChunk(c, r, i);
+        want.push({ c, r, i, visible });
       }
+    }
+    want.sort((a, b) => Number(b.visible) - Number(a.visible));
+    for (const w of want) {
+      if (this.pending.size >= IN_FILTER) break;
+      this.loadChunk(w.c, w.r, w.i);
     }
     for (const [i, ch] of this.loaded) {
       const c = i % cols;
@@ -314,19 +391,68 @@ export class CapitalScene extends Phaser.Scene {
     }
   }
 
-  private loadChunk(c: number, r: number, index: number): void {
-    const canvas = document.createElement("canvas");
-    canvas.width = TEX;
-    canvas.height = TEX;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  /** A cor do reino dono da capital (estandartes, camarote da Liça). */
+  private realmColor(): number {
     const def = useGameStore.getState().world?.factions.find((f) => f.id === this.owner);
-    paintCapitalChunk(ctx, this.layout, c * CHUNK, r * CHUNK, CHUNK, TEX, this.owner === "PLAYER" ? COLORS.ALLY : (def?.color ?? 0xc0a040));
-    const key = `${this.prefix}-${c}-${r}`;
-    if (this.textures.exists(key)) this.textures.remove(key);
-    addCanvasTexture(this.textures, key, canvas);
-    const image = this.add.image(c * CHUNK, r * CHUNK, key).setOrigin(0, 0).setScale(CHUNK / TEX).setDepth(0);
-    this.loaded.set(index, { image, key });
+    return this.owner === "PLAYER" ? COLORS.ALLY : (def?.color ?? 0xc0a040);
+  }
+
+  /**
+   * Um pedaço do chão: a base vai para o filtro do chão (no worker) e, quando volta, ganha o
+   * calçamento por cima e vira textura. Quem chega tarde, com a câmera já longe, é descartado.
+   */
+  private loadChunk(c: number, r: number, index: number): void {
+    const S = CHUNK + PAD * 2;
+    const x0 = c * CHUNK - PAD;
+    const y0 = r * CHUNK - PAD;
+    const canvas = document.createElement("canvas");
+    canvas.width = S;
+    canvas.height = S;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    paintCapitalBase(ctx, this.layout, x0, y0, S);
+    const data = ctx.getImageData(0, 0, S, S).data;
+    this.pending.add(index);
+    this.filter.run(
+      { data, w: S, h: S, x0, y0, flowers: this.flowers, inner: null },
+      (out) => {
+        this.pending.delete(index);
+        const w = this.window;
+        if (this.loaded.has(index) || c < w.c0 - 1 || c > w.c1 + 1 || r < w.r0 - 1 || r > w.r1 + 1) return;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.putImageData(new ImageData(out as Uint8ClampedArray<ArrayBuffer>, S, S), 0, 0);
+        const tiles = {} as Record<Paving, CanvasPattern>;
+        for (const [k, tile] of this.tiles) {
+          const p = ctx.createPattern(tile, "repeat");
+          if (p) tiles[k] = p;
+        }
+        paveCapital(ctx, this.layout, x0, y0, S, tiles);
+        const crop = document.createElement("canvas");
+        crop.width = CHUNK;
+        crop.height = CHUNK;
+        crop.getContext("2d")?.drawImage(canvas, -PAD, -PAD);
+        const key = `${this.prefix}-${c}-${r}`;
+        if (this.textures.exists(key)) this.textures.remove(key);
+        addCanvasTexture(this.textures, key, crop)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+        const image = this.add.image(c * CHUNK, r * CHUNK, key).setOrigin(0, 0).setDepth(-10);
+        this.loaded.set(index, { image, key });
+      },
+      () => this.pending.delete(index),
+    );
+  }
+
+  /** Os portões do Bairro Nobre e do castelo: abertos e fechados, um de cada vez à vista. */
+  private buildGates(culture: Culture): void {
+    for (const g of this.layout.gates) {
+      const t = Math.min(g.rect.h, 60);
+      const w = Math.round(g.rect.w);
+      const seed = seedFromText(`${this.townId}:${g.place}`);
+      const key = `${this.prefix}-portao-${g.place}`;
+      const open = pieceImage(this, `${key}-aberto`, gatePiece(w, t, "S", true, culture, seed, false), g.rect.x, g.rect.y, g.rect.y + t);
+      const shut = pieceImage(this, `${key}-fechado`, gatePiece(w, t, "S", true, culture, seed, false, true), g.rect.x, g.rect.y, g.rect.y + t);
+      this.gateViews.set(g.place, { open, shut });
+    }
   }
 
   private unload(index: number, ch: { image: Phaser.GameObjects.Image; key: string }): void {
@@ -335,18 +461,17 @@ export class CapitalScene extends Phaser.Scene {
     this.loaded.delete(index);
   }
 
+  /** O Comandante (de capuz e cajado, se estiver disfarçado). */
   private drawCommander(): void {
-    const g = this.commander;
-    g.clear();
-    const disguised = useGameStore.getState().disguiseUntil > useGameStore.getState().day + useGameStore.getState().dayProgress;
-    g.fillStyle(disguised ? 0x8a7a6a : COLORS.ALLY, 1);
-    g.fillCircle(0, 0, RADIUS);
-    g.lineStyle(3, disguised ? 0x4a3a2a : COLORS.COMMANDER_OUTLINE, 1);
-    g.strokeCircle(0, 0, RADIUS);
-    g.fillStyle(COLORS.COMMANDER_OUTLINE, 1);
-    g.fillTriangle(RADIUS + 6, 0, RADIUS - 2, -5, RADIUS - 2, 5);
-    g.setPosition(this.pos.x, this.pos.y);
-    g.setRotation(this.facing);
+    const s = useGameStore.getState();
+    const disguised = s.disguiseUntil > s.day + s.dayProgress;
+    this.commander.dress(disguised ? folkLook("TRAVELER") : commanderLook());
+    this.placeCommander();
+  }
+
+  private placeCommander(): void {
+    this.commander.x = this.pos.x;
+    this.commander.y = this.pos.y;
   }
 
   private move(dt: number): void {
@@ -364,8 +489,7 @@ export class CapitalScene extends Phaser.Scene {
     if (!this.blocked(nx, RADIUS)) this.pos.x = nx.x;
     const ny = { x: this.pos.x, y: this.pos.y + (vy / len) * step };
     if (!this.blocked(ny, RADIUS)) this.pos.y = ny.y;
-    this.facing = Math.atan2(vy, vx);
-    this.commander.setPosition(this.pos.x, this.pos.y).setRotation(this.facing);
+    this.commander.walkTo(this.pos.x, this.pos.y);
     // Pisou no Portão Velho: sai da Cidade Alta. Portas e portões, só com E: andar de encontro
     // a eles entrava sem querer
     if (this.pos.y > CAPITAL_H - 60) this.leave();
@@ -376,14 +500,18 @@ export class CapitalScene extends Phaser.Scene {
   private spawnGuards(): void {
     const l = this.layout;
     for (const g of l.gates) {
-      for (const dx of [-70, 70]) this.guards.push({ x: g.post.x + dx, y: g.post.y, path: [], speed: 0, color: 0x7f8c8d, zone: "COMMON", wait: 0, post: true, lane: { x: 0, y: 0 } });
+      for (const dx of [-70, 70]) {
+        const fig = this.figure(g.post.x + dx, g.post.y, folkLook("GUARD"), 11);
+        fig.setFacing(Math.PI / 2);
+        this.guards.push({ x: g.post.x + dx, y: g.post.y, path: [], speed: 0, color: 0x7f8c8d, zone: "COMMON", wait: 0, post: true, lane: { x: 0, y: 0 }, fig });
+      }
     }
     const zones: [CityZone, number][] = [["COMMON", 8], ["NOBLE", 3], ["CASTLE", 4]];
     for (const [zone, n] of zones) {
       const nodes = l.nodes.filter((p) => p.zone === zone);
       for (let i = 0; i < n && nodes.length > 0; i++) {
         const p = nodes[Math.floor(Math.random() * nodes.length)];
-        this.guards.push({ x: p.x, y: p.y, path: [], speed: 90, color: 0x95a5a6, zone, wait: 0, post: false, lane: { x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80 } });
+        this.guards.push({ x: p.x, y: p.y, path: [], speed: 90, color: 0x95a5a6, zone, wait: 0, post: false, lane: { x: (Math.random() - 0.5) * 80, y: (Math.random() - 0.5) * 80 }, fig: this.figure(p.x, p.y, folkLook("GUARD"), 11) });
       }
     }
   }
@@ -400,12 +528,16 @@ export class CapitalScene extends Phaser.Scene {
     const v = this.cameras.main.worldView;
     const unseen = (p: Point) => p.x < v.x - 80 || p.x > v.right + 80 || p.y < v.y - 80 || p.y > v.bottom + 80;
     // Ninguém some nem aparece à vista: quem sobra sai longe dos olhos do Comandante
-    this.walkers = this.walkers.filter((w) => !unseen(w) || distance(w, this.pos) < 1900);
+    const drop = (w: Walker) => {
+      w.fig.destroy();
+      return false;
+    };
+    this.walkers = this.walkers.filter((w) => !unseen(w) || distance(w, this.pos) < 1900 || drop(w));
     let mine = this.walkers.filter((w) => w.zone === zone).length;
     this.walkers = this.walkers.filter((w) => {
       if (w.zone !== zone || mine <= want || !unseen(w)) return true;
       mine--;
-      return false;
+      return drop(w);
     });
     const first = !this.populated;
     this.populated = true;
@@ -413,8 +545,18 @@ export class CapitalScene extends Phaser.Scene {
     for (let i = mine; i < want && near.length > 0 && i < mine + (first ? want : 8); i++) {
       const p = near[Math.floor(Math.random() * near.length)];
       const lane = { x: (Math.random() - 0.5) * 90, y: (Math.random() - 0.5) * 90 };
-      this.walkers.push({ x: p.x + lane.x, y: p.y + lane.y, path: [], speed: 45 + Math.random() * 35, color: FOLK[Math.floor(Math.random() * FOLK.length)], zone, wait: Math.random() * 3, lane });
+      const x = p.x + lane.x;
+      const y = p.y + lane.y;
+      const fig = this.figure(x, y, passerLook(zone, districtAt(this.layout, p).id === "SLUMS"), 10);
+      this.walkers.push({ x, y, path: [], speed: 45 + Math.random() * 35, color: FOLK[Math.floor(Math.random() * FOLK.length)], zone, wait: Math.random() * 3, lane, fig });
     }
+  }
+
+  /** Uma figura da Cidade Alta, sempre de perto (o zoom do continente não vale aqui). */
+  private figure(x: number, y: number, look: Look, radius: number): Extra {
+    const fig = new Extra(this, x, y, look, radius);
+    fig.setOwnLod("FULL");
+    return fig;
   }
 
   private walk(w: Walker, dt: number): void {
@@ -518,7 +660,7 @@ export class CapitalScene extends Phaser.Scene {
     const text = s.arrest(this.owner, why);
     this.world().advanceAbroad(COURT.JAIL_DAYS);
     this.pos = { ...this.layout.spawn };
-    this.commander.setPosition(this.pos.x, this.pos.y);
+    this.placeCommander();
     this.cameras.main.centerOn(this.pos.x, this.pos.y);
     this.updateGates(true);
     this.say("Sargento da guarda", { text: `${text} Solto na manhã do terceiro dia, diante do Portão Velho.` });
@@ -529,7 +671,7 @@ export class CapitalScene extends Phaser.Scene {
     const out = this.layout.entries[v.place];
     this.nobles.delete(v.id);
     if (!out) {
-      v.gfx.destroy();
+      v.fig.destroy();
       v.label.destroy();
       return;
     }
@@ -558,20 +700,12 @@ export class CapitalScene extends Phaser.Scene {
       const from = first ? p : (this.layout.entries[w.place] ?? p);
       const n = s.nobles.find((x) => x.id === id);
       if (!n) continue;
-      const gfx = this.add.graphics().setDepth(5);
-      gfx.fillStyle(n.female ? 0xd080b0 : 0x8080d0, 1);
-      gfx.fillCircle(0, 0, 12);
-      gfx.lineStyle(2, 0xe0b040, 1);
-      gfx.strokeCircle(0, 0, 12);
-      if (n.rank === "RULER" || n.rank === "CONSORT") {
-        gfx.fillStyle(0xe0b040, 1);
-        gfx.fillTriangle(-9, -13, -3, -20, 0, -13);
-        gfx.fillTriangle(9, -13, 3, -20, 0, -13);
-      }
-      gfx.setPosition(from.x, from.y).setAlpha(first ? 1 : 0);
+      const fig = this.figure(from.x, from.y, nobleLook(n.female ? 0xd080b0 : 0x8080d0, n.rank === "RULER" || n.rank === "CONSORT"), 11);
+      fig.setFacing(Math.PI / 2);
+      fig.setAlpha(first ? 1 : 0);
       const name = courtName(s, n);
-      const label = this.add.text(from.x, from.y - 26, name, { fontFamily: "monospace", fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(8);
-      this.nobles.set(id, { id, place: w.place, name, x: from.x, y: from.y, tx: p.x, ty: p.y, gfx, label });
+      const label = this.add.text(from.x, from.y - LABEL_UP, name, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(8);
+      this.nobles.set(id, { id, place: w.place, name, x: from.x, y: from.y, tx: p.x, ty: p.y, fig, label });
     }
   }
 
@@ -583,60 +717,36 @@ export class CapitalScene extends Phaser.Scene {
         v.x += ((v.tx - v.x) / d) * step;
         v.y += ((v.ty - v.y) / d) * step;
       }
-      v.gfx.setPosition(v.x, v.y);
-      v.label.setPosition(v.x, v.y - 26);
+      v.fig.walkTo(v.x, v.y);
+      v.label.setPosition(Math.round(v.x), Math.round(v.y - LABEL_UP));
       return d;
     };
     for (const v of this.nobles.values()) {
       stepTo(v);
       // Sai da porta aos poucos
-      v.gfx.setAlpha(Math.min(1, v.gfx.alpha + dt * 2));
-      v.label.setAlpha(distance(v, this.pos) < 340 ? v.gfx.alpha : 0);
+      v.fig.setAlpha(Math.min(1, v.fig.alpha + dt * 2));
+      v.label.setAlpha(distance(v, this.pos) < 340 ? v.fig.alpha : 0);
     }
     this.goers = this.goers.filter((v) => {
       const d = stepTo(v);
       v.label.setAlpha(0);
       if (d > 30) return true;
-      v.gfx.setAlpha(v.gfx.alpha - dt * 3);
-      if (v.gfx.alpha > 0) return true;
-      v.gfx.destroy();
+      v.fig.setAlpha(v.fig.alpha - dt * 3);
+      if (v.fig.alpha > 0) return true;
+      v.fig.destroy();
       v.label.destroy();
       return false;
     });
   }
 
+  /** Leva cada figura até onde a pessoa está (o passo e a direção saem do caminho andado) e mostra os portões. */
   private drawCrowd(): void {
-    const g = this.crowd;
-    g.clear();
-    const v = this.cameras.main.worldView;
-    const inView = (p: Point) => p.x > v.x - 20 && p.x < v.right + 20 && p.y > v.y - 20 && p.y < v.bottom + 20;
-    for (const w of this.walkers) {
-      if (!inView(w)) continue;
-      g.fillStyle(w.color, 1);
-      g.fillCircle(w.x, w.y, 9);
-      g.lineStyle(1.5, COLORS.OUTLINE, 0.8);
-      g.strokeCircle(w.x, w.y, 9);
-    }
-    for (const w of this.guards) {
-      if (!inView(w)) continue;
-      g.fillStyle(w.color, 1);
-      g.fillCircle(w.x, w.y, 11);
-      g.lineStyle(2, COLORS.OUTLINE, 1);
-      g.strokeCircle(w.x, w.y, 11);
-      g.lineStyle(2, 0xd8d8d8, 1);
-      g.lineBetween(w.x + 12, w.y - 16, w.x + 12, w.y + 12);
-    }
-    // Portões fechados
-    const gg = this.gateGfx;
-    gg.clear();
-    for (const q of this.layout.gates) {
-      if (this.openGates.has(q.place)) continue;
-      gg.fillStyle(0x3a2412, 1);
-      gg.fillRect(q.rect.x, q.rect.y, q.rect.w, q.rect.h);
-      gg.lineStyle(4, 0x8fa6b8, 1);
-      for (let d = 16; d < q.rect.w; d += 26) gg.lineBetween(q.rect.x + d, q.rect.y, q.rect.x + d, q.rect.y + q.rect.h);
-      gg.lineStyle(3, 0xe0b040, 1);
-      gg.strokeRect(q.rect.x, q.rect.y, q.rect.w, q.rect.h);
+    for (const w of this.walkers) w.fig.walkTo(w.x, w.y);
+    for (const g of this.guards) g.fig.walkTo(g.x, g.y);
+    for (const [place, v] of this.gateViews) {
+      const open = this.openGates.has(place);
+      v.open.setVisible(open);
+      v.shut.setVisible(!open);
     }
   }
 
@@ -705,8 +815,13 @@ export class CapitalScene extends Phaser.Scene {
     if (s.campPrompt !== prompt) s.setCampPrompt(prompt);
   }
 
-  private say(speaker: string, talk: Talk): void {
-    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }] });
+  /** O último nobre que falou: as respostas dele seguem com o retrato (G5). */
+  private lastNoble: { speaker: string; id: string } | null = null;
+
+  private say(speaker: string, talk: Talk, nobleId?: string): void {
+    if (nobleId) this.lastNoble = { speaker, id: nobleId };
+    const face = nobleId ?? (this.lastNoble?.speaker === speaker ? this.lastNoble.id : undefined);
+    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face });
   }
 
   private interact(): void {
@@ -724,7 +839,7 @@ export class CapitalScene extends Phaser.Scene {
     if (!n) return;
     if (n.kind === "NOBLE") {
       const noble = s.nobles.find((x) => x.id === n.v.id);
-      if (noble) this.say(n.v.name, nobleTalk(noble, s));
+      if (noble) this.say(n.v.name, nobleTalk(noble, s), noble.id);
       return;
     }
     if (n.kind === "GATE") {
@@ -814,7 +929,7 @@ export class CapitalScene extends Phaser.Scene {
       if (p) {
         this.pos = { x: p.x, y: p.y + 40 };
         while (this.blocked(this.pos, RADIUS) && this.pos.y < CAPITAL_H - 100) this.pos.y += 20;
-        this.commander.setPosition(this.pos.x, this.pos.y);
+        this.placeCommander();
         this.cameras.main.centerOn(this.pos.x, this.pos.y);
       }
     }
@@ -836,7 +951,7 @@ export class CapitalScene extends Phaser.Scene {
       useGameStore.setState({ gold: store.gold - COURT.LITTER_GOLD });
       this.world().advanceAbroad(COURT.LITTER_DAYS);
       this.pos = { ...d.stand };
-      this.commander.setPosition(this.pos.x, this.pos.y);
+      this.placeCommander();
       this.cameras.main.centerOn(this.pos.x, this.pos.y);
       return;
     }

@@ -3,6 +3,7 @@ import { useGameStore, type BattalionStatus, type BattleHud, type CommandReach, 
 import { SICKNESS_LABEL } from "../../../game/sim/logistics";
 import { COMBAT, FATIGUE, FORMATIONS, TERRAIN, TROOPS, type Formation } from "../../../utils/constants";
 import { troopFacts } from "../../../game/data/troopFacts";
+import { IconText, PixelIcon } from "../PixelIcon";
 import { CommandIcon, FormationIcon, TroopIcon, type CommandIconId } from "./BattleIcons";
 import { useFieldFood } from "../SupplyPanel";
 import type { CompanyHud, CompanyStance } from "../../../game/sim/companies";
@@ -66,15 +67,15 @@ function Command({ icon, label, hint, keyName, active, disabled, badge, fill, to
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`group relative flex h-11 w-11 items-center justify-center rounded border bg-neutral-900/80 outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600 ${
-        active ? "border-amber-400 bg-amber-800/60 text-amber-100" : tone
+      className={`btn-pixel group relative flex h-11 w-11 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50 ${
+        active ? "btn-gold text-amber-50" : `btn-iron ${tone}`
       }`}
     >
       {fill !== undefined && fill > 0 && <span className="absolute inset-x-0 bottom-0 rounded-b bg-sky-500/35" style={{ height: `${Math.round(fill * 100)}%` }} />}
       <span className="relative">{icon}</span>
       {badge && <span className="absolute inset-0 flex items-center justify-center font-mono text-sm font-bold text-white [text-shadow:0_0_4px_#000]">{badge}</span>}
       {keyName && <span className="absolute bottom-0 right-0.5 font-mono text-[9px] text-neutral-400">{keyName}</span>}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 hidden w-max max-w-56 -translate-x-1/2 rounded bg-black/95 px-2 py-1 text-left text-xs text-white group-hover:block group-focus-visible:block">
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-1.5 hidden w-max max-w-56 -translate-x-1/2 hud-box px-2 py-1 text-left text-xs text-white group-hover:block group-focus-visible:block">
         <b>{label}</b>
         {keyName && <span className="ml-1 font-mono text-neutral-400">({keyName})</span>}
         {hint && <span className="block font-normal text-neutral-300">{hint}</span>}
@@ -86,7 +87,9 @@ function Command({ icon, label, hint, keyName, active, disabled, badge, fill, to
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="px-0.5 text-[10px] uppercase tracking-wider text-neutral-400">{title}</span>
+      <span className="px-0.5 text-[10px] uppercase tracking-wider text-neutral-400">
+        <IconText text={title} />
+      </span>
       <div className="flex gap-1">{children}</div>
     </div>
   );
@@ -119,7 +122,7 @@ function UnitCard({ b, fatigue, faltering }: { b: HudBattalion; fatigue: number;
       aria-label={`${b.name}: ${status}, ${b.alive} de ${b.max} soldados, moral ${b.morale}`}
       aria-pressed={b.selected}
       onClick={(e) => send({ type: "SELECT", ids: [b.id], additive: e.shiftKey })}
-      className={`group pointer-events-auto relative flex min-w-0 max-w-44 flex-1 flex-col gap-0.5 rounded bg-black/75 px-1.5 py-1 text-left outline-none hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-50 ${ring}`}
+      className={`group pointer-events-auto relative flex min-w-0 max-w-44 flex-1 flex-col gap-0.5 hud-card px-1.5 py-0.5 text-left outline-none hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-50 ${ring}`}
     >
       <span className="flex items-center gap-1 text-xs">
         <span className={`shrink-0 ${panic ? "text-red-400" : "text-sky-300"}`}>
@@ -130,13 +133,13 @@ function UnitCard({ b, fatigue, faltering }: { b: HudBattalion; fatigue: number;
         {!gone && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${REACH[b.reach].dot}`} />}
       </span>
       <span className={`truncate text-[10px] ${panic || gone ? "font-bold text-red-400" : b.flanked ? "font-bold text-orange-300" : b.pendingOrder ? "text-amber-300" : "text-neutral-300"}`}>
-        {status} · {b.alive}/{b.max}
+        <IconText text={status} /> · {b.alive}/{b.max}
         {b.ammo !== null ? ` · ${b.ammo} tiros` : ""}
       </span>
       <Bar value={b.max > 0 ? (b.alive / b.max) * 100 : 0} tone="bg-blue-500" />
       <Bar value={b.morale} tone={panic ? "bg-red-500" : "bg-yellow-400"} />
       <Bar value={fatigue} thin tone={fatigue >= FATIGUE.EXHAUSTED ? "bg-red-400" : "bg-slate-400"} />
-      <span className="pointer-events-none absolute bottom-full left-0 z-30 mb-1.5 hidden w-60 rounded bg-black/95 px-2 py-1.5 text-xs font-normal text-neutral-200 group-hover:block">
+      <span className="pointer-events-none absolute bottom-full left-0 z-30 mb-1.5 hidden w-60 hud-box px-2 py-1.5 text-xs font-normal text-neutral-200 group-hover:block">
         <b className="block text-white">{b.name}</b>
         {TROOPS[b.troopType].label} · nível {b.level} · {FORMATIONS[b.formation].label}
         <span className="block text-neutral-400">{troopFacts(b.troopType).join(" · ")}</span>
@@ -169,14 +172,14 @@ const STANCES: { stance: CompanyStance; short: string; hint: string }[] = [
 function CompanyBox({ c }: { c: CompanyHud }) {
   const send = useGameStore((s) => s.sendBattleCommand);
   return (
-    <div className="flex h-11 w-40 flex-col justify-between rounded border border-amber-700/70 bg-neutral-900/80 px-1 py-0.5">
+    <div className="flex h-11 w-40 flex-col justify-between hud-card px-1 py-0">
       <button
         type="button"
         onClick={() => send({ type: "SELECT", ids: c.battalionIds, additive: false })}
         className="truncate text-left text-[11px] font-bold text-amber-200 outline-none hover:text-amber-100 focus-visible:ring-1 focus-visible:ring-amber-300"
         title={c.fallen ? `O capitão ${c.captain} caiu; quem manda é o tenente ${c.leader}` : `Companhia de ${c.captain}: clique para selecionar os batalhões`}
       >
-        ⚑ {c.leader}
+        <PixelIcon id="BANNER" /> {c.leader}
         <span className="ml-1 font-normal text-neutral-400">{c.plan ?? (c.fallen ? "sem capitão" : "")}</span>
       </button>
       <span className="flex gap-0.5">
@@ -243,14 +246,14 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
   return (
     <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-1 p-2">
       {help && (
-        <div className="max-w-2xl rounded bg-black/90 px-3 py-2 font-mono text-xs leading-5 text-neutral-200">
+        <div className="max-w-2xl hud-box px-3 py-2 font-mono text-xs leading-5 text-neutral-200">
           {HELP_LINES.map((line) => (
             <div key={line}>{line}</div>
           ))}
         </div>
       )}
       {!hidden && !hud.inCamp && (
-        <div className="pointer-events-auto flex flex-wrap items-end justify-center gap-x-3 gap-y-1 rounded-lg bg-black/75 px-2 py-1">
+        <div className="pointer-events-auto flex flex-wrap items-end justify-center gap-x-3 gap-y-1 hud-box px-2 py-1">
           <Group title={`Formação · ${who}`}>
             {FORMATION_LIST.map((f) => {
               const able = targets.filter((b) => TROOPS[b.troopType].formations.includes(f));

@@ -22,6 +22,9 @@ export async function legacy({ page, ev, labScript }, { check }) {
   const first = await ev(() => {
     const st = window.__store;
     st.setState({ gold: 900, rations: 900, nextEventDay: 99999, nextCalamityDay: 99999, fame: 40 });
+    // Desde o Marco 22 o bando começa sem tenentes (as vagas vêm da tenda dos oficiais): o teste traz um
+    const s0 = st.getState();
+    if (s0.lieutenants.length === 0) st.setState({ lieutenants: [{ ...s0.lieutenantCandidates[0], battalionId: s0.battalions[0].id }] });
     const s = st.getState();
     return { name: s.leader.name, age: s.leader.age, lieutenants: s.lieutenants.map((l) => ({ id: l.id, name: l.name, traits: l.traits })), maxHp: window.__world.commander.maxHp };
   });
@@ -66,6 +69,7 @@ export async function legacy({ page, ev, labScript }, { check }) {
   console.log("   sucessão:", JSON.stringify(fall.succession));
   check("o herdeiro é quem está no testamento", fall.leader.name === first.lieutenants[0].name && fall.leader.generation === 2, JSON.stringify(fall.leader));
   check("o herdeiro traz os traços dele", JSON.stringify(fall.leader.traits) === JSON.stringify(first.lieutenants[0].traits));
+  check("o herdeiro leva o rosto que tinha (G5)", fall.leader.face === first.lieutenants[0].id && fall.former[0].wounds === 1, JSON.stringify({ face: fall.leader.face, wounds: fall.former[0]?.wounds }));
   check("o morto entra para a história", fall.former.length === 1 && fall.former[0].name === first.name && /caiu em combate (no|na|nas|em) /.test(fall.former[0].cause) && !/em o /.test(fall.former[0].cause), JSON.stringify(fall.former));
   check("sai da lista de tenentes", fall.lieutenants === first.lieutenants.length - 1);
   check("a fama diminui, sem sumir", fall.fame === 30, String(fall.fame));

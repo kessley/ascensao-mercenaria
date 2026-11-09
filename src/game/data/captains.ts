@@ -1,5 +1,7 @@
 import { newId } from "../../utils/id";
 import { TRAITS, type LieutenantData, type TraitId } from "./lieutenants";
+import { CULTURES, type CultureId } from "./planet";
+import { nameIn } from "../worldgen/names";
 
 /**
  * Capitães (Marco 20): quem comanda uma companhia de batalhões abaixo do Comandante. Cada
@@ -42,6 +44,8 @@ export interface CaptainData {
   battles: number;
   /** Crônica pessoal (mais recente por último). */
   history: string[];
+  /** De onde ele vem (Marco 23); sem o campo, da terra natal do bando. */
+  culture?: CultureId;
 }
 
 export const ORIGIN_LABEL: Record<CaptainOrigin, string> = {
@@ -58,6 +62,8 @@ export const TEMPER_LABEL: Record<Temper, string> = {
 };
 
 const NAMES = ["Aurelio", "Brunhild", "Casimir", "Dorotea", "Edmund", "Frida", "Gaspard", "Hilde", "Isidro", "Jorunn", "Konrad", "Lucrécia", "Matthias", "Nerea", "Osric", "Petra"];
+/** Os nomes de mulher da lista (o retrato precisa saber). */
+export const CAPTAIN_WOMEN: ReadonlySet<string> = new Set(["Brunhild", "Dorotea", "Frida", "Hilde", "Jorunn", "Lucrécia", "Nerea", "Petra"]);
 const EPITHETS = ["o Velho", "Duas-Espadas", "Mão-Firme", "o Calado", "Barba-Ruiva", "Cem-Batalhas", "o Lento", "Olho-Vivo", "Ferro-Frio", "Coração-de-Pedra", "a Serpente", "Quebra-Escudos"];
 const NOBLE_PAST = [
   "Filho mais novo de uma casa sem terras, aprendeu a guerra nas campanhas do pai",
@@ -92,7 +98,7 @@ export function temperOf(c: Pick<CaptainData, "traits">): Temper {
 }
 
 /** Capitão de fora do bando: nobre (corte) ou mercenário famoso (taverna). Os famosos sabem mais e custam mais. */
-export function generateCaptain(day: number, origin: "NOBLE" | "TAVERN"): CaptainData {
+export function generateCaptain(day: number, origin: "NOBLE" | "TAVERN", culture: CultureId = "REALMS"): CaptainData {
   const traits = [...(Object.keys(TRAITS) as TraitId[])].sort(() => Math.random() - 0.5).slice(0, 2);
   const noble = origin === "NOBLE";
   const command = roll(noble ? 2 : 1, noble ? 4 : 5);
@@ -102,10 +108,11 @@ export function generateCaptain(day: number, origin: "NOBLE" | "TAVERN"): Captai
   const skill = command + tactics + duel;
   return {
     id: newId(),
-    name: pick(NAMES),
+    name: culture === "REALMS" ? pick(NAMES) : nameIn(culture, Math.random() < 0.5),
     epithet: pick(EPITHETS),
-    backstory: `${pick(noble ? NOBLE_PAST : TAVERN_PAST)}.`,
+    backstory: `${pick(noble ? NOBLE_PAST : TAVERN_PAST)}${culture === "REALMS" ? "" : `, nos ${CULTURES[culture].label}`}.`,
     origin,
+    culture,
     traits,
     command,
     tactics,
@@ -140,6 +147,7 @@ export function promoteLieutenant(l: LieutenantData, battalionLevel: number, day
     epithet: `"${l.epithet}"`,
     backstory: l.backstory,
     origin: "PROMOTED",
+    culture: l.culture,
     traits: [...l.traits],
     command: clampStat(2 + (battalionLevel >= 4 ? 1 : 0) + (p === "INSPIRING" || p === "STALWART" ? 1 : 0)),
     tactics: clampStat(2 + (p === "TACTICIAN" ? 2 : p === "DRILLMASTER" || p === "MARKSMAN" ? 1 : 0)),

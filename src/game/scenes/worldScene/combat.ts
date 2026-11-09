@@ -534,8 +534,8 @@ export const combatMethods = {
     for (const { party } of this.parties.values()) add(party, V.BATTALION);
     // Batalha personalizada sem névoa: todo o campo à vista
     if (this.run && !this.run.def.fog) sources.push({ x: this.world.camp.center.x, y: this.world.camp.center.y, radius: 20000 });
-    // Torres de vigia do acampamento (obra): enxergam longe em volta dele
-    if (!this.campArea.packed && useGameStore.getState().campWorks.includes("TOWERS")) {
+    // Torres de vigia da planta do acampamento: enxergam longe em volta dele
+    if (!this.campArea.packed) {
       for (const t of this.campArea.watchtowers) sources.push({ x: t.x, y: t.y, radius: V.TOWER * night });
     }
     return sources;

@@ -1,4 +1,6 @@
 import { Unit } from "../../entities/Unit";
+import { bitmapKey } from "../../art/atlas";
+import { deckOrigin, deckShipBitmap, deckSize, gangplankBitmap, SEA_TILE, seaTileBitmap, type DeckShape } from "../../art/deck";
 import type { Rect } from "../../world/townLayout";
 import { DECK } from "../../data/scenarios";
 import { useGameStore } from "../../../store/useGameStore";
@@ -53,22 +55,30 @@ export const seaMethods = {
 
   /** Dois navios amarrados: só as pranchas ligam um ao outro; em volta, o mar. */
   buildDeck(this: WorldScene): void {
-    const g = this.add.graphics().setDepth(-4.5);
+    const g = this.add.graphics().setDepth(-4.6);
     g.fillStyle(0x1f4f6e, 1);
     g.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    // O mar que se mexe, em volta dos navios (além dele, a cor lisa)
+    const middle = { x: (DECK.OURS.x + DECK.THEIRS.x + DECK.THEIRS.w) / 2, y: DECK.OURS.y + DECK.OURS.h / 2 };
+    const sea = this.add.tileSprite(middle.x, middle.y, SEA_TILE * 64, SEA_TILE * 40, bitmapKey(this, "deck:sea", seaTileBitmap)).setDepth(-4.5);
+    this.tweens.add({ targets: sea, tilePositionX: SEA_TILE, duration: 26000, repeat: -1 });
+    // Os dois navios: o nosso com a proa a oeste, o deles espelhado
+    const shapeOf = (ship: Rect): DeckShape => ({ w: ship.w, h: ship.h, rail: DECK.RAIL, planks: DECK.PLANKS.map((y) => y - ship.y), plankWidth: DECK.PLANK_WIDTH });
+    for (const [ship, enemy] of [[DECK.OURS, false], [DECK.THEIRS, true]] as const) {
+      const shape = shapeOf(ship);
+      const o = deckOrigin(shape);
+      const size = deckSize(shape);
+      const key = bitmapKey(this, `deck:ship:${enemy ? "theirs" : "ours"}:${ship.w}x${ship.h}`, () => deckShipBitmap(shape, enemy));
+      // Espelhado, o desenho vira em volta do meio: o convés tem de cair de novo no lugar
+      const left = enemy ? ship.x + ship.w + o.x - size.w : ship.x - o.x;
+      this.add.image(left + size.w / 2, ship.y - o.y + size.h / 2, key).setFlipX(enemy).setDepth(-4.45);
+    }
     const solids: { rect: Rect; type: "WALL" }[] = [];
     const wall = (x: number, y: number, w: number, h: number) => solids.push({ rect: { x, y, w, h }, type: "WALL" });
     const R = DECK.RAIL;
     const half = DECK.PLANK_WIDTH / 2;
     const openings: Rect[] = [];
     for (const [ship, gapSide] of [[DECK.OURS, "E"], [DECK.THEIRS, "W"]] as const) {
-      g.fillStyle(0x7a5a38, 1);
-      g.fillRect(ship.x, ship.y, ship.w, ship.h);
-      g.lineStyle(2, 0x5a4028, 0.8);
-      for (let y = ship.y + 44; y < ship.y + ship.h; y += 44) g.lineBetween(ship.x, y, ship.x + ship.w, y);
-      g.fillStyle(0x3a2616, 1);
-      g.fillRect(ship.x + ship.w / 2 - 22, ship.y + 90, 44, 44);
-      g.fillRect(ship.x + ship.w / 2 - 22, ship.y + ship.h - 134, 44, 44);
       wall(ship.x - R, ship.y - R, ship.w + 2 * R, R);
       wall(ship.x - R, ship.y + ship.h, ship.w + 2 * R, R);
       const side = gapSide === "E" ? ship.x + ship.w : ship.x - R;
@@ -84,15 +94,13 @@ export const seaMethods = {
     }
     const left = DECK.OURS.x + DECK.OURS.w;
     const right = DECK.THEIRS.x;
-    g.fillStyle(0x9a7a50, 1);
+    const plank = bitmapKey(this, `deck:plank:${right - left}`, () => gangplankBitmap(right - left, DECK.PLANK_WIDTH, R));
     for (const y of DECK.PLANKS) {
-      g.fillRect(left, y - half, right - left, DECK.PLANK_WIDTH);
+      this.add.image(left, y - half - R, plank).setOrigin(0, 0).setDepth(-4.4);
       wall(left + R, y - half - R, right - left - 2 * R, R);
       wall(left + R, y + half, right - left - 2 * R, R);
       openings.push({ x: left - R, y: y - half, w: right - left + 2 * R, h: DECK.PLANK_WIDTH });
     }
-    g.fillStyle(0x3a2616, 1);
-    for (const s of solids) g.fillRect(s.rect.x, s.rect.y, s.rect.w, s.rect.h);
     Unit.terrain?.setExtraSolids(solids);
     this.nav.setOpenings(openings);
     this.armyNav.setOpenings(openings);

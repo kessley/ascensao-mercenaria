@@ -3,6 +3,8 @@ import { useGameStore } from "../../../store/useGameStore";
 import { NOTE_SOURCE_LABEL, latestNote, type PriceNote } from "../../../game/sim/trade";
 import { GOODS, GOOD_LIST, type Good } from "../../../utils/constants";
 import { Sparkline, VIZ, priceTint } from "./Sparkline";
+import { GOOD_ICON } from "../../../game/art/icons";
+import { PixelIcon } from "../PixelIcon";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -59,7 +61,7 @@ export function PriceBook() {
         {deals.length === 0 && <p className="text-xs text-neutral-500">Nenhuma diferença grande entre os mercados conhecidos.</p>}
         {deals.map((d) => (
           <p key={d.g} className="text-xs text-neutral-300">
-            {GOODS[d.g].icon} <b>{GOODS[d.g].label}</b>: comprar em {d.from} (~{Math.round(d.buy)}) e vender em {d.to} (~{Math.round(d.sell)})
+            <PixelIcon id={GOOD_ICON[d.g]} /> <b>{GOODS[d.g].label}</b>: comprar em {d.from} (~{Math.round(d.buy)}) e vender em {d.to} (~{Math.round(d.sell)})
             <span className={d.old >= 5 ? "text-amber-400" : "text-neutral-500"}> · notícia de até {d.old} dia(s)</span>
           </p>
         ))}
@@ -74,7 +76,7 @@ export function PriceBook() {
                 <th className="text-left font-normal text-neutral-500">Mercado</th>
                 {GOOD_LIST.map((g) => (
                   <th key={g} className="font-normal" title={`${GOODS[g].label} (base ${GOODS[g].base})`}>
-                    {GOODS[g].icon}
+                    <PixelIcon id={GOOD_ICON[g]} />
                   </th>
                 ))}
               </tr>
@@ -84,7 +86,12 @@ export function PriceBook() {
                 <tr key={k.id} onClick={() => setSelected(k.id === selected ? null : k.id)} className={`cursor-pointer ${k.id === selected ? "outline outline-1 outline-amber-400" : ""}`}>
                   <td className="whitespace-nowrap pr-1 text-neutral-200" title={NOTE_SOURCE_LABEL[k.note.source]}>
                     {k.name}
-                    {posts.includes(k.id) && <span className="text-violet-300"> ✦</span>}
+                    {posts.includes(k.id) && (
+                      <>
+                        {" "}
+                        <PixelIcon id="SPARK" title="Feitoria do bando" />
+                      </>
+                    )}
                     <span className={`ml-1 ${day - k.note.day >= 6 ? "text-amber-400" : "text-neutral-500"}`}>{age(day, k.note)}</span>
                   </td>
                   {GOOD_LIST.map((g) => (
@@ -105,7 +112,7 @@ export function PriceBook() {
         <p className="flex items-center gap-2 text-[10px] text-neutral-500">
           <span className="inline-block h-2 w-6 rounded" style={{ background: priceTint(0.4) }} /> barato
           <span className="inline-block h-2 w-6 rounded" style={{ background: VIZ.neutral }} /> preço base
-          <span className="inline-block h-2 w-6 rounded" style={{ background: priceTint(2.5) }} /> caro · ✦ feitoria do bando · clique num mercado para ver o histórico
+          <span className="inline-block h-2 w-6 rounded" style={{ background: priceTint(2.5) }} /> caro · <PixelIcon id="SPARK" /> feitoria do bando · clique num mercado para ver o histórico
         </p>
       </section>
 
@@ -120,7 +127,7 @@ export function PriceBook() {
               return (
                 <div key={g} className="flex items-center justify-between gap-2">
                   <span className="truncate text-neutral-300">
-                    {GOODS[g].icon} {GOODS[g].label}
+                    <PixelIcon id={GOOD_ICON[g]} /> {GOODS[g].label}
                   </span>
                   <span className="flex items-center gap-1">
                     <Sparkline values={values} base={GOODS[g].base} label={`${GOODS[g].label} em ${sel.name}`} />

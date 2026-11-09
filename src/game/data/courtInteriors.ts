@@ -33,7 +33,7 @@ function nobleNpc(s: GameState, n: Noble, x: number, y: number, wander = 0): Npc
 }
 
 function guards(d: InteriorDef, ...at: [number, number][]): void {
-  at.forEach(([x, y], i) => d.npcs.push({ id: `guarda${i}`, name: "Guarda real", x, y, color: 0x7f8c8d, talk: { text: i % 2 ? "..." : "Mão longe da espada, por favor." } }));
+  at.forEach(([x, y], i) => d.npcs.push({ id: `guarda${i}`, name: "Guarda real", x, y, color: 0x7f8c8d, folk: "GUARD", talk: { text: i % 2 ? "..." : "Mão longe da espada, por favor." } }));
 }
 
 /** Tenda de guerra: o lorde em campanha recebe quem vem em paz (Marco 15). */
@@ -86,8 +86,8 @@ export function courtInterior(key: string, s: GameState, t: Settlement, what: st
 function throne(key: string, s: GameState, t: Settlement): InteriorDef {
   const own = t.owner === "PLAYER";
   const d = makeRoom(key, `Sala do Trono de ${t.name}`, "STONE", 960, 780, { settlementId: t.id });
-  d.furniture.push(f("CARPET", 420, 130, 120, 620, 0x7a2a22, false), f("CARPET", 330, 26, 300, 100, 0x4a2a7a, false), f("TABLE", 448, 40, 64, 62, GOLD), f("BANNER", 200, 30, 50, 34, GOLD, false), f("BANNER", 710, 30, 50, 34, GOLD, false));
-  for (let i = 0; i < 4; i++) d.furniture.push(f("TABLE", 280, 170 + i * 150, 44, 44, 0x77716a), f("TABLE", 636, 170 + i * 150, 44, 44, 0x77716a));
+  d.furniture.push(f("CARPET", 420, 130, 120, 620, 0x7a2a22, false), f("CARPET", 330, 26, 300, 100, 0x4a2a7a, false), f("THRONE", 448, 40, 64, 62, GOLD), f("BANNER", 200, 30, 50, 34, GOLD, false), f("BANNER", 710, 30, 50, 34, GOLD, false));
+  for (let i = 0; i < 4; i++) d.furniture.push(f("PILLAR", 280, 170 + i * 150, 44, 44, 0x77716a), f("PILLAR", 636, 170 + i * 150, 44, 44, 0x77716a));
   guards(d, [330, 110], [630, 110], [350, 720], [610, 720]);
   const here = nobleAtPlace(s, t.id, "THRONE");
   const ruler = here.find((n) => n.rank === "RULER");
@@ -150,7 +150,7 @@ function chapel(key: string, s: GameState, t: Settlement): InteriorDef {
 
 function library(key: string, s: GameState, t: Settlement): InteriorDef {
   const d = makeRoom(key, `Biblioteca Real de ${t.name}`, "WOOD", 680, 500, { settlementId: t.id });
-  for (let i = 0; i < 5; i++) d.furniture.push(f("RACK", 40 + i * 130, 40, 100, 30, DARK));
+  for (let i = 0; i < 5; i++) d.furniture.push(f("SHELF", 40 + i * 130, 40, 100, 30, DARK));
   d.furniture.push(f("TABLE", 240, 240, 200, 80, WOOD));
   const history = s.world?.history ?? [];
   const pick = history.slice(-4).map((h) => `Ano ${h.year}: ${h.text}`).join(" ");
@@ -164,7 +164,7 @@ function library(key: string, s: GameState, t: Settlement): InteriorDef {
 /** Falcoaria (Marco 16): o falcoeiro da coroa vende harpias treinadas a quem tem nome. */
 function mews(key: string, s: GameState, t: Settlement): InteriorDef {
   const d = makeRoom(key, `Falcoaria Real de ${t.name}`, "WOOD", 620, 460, { settlementId: t.id });
-  for (let i = 0; i < 4; i++) d.furniture.push(f("RACK", 50 + i * 140, 44, 90, 22, DARK));
+  for (let i = 0; i < 4; i++) d.furniture.push(f("PERCH", 50 + i * 140, 44, 90, 22, DARK));
   d.furniture.push(f("HAY", 60, 330, 500, 70, 0xc8b070, false));
   const H = SUPPORT.HARPY;
   const free = s.scouts.filter((x) => !x.harpy);
@@ -172,6 +172,7 @@ function mews(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "falcoeiro",
     name: "Falcoeiro real",
+    folk: "HUNTER",
     x: 310,
     y: 200,
     color: 0x6a5a3a,
@@ -191,17 +192,17 @@ function mews(key: string, s: GameState, t: Settlement): InteriorDef {
 function armory(key: string, t: Settlement): InteriorDef {
   const d = makeRoom(key, `Arsenal Real de ${t.name}`, "STONE", 620, 460, { settlementId: t.id });
   for (let i = 0; i < 4; i++) d.furniture.push(f("RACK", 40 + i * 150, 50, 100, 34, DARK));
-  d.npcs.push({ id: "armeiro", name: "Armeiro real", x: 310, y: 200, color: 0x5a4a3a, talk: { text: "Vassalos da coroa têm direito a ferro do arsenal, uma vez por estação.", options: [{ id: `court:armory:${t.owner}`, label: "Levar a cota de ferro" }, bye] } });
+  d.npcs.push({ id: "armeiro", name: "Armeiro real", x: 310, y: 200, color: 0x5a4a3a, folk: "SMITH", talk: { text: "Vassalos da coroa têm direito a ferro do arsenal, uma vez por estação.", options: [{ id: `court:armory:${t.owner}`, label: "Levar a cota de ferro" }, bye] } });
   return d;
 }
 
 /** Masmorra: os presos de verdade, em celas. Entra-se pela porta do castelo ou pelos esgotos. */
 function dungeon(key: string, s: GameState, t: Settlement): InteriorDef {
   const d = makeRoom(key, `Masmorra de ${t.name}`, "STONE", 820, 520, { settlementId: t.id });
-  for (let i = 0; i < 5; i++) d.furniture.push(f("TABLE", 40 + i * 155, 40, 12, 150, 0x444444), f("TABLE", 40 + i * 155, 190, 110, 12, 0x444444));
+  for (let i = 0; i < 5; i++) d.furniture.push(f("BARS", 40 + i * 155, 40, 12, 150, 0x444444), f("BARS", 40 + i * 155, 190, 110, 12, 0x444444));
   const prisoners = s.nobles.filter((n) => n.alive && n.captiveOf && n.at === t.id);
   prisoners.slice(0, 5).forEach((n, i) => d.npcs.push(nobleNpc(s, n, 100 + i * 155, 110)));
-  d.npcs.push({ id: "carcereiro", name: "Carcereiro", x: 410, y: 300, color: 0x4a4a3a, talk: { text: prisoners.length > 0 ? "Quer pagar o resgate? Fale com o preso, e ele fala com quem paga." : "Celas vazias. O reino anda calmo, ou anda matando em vez de prender." } });
+  d.npcs.push({ id: "carcereiro", name: "Carcereiro", x: 410, y: 300, color: 0x4a4a3a, folk: "WORKER", talk: { text: prisoners.length > 0 ? "Quer pagar o resgate? Fale com o preso, e ele fala com quem paga." : "Celas vazias. O reino anda calmo, ou anda matando em vez de prender." } });
   d.spots.push({ x: 60, y: 460, label: "Bueiro", talk: { text: "Uma grade solta. Dá para os esgotos e, de lá, para o Bairro Baixo.", options: [{ id: "cityleave:SEWER", label: "Descer pelo bueiro" }, bye] } });
   return d;
 }
@@ -231,6 +232,7 @@ function arena(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "mestre",
     name: "Mestre da Liça",
+    folk: "CLERK",
     x: 380,
     y: 440,
     color: 0xc0a040,
@@ -257,6 +259,7 @@ function thieves(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "rato",
     name: "A Ratazana",
+    folk: "THIEF",
     x: 280,
     y: 120,
     color: 0x6a5a4a,
@@ -269,7 +272,7 @@ function thieves(key: string, s: GameState, t: Settlement): InteriorDef {
       ],
     },
   });
-  d.npcs.push({ id: "ladrao", name: "Ladrão", x: 120, y: 280, color: 0x5a4a3a, wander: 24, talk: { text: r() < 0.5 ? "À noite, a guarda do Bairro Nobre dorme em pé. Os esgotos dão no jardim." : "Os bueiros do Bairro Baixo vão dar na masmorra. Ninguém volta contando, mas é verdade." } });
+  d.npcs.push({ id: "ladrao", name: "Ladrão", x: 120, y: 280, color: 0x5a4a3a, folk: "THIEF", wander: 24, talk: { text: r() < 0.5 ? "À noite, a guarda do Bairro Nobre dorme em pé. Os esgotos dão no jardim." : "Os bueiros do Bairro Baixo vão dar na masmorra. Ninguém volta contando, mas é verdade." } });
   return d;
 }
 
@@ -282,6 +285,7 @@ function inn(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "dona",
     name: "Estalajadeira",
+    folk: "COOK",
     x: 170,
     y: 56,
     color: 0xb08a68,
@@ -295,19 +299,19 @@ function inn(key: string, s: GameState, t: Settlement): InteriorDef {
     },
   });
   const gossip = townGossip(s, t, r);
-  for (let i = 0; i < 3; i++) d.npcs.push({ id: `h${i}`, name: "Viajante", x: 130 + i * 170, y: 330, color: 0xa88a6a, wander: 18, talk: { text: gossip[i % gossip.length] } });
+  for (let i = 0; i < 3; i++) d.npcs.push({ id: `h${i}`, name: "Viajante", x: 130 + i * 170, y: 330, color: 0xa88a6a, folk: "TRAVELER", wander: 18, talk: { text: gossip[i % gossip.length] } });
   return d;
 }
 
 /** Esgotos: um túnel que junta o Bairro Baixo, o jardim do Bairro Nobre e a masmorra do castelo. */
 function sewer(key: string, t: Settlement): InteriorDef {
   const d = makeRoom(key, `Esgotos de ${t.name}`, "STONE", 900, 380, { settlementId: t.id });
-  d.furniture.push(f("CARPET", 20, 150, 860, 90, 0x2a4a3a, false));
+  d.furniture.push(f("WATER", 20, 150, 860, 90, 0x2a4a3a, false));
   d.spots.push(
     { x: 120, y: 120, label: "Grade do Bairro Nobre", talk: { text: "Uma escada de ferro sobe até um jardim que cheira a rosas.", options: [{ id: "cityleave:NOBLE", label: "Subir" }, bye] } },
     { x: 760, y: 120, label: "Grade da masmorra", talk: { text: "Ferrugem, escuridão e um gemido lá em cima.", options: [{ id: "cityenter:dungeon", label: "Subir" }, bye] } },
   );
-  d.npcs.push({ id: "rato", name: "Rato enorme", x: 460, y: 200, color: 0x4a3a2a, wander: 60, talk: { text: "..." } });
+  d.npcs.push({ id: "rato", name: "Rato enorme", x: 460, y: 200, color: 0x4a3a2a, folk: "RAT", wander: 60, talk: { text: "..." } });
   return d;
 }
 
@@ -328,7 +332,7 @@ function palace(key: string, s: GameState, t: Settlement, index: number): Interi
   const home = family.filter((n) => scheduleOf(n, hour, s.day, feast) === "PALACE");
   home.slice(0, 5).forEach((n, i) => d.npcs.push(nobleNpc(s, n, 300 + i * 80, 240 + (i % 2) * 60, 16)));
   const has = s.quests.some((q) => q.kind === "SPY" && q.targetId === lord.id && !q.ready);
-  d.npcs.push({ id: "mordomo", name: "Mordomo", x: 240, y: 440, color: 0x7a6a5a, talk: { text: home.length > 0 ? "A família está em casa. Não toque nas pratas." : "A família saiu. Só a criadagem está em casa." } });
+  d.npcs.push({ id: "mordomo", name: "Mordomo", x: 240, y: 440, color: 0x7a6a5a, folk: "CLERK", talk: { text: home.length > 0 ? "A família está em casa. Não toque nas pratas." : "A família saiu. Só a criadagem está em casa." } });
   d.spots.push({
     x: 155,
     y: 170,

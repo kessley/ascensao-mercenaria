@@ -2,6 +2,8 @@ import { useGameStore } from "../../../store/useGameStore";
 import { freightOf, freightWeight } from "../../../game/sim/trade";
 import { GOODS, GOOD_LIST, TRADE, type Good } from "../../../utils/constants";
 import { cargoCapacity } from "../../../utils/economy";
+import { GOOD_ICON } from "../../../game/art/icons";
+import { PixelIcon } from "../PixelIcon";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 const small = "rounded border px-2 py-0.5 text-[11px] font-semibold disabled:opacity-30";
@@ -37,7 +39,7 @@ export function DepotPanel() {
       {goods.map((g) => (
         <div key={g} className="flex items-center justify-between gap-2 text-xs">
           <span>
-            {GOODS[g].icon} {GOODS[g].label}: <b>{inDepot(g)}</b> no depósito · <b className="text-violet-300">{freightOf(freight, g)}</b> nas carroças
+            <PixelIcon id={GOOD_ICON[g]} /> {GOODS[g].label}: <b>{inDepot(g)}</b> no depósito · <b className="text-violet-300">{freightOf(freight, g)}</b> nas carroças
           </span>
           <span className="flex gap-1">
             <button type="button" className={`${small} border-blue-400 bg-blue-700`} disabled={away || inDepot(g) < 1 || GOODS[g].weight * Math.min(5, inDepot(g)) > room} onClick={() => moveGoods(g, Math.min(5, inDepot(g)))}>

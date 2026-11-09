@@ -6,18 +6,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
 }
 
+/** O tom da peça de pixel de cada variante (G5, parte 2). */
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: "bg-blue-600 hover:bg-blue-500 border-blue-400",
-  danger: "bg-red-700 hover:bg-red-600 border-red-500",
-  gold: "bg-amber-600 hover:bg-amber-500 border-amber-400",
-  quiet: "bg-neutral-800 hover:bg-neutral-700 border-neutral-600",
+  primary: "btn-blue",
+  danger: "btn-red",
+  gold: "btn-gold",
+  quiet: "btn-wood",
 };
 
 export function Button({ variant = "primary", className = "", ...props }: ButtonProps) {
   return (
     <button
       type="button"
-      className={`rounded border px-4 py-2 font-semibold text-white transition-colors disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${className}`}
+      className={`btn-pixel px-3 py-1 font-pixel text-xs font-bold disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${className}`}
       {...props}
     />
   );

@@ -4,6 +4,8 @@ import { wagonsWithArmy } from "../../store/useGameStore";
 import { useFieldFood } from "./SupplyPanel";
 import { freightOf, freightWeight } from "../../game/sim/trade";
 import { GOODS, GOOD_LIST } from "../../utils/constants";
+import { GOOD_ICON } from "../../game/art/icons";
+import { PixelIcon } from "./PixelIcon";
 
 export function ResourceBar() {
   const gold = useGameStore((s) => s.gold);
@@ -25,41 +27,57 @@ export function ResourceBar() {
   const fear = useGameStore((s) => s.fear);
 
   return (
-    <div className="flex gap-4 whitespace-nowrap rounded bg-black/60 px-4 py-2 text-sm font-mono text-white">
-      <span className="text-yellow-400">Ouro: {gold}</span>
+    <div className="flex items-center gap-4 whitespace-nowrap hud-box px-4 py-2 text-sm font-mono text-white">
+      <span className="text-yellow-400" title={`Ouro: ${gold}`}>
+        <PixelIcon id="GOLD" /> {gold}
+      </span>
       <span
         className="text-orange-300"
         title={
           packed
-            ? "Acampamento levantado: o depósito inteiro vai nas carroças"
-            : "Depósito do acampamento · comida que marcha com o exército (mochilas, bolsa e carroças) e os dias que ela dura"
+            ? `Rações: ${rations}. Acampamento levantado: o depósito inteiro vai nas carroças`
+            : `Rações: ${rations} no depósito do acampamento · comida que marcha com o exército (mochilas, bolsa e carroças) e os dias que ela dura`
         }
       >
-        Rações: {rations}
+        <PixelIcon id="FOOD" /> {rations}
         {away && !packed && (
           <span className={days !== null && days <= 1 ? "text-red-400" : "text-orange-200"}>
             {" "}
-            · 🎒 {Math.floor(field.food)} ({days}d)
+            · <PixelIcon id="PACK" /> {Math.floor(field.food)} ({days}d)
           </span>
         )}
         {wagons > 0 && !packed && (fieldCargo > 0 || goods > 0) && (
           <span className="text-orange-200">
             {" "}
-            · 🛒 {Math.round(fieldCargo + goods)}/{cargoCapacity(wagons)}
+            · <PixelIcon id="WAGON" /> {Math.round(fieldCargo + goods)}/{cargoCapacity(wagons)}
           </span>
         )}
         {packed && <span className="text-amber-200"> · nas carroças</span>}
       </span>
-      <span className="text-sky-300">Ferro: {iron}</span>
+      <span className="text-sky-300" title={`Ferro: ${iron}`}>
+        <PixelIcon id="IRON" /> {iron}
+      </span>
       <span title="Fama, Honra e Temor: o nome do bando (Livro da Nobreza, na mesa da Tenda)">
-        <span className="text-amber-300">★{Math.round(fame)}</span> <span className="text-sky-200">⚖{Math.round(honor)}</span> <span className="text-rose-400">☠{Math.round(fear)}</span>
+        <span className="text-amber-300">
+          <PixelIcon id="STAR" /> {Math.round(fame)}
+        </span>{" "}
+        <span className="text-sky-200">
+          <PixelIcon id="SCALES" /> {Math.round(honor)}
+        </span>{" "}
+        <span className="text-rose-400">
+          <PixelIcon id="SKULL" /> {Math.round(fear)}
+        </span>
       </span>
       {freight.length > 0 && (
         <span
           className="text-violet-300"
           title={`Mercadorias nas carroças (peso ${goods}): ${carried.map((x) => `${x.n} ${GOODS[x.g].label.toLowerCase()}`).join(", ")}`}
         >
-          Carga: {carried.map((x) => `${GOODS[x.g].icon}${x.n}`).join(" ")}
+          {carried.map((x) => (
+            <span key={x.g} className="mr-1.5">
+              <PixelIcon id={GOOD_ICON[x.g]} /> {x.n}
+            </span>
+          ))}
         </span>
       )}
     </div>

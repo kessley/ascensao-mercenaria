@@ -394,6 +394,39 @@ function clip(a: number, b: number, covers: [number, number][]): [number, number
 }
 
 /** Todas as peças de um povoado, com o lugar de cada uma. */
+/**
+ * Os trechos de muralha e as torres (o que as torres cobrem fica de fora). Os povoados e a
+ * fortaleza do bando (Marco 22, parte 3) usam o mesmo desenho.
+ */
+export function wallJobs(jobs: ArtJob[], list: readonly Rect[], towers: readonly Rect[], center: { x: number; y: number }, stoneWall: boolean, culture: Culture, ruined: boolean, seed0: number): void {
+  const R = Math.round;
+  const seed = (x: number, y: number) => (Math.imul(R(x), 73856093) ^ Math.imul(R(y), 19349663) ^ seed0) >>> 0;
+  const add = (r: Rect, make: () => Piece) => jobs.push({ x: R(r.x), y: R(r.y), depth: R(r.y + r.h), make });
+  for (const w of list) {
+    if (w.w >= w.h) {
+      const side = w.y + w.h / 2 < center.y ? "N" : "S";
+      const covers = towers.filter((tw) => tw.y < w.y + w.h && tw.y + tw.h > w.y).map((tw): [number, number] => [tw.x, tw.x + tw.w]);
+      for (const [a, e] of clip(w.x, w.x + w.w, covers)) {
+        for (let x = a; x < e; x += MAX_SPAN) {
+          const len = R(Math.min(MAX_SPAN, e - x));
+          add({ x, y: w.y, w: len, h: w.h }, () => wallPieceEW(len, R(w.h), side, stoneWall, culture, seed(x, w.y), ruined));
+        }
+      }
+    } else {
+      const side = w.x + w.w / 2 < center.x ? "W" : "E";
+      const covers = towers.filter((tw) => tw.x < w.x + w.w && tw.x + tw.w > w.x).map((tw): [number, number] => [tw.y, tw.y + tw.h]);
+      for (const [a, e] of clip(w.y, w.y + w.h, covers)) {
+        for (let y = a; y < e; y += SEG) {
+          const len = R(Math.min(SEG, e - y));
+          const end = y + SEG >= e;
+          add({ x: w.x, y, w: w.w, h: len }, () => wallPieceNS(len, R(w.w), side, stoneWall, culture, end, seed(w.x, y), ruined));
+        }
+      }
+    }
+  }
+  for (const tw of towers) add(tw, () => towerPiece(R(tw.w), stoneWall, culture, seed(tw.x, tw.y), ruined));
+}
+
 function townJobs(layout: TownLayout, culture: Culture, ruined: boolean, seed0: number): ArtJob[] {
   const jobs: ArtJob[] = [];
   const R = Math.round;
@@ -425,8 +458,9 @@ function townJobs(layout: TownLayout, culture: Culture, ruined: boolean, seed0: 
 
   // Paço (Casa do Conselho nas aldeias, castelo nas cidades e fortalezas) e templo
   const k = layout.keep;
-  if (!layout.inner) {
-    if (layout.kind === "VILLAGE") add(k, () => housePiece(R(k.w), R(k.h), culture, 0, R(layout.hall.x - k.x), seed(k.x, k.y), ruined, true));
+  // (na cidade da sede, o castelo é a fortaleza do bando: ali fica a Casa do Conselho, a partir da vila)
+  if (!layout.inner && k.w > 0) {
+    if (layout.kind === "VILLAGE" || layout.seat) add(k, () => housePiece(R(k.w), R(k.h), culture, 0, R(layout.hall.x - k.x), seed(k.x, k.y), ruined, true));
     else add(k, () => keepPiece(R(k.w), R(k.h), culture, R(layout.hall.x - k.x), seed(k.x, k.y), ruined));
   }
   const tp = layout.temple;
@@ -459,32 +493,7 @@ function townJobs(layout: TownLayout, culture: Culture, ruined: boolean, seed0: 
   }
 
   // Muralha, torres e portões (os trechos cobertos pelas torres ficam de fora)
-  const walls = (list: readonly Rect[], towers: readonly Rect[], center: { x: number; y: number }, stoneWall: boolean) => {
-    for (const w of list) {
-      if (w.w >= w.h) {
-        const side = w.y + w.h / 2 < center.y ? "N" : "S";
-        const covers = towers.filter((tw) => tw.y < w.y + w.h && tw.y + tw.h > w.y).map((tw): [number, number] => [tw.x, tw.x + tw.w]);
-        for (const [a, e] of clip(w.x, w.x + w.w, covers)) {
-          for (let x = a; x < e; x += MAX_SPAN) {
-            const len = R(Math.min(MAX_SPAN, e - x));
-            add({ x, y: w.y, w: len, h: w.h }, () => wallPieceEW(len, R(w.h), side, stoneWall, culture, seed(x, w.y), ruined));
-          }
-        }
-      } else {
-        const side = w.x + w.w / 2 < center.x ? "W" : "E";
-        const covers = towers.filter((tw) => tw.x < w.x + w.w && tw.x + tw.w > w.x).map((tw): [number, number] => [tw.y, tw.y + tw.h]);
-        for (const [a, e] of clip(w.y, w.y + w.h, covers)) {
-          for (let y = a; y < e; y += SEG) {
-            const len = R(Math.min(SEG, e - y));
-            const end = y + SEG >= e;
-            add({ x: w.x, y, w: w.w, h: len }, () => wallPieceNS(len, R(w.w), side, stoneWall, culture, end, seed(w.x, y), ruined));
-          }
-        }
-      }
-    }
-    for (const tw of towers) add(tw, () => towerPiece(R(tw.w), stoneWall, culture, seed(tw.x, tw.y), ruined));
-  };
-  walls(layout.walls, layout.towers, { x: layout.cx, y: layout.cy }, stone);
+  wallJobs(jobs, layout.walls, layout.towers, { x: layout.cx, y: layout.cy }, stone, culture, ruined, seed0);
   if (!ruined) {
     for (const g of layout.gates) {
       if (g.side === "N" || g.side === "S") {
@@ -513,7 +522,7 @@ function townJobs(layout: TownLayout, culture: Culture, ruined: boolean, seed0: 
     const c = { x: r.x + r.w / 2, y: r.y + 230 };
     add({ x: c.x - 280, y: c.y - 150, w: 560, h: 300 }, () => keepPiece(560, 300, culture, 280, seed(c.x, c.y), ruined));
     const it = inner.walls[0].h;
-    walls(inner.walls, inner.towers, { x: r.x + r.w / 2, y: r.y + r.h / 2 }, true);
+    wallJobs(jobs, inner.walls, inner.towers, { x: r.x + r.w / 2, y: r.y + r.h / 2 }, true, culture, ruined, seed0);
     add({ x: r.x + r.w / 2 - inner.gateWidth / 2, y: r.y + r.h - it, w: inner.gateWidth, h: it }, () =>
       gatePiece(inner.gateWidth, R(it), "S", true, culture, seed(r.x, r.y), false, true),
     );

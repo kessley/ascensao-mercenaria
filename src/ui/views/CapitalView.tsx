@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "../../store/useGameStore";
-import { chooseDialog } from "../../game/interiorBridge";
 import { capitalLayout } from "../../game/world/capitalLayout";
 import { STANDING_LABEL, standingIn } from "../../game/sim/reputation";
 import { formatHour } from "../../utils/time";
+import { DialogBox } from "../components/DialogBox";
 import { ResourceBar } from "../components/ResourceBar";
 
 const DISTRICT_COLOR: Record<string, string> = {
@@ -68,20 +68,20 @@ export function CapitalView() {
   return (
     <div className="pointer-events-none absolute inset-0 text-white">
       <div className="absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-1">
-        <div className="rounded-full border border-amber-300/50 bg-black/75 px-5 py-1.5 text-base font-bold tracking-wide text-amber-200">
+        <div className="hud-box px-5 py-1.5 font-serif text-base font-bold tracking-wide text-amber-200">
           {city.name} · {city.district}
         </div>
-        <div className="rounded bg-black/60 px-3 py-0.5 font-mono text-xs text-neutral-200">
+        <div className="hud-box px-3 py-0.5 font-mono text-xs text-neutral-200">
           Dia {day}, {formatHour(progress)} · aqui o senhor é <b className={standing < 0 ? "text-red-400" : "text-amber-200"}>{city.factionId === "PLAYER" ? "o dono da cidade" : STANDING_LABEL[standing]}</b>
           {disguised && <span className="text-sky-300"> · de libré</span>}
         </div>
       </div>
       <div className="pointer-events-auto absolute right-3 top-3 flex flex-col items-end gap-1">
         <div className="flex gap-1">
-          <button type="button" onClick={() => setCampPanel({ kind: "NOBILITY" })} className="rounded border border-amber-400/70 bg-black/70 px-3 py-1 text-xs text-amber-100 hover:bg-amber-900/50">
+          <button type="button" onClick={() => setCampPanel({ kind: "NOBILITY" })} className="btn-pixel btn-gold px-3 py-1 font-pixel text-xs font-bold">
             Livro da Nobreza
           </button>
-          <button type="button" onClick={() => setCampPanel({ kind: "GAME" })} className="rounded border border-neutral-500 bg-black/70 px-3 py-1 text-xs text-neutral-100 hover:bg-neutral-700">
+          <button type="button" onClick={() => setCampPanel({ kind: "GAME" })} className="btn-pixel btn-wood px-3 py-1 font-pixel text-xs font-bold">
             Jogo
           </button>
         </div>
@@ -89,24 +89,11 @@ export function CapitalView() {
       <div className="absolute bottom-3 right-3">
         <ResourceBar />
       </div>
-      <div className="absolute bottom-3 left-3 rounded bg-black/60 px-3 py-1 font-mono text-[11px] text-neutral-300">
+      <div className="absolute bottom-3 left-3 hud-box px-3 py-1 font-mono text-[11px] text-neutral-300">
         WASD andar · Shift correr · E falar/entrar · M mapa · Portão Velho sai
       </div>
       {map && <CityMap townId={city.townId} x={city.x} y={city.y} />}
-      {dialog && !panel && (
-        <div className="pointer-events-auto absolute bottom-16 left-1/2 w-[40rem] max-w-[92vw] -translate-x-1/2 rounded-lg border-2 border-amber-200/60 bg-neutral-950/95 p-4 shadow-2xl">
-          <div className="mb-1 text-sm font-bold text-amber-300">{dialog.speaker}</div>
-          <p className="text-sm leading-relaxed text-neutral-100">{dialog.text}</p>
-          <div className="mt-3 flex max-h-72 flex-col gap-1 overflow-y-auto">
-            {dialog.options.map((o, i) => (
-              <button key={o.id} type="button" onClick={() => chooseDialog(o.id)} className="rounded border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-left text-sm hover:border-amber-300 hover:bg-neutral-700">
-                <span className="mr-2 font-mono text-amber-300">{i + 1}.</span>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {dialog && !panel && <DialogBox dialog={dialog} />}
     </div>
   );
 }

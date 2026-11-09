@@ -1,12 +1,54 @@
 import Phaser from "phaser";
+import { addCanvasTexture } from "../art/canvasTexture";
+import type { Look, Weapon } from "../art/figures";
+import { pixelGround } from "../art/ground";
+import { commanderLook } from "../art/looks";
 import { tournamentRival } from "../data/courtTalk";
-import { aiPace, aiSpeed, duelAi, makeFighter, makeMind, reachOf, startDuel, stepDuel, WEAPONS, type DuelFighter, type DuelInput, type DuelMind, type DuelState } from "../sim/duel";
+import { Extra } from "../entities/Extra";
+import { Unit } from "../entities/Unit";
+import { aiPace, aiSpeed, duelAi, makeFighter, makeMind, reachOf, startDuel, stepDuel, type DuelFighter, type DuelInput, type DuelMind, type DuelState } from "../sim/duel";
+import { paintStands } from "../world/capitalPaint";
+import { poseOf } from "./worldScene/duel";
 import { useGameStore } from "../../store/useGameStore";
-import { COLORS, DUEL, GAME_HEIGHT, GAME_WIDTH } from "../../utils/constants";
+import { DUEL, GAME_HEIGHT, GAME_WIDTH } from "../../utils/constants";
+import { PIXEL_FONT } from "../art/font";
 
 const ARENA_R = 300;
 const CX = 640;
 const CY = 380;
+const ARENA_KEY = "lica-duelo";
+
+/** O lutador na Liça, no dobro do tamanho (desenhado em resolução dobrada, sem engrossar o pixel). */
+function duelistLook(base: Look, weapon: DuelFighter["weapon"]): Look {
+  const w: Weapon = weapon === "SPEAR" ? "SPEAR" : weapon === "AXE" ? "AXE" : "SWORD";
+  return { ...base, weapon: w, shield: weapon === "SHIELD" ? "KITE" : base.shield, scale: 2 };
+}
+
+/** O adversário: cavaleiro de placas, com o tabardo vermelho e o friso de ouro. */
+const RIVAL: Look = { body: "HUMAN", head: "HELM", armor: 2, weapon: "SWORD", shield: "ROUND", mount: "NONE", color: 0xc0503a, trim: 0xe0b040, cape: 0x5a1a1a };
+
+/** O chão da Liça em pixel art: a areia (com o filtro do chão), a arquibancada cheia e a cerca. Uma vez só. */
+function arenaTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(ARENA_KEY)) return;
+  const canvas = document.createElement("canvas");
+  canvas.width = GAME_WIDTH;
+  canvas.height = GAME_HEIGHT;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return;
+  ctx.fillStyle = "#7d6f50";
+  ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+  ctx.fillStyle = "#d8c070";
+  for (let y = CY - ARENA_R; y < CY + ARENA_R; y++) {
+    const dy = y + 0.5 - CY;
+    const hw = Math.round(Math.sqrt(Math.max(0, ARENA_R * ARENA_R - dy * dy)));
+    ctx.fillRect(CX - hw, y, hw * 2, 1);
+  }
+  const img = ctx.getImageData(0, 0, GAME_WIDTH, GAME_HEIGHT);
+  pixelGround(img.data, GAME_WIDTH, GAME_HEIGHT, 0, 0, 0);
+  ctx.putImageData(img, 0, 0);
+  paintStands(ctx, CX, CY, 720, 470, ARENA_R, ARENA_R, 0, GAME_HEIGHT, false);
+  addCanvasTexture(scene.textures, ARENA_KEY, canvas)?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+}
 
 /** O que cada lance diz em cima de quem levou. */
 const SAY: Partial<Record<string, string>> = {
@@ -24,7 +66,7 @@ const SAY: Partial<Record<string, string>> = {
 export class DuelScene extends Phaser.Scene {
   private duel!: DuelState;
   private mind!: DuelMind;
-  private gfx = new Map<DuelFighter, Phaser.GameObjects.Graphics>();
+  private figs = new Map<DuelFighter, Extra>();
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private hud!: Phaser.GameObjects.Graphics;
   private arc!: Phaser.GameObjects.Graphics;
@@ -49,31 +91,31 @@ export class DuelScene extends Phaser.Scene {
     useGameStore.getState().setCampPrompt(null);
     this.over = false;
     this.pressed = {};
-    this.gfx.clear();
+    this.figs.clear();
     // O quadro da arena (1280×720) fica no meio de qualquer tamanho de tela
     this.cameras.main.setBackgroundColor(0x2a2418).centerOn(GAME_WIDTH / 2, GAME_HEIGHT / 2).fadeIn(220, 0, 0, 0);
-    const g = this.add.graphics();
-    g.fillStyle(0xd8c070, 1);
-    g.fillCircle(CX, CY, ARENA_R);
-    g.lineStyle(10, 0x6b4a2b, 1);
-    g.strokeCircle(CX, CY, ARENA_R);
-    g.lineStyle(2, 0xa89040, 0.6);
-    g.strokeCircle(CX, CY, 90);
-    this.arc = this.add.graphics().setDepth(2);
+    arenaTexture(this);
+    if (this.textures.exists(ARENA_KEY)) this.add.image(0, 0, ARENA_KEY).setOrigin(0, 0).setDepth(-1);
+    // O aviso do golpe fica no chão, debaixo das figuras
+    this.arc = this.add.graphics().setDepth(-0.5);
     this.hud = this.add.graphics().setDepth(5);
     const skill = spec.skill;
     const me = makeFighter({ name: "Comandante", x: CX - 150, y: CY, armor: 0.1 });
     const foe = makeFighter({ name: spec.opponent, x: CX + 150, y: CY, maxHp: 80 + skill * 5, armor: 0.1, pace: aiPace(skill), speed: aiSpeed(skill) });
     this.duel = startDuel(me, foe, { center: { x: CX, y: CY }, radius: ARENA_R - 24 });
     this.mind = makeMind(spec.aggressive ? "AGGRESSIVE" : "STEADY", skill);
-    for (const [f, color] of [[me, COLORS.ALLY], [foe, 0xc0503a]] as const) this.gfx.set(f, this.add.graphics().setDepth(3).setData("color", color));
+    for (const [f, look] of [[me, commanderLook()], [foe, RIVAL]] as const) {
+      const fig = new Extra(this, f.x, f.y, duelistLook(look, f.weapon), DUEL.BODY);
+      fig.setOwnLod("FULL");
+      this.figs.set(f, fig);
+    }
     const round = spec.tournament ? ` · ${spec.tournament.round}ª rodada do torneio` : "";
-    this.title = this.add.text(CX, 24, `Liça${round}`, { fontFamily: "monospace", fontSize: "18px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 4 }).setOrigin(0.5).setDepth(6);
-    const small = { fontFamily: "monospace", fontSize: "13px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 };
+    this.title = this.add.text(CX, 24, `Liça${round}`, { fontFamily: PIXEL_FONT, fontSize: "24px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 4 }).setOrigin(0.5).setDepth(6);
+    const small = { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 };
     this.add.text(170, 36, "Comandante", small).setDepth(6);
     this.add.text(1110, 36, spec.opponent, small).setOrigin(1, 0).setDepth(6);
     this.tip = this.add
-      .text(CX, 694, "WASD anda · Espaço ou clique: golpe leve · Q ou botão direito: pesado · Shift: bloquear (na hora certa, apara)\nF: esquiva · E: empurrão · o arco vermelho avisa o golpe; o largo e escuro é o pesado", { fontFamily: "monospace", fontSize: "13px", color: "#d8d8d8", stroke: "#000000", strokeThickness: 3, align: "center" })
+      .text(CX, 694, "WASD anda · Espaço ou clique: golpe leve · Q ou botão direito: pesado · Shift: bloquear (na hora certa, apara)\nF: esquiva · E: empurrão · o arco vermelho avisa o golpe; o largo e escuro é o pesado", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#d8d8d8", stroke: "#000000", strokeThickness: 3, align: "center" })
       .setOrigin(0.5)
       .setDepth(6);
     const keyboard = this.input.keyboard;
@@ -91,7 +133,8 @@ export class DuelScene extends Phaser.Scene {
     if (import.meta.env.DEV) (window as unknown as { __duel?: DuelScene }).__duel = this;
   }
 
-  update(_t: number, delta: number): void {
+  update(time: number, delta: number): void {
+    Unit.animateAll(time, this.cameras.main.worldView, this);
     if (this.over) return;
     const dt = Math.min(delta, 50) / 1000;
     const d = this.duel;
@@ -120,32 +163,19 @@ export class DuelScene extends Phaser.Scene {
 
   /** Uma palavra que sobe e some em cima de quem fez o lance. */
   private float(f: DuelFighter, text: string): void {
-    const t = this.add.text(f.x, f.y - 34, text, { fontFamily: "monospace", fontSize: "14px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(6);
+    const t = this.add.text(f.x, f.y - 74, text, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 }).setOrigin(0.5).setDepth(6);
     this.tweens.add({ targets: t, y: t.y - 26, alpha: 0, duration: 800, onComplete: () => t.destroy() });
   }
 
   private draw(): void {
     const d = this.duel;
-    for (const [f, g] of this.gfx) {
-      g.clear();
-      const color = g.getData("color") as number;
-      g.fillStyle(f.stance === "STAGGER" ? 0xffffff : color, f.stance === "DODGE" ? 0.5 : 1);
-      g.fillCircle(0, 0, DUEL.BODY);
-      g.lineStyle(3, COLORS.OUTLINE, 1);
-      g.strokeCircle(0, 0, DUEL.BODY);
-      g.lineStyle(f.weapon === "AXE" ? 7 : 5, 0xe8e8e8, 1);
-      // A arma recua no aviso (mais no pesado) e estica no golpe
-      const reach = WEAPONS[f.weapon].reach * 0.6;
-      const len = f.stance === "WINDUP" ? (f.move === "HEAVY" ? reach * 0.3 : reach * 0.55) : reach;
-      const back = f.stance === "WINDUP" && f.move === "HEAVY" ? -0.9 : 0;
-      g.lineBetween(0, 0, Math.cos(f.facing + back) * len, Math.sin(f.facing + back) * len);
-      if (f.stance === "BLOCK") {
-        g.lineStyle(8, 0x8fa6b8, 1);
-        g.beginPath();
-        g.arc(0, 0, 28, f.facing - 0.9, f.facing + 0.9);
-        g.strokePath();
-      }
-      g.setPosition(f.x, f.y);
+    // As figuras: o lugar, a direção e a pose do momento (armar, golpear, guarda, esquiva, tropeço)
+    for (const [f, fig] of this.figs) {
+      fig.x = f.x;
+      fig.y = f.y;
+      fig.setFacing(f.facing);
+      fig.duelPose = poseOf(f, d.time);
+      fig.setAlpha(f.stance === "DODGE" ? 0.7 : 1);
     }
     const a = this.arc;
     a.clear();

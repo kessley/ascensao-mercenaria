@@ -2,7 +2,7 @@
 
 Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador (que vira fortaleza e, em volta dela, cidade), cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
-**Onde estamos (4 de novembro de 2026):**
+**Onde estamos (9 de novembro de 2026):**
 - **Feito:**
   - a progressão dos batalhões;
   - a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3);
@@ -12,13 +12,15 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - os duelos no meio da batalha (Marco 21 ✅ OK: as regras, os heróis do outro lado e o duelo no campo);
   - uma rodada de desempenho, fora da fila: a simulação da batalha ficou 4 vezes mais leve, e 1600 soldados de perto cabem em 60 fps ([ROADMAP.md](ROADMAP.md#desempenho-batalhas-quatro-vezes-mais-leves--ok)).
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
-  - os locais de missão sempre habitados (etapa 10 ✅ OK).
+  - os locais de missão sempre habitados (etapa 10 ✅ OK);
+  - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
+  - o Marco 22 inteiro (etapa 12 ✅ OK): o bivaque e a grade, a vida no acampamento, a fortaleza e a cidade que nasce sozinha em volta dela.
+  - o G5 inteiro (etapa 13 ✅ OK): a fonte de pixel, as molduras e os botões, os ícones e os retratos.
+  - a parte 1 do Marco 23 (etapa 14.1): a gente de cada lugar, de onde vem cada um no bando e o povoado governado por gente de fora.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G4 continua (etapa 11, em seis partes), pela parte 3: harpias, navios e convés.
-  - Já estão feitas as duas primeiras: carroças, aríetes e escadas; a coluna das expedições e do comboio.
-  - Faltam harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1.
+- **A seguir:** a parte 2 do Marco 23 (etapa 14.2): as fés.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -47,9 +49,9 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 8 | [Arrumação: dividir a `WorldScene`](#8-arrumação-dividir-a-worldscene--ok) | dívida | Os Marcos 21 e 22 mexem muito nela | ✅ OK |
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
-| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | partes 1 e 2 de 6 ✅ OK |
-| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
-| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
+| 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
+| 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
@@ -77,13 +79,13 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **G0, decidido:** vista 3/4, soldado de 16×24 e arte gerada por código, depois de uma prova com até 6400 soldados nos três níveis de zoom.
 - **G1, feito** (`src/game/art/`):
   - figuras em camadas: 4 corpos, 7 cabeças, 3 armaduras, 8 armas, 2 escudos e 3 montarias, na cor da tropa;
-  - as 9 tropas do jogador, o Comandante, batedores, mensageiros e 53 dos 55 tipos de inimigo;
+  - as 9 tropas do jogador, o Comandante, batedores, mensageiros e 53 dos 55 tipos de inimigo (os outros 2, a carroça de mercador e o aríete, vieram no G4);
   - 3 direções e uma espelhada, com as poses parado, andando, atacando e caindo;
   - zoom em degraus (25%, 50%, 100% e 200%), com 3 níveis de detalhe;
   - chefes no dobro do tamanho, corpos que ficam no chão e escala inteira da tela;
   - a barra de vida saiu de cima das unidades.
 - **Medido:** o desenho de cerca de 1500 unidades caiu de 20 a 35 ms por quadro para 0 a 12 ms. O gargalo agora é a simulação, de 25 a 60 ms.
-- **O que ficou para depois:** o cavalo de frente e de costas (a pose mais fraca). As poses de duelo entraram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
+- **O que ficou para depois:** o cavalo de frente e de costas, a pose mais fraca. Ele foi refeito no G4, parte 6, e as poses de duelo entraram com o Marco 21. Detalhes em [ARTE.md](ARTE.md).
 
 ## 3. G3: construções ✅ OK
 - **Povoados** (`src/game/art/buildings.ts`, `src/game/world/TownArt.ts`): casas, Casa do Conselho, castelo, templo, muralhas, paliçadas, portões, mercado, poço, pátios da guarnição, ruínas e a Cidade Alta vista de fora, nas 4 culturas:
@@ -528,7 +530,7 @@ O marco foi dividido em três partes: as regras (que a Liça já usa), os herói
 - limpo, ele fica vazio por uns dias e depois volta a ter gente;
 - com contrato, o mesmo local vem mais forte e com o chefe.
 
-## 11. G4: resto do elenco
+## 11. G4: resto do elenco ✅ OK
 **Objetivo:** o que ainda é greybox no campo e no mapa vira pixel art, com as figuras do G1 como base.
 
 **Pronto quando:** numa marcha com comboio, num cerco e numa viagem por mar, nada em campo é mais círculo nem retângulo.
@@ -571,19 +573,127 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
 - **Conserto no caminho:** a cena esquecia o comboio quando recomeçava (ao voltar de uma batalha, ao carregar o jogo), e ele sumia até sair outro. Agora o comboio é desenhado de novo.
 - **Testes:** a suíte `missoes` manda a companhia de um capitão para uma escolta e confere que a coluna marcha (28 de 28). Conferido também na tela.
 
-### 11.3. Harpias, navios e convés
-**A fazer:** as harpias em pixel art; os navios no mar e o convés da batalha no mar.
+### 11.3. Harpias, navios e convés ✅ OK
+**Feito:**
+- **A harpia** (`art/harpy.ts`, `Harpy`): uma águia de asas largas e cabeça clara, vista de cima em três direções. O oeste é o leste espelhado.
+  - Bate as asas em 4 quadros por pouco mais de um segundo e depois plana. Vira para onde voa, com folga na diagonal, como as figuras.
+  - A sombra vai no chão, 34 px abaixo da ave: é ela que mostra a altura. Ave e sombra crescem com o zoom, como as figuras.
+- **Barcaças e navios de comércio** (`art/ships.ts`, `TradeRoutes`): o casco visto do alto e um pouco de lado, com o costado, o convés de tábuas e a espuma na linha d'água.
+  - A barcaça leva caixotes e uma vela. O navio tem castelo de popa, gurupés, dois mastros, velas com faixa e flâmula.
+  - Viram para onde vão (de frente, de lado, de costas). A espuma se mexe e o barco balança um pixel.
+  - Na tempestade, parado no porto, o barco recolhe a vela e o rastro some.
+- **O convés da abordagem** (`art/deck.ts`, `buildDeck`): os dois navios a 1 px por px de mundo, como o chão.
+  - A proa fica em ponta, para fora. A popa é reta, com a amurada aberta onde as pranchas apoiam e um cunho de ferro de cada lado.
+  - No convés: tábuas ao comprido em três tons, com emendas e pregos, escotilhas com grade, a base do mastro, cabos enrolados e a sombra da vela atravessando tudo. Embaixo, o costado e a espuma.
+  - O navio deles é o nosso espelhado, em madeira mais escura e com a cinta vermelha (a nossa é azul).
+  - As pranchas têm travessas e corrimão de corda. O mar é um ladrilho que corre devagar.
+  - As paredes da cena não mudaram: a arte cobre as mesmas amuradas.
+- **Testes:**
+  - 11 de regras novos: o polígono da grade, as folhas da harpia e dos barcos, e o convés.
+  - A suíte `mar` continua passando (45 de 45), com a abordagem no convés. Conferido também na tela.
 
-### 11.4. Gente do mapa e do acampamento
-**A fazer:** viajantes, caravanas, seguidores e quem trabalha nos postos, com as figuras do G1. O Marco 22 põe essa gente para construir.
+**Ficou para depois:**
+- o mastro do convés é só a base: em pé, ele taparia quem luta atrás;
+- o mar que se mexe cobre uma área em volta dos navios; mais longe, é a cor lisa;
+- a harpia some ao chegar, sem pousar no braço de ninguém.
 
-### 11.5. Interiores e a Cidade Alta
-**A fazer:** o lado de dentro das construções e a Cidade Alta das capitais (de fora ela já é pixel art).
+### 11.4. Gente do mapa e do acampamento ✅ OK
+**Feito:**
+- **A figura de enfeite** (`entities/Extra.ts`): uma `Unit` que não luta. Ganha de graça a animação, a direção e o zoom das figuras do G1. A coluna da parte 2 passou a usar a mesma.
+- **Gente nova nas figuras** (`folkLook` em `art/looks.ts`):
+  - duas ferramentas: o cajado de caminhante (o do mago, sem a pedra e sem o brilho) e a enxada, que sobe e desce nos quadros do golpe;
+  - o cervo, sobre o desenho do cavalo: mais claro, com galhada e rabo branco, nas três direções.
+- **O mapa vivo** (`MapLife`): moradores com roupas de seis cores, camponeses de boné e enxada, viajantes de capa e cajado, peregrinos de branco, caçadores de arco e as manadas de cervos.
+  - Parado na lavoura, o camponês trabalha a terra, cada um no seu tempo.
+  - A flechada no cervo toca o tiro do arco. O caçador volta com o cervo nas costas, como uma capa da cor do bicho.
+  - Na névoa, ninguém aparece, como antes. As caravanas já eram pixel art: são bandos de verdade, com a carroça do mercador.
+- **Os seguidores do acampamento** (`CampLife`): cada um com a roupa do ofício. O cozinheiro vai de branco, o mascate de capa e cajado, a curandeira de verde, o capelão de preto, o ajudante de ferreiro com o martelo, e as famílias em quatro cores.
+  - Trabalham com os quadros do golpe: o cozinheiro mexe o caldeirão, a curandeira cuida dos feridos, o ajudante martela a bigorna.
+  - De noite, dormem onde estão.
+  - Os lugares de trabalho viraram peças (`art/campProps.ts`): o caldeirão na trempe, com o fogo e a lenha; a banca de toldo listrado; a enfermaria com a cruz e dez esteiras; o púlpito de caixotes com o estandarte; a bigorna no toco, com o balde e o ferro; e o varal.
+  - A carga de ferro nas costas de quem a leva para a Ferraria (soldados e o ajudante) é uma peça pequena.
+- **Os tenentes sem comando** sentam na roda da fogueira, virados para o fogo, com o anel prateado.
+- **Testes:**
+  - 8 de regras novos: as folhas de toda a gente, a enxada, o cajado sem brilho, o cervo, as cores e as peças dos seguidores.
+  - As suítes `missoes` (28/28) e `companhias` (15/15) continuam passando. Conferido também na tela, no acampamento e num povoado.
 
-### 11.6. Acabamento do G1
-**A fazer:** os 2 tipos de inimigo que faltam e o cavalo de frente e de costas.
+**Ficou para depois:**
+- as crianças das famílias (o greybox desenhava uma): a figura ainda não tem um tamanho menor;
+- quem trabalha nos postos do Marco 22 entra com ele. A figura de enfeite e as ferramentas já servem.
 
-## 12. Marco 22: do bivaque à cidade
+### 11.5. Interiores e a Cidade Alta ✅ OK
+**Feito:**
+- **Os interiores** (`art/interiors.ts`, `InteriorScene`): a sala inteira é uma imagem só.
+  - O chão de cada estilo: tábuas, lajes, mármore em xadrez, ou terra com palha na tenda.
+  - A parede do fundo tem janelas, tochas, vitrais ou a lona; na porta, as ombreiras e o capacho.
+  - Os móveis viraram peças, cada uma com a sua altura:
+    - mesa (de banquete, de mapa ou de taverna), catre, banco, balcão, baú, estante de livros e quadro de avisos;
+    - barril, caixote, saco, feno, tapete e estandarte;
+    - lareira com a coifa, bigorna, ferro e armeiro;
+    - altar, trono, pilar e o poleiro com os falcões;
+    - o canal do esgoto e as celas da masmorra (grades finas na frente, parede de pedra entre uma e outra).
+  - Os cavalos do estábulo são figuras, em pelagens diferentes.
+  - Toda a gente das salas é figura:
+    - guardas de elmo e lança, nobres de capa (quem reina, de coroa), escrivães, mercadores e sacerdotes;
+    - ladrões, trabalhadores, o ferreiro e o taverneiro;
+    - o rato enorme dos esgotos.
+  - Quem dorme ou está ferido deita no catre.
+  - O zoom é 2 nas telas grandes, com o pixel inteiro. Só aparece o nome de quem está mais perto.
+- **A Cidade Alta** (`art/cityArt.ts`, `world/capitalArt.ts`, `world/capitalPaint.ts`):
+  - O chão vem em pedaços de 600 px, com 1 px de textura por px de mundo, em duas camadas.
+    - A base é terra, grama, a água do fosso e a areia da Liça. Ela passa pelo filtro do chão do G2, no worker.
+    - Por cima vem o calçamento:
+      - pedra nas ruas, com a Avenida Real mais larga e lajes claras no Bairro Nobre;
+      - lajes na Praça Real, no Grande Mercado e no pátio do castelo;
+      - a ponte de tábuas;
+      - a arquibancada da Liça, com o povo sentado e a barreira da justa.
+  - Os prédios saem das peças do G3: casas, oficinas, barracos, tavernas com placa, a catedral, as muralhas, as torres e o Portão Velho.
+  - Também há peças novas:
+    - a torre de menagem: o telhado fica escondido atrás das ameias, com os torreões e a torre do meio, que leva o estandarte;
+    - os paços de pedra do castelo;
+    - os palácios do Bairro Nobre, com o jardim na frente;
+    - o chafariz, o lampião e a lápide.
+  - A TownArt monta só os grupos de peças que estão perto da câmera.
+  - Os portões do Bairro Nobre e do castelo abrem e fecham na tela.
+  - O Comandante, o povo, os criados, os guardas e os nobres são figuras. Disfarçado, o Comandante usa capuz e cajado. O zoom é 1.
+- **A Liça dos duelos** (`DuelScene`):
+  - a areia e a arquibancada cheia;
+  - os dois lutadores no dobro do tamanho, com as poses do duelo em campo: armar, golpear, guarda, esquiva e tropeço;
+  - o aviso do golpe continua no chão.
+- Nas casas grandes, a chaminé agora tem no máximo 16 px. Antes ela parecia um poste.
+- **Testes:**
+  - 12 testes de regras novos. São 8 dos interiores e 4 da Cidade Alta: as peças novas, os calçamentos e se todo prédio vira peça.
+  - A suíte `duelos` continua passando (17/17).
+  - Conferido na tela: as salas, os bairros da Cidade Alta, os portões e o duelo. Na Cidade Alta, cada quadro leva 12 ms.
+
+**Ficou para depois:**
+- a Cidade Alta não tem zoom: fica sempre em 100%;
+- os prédios muito grandes, como a estalagem e a Casa dos Mercadores, ainda têm muito telhado liso;
+- o povo da arquibancada faz parte do chão: não se mexe nem torce.
+
+### 11.6. Acabamento do G1 ✅ OK
+**Feito:**
+- **Os 2 tipos de inimigo que faltavam** eram a carroça de mercador e o aríete. Eles entraram na parte 1, e agora os 55 tipos têm figura.
+- **O cavalo de frente e de costas** (`art/figures.ts`), que era a pose mais fraca do G1:
+  - **De frente:**
+    - o corpo foge para trás do cavaleiro, e a barriga sobra dos dois lados;
+    - o peito é largo, e as patas de perto são mais grossas que as de trás;
+    - a cara é comprida e desce até entre as patas da frente, com orelhas, topete, olhos dos lados, a lista branca na testa e o focinho escuro;
+    - um traço escuro separa a cara do peito, que é do mesmo pelo;
+    - o rabo escapa de um lado, lá atrás.
+  - **De costas:**
+    - a garupa tem duas ancas, cada uma com a luz em cima;
+    - o rabo cheio desce entre elas e balança no passo;
+    - as coxas são grossas e as canelas, finas.
+  - **O cavalo de barda** leva a testeira de ferro no lugar da lista. A coberta na cor da tropa vai no peito, no pescoço, no lombo e na garupa.
+  - **Sem ninguém em cima,** como os cavalos do estábulo: de frente, a cabeça fica no alto; de costas, o pescoço e as orelhas aparecem lá na frente.
+  - O cavalo agora fica simétrico com o cavaleiro.
+  - O cervo usa o mesmo desenho, com a galhada e o traseiro branco.
+- **Testes:**
+  - 4 testes de regras novos: o cavalo é mais largo que o cavaleiro, a lista e a testeira, a cabeça no alto sem cavaleiro, e o rabo, que balança no passo;
+  - conferido na tela, numa batalha com cavalaria, cavaleiros e arqueiros montados, a 200% e a 400%.
+
+## 12. Marco 22: do bivaque à cidade ✅ OK
 **Objetivo:** o bando começa com quase nada e constrói a própria casa. A tenda vira acampamento, o acampamento vira fortaleza e, em volta da fortaleza, uma cidade nasce sozinha. O design inteiro, com o catálogo e os números, está na [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22).
 
 **O que mudou no plano** (combinado em 4 de novembro, depois de um brainstorm):
@@ -599,7 +709,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 
 **Arte:** as peças do G3 (casas, tendas, cercas, ferraria, poço, torres) e as carroças do G4 servem a muitas construções. Cada construção nova precisa da sua peça, feita junto com a parte que a usa. Os ícones das construções ficam para o G5.
 
-### 12.1. Marco 22, parte 1: o bivaque e a grade
+### 12.1. Marco 22, parte 1: o bivaque e a grade ✅ OK
 **A fazer:**
 - **O começo novo** (GDD 9.9): o Comandante, 1 batalhão de infantaria, 1 batedor, 1 mensageiro, 1 carroça, cerca de 80 de ouro e 20 rações. Só a tenda, a fogueira e uma barraca, e nenhum tenente.
 - **A grade quadrada** (GDD 9.2):
@@ -628,7 +738,31 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - levantar e montar em outro lugar mantém a planta e o que coube nas carroças;
 - um save antigo abre com o acampamento dele.
 
-### 12.2. Marco 22, parte 2: a vida no acampamento
+**Feito** (8 de novembro):
+- **As regras puras** estão em `src/game/data/campGrid.ts`: a grade, os patamares, o catálogo, as necessidades, a carga nas carroças, a conversão dos saves antigos e a geometria em pixels (o quadrado, o portão e a cerca). Testes em `campGrid.test.ts`, `campStore.test.ts` e `campPace.test.ts`.
+- **A planta no store** (`campPlan`):
+  - construir, mover, desmontar (devolve metade), melhorar, trocar o portão, crescer a paliçada e cavar o fosso;
+  - os voluntários do mastro e a taverna, que aluga um batalhão por semana em cada povoado;
+  - as obras antigas (`CAMP_WORKS`) saíram.
+- **No acampamento,** o `CampArea` foi reescrito sobre a grade: a cerca de estacas do bivaque, a paliçada com torres no portão e uma peça para cada construção. Ainda no acampamento:
+  - a peça fantasma verde ou vermelha segue o mouse, com o custo ou o motivo. Shift continua pondo, e o botão direito ou ESC cancela;
+  - cada batalhão dorme na porta da sua barraca; quem sobra fica ao relento perto da fogueira.
+- **Necessidades com efeito:**
+  - Comida: quem passa da fogueira e da cozinha come cru, e custa mais ração;
+  - Cura: só os leitos da enfermaria saram no ritmo do acampamento; o resto sara no do campo;
+  - Salubridade: o poço sobe o limite de lotação;
+  - Segurança: entra nos ataques ao acampamento.
+  - Os Leitos só aparecem no painel por enquanto; o efeito vem na parte 2.
+- **Os números:**
+  - a madeira ficou mais barata do que a GDD sugeria, porque uma carroça leva só 4 de madeira: a paliçada custa 8, 16 e 24, o campo de treino 4, o estábulo 6 e a torre 4;
+  - ao montar, cada célula de floresta dentro do quadrado rende 0,2 de madeira;
+  - o bando goblin cresce 2 a cada 3 de fama (`goblinBandSize`), e não com o dia.
+- **A simulação dos 30 dias:** o mastro sai no dia 1, a primeira escolha vem no dia 3, o 2º batalhão no dia 9 e a paliçada pequena no dia 15.
+- **Falta:**
+  - as estradas ainda chegam pelo oeste, mesmo com o portão em outro lado;
+  - o desempenho com a planta cheia não foi medido: espera o sinal do usuário.
+
+### 12.2. Marco 22, parte 2: a vida no acampamento ✅ OK
 **A fazer:**
 - **As sete necessidades completas no painel:** entram Salubridade, Moral e Ofício (GDD 9.3).
 - **A falta aparece no acampamento:** soldados dormindo ao relento, fila na fogueira, doentes no chão, cavalos amarrados na paliçada.
@@ -645,7 +779,41 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - pôr um batalhão na obra em vez do treino é uma decisão que pesa;
 - a carpintaria faz o aríete e as escadas de um cerco.
 
-### 12.3. Marco 22, parte 3: a fortaleza
+**Feito** (8 de novembro):
+- **As regras puras** estão em `src/game/sim/campDays.ts`: turnos, postos, obras, humor, produção, manutenção e a carpintaria. O catálogo cresceu em `campGrid.ts`: são 22 construções novas e 3 níveis novos (barracão, refeitório e hospital de campanha). Os testes estão em `campDays.test.ts`.
+- **Turnos** (no painel da planta e na barraca): descanso, treino, obra e guarda.
+  - O treino dá 6 XP por dia com o pátio da tropa (campo de treino, estande ou picadeiro) e 2 sem ele.
+  - A obra dá 4 de trabalho por dia.
+  - A guarda segura 15% do saque e faz a ronda por dentro da cerca.
+  - Sem guarda e sem posto de sentinela, um bando que chega ao acampamento com gente dentro pega todos de surpresa: leva metade do que levaria.
+- **Gente nos postos:** cozinha, enfermaria, ferraria, forno, defumadouro, herbário, taverna, as oficinas, o lenhador e a horta só funcionam com alguém. Os seguidores do papel certo vão primeiro, depois qualquer seguidor e, por último, os soldados de um batalhão na obra (1 de trabalho por posto). O jogador pode fechar um posto.
+- **Obras levam dias:** construção pequena pede 3 de trabalho, média 6 e grande 10. Trabalham o estado-maior (2 por dia), os seguidores livres (1 cada) e os batalhões na obra. Só a construção pronta faz efeito e libera tropa. Melhorar de nível ainda é na hora.
+- **Manutenção:** algumas construções custam ouro por semana (torre, altar, arsenal, picadeiro, tenda de mapas e tenda do capitão), pago junto com os salários.
+- **As sete necessidades:**
+  - Salubridade: o poço e a latrina somam 30 cada ao limite de lotação, e a latrina corta 30% dos surtos;
+  - Moral: o humor do acampamento anda para a moral das construções menos os batalhões, e cai mais com quem dorme ao relento. Antes, ele sempre voltava a 0;
+  - Ofício: uma oficina a cada 3 batalhões. Para cada oficina que falta, há 30% de chance por semana de um batalhão perder um nível de equipamento.
+  - Quem dorme ao relento também adoece mais. O herbário faz os doentes sararem mais depressa.
+- **Na cena:**
+  - quem come cru faz fila na fogueira na hora da refeição;
+  - feridos sem leito ficam deitados no chão diante da barraca;
+  - sem estábulo, a cavalaria segura os cavalos amarrados na paliçada;
+  - os soldados da obra martelam nas obras, que aparecem com um andaime.
+- **Os outros efeitos:**
+  - o forno economiza 10% das rações do acampamento, e o defumadouro, 15% das gastas em campo;
+  - a horta dá 3 rações por dia, e o lenhador dá madeira se houver floresta em volta;
+  - os troféus e o bardo dão um pouco de fama por dia;
+  - a tenda do capitão dá lealdade toda semana;
+  - o cercado de cativos faz fugirem pela metade;
+  - a tenda de mapas aumenta em 30% a região que os batedores exploram;
+  - o picadeiro libera os arqueiros montados.
+- **Carpintaria:** faz carroças, escadas e o aríete com madeira. O que ela fez vai com o exército e entra no próximo cerco.
+- **Falta:**
+  - Segurança e Ofício em falta só aparecem no diário e no painel, não na cena;
+  - a cor do uniforme (alfaiataria) fica para o G5;
+  - o equilíbrio dos números só se vê jogando uma campanha.
+
+### 12.3. Marco 22, parte 3: a fortaleza ✅ OK
 **A fazer** (GDD 9.7):
 - **Fincar o estandarte,** com os requisitos de fama, soldados e construções.
 - **A terra por um de três caminhos:** carta de terra de um reino (vassalagem), ruínas reerguidas (antes, limpá-las) ou terra de ninguém (temor).
@@ -659,7 +827,40 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - o bando sai em campanha com o acampamento de campo enquanto a fortaleza fica com o castelão;
 - a fortaleza aguenta (ou não) um cerco sem o bando.
 
-### 12.4. Marco 22, parte 4: a cidade que nasce sozinha
+**Feito:**
+- **As regras** ficam em `src/game/sim/fortress.ts` (puras, com 20 testes). O estado e as ações ficam em `src/store/fortressSlice.ts`.
+- **Fincar o estandarte:** é o passo de 28 para 34 na planta. Pede fama 45, 5 batalhões, cozinha, tenda dos oficiais, poço e torre de vigia, e que a muralha caiba em volta, sem água, rocha nem povoado. A fortaleza não se levanta mais.
+- **Os três caminhos da terra,** no painel da planta:
+  - carta de terra: +120 de ouro e um reino com relação 25 a até 3200 de distância. O bando vira vassalo, e os inimigos do suserano passam a ser os dele;
+  - ruínas reerguidas: um local a até 1600, com no máximo 25% dos moradores. Fica 200 de ouro e 15 de madeira mais barato, e os moradores não voltam;
+  - terra de ninguém: +10 de temor, e o cerco vem mais cedo.
+- **A muralha:** de madeira, e depois de pedra (450 de ouro e 12 de ferro). É desenhada com as mesmas peças dos fortes do mundo (`wallJobs`), com torres nos cantos, no meio dos lados e no portão.
+- **As 12 construções da fortaleza:**
+  - torre de menagem, cisterna, armazém e castelão: somam na defesa;
+  - quartel: leitos;
+  - salão do Comandante: fama por dia;
+  - masmorra: ninguém foge;
+  - escola de oficiais: mais tenentes;
+  - tesouraria: o saque não leva ouro;
+  - oficina de cerco: escadas pela metade da madeira e dois aríetes;
+  - feira do castelo: ouro por semana;
+  - pombal: o aviso do cerco chega uma semana antes;
+  - templo.
+- **O castelão e a guarnição:** o castelão é um tenente escolhido no painel. A guarnição são os batalhões que ficam na saída. O painel mostra a força da defesa contra o tamanho do próximo cerco.
+- **O acampamento de campo:** um kit de até 6 construções que andam nas carroças.
+  - É montado pelo botão do HUD, longe da sede e com as carroças junto, e leva meio dia.
+  - As barracas abrigam do frio e do pântano, e quem está ferido e tem leito sara no ritmo do acampamento.
+  - Entrar na sede recolhe o acampamento.
+- **O cerco da sede:** a cada 45 dias, mais cedo com fama e em terra de ninguém. Vem um reino em guerra com o bando, os orcs (com fama 60) ou salteadores, e o cerco cresce a cada vez.
+  - Com o bando longe, o cerco se resolve sozinho. Se a sede cair, ela é saqueada: ouro, metade das rações e do depósito, e um terço das construções volta a ser obra.
+  - Com o bando em casa, toca o alarme ("Às muralhas!"). A batalha é "Você defende os muros" (a sede como forte de pedra ou vila de madeira), e o bando volta à fortaleza depois dela.
+- **Testes:** os 392 de regras e a suíte `fortaleza` (18 verificações) passam, junto com as de cercos e do mar.
+- **Falta:**
+  - a batalha nas muralhas usa o mapa genérico de cerco, não a planta da fortaleza;
+  - o acampamento de campo dá abrigo, enfermaria e cozinha, mas não os outros efeitos das construções;
+  - o equilíbrio dos números (custos, cadência e tamanho dos cercos) só se vê jogando.
+
+### 12.4. Marco 22, parte 4: a cidade que nasce sozinha ✅ OK
 **A fazer** (GDD 9.8):
 - **A população cresce** com seguidores, famílias, refugiados e mercadores, e com segurança, comida, comércio e fama.
 - **As etapas:** arraial, burgo, vila e cidade.
@@ -676,7 +877,55 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - entrar pelo portão interno leva à fortaleza que o jogador construiu;
 - a cidade paga impostos e é cercada como as outras.
 
-## 13. G5: interface
+**Dividida em três:** 4a (as regras), 4b (a cidade no mapa e no reino) e 4c (a fortaleza num mapa à parte).
+
+**Feito na 4a, as regras** (`src/game/sim/seatCity.ts`, puras, com testes):
+- **A gente:** a cidade nasce no dia em que o estandarte é fincado, com parte dos seguidores.
+- **O crescimento de cada dia** vem do que a sede oferece, de 0 a 1:
+  - segurança: muralha, guarnição e milícia, torres e torre de menagem;
+  - comida: horta, armazém, cisterna e rações guardadas;
+  - comércio: feira do castelo, intendente, taverna e o decreto da feira;
+  - fama.
+- **Sem segurança** (abaixo de 0,25), a gente vai embora em vez de chegar.
+- **As etapas:** arraial (0), burgo (120), vila (300) e cidade (700 a 1200). Sem a muralha de pedra, a vila para logo antes de virar cidade.
+- **Os decretos,** no painel da fortaleza:
+  - artesãos: o ferro do intendente sai 20% mais barato, por 25 de ouro por semana;
+  - feira semanal: mais comércio, por 15;
+  - refugiados: mais gente por dia, mas a febre vem mais (25% por semana, levando 8%);
+  - terra para veteranos: soldados de batalhões de nível 3 ou mais se aposentam, viram milícia e trazem a família.
+- **Os impostos** (baixos, normais ou altos) trocam ouro por crescimento.
+- **O saque da sede** leva também um quinto da cidade.
+
+**Feito na 4b, a cidade no mapa e no reino:**
+- **O desenho** vem de `seatLayout` (em `world/townLayout.ts`): o mesmo gerador dos povoados, com a mesma muralha, as mesmas casas e as mesmas ruas, montado de uma vez em volta da fortaleza com 760 de folga.
+  - As casas aparecem do portão da fortaleza para fora e não mudam de lugar quando a cidade cresce.
+  - Água e montanha ficam sem casa.
+- **Cada etapa no mapa:**
+  - arraial: a praça com as barracas, diante do portão;
+  - burgo: casas e roças, sem muralha;
+  - vila: paliçada de fora com quatro portões e guarnição, Casa do Conselho e templo;
+  - cidade: muralha de pedra.
+- **A vila entra no reino:** vira um povoado do bando (`seat: true`), com impostos ("Renda do reino"), guarnição, lealdade e cercos como os outros. Mercado, Sala de Administração e portões funcionam com E, e a taxa do painel vale para o reino. Daí em diante, o ouro da cidade vem pelo reino, e o painel da fortaleza cobra só os decretos.
+- **O painel "Cidade da sede"** (na planta, junto da fortaleza) mostra a etapa, a gente, o crescimento e os quatro motivos dele, os impostos, os decretos e os veteranos.
+- **Saves antigos** com fortaleza ganham a cidade ao carregar.
+- **Testes:** os 412 de regras (8 novos, de `seatLayout`) e a suíte `fortaleza`, com 27 verificações. Ela leva o arraial ao burgo, à vila no reino e à cidade de pedra, e confere a renda do reino.
+
+**Feito na 4c, a fortaleza num mapa à parte:**
+- **Do burgo em diante, a fortaleza fica selada:** o Comandante só entra e sai pelo portão, com E ou com um clique, como nas casas. A pé, a muralha não deixa passar nem pelo vão do portão.
+  - De fora, o aviso é "E — Entrar: Fortaleza do bando". De dentro, "E — Sair para" o burgo, ou para o nome da vila.
+  - A tela escurece e o Comandante aparece do outro lado.
+- **Lá dentro, a fortaleza é o mapa:** a câmera fica presa nela e a cidade em volta escurece. Fora, a câmera volta a correr o mundo.
+- **O mesmo lugar do mundo:** a fortaleza continua onde sempre esteve, no meio da cidade, e não numa cena à parte como a Cidade Alta.
+  - Assim os alojamentos, as obras, a gente do acampamento, o modo construção e os cercos continuam funcionando sem mudança.
+  - As tropas, as carroças e os mensageiros passam pelo portão a pé: entrando, vão para os alojamentos; saindo, vêm atrás do Comandante.
+- **Testes:** a suíte `fortaleza` com 34 verificações. Ela confere que a pé não se entra, o aviso do portão, a câmera presa e o escuro em volta, a saída e as tropas passando pelo portão.
+
+**Falta:**
+- a fortaleza não é maior por dentro do que parece no mapa (ela é o mesmo lugar);
+- a floresta debaixo das casas da cidade não é limpa;
+- o equilíbrio do crescimento, dos decretos e dos impostos só se vê jogando uma campanha.
+
+## 13. G5: interface ✅ OK
 **Objetivo:** a interface em React ganha a mesma cara do jogo.
 - **Fonte** em pixel art, também no nome e no estandarte dos batalhões (hoje greybox).
 - **Molduras** dos painéis, da tenda e do diário.
@@ -684,6 +933,67 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Retratos** do Comandante, dos capitães, dos tenentes e dos nobres, gerados por código como as figuras, com as cicatrizes do Marco 18.
 
 **Pronto quando:** abrir a tenda, o quadro de comando e o diário não mostra mais nenhum painel genérico.
+
+**Em quatro partes,** cada uma com o seu commit. Tudo é feito por código, como as figuras, sem fonte nem pacote baixado de fora:
+1. **A fonte:** uma fonte de pixel desenhada letra a letra, com todos os acentos do português, montada em TrueType no próprio jogo. Vale para títulos, rótulos, botões e números do HUD, e para o nome e o estandarte dos batalhões no mapa. O texto corrido dos painéis fica numa fonte comum, para ler sem cansar.
+2. **As molduras e os botões:** bordas de madeira, ferro e pergaminho em pixel art, para os painéis, a tenda, o diário e os botões.
+3. **Os ícones:** as tropas, os bens, as construções do Marco 22 e os botões de batalha, no lugar dos ícones de linha.
+4. **Os retratos:** o Comandante, os capitães, os tenentes e os nobres, com a cultura, a idade e as cicatrizes do Marco 18.
+
+**Feito na parte 1, a fonte:**
+- **A fonte "Mercenaria Pixel"** fica em `src/game/art/font.ts`. Cada letra é desenhada numa grade de 12 linhas: as maiúsculas têm 7 de altura, as minúsculas 5, as pernas 2, e os acentos vêm em cima, sem encostar.
+  - Tem o alfabeto, os algarismos (todos da mesma largura), a pontuação, todas as letras acentuadas do português e os sinais que os textos usam (· — … × ★ ✓ ✗ ⚑ ▲ ▼ →).
+  - O que ela não tem (os emojis) cai na fonte seguinte, até os ícones da parte 3.
+- **O TrueType é montado no próprio jogo:** cada pixel vira um quadrado do contorno. O negrito engrossa as hastes sem fechar os vãos de 1 pixel, como as pernas do m.
+  - `ui/pixelFont.ts` registra as duas faces antes de o jogo abrir.
+- **Onde ela entra:**
+  - os títulos (`font-serif`), os números (`font-mono`), os rótulos de seção (h1 a h4) e os botões do componente `Button`;
+  - os textos do mapa: nomes dos batalhões, das construções e da gente, e os da Liça, dos interiores e da Cidade Alta.
+- **Os tamanhos:** a fonte só fica nítida em 12 px e nos múltiplos, e o CSS encaixa cada tamanho no degrau mais perto (12, 18, 24 ou 36). O texto corrido dos painéis continua na fonte comum.
+- **O estandarte dos batalhões:** o nome tem contorno escuro, e a barra da moral tem moldura de pixel, com luz em cima e sombra embaixo.
+- **Testes:** 6 de regras (`tests/unit/pixelFont.test.ts`): as tabelas e as somas do arquivo, a cobertura do português, os contornos e o negrito. A suíte de navegador `interface` confere que o navegador aceita as duas faces e onde a fonte aparece, e tira as fotos `.shots-g5-*.png`.
+
+**Feito na parte 2, as molduras e os botões:**
+- **As peças** ficam em `src/game/art/frames.ts`, desenhadas na grade de pixel das figuras:
+  - madeira, com tábuas, veio, a linha funda e cantoneiras de ferro com rebite;
+  - ferro, com trilho de 3 pixels e rebites nos cantos, e o meio deixando ver o mundo;
+  - pergaminho, com a borda queimada;
+  - botões de 9 pixels em cinco tons (madeira, ouro, vermelho, azul e ferro), cada um em cima, com o mouse e apertado.
+- **No CSS:** `ui/pixelFrames.ts` transforma cada peça em imagem e a põe como variável da raiz. As classes `frame-wood`, `frame-iron`, `frame-parchment`, `hud-box`, `hud-card` e `btn-pixel` usam essas imagens no `border-image`, sem suavizar: cada pixel vale 2 px nos painéis e 1 px no HUD.
+- **Onde entram:**
+  - madeira: o painel do lado (tenda, quadro de comando, construções e povoados) e as caixas do menu. Dentro dela, os cinzas da interface viram tons de madeira e couro só pela troca das variáveis de cor, e os cartões ficam entalhados;
+  - ferro: as caixas do HUD (Comandante, dia, recursos, som, câmera, o aviso do E), a barra de comando e os cartões dos batalhões;
+  - pergaminho: o diário, com tinta escura;
+  - os botões do componente `Button` e os botões de ordem da barra de comando (ferro; o ativo, ouro).
+- **Conserto:** o diário da tenda encolhia até sumir no painel (a seção podia encolher dentro da coluna que rola). Agora ele fica do tamanho dele.
+- **Testes:** 4 de regras (`tests/unit/frames.test.ts`) e 4 verificações novas na suíte `interface` (9 no total).
+
+**Feito na parte 3, os ícones:**
+- **Os desenhos** ficam em `src/game/art/iconArt.ts`: 103 desenhos de 10×10 (111 ícones, contando os derivados), uma letra por cor, com o contorno escuro posto depois (o ícone pronto tem 12×12, a altura da fonte). `art/icons.ts` tem a paleta, os derivados (a retirada é o avanço de cabeça para baixo; o cavaleiro é o cavalo de ferro) e as tabelas:
+  - as 9 tropas (espada, lança, elmo, arco, besta, dardos, cavalo, cavalo com barda, cavalo com flecha);
+  - os 10 bens, o ouro, as rações, a mochila, a carroça, a fama, a honra e o temor;
+  - as 50 construções do Marco 22, cada uma pelo que faz (a cozinha é um caldeirão, a ferraria uma bigorna, o estábulo uma ferradura...), e as 7 necessidades;
+  - os 16 botões de ordem e as 4 formações da barra de comando;
+  - o tempo, a hora do dia e os sinais do texto (⚑, ★, ☠, ♛, ⚔, ⚓, ✉, ✓...).
+- **Na interface:** o componente `PixelIcon` mostra o ícone em 12 px (na linha do texto) ou 24 px (botões e listas), sem suavizar; `IconText` troca os sinais de um texto pelos ícones, e assim as notícias do campo, o diário e os rótulos que vêm do jogo não mostram mais emoji. No mapa do continente, os rótulos desenham os ícones no canvas, e o tempo de cada região também é ícone.
+- **Onde entram:** a barra de comando inteira, o cartão de cada batalhão, o HUD de recursos (ouro, rações, ferro e o nome do bando viram ícone com número), o relógio e o tempo, a planta do acampamento (cada construção, cada posto, cada obra e cada necessidade), o quadro de comando, o exército da tenda, o comércio e o Livro de Preços.
+- **Junto:** as caixas pretas que sobravam no HUD de batalha (dicas dos botões, ajuda, duelo, pausa, câmera lenta, notícias, cenário) viraram ferro, e os botões do campo (tochas, descansar, fundar vila, montar acampamento, às muralhas) viraram botões de pixel. O relógio desceu para a coluna da direita: numa tela de 1280, as notícias o cobriam. Os emojis dos bens e do tempo saíram de `constants.ts`, e a fonte ganhou ♪, ♫ e ☺ para as falas do acampamento.
+- **Testes:** 5 de regras (`tests/unit/icons.test.ts`: o tamanho e as cores de cada desenho, o contorno, um ícone para cada tropa, bem e construção, os derivados e o corte do texto) e 6 verificações novas na suíte `interface` (15 no total), entre elas a de que nenhum emoji sobra no HUD, na planta, na tenda, no quadro de comando e no diário.
+
+**Feito na parte 4, os retratos:**
+- **O busto** sai de `src/game/art/portraits.ts`, em 32×32, na grade de pixel das figuras (com o mesmo contorno escuro). O rosto vem de uma semente: o mesmo personagem tem sempre a mesma pele, o mesmo cabelo e o mesmo penteado. O resto vem do que o jogo sabe dele:
+  - **o sexo:** o queixo, as sobrancelhas, os lábios, os penteados, a barba;
+  - **a idade:** o cabelo começa a branquear aos 40 e fica branco perto dos 70; aparecem rugas, e depois dos 45 o homem pode ficar calvo. Os sorteios saem todos de uma vez, então envelhecer muda o cabelo, mas não troca o rosto;
+  - **a cultura:** quatro paletas de pele e de cabelo, que se cruzam. Nas Areias há o turbante, no Jade o coque e o topete, nas Ilhas as tranças e o cabelo comprido;
+  - **as cicatrizes do Marco 18:** a primeira corta a bochecha, a segunda a sobrancelha, a terceira o lábio; a quarta põe o tapa-olho, e a quinta marca a testa;
+  - **o papel:** o Comandante de couraça, com ombreiras e a capa do bando; o capitão de cota de malha, com a faixa do bando de través; o tenente de gibão, com o lenço; o nobre na cor do reino, com gola de ouro. O rei leva coroa e manto de arminho; o consorte e o herdeiro, um diadema. O fundo é da cor do papel, ou do reino.
+- **De quem é cada retrato** (`art/portraitSpecs.ts`): o bando veio dos Reinos, então o fundador é de lá. Quem entra no bando vem de toda parte: metade da terra natal, a maior parte do resto da terra onde o bando está, e um ou outro de mais longe. O nobre sem terra e o inimigo que mudou de lado são da terra, como os nobres.
+  - Os capitães ganham idade e cicatrizes com as batalhas, e os tenentes com os abates.
+  - O tenente promovido a capitão continua com o mesmo rosto. O herdeiro que era capitão ou tenente leva o rosto para o estandarte: o Comandante ganhou o campo `face`, e os que já se foram guardam o rosto e as cicatrizes.
+  - As listas de nomes dos capitães e dos tenentes marcam os nomes de mulher.
+- **Onde entram:** o cartão do Comandante no HUD; a ficha do capitão e a do tenente; os candidatos do Posto de Recrutamento; o quadro de comando (cada companhia e cada tenente no batalhão dele); a lista de tenentes e as relações entre eles; o Livro do Bando (o Comandante, os herdeiros possíveis e, em cinza, os que vieram antes); o Livro da Nobreza, com cada nobre da corte (em cinza quem o Comandante ainda não conheceu); e a caixa de diálogo, quando quem fala é um nobre.
+- **Junto:** as caixas de diálogo dos interiores e da Cidade Alta eram duas cópias, e viraram um componente só (`DialogBox`), em moldura de madeira. A suíte `lendas` estava quebrada desde o Marco 22, parte 1b, porque o bando passou a começar sem tenentes: agora ela traz um dos candidatos.
+- **Testes:** 5 de regras (`tests/unit/portraits.test.ts`: cada cultura, papel e sexo dá um busto cheio; o mesmo rosto para a mesma semente, também ao envelhecer; a idade no cabelo; cada cicatriz uma marca, e o tapa-olho na quarta; de quem é cada retrato), 6 verificações novas na suíte `interface` (21 no total) e uma na `lendas`: o herdeiro leva o rosto que tinha.
 
 ## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.
@@ -715,6 +1025,37 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - chegar a outro continente muda como o bando conversa, negocia e recruta;
 - um dia santo ou um preceito obriga o jogador a decidir;
 - a mistura de culturas e de fés do bando pesa na moral.
+
+**Em quatro partes,** cada uma com o seu commit:
+1. **14.1, a gente de cada lugar:** a mistura de culturas de cada povoado (mais estrangeiros nos portos e nas cidades), a origem de cada batalhão, tenente, capitão e Comandante, guardada desde a contratação. Quem se alista vem da gente do lugar. O povoado governado por gente de fora fica descontente, e o tenente e o capitão da cultura da tropa seguram mais a moral. O painel do povoado, a tenda e as fichas mostram de onde cada um vem.
+2. **14.2, as fés:** quatro fés, uma de cada cultura, e uma quinta, de pregadores, que corre entre elas. Cada uma tem templo, clero, calendário e preceitos (o dia santo, enterrar os mortos antes de marchar, o jejum, não tocar em magia). No bando: a fé de cada batalhão, o altar e o templo do acampamento, o capelão, o atrito entre fés e as festas de cada cultura. Na política: a voz dos templos na corte e a guerra santa.
+3. **14.3, as línguas:** o Comandante aprende a língua do lugar com o tempo passado ali, e o intérprete (um seguidor novo), o tenente e o capitão falam por ele. Sem quem fale a língua, os preços pioram, os contratos vêm com menos detalhe, os boatos chegam truncados, os prisioneiros dizem menos e as falas aparecem com palavras da língua de lá. Na batalha, a ordem a um batalhão estrangeiro passa pelo tenente, que precisa falar as duas línguas.
+4. **14.4, outra terra:** cruzar o mar junta tudo de uma vez (a chegada avisa o que muda), e o fechamento: uma viagem de teste a cada continente confere os três "Pronto quando".
+
+**Feito na parte 1, a gente de cada lugar:**
+- **As regras** ficam em `src/game/sim/culture.ts`, sem nada do Phaser nem da loja.
+- **A gente de cada povoado** sai do id dele, então é sempre a mesma e não ocupa o save. Quase toda é da terra; o resto vem de fora:
+  - a aldeia tem 4% de gente de fora, o forte 8%, a cidade 12% e a capital 18%;
+  - o porto ganha mais 12%;
+  - a vila da sede do bando é quase metade gente do bando.
+- **A origem fica guardada** (o campo `culture`) em cada batalhão, tenente, capitão e Comandante, desde a contratação. Quem é de save antigo é dos Reinos, a terra natal do bando.
+  - **Os soldados:** quem se alista no Posto de Recrutamento ou se apresenta como voluntário é sorteado da gente do povoado mais perto do acampamento; na taverna, da gente daquele povoado. Os prisioneiros que mudam de lado são da terra.
+  - **Os oficiais:** fora de casa, 30% vêm da terra natal e o resto da terra onde o bando está; em casa, 90% são da terra natal. O nobre sem terra é da terra. O oficial estrangeiro tem nome na língua dele e diz na história de onde veio.
+  - **O Comandante:** o herdeiro leva a origem dele para o estandarte. O veterano escolhido pela tropa é da gente que mais tem no bando.
+- **O povoado governado por gente de fora** perde até 16 pontos na lealdade que busca, conforme o peso da gente principal dele. O povoado do bando é governado pela gente do Comandante; o de um reino, pela gente da terra.
+- **Na batalha:**
+  - o tenente da mesma gente da tropa faz o batalhão perder 12% menos moral;
+  - o capitão da mesma gente reforça a aura dele em 6%.
+- **Na tela:**
+  - o painel do povoado mostra a gente dele e avisa quando está "governada por gente de fora";
+  - cada batalhão da tenda diz de onde vem, e marca o "tenente da terra";
+  - as fichas e os candidatos a tenente e a capitão mostram a origem;
+  - o Livro do Bando mostra a do Comandante.
+  - Os retratos do G5 passam a usar a origem guardada, no lugar do sorteio pela terra onde o bando está.
+- **Junto:** a suíte `progressao` estava quebrada desde o Marco 22, porque o bando passou a começar com um batalhão só. Agora ela traz os arqueiros que testa.
+- **Testes:**
+  - 6 de regras em `tests/unit/culture.test.ts`: a gente de cada povoado, o sorteio, a lealdade, a origem dos oficiais, a moral com o tenente da mesma gente e a mistura do bando;
+  - a suíte nova `cultura`, com 7 verificações.
 
 ## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.

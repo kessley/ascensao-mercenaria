@@ -95,6 +95,8 @@ export interface BattleScenario {
   siege: ScenarioSiege | null;
   /** Abordagem em alto-mar (Marco 17): quem luta é o exército de verdade, e quem morre não volta. */
   boarding?: boolean;
+  /** Cerco à sede do bando (Marco 22, parte 3): a batalha volta à campanha no fim. */
+  seat?: boolean;
 }
 
 export interface ScenarioBattalionResult {
@@ -545,6 +547,32 @@ export function boardingScenario(units: ScenarioForce["units"], difficulty: WarD
     difficulty,
     boarding: true,
     forces: [{ ...newForce("BANDITS"), units, stance: "ATTACK", competence: 3, trait: "CRUEL", chief: "Capitão Sem-Porto" }],
+  };
+}
+
+/**
+ * O cerco à sede (Marco 22, parte 3): "Você defende os muros", com o exército que estiver em casa.
+ * A força se divide entre o grosso (de frente) e um destacamento que chega pelo flanco.
+ */
+export function seatSiegeScenario(attackers: number, faction: EnemyFactionId, chief: string, difficulty: WarDifficulty, wallStone: boolean): BattleScenario {
+  const kinds = ENEMY_FACTIONS[faction].units;
+  const main = Math.round(attackers * 0.65);
+  const flank = attackers - main;
+  const split = (n: number, a: EnemyKind, b: EnemyKind): ScenarioForce["units"] => ({ [a]: Math.ceil(n * 0.7), [b]: Math.floor(n * 0.3) });
+  return {
+    ...blankScenario(),
+    id: "seat-siege",
+    name: "O cerco à sede",
+    description: "Atirem de cima da muralha e segurem o portão: a sede do bando não pode cair.",
+    map: "PLAINS",
+    fog: false,
+    difficulty,
+    seat: true,
+    siege: { role: "DEFEND", town: wallStone ? "FORT" : "VILLAGE", ladders: 2 + Math.floor(attackers / 40), rams: 1 },
+    forces: [
+      { ...newForce(faction), units: split(main, kinds[0], kinds[1]), stance: "ATTACK", competence: 3, trait: "BRAVE", chief },
+      { ...newForce(faction), units: split(flank, kinds[kinds.length > 3 ? 3 : 0], kinds[1]), side: "LEFT", delay: 120, stance: "ATTACK", competence: 3, trait: "CRUEL", chief: "" },
+    ],
   };
 }
 

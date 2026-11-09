@@ -17,7 +17,7 @@ export function SoundControl() {
   }, []);
 
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded bg-black/60 px-2 py-1.5 text-xs text-neutral-200">
+    <div className="pointer-events-auto flex items-center gap-2 hud-box px-2 py-1.5 text-xs text-neutral-200">
       <button
         type="button"
         onClick={() => AudioEngine.toggleMute()}

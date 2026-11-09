@@ -6,6 +6,9 @@ import { LEADER_TRAITS, fallDeathChance, leaderAge } from "../../../game/sim/leg
 import { useGameStore } from "../../../store/useGameStore";
 import { TRAITS } from "../../../game/data/lieutenants";
 import { Button } from "../Button";
+import { PixelIcon } from "../PixelIcon";
+import { CaptainPortrait, CommanderPortrait, FormerPortrait, LieutenantPortrait } from "../Portrait";
+import { cultureOf, peopleOf } from "../../../game/sim/culture";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -31,11 +34,16 @@ export function SagaPanel() {
   return (
     <>
       <section className="flex flex-col gap-1 rounded bg-neutral-800 p-3 text-sm">
-        <h3 className="font-serif text-xl text-amber-100">{leader.name}</h3>
-        <p className="text-neutral-300">
-          {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es) · {leader.origin}
-        </p>
-        <p className="text-xs text-neutral-400">Chance de não se levantar se cair em combate: {Math.round(fallDeathChance(age, leader.wounds) * 100)}%.</p>
+        <div className="flex items-center gap-3">
+          <CommanderPortrait />
+          <div className="flex flex-col gap-1">
+            <h3 className="font-serif text-xl text-amber-100">{leader.name}</h3>
+            <p className="text-neutral-300">
+              {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es) · {leader.origin} · {peopleOf(cultureOf(leader))}
+            </p>
+            <p className="text-xs text-neutral-400">Chance de não se levantar se cair em combate: {Math.round(fallDeathChance(age, leader.wounds) * 100)}%.</p>
+          </div>
+        </div>
         {leader.traits.map((t) => (
           <p key={t} className="text-xs text-amber-200">
             {TRAITS[t].label}: {LEADER_TRAITS[t].text}.
@@ -49,10 +57,16 @@ export function SagaPanel() {
           <p className="text-xs text-neutral-400">Sem capitães nem tenentes: se o Comandante cair, a tropa escolhe um veterano.</p>
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
-            {[...captains.map((c) => ({ id: c.id, name: `Capitão ${captainName(c)}`, loyalty: c.loyalty })), ...lieutenants.map((l) => ({ id: l.id, name: fullName(l), loyalty: l.loyalty }))].map((l) => (
+            {[
+              ...captains.map((c) => ({ id: c.id, name: `Capitão ${captainName(c)}`, loyalty: c.loyalty, face: <CaptainPortrait captain={c} scale={1} /> })),
+              ...lieutenants.map((l) => ({ id: l.id, name: fullName(l), loyalty: l.loyalty, face: <LieutenantPortrait lieutenant={l} scale={1} /> })),
+            ].map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-2 rounded bg-neutral-800 px-2 py-1">
-                <span>
-                  {l.name} <span className="text-xs text-neutral-400">· lealdade {Math.round(l.loyalty)}</span>
+                <span className="flex items-center gap-2">
+                  {l.face}
+                  <span>
+                    {l.name} <span className="text-xs text-neutral-400">· lealdade {Math.round(l.loyalty)}</span>
+                  </span>
                 </span>
                 <button type="button" onClick={() => setHeir(l.id === heirId ? null : l.id)} className={`rounded border px-2 py-0.5 text-xs ${l.id === heirId ? "border-amber-400 text-amber-200" : "border-neutral-600 text-neutral-200"}`}>
                   {l.id === heirId ? "Herdeiro" : "Nomear"}
@@ -79,7 +93,7 @@ export function SagaPanel() {
                 <div className="flex items-center justify-between gap-2">
                   <span className={finished ? "text-emerald-300" : ""}>
                     {a.label}
-                    {finished && " ✓"}
+                    {finished && <> <PixelIcon id="CHECK" /></>}
                   </span>
                   {!finished && (
                     <button type="button" disabled={!active && ambitions.length >= AMBITION_SLOTS} onClick={() => (active ? dropAmbition(id) : pickAmbition(id))} className={`rounded border px-2 py-0.5 text-xs disabled:opacity-40 ${active ? "border-amber-400 text-amber-200" : "border-neutral-600 text-neutral-200"}`}>
@@ -101,8 +115,11 @@ export function SagaPanel() {
         <section className="flex flex-col gap-1 text-sm">
           <h3 className={sectionTitle}>Quem veio antes</h3>
           {former.map((f) => (
-            <p key={f.generation} className="text-neutral-300">
-              {f.generation}º · {f.name} morreu aos {f.age} anos: {f.cause}.
+            <p key={f.generation} className="flex items-center gap-2 text-neutral-300">
+              <FormerPortrait former={f} scale={1} className="grayscale" />
+              <span>
+                {f.generation}º · {f.name} morreu aos {f.age} anos: {f.cause}.
+              </span>
             </p>
           ))}
         </section>

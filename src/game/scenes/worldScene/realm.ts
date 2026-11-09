@@ -2,7 +2,10 @@ import Phaser from "phaser";
 import { Unit } from "../../entities/Unit";
 import { seasonOf } from "../../../utils/season";
 import { bandSize, type WarbandEvent } from "../../systems/Warbands";
-import { TOWN_SIZE, insideTown, nearestGate } from "../../world/townLayout";
+import { TOWN_SIZE, insideTown, nearestGate, seatLayout } from "../../world/townLayout";
+import { FORT_WALL_SPEC, gatePoints, shapeOf } from "../../data/campGrid";
+import type { Interactable } from "../../world/CampArea";
+import { houseShare, stageOf } from "../../sim/seatCity";
 import { nobleName } from "../../sim/nobility";
 import type { WildlifeContext } from "../../world/Wildlife";
 import type { TradeNews } from "../../world/TradeRoutes";
@@ -12,8 +15,8 @@ import type { EnemyGroupDef } from "../../data/battleMaps";
 import { ferryDocks, regionName } from "../../data/world";
 import { isRaiderKind } from "../../sim/realm";
 import { activeLairs, siteFill } from "../../sim/siteLife";
-import { useGameStore } from "../../../store/useGameStore";
-import { SUPPORT, GEO, PROGRESSION, REALM, KINGDOM, WOLF, WORLD, CAMP_MOVE, FATIGUE, SEASONS, TRADE } from "../../../utils/constants";
+import { campWatched, useGameStore } from "../../../store/useGameStore";
+import { SUPPORT, GEO, PROGRESSION, REALM, KINGDOM, WOLF, WORLD, CAMP_MOVE, FATIGUE, SEASONS, TRADE, WORLD_HEIGHT, WORLD_WIDTH } from "../../../utils/constants";
 import { cargoCapacity } from "../../../utils/economy";
 import { freightWeight } from "../../sim/trade";
 import { distance, pointAlong, routeLength, type Point } from "../../../utils/math";
@@ -261,7 +264,7 @@ export const realmMethods = {
     // Covis perto de um local limpo ficam quietos até ele se encher de novo (Fase 3, etapa 10)
     const lives = useGameStore.getState().siteLife;
     const lairs = activeLairs(this.world.lairs, this.world.sites, (id) => siteFill(lives[id], after));
-    const band = this.warbands.maybeSpawnGoblins(after, lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1);
+    const band = this.warbands.maybeSpawnGoblins(after, lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1, useGameStore.getState().fame);
     if (band) useGameStore.getState().chronicle(`Rumores: um bando goblin deixou seu covil nos ermos.`, "bad");
     this.spawnArmies(after);
     this.spawnAgents();
@@ -392,6 +395,10 @@ export const realmMethods = {
         if (!defenders && !this.campArea.packed) {
           store.raidCamp(band.name);
           this.pushFeed(`${band.name} atacou o acampamento desguarnecido!`);
+        } else if (defenders && !this.campArea.packed && !campWatched(store)) {
+          // Há gente, mas ninguém de guarda nem sentinela (Marco 22): o bando pega o acampamento de surpresa
+          store.raidCamp(band.name, true);
+          this.pushFeed(`${band.name} pegou o acampamento de surpresa: ninguém estava de guarda!`);
         }
         this.warbands.retarget(band);
         continue;
@@ -440,6 +447,7 @@ export const realmMethods = {
 
   /** Nome do lugar para o HUD e os relatórios: povoado, acampamento, local de contrato ou região. */
   placeName(this: WorldScene, p: Point): string {
+    if (useGameStore.getState().scenario?.seat) return "a sede";
     if (this.campArea.contains(p, -200)) return "o acampamento";
     const town = useGameStore.getState().settlements.find((t) => {
       const layout = this.settlementLayer.layoutOf(t.id);
@@ -463,6 +471,134 @@ export const realmMethods = {
    * Plantas mudaram (aldeia fundada, povoado em ruínas ou reconstruído): colisão, navegação e
    * rotas são refeitas, e quem ficou dentro de uma parede sai para a rua mais próxima.
    */
+  /**
+   * A cidade da sede (Marco 22, parte 4): a planta é refeita quando muda a etapa, quando mais um
+   * quadragésimo das casas fica de pé ou quando a vila entra no reino. Devolve true se mudou.
+   */
+  updateSeat(this: WorldScene): boolean {
+    const s = useGameStore.getState();
+    const c = s.seatCity;
+    const on = !!c && !!s.fortress && !s.campPacked && !s.scenario;
+    const stage = c ? stageOf(c.people) : "CAMPTOWN";
+    const share = c ? Math.floor(houseShare(c.people) * 40) / 40 : 0;
+    const shape = shapeOf(s.campPlan, this.world.camp.center);
+    const key = on ? `${stage}|${share}|${shape.gate}|${c?.settlementId ?? ""}` : "";
+    if (key === this.seatKey) return false;
+    this.seatKey = key;
+    // Do burgo em diante, a fortaleza é um mapa à parte: o Comandante só passa pelo portão com E
+    this.seatSealed = on && stage !== "CAMPTOWN";
+    if (this.campArea) this.campArea.sealed = this.seatSealed;
+    if (!on || !c) {
+      this.settlementLayer.setSeat(null);
+      return true;
+    }
+    // A fortaleza com a muralha de pedra, mesmo antes dela: as casas não mudam de lugar quando ela sobe
+    const t = FORT_WALL_SPEC.STONE.thickness;
+    const fort = { x: shape.cx - shape.half - t, y: shape.cy - shape.half - t, w: (shape.half + t) * 2, h: (shape.half + t) * 2 };
+    const geo = geoOf(this.world.geo);
+    const layout = seatLayout(`${this.world.name}`, fort, shape.gate, stage, share, (p) => geo.isOpenLand(p, 30));
+    this.settlementLayer.setSeat({ layout, key, settlementId: c.settlementId });
+    return true;
+  },
+
+  /** A grossura da muralha da fortaleza (ou da cerca, antes dela). */
+  seatWallThickness(this: WorldScene): number {
+    const wall = useGameStore.getState().campPlan.wall;
+    return wall ? FORT_WALL_SPEC[wall].thickness : 20;
+  },
+
+  /**
+   * O portão da fortaleza selada (Marco 22, parte 4): de fora, entrar na fortaleza; de dentro,
+   * sair para a cidade. Só com E ou com um clique, como as casas.
+   */
+  seatGateSpots(this: WorldScene): Interactable[] {
+    if (!this.seatSealed || this.campArea.packed) return [];
+    const s = useGameStore.getState();
+    const shape = this.campArea.palisade;
+    const town = s.settlements.find((x) => x.id === s.seatCity?.settlementId);
+    const key = `${shape.cx},${shape.cy},${shape.half},${shape.gate},${s.campPlan.wall},${town?.name ?? ""}`;
+    if (this.seatSpots?.key === key) return this.seatSpots.spots;
+    const outer = gatePoints(shape, this.seatWallThickness() + 40).outer;
+    const inner = gatePoints(shape, 14).inner;
+    const box = (p: Point, r: number) => new Phaser.Geom.Rectangle(p.x - r, p.y - r, r * 2, r * 2);
+    const spots: Interactable[] = [
+      { label: "Fortaleza do bando", door: outer, panel: { kind: "DEPARTURE" }, bounds: box(outer, 60), radius: 80, enter: "seat:in" },
+      { label: `Sair para ${town ? town.name : "o burgo"}`, door: inner, panel: { kind: "DEPARTURE" }, bounds: box(inner, 40), radius: 45, enter: "seat:out" },
+    ];
+    this.seatSpots = { key, spots };
+    return spots;
+  },
+
+  /**
+   * Atravessar o portão da fortaleza selada: a tela escurece e o Comandante aparece do outro
+   * lado. Quem o segue passa a pé pelo portão: entrando, vai para os alojamentos; saindo, vem atrás.
+   */
+  crossSeatGate(this: WorldScene, inward: boolean): void {
+    if (this.seatCrossing) return;
+    const store = useGameStore.getState();
+    store.setCampPanel(null);
+    if (store.campBuild) store.setCampBuild(null);
+    this.walkPath = null;
+    this.seatCrossing = true;
+    const cam = this.cameras.main;
+    cam.fadeOut(160, 0, 0, 0);
+    cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.seatCrossing = false;
+      const g = gatePoints(this.campArea.palisade, inward ? 90 : this.seatWallThickness() + 70);
+      const p = inward ? g.inner : g.outer;
+      this.commander.x = p.x;
+      this.commander.y = p.y;
+      this.commander.setFacing(inward ? g.angle + Math.PI : g.angle);
+      this.lastCommanderPos = { x: p.x, y: p.y };
+      this.input.keyboard?.resetKeys();
+      this.updateSeatView();
+      cam.centerOn(p.x, p.y);
+      cam.fadeIn(200, 0, 0, 0);
+    });
+  },
+
+  /** O Comandante está dentro da fortaleza selada? */
+  inSeatFort(this: WorldScene, p?: Point): boolean {
+    if (!this.seatSealed || this.campArea.packed) return false;
+    const s = this.campArea.palisade;
+    const at: Point = p ?? this.commander;
+    return Math.abs(at.x - s.cx) <= s.half && Math.abs(at.y - s.cy) <= s.half;
+  },
+
+  /**
+   * Dentro da fortaleza selada, a câmera fica nela e a cidade em volta escurece: é o mapa da
+   * fortaleza. Fora, a câmera volta a correr o mundo inteiro.
+   */
+  updateSeatView(this: WorldScene): void {
+    const cam = this.cameras.main;
+    const inside = this.inSeatFort();
+    const s = this.campArea.palisade;
+    const key = inside ? `${cam.zoom}|${s.cx},${s.cy},${s.half}|${this.seatWallThickness()}` : "";
+    if (key === this.seatViewKey) return;
+    this.seatViewKey = key;
+    if (!inside) {
+      cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      this.seatVeil?.setVisible(false);
+      return;
+    }
+    const t = this.seatWallThickness() + 50;
+    const fort = { x: s.cx - s.half - t, y: s.cy - s.half - t, w: (s.half + t) * 2, h: (s.half + t) * 2 };
+    // Mais largo que a muralha só quando a tela é maior que ela (aí a fortaleza fica no meio)
+    const w = Math.max(fort.w, cam.width / cam.zoom);
+    const h = Math.max(fort.h, cam.height / cam.zoom);
+    cam.setBounds(s.cx - w / 2, s.cy - h / 2, w, h);
+    if (!this.seatVeil) this.seatVeil = this.add.graphics().setDepth(13);
+    const far = 8000;
+    this.seatVeil
+      .clear()
+      .setVisible(true)
+      .fillStyle(0x07080c, 0.94)
+      .fillRect(fort.x - far, fort.y - far, fort.w + far * 2, far)
+      .fillRect(fort.x - far, fort.y + fort.h, fort.w + far * 2, far)
+      .fillRect(fort.x - far, fort.y, far, fort.h)
+      .fillRect(fort.x + fort.w, fort.y, far, fort.h);
+  },
+
   applyTowns(this: WorldScene): void {
     const terrain = Unit.terrain;
     if (!terrain) return;

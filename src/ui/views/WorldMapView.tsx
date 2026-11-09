@@ -4,7 +4,7 @@ import { expeditionStage } from "../../game/sim/expeditions";
 import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { fieldFood } from "../components/SupplyPanel";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
-import { PALISADE } from "../../game/data/campLayout";
+import { CELL, ready } from "../../game/data/campGrid";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
 import { SEASONS, SUPPORT, WEATHER, WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
 import type { ScoutOrder } from "../../game/entities/Scout";
@@ -14,6 +14,13 @@ import { groundColor } from "../../game/world/TerrainMap";
 import { dailyRations } from "../../utils/economy";
 import { distance, type Point } from "../../utils/math";
 import { Button } from "../components/Button";
+import { ICON_SIZE, WEATHER_ICON, splitIcons } from "../../game/art/icons";
+import { PIXEL_FONT } from "../../game/art/font";
+import { PixelIcon } from "../components/PixelIcon";
+import { iconCanvas } from "../pixelIcons";
+
+/** Os nomes no mapa, na fonte de pixel (só fica nítida em 12 px). */
+const MAP_FONT = `12px ${PIXEL_FONT}`;
 
 export const MAP_W = 1024;
 
@@ -97,6 +104,8 @@ export interface MapLayers {
   day?: number;
   /** Acampamento levantado (não aparece no mapa). */
   campPacked?: boolean;
+  /** Lado do quadrado do acampamento, em células (Marco 22); sem ele, o de um bivaque. */
+  campSize?: number;
   /** Tropas em expedição: onde estão e para onde vão. */
   expeditions?: readonly { at: Point; heading: Point }[];
 }
@@ -138,13 +147,29 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.stroke();
   }
 
-  ctx.font = "11px monospace";
+  ctx.font = MAP_FONT;
   ctx.textAlign = "center";
+  // O rótulo com os sinais (♛, ⚔, ⚓, ★, ☠) trocados pelos ícones de pixel (G5, parte 3)
   const label = (text: string, p: Point, dy: number, color: string) => {
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillText(text, p.x * s + 1, p.y * s + dy + 1);
-    ctx.fillStyle = color;
-    ctx.fillText(text, p.x * s, p.y * s + dy);
+    const parts = splitIcons(text);
+    const widthOf = (q: (typeof parts)[number]) => (q.icon ? ICON_SIZE + 1 : ctx.measureText(q.text).width);
+    let x = Math.round(p.x * s - parts.reduce((sum, q) => sum + widthOf(q), 0) / 2);
+    const y = Math.round(p.y * s + dy);
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.imageSmoothingEnabled = false;
+    for (const q of parts) {
+      if (q.icon) {
+        ctx.drawImage(iconCanvas(q.icon), x, y - ICON_SIZE + 2);
+      } else {
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillText(q.text, x + 1, y + 1);
+        ctx.fillStyle = color;
+        ctx.fillText(q.text, x, y);
+      }
+      x += widthOf(q);
+    }
+    ctx.restore();
   };
 
   // Pontes (quadradinho marrom; queimadas, preto) e vaus (pontos claros)
@@ -211,8 +236,7 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
   if (snap && layers.day !== undefined) {
     const cw = WORLD.REGION_WIDTH * WEATHER.CELL_REGIONS;
     const ch = WORLD.REGION_HEIGHT * WEATHER.CELL_REGIONS;
-    ctx.font = "16px sans-serif";
-    ctx.textAlign = "center";
+    ctx.imageSmoothingEnabled = false;
     for (let y = ch / 2; y < WORLD_HEIGHT; y += ch) {
       for (let x = cw / 2; x < WORLD_WIDTH; x += cw) {
         const p = { x, y };
@@ -220,21 +244,21 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
         const w = weatherAt(world.seed, layers.day, p, geoOf(world.geo));
         if (w === "CLEAR") continue;
         ctx.globalAlpha = 0.8;
-        ctx.fillText(WEATHER.ICON[w], x * s, y * s);
+        ctx.drawImage(iconCanvas(WEATHER_ICON[w]), Math.round(x * s) - ICON_SIZE, Math.round(y * s) - ICON_SIZE, ICON_SIZE * 2, ICON_SIZE * 2);
         ctx.globalAlpha = 1;
       }
     }
-    ctx.font = "11px monospace";
+    ctx.imageSmoothingEnabled = true;
   }
 
   // Acampamento, povoados (cor do dono) e locais de contrato
   if (!layers.campPacked) {
     ctx.strokeStyle = "#e0b040";
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(world.camp.center.x * s, world.camp.center.y * s, PALISADE.rx * s, PALISADE.ry * s, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    label("Acampamento", world.camp.center, -PALISADE.ry * s - 6, "#ffe9b0");
+    // O quadrado da planta (com um mínimo para se ver no mapa)
+    const half = Math.max(6, ((layers.campSize ?? 10) / 2) * CELL * s);
+    ctx.strokeRect(world.camp.center.x * s - half, world.camp.center.y * s - half, half * 2, half * 2);
+    label("Acampamento", world.camp.center, -half - 6, "#ffe9b0");
   }
   for (const t of settlements) {
     const size = t.kind === "CAPITAL" ? 24 : t.kind === "CITY" ? 18 : t.kind === "FORT" ? 15 : 11;
@@ -425,6 +449,9 @@ export function WorldMapView() {
   const followers = useGameStore((s) => s.followers);
   const day = useGameStore((s) => s.day);
   const campPacked = useGameStore((s) => s.campPacked);
+  const campSize = useGameStore((s) => s.campPlan.size);
+  // A tenda de mapas (Marco 22): os batedores exploram uma região maior
+  const mapTent = useGameStore((s) => !s.campPacked && ready(s.campPlan, "MAP_TENT"));
   const away = useGameStore((s) => s.expeditions);
   const clock = useGameStore((s) => s.day + s.dayProgress);
   // Em campo, o exército só come o que leva (mochilas, bolsa e carroças junto)
@@ -450,8 +477,8 @@ export function WorldMapView() {
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
     const expeditions = snap ? away.map((e) => expeditionStage(e, clock, snap.commander)) : [];
-    if (ctx && world) drawWorldMap(ctx, { expeditions, world, settlements, calamities, snap, contractSiteId, contractTownIds, contractRoute: world && activeContract ? missionPlan(activeContract.contract, { world, settlements }).route : undefined, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked });
-  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked, away, clock]);
+    if (ctx && world) drawWorldMap(ctx, { expeditions, world, settlements, calamities, snap, contractSiteId, contractTownIds, contractRoute: world && activeContract ? missionPlan(activeContract.contract, { world, settlements }).route : undefined, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked, campSize });
+  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked, campSize, away, clock]);
 
   const plan = useMemo(() => {
     if (!dest || !snap) return null;
@@ -528,14 +555,24 @@ export function WorldMapView() {
           <span><span className="text-sky-400">◆</span> tropa em missão (- - - rumo)</span>
           <span><span className="text-red-500">■</span> bando à vista (- - - rumo)</span>
           <span><span className="text-red-500/50">■</span> ? última posição conhecida</span>
-          <span><span className="text-red-400">☠</span> covil de calamidade</span>
-          <span><span className="text-amber-400">★</span> contrato ativo</span>
+          <span>
+            <PixelIcon id="SKULL" /> covil de calamidade
+          </span>
+          <span>
+            <PixelIcon id="STAR" /> contrato ativo
+          </span>
           <span><span className="text-sky-500">━</span> rio</span>
           <span><span className="text-amber-700">■</span> ponte</span>
           <span><span className="text-sky-100">●</span> vau</span>
-          <span>⚓ porto</span>
-          <span>♛ capital</span>
-          <span>⚔ sob cerco</span>
+          <span>
+            <PixelIcon id="ANCHOR" /> porto
+          </span>
+          <span>
+            <PixelIcon id="CROWN" /> capital
+          </span>
+          <span>
+            <PixelIcon id="ARMS" /> sob cerco
+          </span>
           <span><span className="text-violet-400">■</span> exército de um reino (em paz com o bando)</span>
         </div>
       </div>
@@ -579,7 +616,7 @@ export function WorldMapView() {
                 </span>
                 {dest && (
                   <span className="flex flex-wrap gap-1">
-                    <button type="button" onClick={() => scoutOrder(sc.id, { kind: "REGION", point: dest.point, radius: SUPPORT.SCOUT.REGION_RADIUS })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
+                    <button type="button" onClick={() => scoutOrder(sc.id, { kind: "REGION", point: dest.point, radius: SUPPORT.SCOUT.REGION_RADIUS * (mapTent ? 1.3 : 1) })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
                       Explorar região
                     </button>
                     <button type="button" onClick={() => scoutOrder(sc.id, { kind: "WATCH", point: dest.point })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">

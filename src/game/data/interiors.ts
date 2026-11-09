@@ -9,6 +9,7 @@ import { dailyRations } from "../../utils/economy";
 import { createRng, seedFromText } from "../worldgen/rng";
 import { courtInterior, fieldTent } from "./courtInteriors";
 import type { Point } from "../../utils/math";
+import type { FolkKind } from "../art/looks";
 
 /**
  * Interiores (Marco 14): cada estrutura do acampamento e dos povoados tem um "lado de dentro",
@@ -39,7 +40,14 @@ export type FurnitureKind =
   | "HAY"
   | "CARPET"
   | "BANNER"
-  | "IRON";
+  | "IRON"
+  // Pixel art (G4): estantes, poleiros, a água do esgoto, o trono, colunas e grades de cela
+  | "SHELF"
+  | "PERCH"
+  | "WATER"
+  | "THRONE"
+  | "PILLAR"
+  | "BARS";
 
 export interface Furniture {
   x: number;
@@ -64,6 +72,8 @@ export interface Npc {
   x: number;
   y: number;
   color: number;
+  /** Quem é, para a roupa da figura (G4); sem isso, sai das outras pistas (tropa, nobre, morador). */
+  folk?: FolkKind;
   /** Soldado do bando (desenhado como as tropas) e o tipo dele. */
   troop?: TroopType;
   /** Anda um pouco em volta do lugar dele. */
@@ -230,6 +240,7 @@ function campSite(key: string, s: GameState, kind: string): InteriorDef | null {
       d.npcs.push({
         id: "qm",
         name: "Intendente",
+        folk: "CLERK",
         x: 320,
         y: 225,
         color: 0xa0784a,
@@ -263,8 +274,8 @@ function campSite(key: string, s: GameState, kind: string): InteriorDef | null {
       const bars = Math.min(16, Math.ceil(s.iron / 2));
       for (let i = 0; i < bars; i++) d.furniture.push(f("IRON", 330 + (i % 4) * 26, 250 + Math.floor(i / 4) * 16, 22, 10, C.IRON, false));
       d.spots.push({ x: 380, y: 330, label: "Barras de ferro", talk: { text: `${s.iron} de ferro na pilha. Cada peça boa de armadura come ferro que nem soldado come pão.` } });
-      d.npcs.push({ id: "smith", name: "Ferreiro do bando", x: 260, y: 120, color: 0x5a4a3a, troop: "INFANTRY", talk: { text: s.iron >= 3 ? "Tenho ferro para trabalhar. O que vamos forjar?" : "Sem ferro, Comandante, eu só conserto o que já existe.", options: [{ id: panelAction({ kind: "FORGE" }), label: "Forjar equipamento" }, bye] } });
-      if (hasFollower(s.followers, "SMITH")) d.npcs.push({ id: "helper", name: "Ajudante de ferreiro", x: 140, y: 150, color: 0x8a6a4a, wander: 20, talk: { text: "Com dois martelos, sai mais barato. O mestre que o diga." } });
+      d.npcs.push({ id: "smith", name: "Ferreiro do bando", x: 260, y: 120, color: 0x5a4a3a, folk: "SMITH", talk: { text: s.iron >= 3 ? "Tenho ferro para trabalhar. O que vamos forjar?" : "Sem ferro, Comandante, eu só conserto o que já existe.", options: [{ id: panelAction({ kind: "FORGE" }), label: "Forjar equipamento" }, bye] } });
+      if (hasFollower(s.followers, "SMITH")) d.npcs.push({ id: "helper", name: "Ajudante de ferreiro", x: 140, y: 150, color: 0x8a6a4a, folk: "SMITH", wander: 20, talk: { text: "Com dois martelos, sai mais barato. O mestre que o diga." } });
       return d;
     }
     case "PEDDLER": {
@@ -275,6 +286,7 @@ function campSite(key: string, s: GameState, kind: string): InteriorDef | null {
       d.npcs.push({
         id: "peddler",
         name: man ? `${man.name}, o mascate` : "Mascate",
+        folk: "PEDDLER",
         x: 230,
         y: 100,
         color: 0xd9b25f,
@@ -292,10 +304,10 @@ function campSite(key: string, s: GameState, kind: string): InteriorDef | null {
       d.npcs.push({
         id: "groom",
         name: "Cavalariço",
+        folk: "WORKER",
         x: 320,
         y: 240,
         color: 0x8a6a40,
-        troop: "INFANTRY",
         talk: { text: `${s.depot.HORSES ?? 0} cavalos de reserva no estábulo${(s.depot.HORSES ?? 0) === 0 ? " — para montar cavalaria, vai ter de comprar cavalos (as estepes vendem barato)" : ""}. Batedores e mensageiros: ${s.scouts.length + s.messengers.length}.`, options: [{ id: panelAction({ kind: "STABLE" }), label: "Batedores e mensageiros" }, bye] },
       });
       return d;
@@ -394,6 +406,7 @@ function hall(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "steward",
     name: own ? "Administrador" : ruler ? `Intendente de ${ruler}` : "Conselheiro",
+    folk: "CLERK",
     x: 320,
     y: 140,
     color: 0xb08ad0,
@@ -404,7 +417,7 @@ function hall(key: string, s: GameState, t: Settlement): InteriorDef {
       options: [{ id: panelAction({ kind: "TOWN", settlementId: t.id, at: "HALL" }), label: own ? "Administrar o povoado" : "Tratar dos assuntos do povoado" }, bye],
     },
   });
-  d.npcs.push({ id: "g1", name: "Guarda", x: 230, y: 380, color: 0x7f8c8d, talk: { text: "Mantenha a espada na bainha aqui dentro." } }, { id: "g2", name: "Guarda", x: 410, y: 380, color: 0x7f8c8d, talk: { text: "..." } });
+  d.npcs.push({ id: "g1", name: "Guarda", x: 230, y: 380, color: 0x7f8c8d, folk: "GUARD", talk: { text: "Mantenha a espada na bainha aqui dentro." } }, { id: "g2", name: "Guarda", x: 410, y: 380, color: 0x7f8c8d, folk: "GUARD", talk: { text: "..." } });
   return d;
 }
 
@@ -424,6 +437,7 @@ function tavern(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "keeper",
     name: "Taverneiro",
+    folk: "COOK",
     x: 190,
     y: 120,
     color: 0xb08a68,
@@ -438,7 +452,7 @@ function tavern(key: string, s: GameState, t: Settlement): InteriorDef {
   for (let i = 0; i < patrons; i++) {
     const tb = tables[i % tables.length];
     const a = (i / patrons) * Math.PI * 2;
-    d.npcs.push({ id: `p${i}`, name: i === 0 ? "Mercador de passagem" : "Freguês", x: tb.x + Math.cos(a) * 58, y: tb.y + Math.sin(a) * 40, color: pick(r, C.TOWNSFOLK), talk: i === 0 ? { text: "Venho de longe. Quer saber como estão os preços na estrada?", options: [{ id: `hear:${t.id}`, label: "Ouvir o mercador" }, bye] } : { text: gossip[i % gossip.length] } });
+    d.npcs.push({ id: `p${i}`, name: i === 0 ? "Mercador de passagem" : "Freguês", x: tb.x + Math.cos(a) * 58, y: tb.y + Math.sin(a) * 40, color: pick(r, C.TOWNSFOLK), folk: i === 0 ? "TRAVELER" : undefined, talk: i === 0 ? { text: "Venho de longe. Quer saber como estão os preços na estrada?", options: [{ id: `hear:${t.id}`, label: "Ouvir o mercador" }, bye] } : { text: gossip[i % gossip.length] } });
   }
   return d;
 }
@@ -453,6 +467,7 @@ function guild(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "master",
     name: "Mestre da guilda",
+    folk: "MERCHANT",
     x: 160,
     y: 100,
     color: 0x6a4a8a,
@@ -464,6 +479,7 @@ function guild(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "banker",
     name: "Cambista",
+    folk: "MERCHANT",
     x: 480,
     y: 100,
     color: 0x4a6a4a,
@@ -483,6 +499,7 @@ function temple(key: string, s: GameState, t: Settlement): InteriorDef {
   d.npcs.push({
     id: "priest",
     name: "Sacerdote",
+    folk: "PRIEST",
     x: 260,
     y: 120,
     color: 0xe8e0c8,
@@ -505,11 +522,12 @@ function garrison(key: string, s: GameState, t: Settlement): InteriorDef {
     const x = 110 + (i % 6) * 72;
     const y = 130 + Math.floor(i / 6) * 120;
     d.furniture.push(f("BED", x - 20, y - 26, 40, 62, 0x7a6a50));
-    d.npcs.push({ id: `gs${i}`, name: "Soldado da guarnição", x, y: y + 50, color: 0x7f8c8d, talk: { text: pick(r, townGossip(s, t, r)) } });
+    d.npcs.push({ id: `gs${i}`, name: "Soldado da guarnição", x, y: y + 50, color: 0x7f8c8d, folk: "GUARD", talk: { text: pick(r, townGossip(s, t, r)) } });
   }
   d.npcs.push({
     id: "sgt",
     name: "Sargento da guarnição",
+    folk: "GUARD",
     x: 305,
     y: 112,
     color: 0x95a5a6,

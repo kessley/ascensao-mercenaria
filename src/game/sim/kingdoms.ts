@@ -5,6 +5,7 @@ import { distance, type Point } from "../../utils/math";
 import { createRng, randomSeed, type Rng } from "../worldgen/rng";
 import { TheRealm, inRealm, ofRealm, theRealm, toRealm } from "../worldgen/names";
 import { canHost } from "./trade";
+import { BAND_HOME, folkOf, foreignRule, rulerCulture } from "./culture";
 import { isCalamityOwner, isFactionOwner, kingdomsAtWar, plunder, settlementDefense, type FactionState, type KingdomWar, type RealmLog, type RealmState, type Settlement } from "./realm";
 import {
   crown,
@@ -854,8 +855,10 @@ export function courtCalendar(s: RealmState, _world: WorldDef, day: number): Rea
 }
 
 /** Lealdade de um povoado ao dono: impostos, fome, saques, guarnição, conquista e o nome do senhor. */
-export function loyaltyTarget(t: Settlement, day: number, ctx: { honor: number; fear: number; levy: number; weariness: number }): number {
+export function loyaltyTarget(t: Settlement, day: number, ctx: { honor: number; fear: number; levy: number; weariness: number; foreign?: number }): number {
   let v = 72;
+  // Governado por gente de outra cultura (Marco 23)
+  v -= ctx.foreign ?? 0;
   v -= ctx.weariness * 0.3;
   if (t.besiegedBy) v -= 10;
   if (t.owner === "PLAYER") v += (ctx.honor - 50) * 0.3 - ctx.fear * 0.25 + (t.taxRate === 2 ? -18 : t.taxRate === 0 ? 8 : 0);
@@ -875,7 +878,9 @@ export function loyaltyDay(s: RealmState, world: WorldDef, day: number): RealmLo
   for (const t of s.settlements) {
     if (t.owner === "RUINED" || isCalamityOwner(t.owner)) continue;
     const f = s.factions.find((x) => x.id === t.owner);
-    const target = loyaltyTarget(t, day, { honor: s.honor, fear: s.fear, levy: f?.levy ?? 0, weariness: f?.weariness ?? 0 });
+    const land = world.culture ?? BAND_HOME;
+    const foreign = foreignRule(folkOf(t, land, s.bandCulture), rulerCulture(t.owner, land, s.bandCulture ?? BAND_HOME));
+    const target = loyaltyTarget(t, day, { honor: s.honor, fear: s.fear, levy: f?.levy ?? 0, weariness: f?.weariness ?? 0, foreign });
     t.loyalty = Math.round(((t.loyalty ?? KINGDOM.LOYALTY_START) + (target - (t.loyalty ?? KINGDOM.LOYALTY_START)) * KINGDOM.LOYALTY_DRIFT) * 10) / 10;
     if (t.loyalty > KINGDOM.LOYALTY_REVOLT || s.revolts.includes(t.id) || !r.chance(0.08)) continue;
     s.revolts.push(t.id);

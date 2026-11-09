@@ -5,6 +5,8 @@ import { PROGRESSION, TROOPS } from "../../../utils/constants";
 import { PROMOTIONS, canLearn, canPromote, canTrain, describeMods, forgeCost, promotionCost, trainingCost, type EquipmentSlot } from "../../../utils/progression";
 import { Button } from "../Button";
 import { BattalionCard } from "./ArmyPanel";
+import { PixelIcon } from "../PixelIcon";
+import { TroopIcon } from "../battle/BattleIcons";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -45,7 +47,7 @@ export function SkillTree({ battalion: b }: { battalion: BattalionData }) {
                   }`}
                 >
                   <span className="font-semibold text-neutral-100">
-                    {learned ? "✓ " : ""}
+                    {learned && <><PixelIcon id="CHECK" /> </>}
                     {skill.label}
                   </span>
                   <span className="text-neutral-400">{skill.description}</span>
@@ -225,7 +227,7 @@ export function ForgePanel() {
       {battalions.map((b) => (
         <div key={b.id} className="flex flex-col gap-2 rounded bg-neutral-800 p-3 text-sm">
           <div className="font-semibold">
-            {b.name} <span className="text-xs font-normal text-neutral-400">{TROOPS[b.troopType].label}</span>
+            <TroopIcon troop={b.troopType} /> {b.name} <span className="text-xs font-normal text-neutral-400">{TROOPS[b.troopType].label}</span>
           </div>
           {(Object.keys(SLOT_LABEL) as EquipmentSlot[]).map((slot) => {
             const tier = b.equipment[slot];

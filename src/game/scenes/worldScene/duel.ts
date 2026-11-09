@@ -42,8 +42,8 @@ const SAY: Partial<Record<DuelEvent["kind"], string>> = {
   FEINT: "Fingiu!",
 };
 
-/** A pose da figura conforme o momento do duelo (null = a animação comum, parada ou andando). */
-function poseOf(f: DuelFighter, now: number): number | null {
+/** A pose da figura conforme o momento do duelo (null = a animação comum, parada ou andando). Também na Liça. */
+export function poseOf(f: DuelFighter, now: number): number | null {
   switch (f.stance) {
     case "WINDUP":
       return f.move === "HEAVY" ? ANIM.HEAVY : f.move === "SHOVE" ? ANIM.ATTACK + 2 : ANIM.ATTACK;

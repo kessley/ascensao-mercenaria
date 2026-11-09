@@ -116,8 +116,9 @@ export async function progression({ battle, ev, page, labScript }, { check }) {
   const family = await ev((id) => {
     const st = window.__store;
     const s = st.getState();
-    const archers = s.battalions.find((b) => b.id !== id);
-    st.setState({ battalions: s.battalions.map((x) => (x === archers ? { ...x, level: 3, skills: ["EAGLE_EYE"], skillPoints: 1 } : x)) });
+    // O bando começa com um batalhão só (Marco 22): os arqueiros entram aqui
+    const archers = { ...s.battalions.find((b) => b.id === id), id: "arqueiros-teste", name: "Arqueiros de Teste", troopType: "ARCHERS", level: 3, skills: ["EAGLE_EYE"], skillPoints: 1 };
+    st.setState({ battalions: [...s.battalions, archers] });
     const why = st.getState().promoteBattalion(archers.id, "CROSSBOW");
     const same = st.getState().battalions.find((b) => b.id === archers.id);
     return { why, skills: same.skills, points: same.skillPoints };

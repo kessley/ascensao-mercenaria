@@ -111,6 +111,8 @@ export interface TownLayout {
    * vai para outro mapa, bem maior (ver capitalLayout.ts).
    */
   inner: InnerCity | null;
+  /** Cidade da sede do bando (Marco 22, parte 4): a fortaleza fica no meio, desenhada pelo acampamento. */
+  seat?: { fort: Rect; front: Point };
 }
 
 /** Muralha interna de uma capital: o miolo é sólido (a Cidade Alta é outro mapa). */
@@ -227,16 +229,10 @@ const WAIT_OUT = 420;
 const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const inset = (r: Rect, d: number): Rect => ({ x: r.x + d, y: r.y + d, w: r.w - d * 2, h: r.h - d * 2 });
 
-/** Planta do povoado `id` (tipo, centro). `ruined` = muros com brechas e casas destruídas. */
-export function townLayout(id: string, kind: SettlementKind, cx: number, cy: number, ruined = false): TownLayout {
-  const rng = createRng(seedFromText(`cidade-${id}-${kind}`));
-  const spec = SPEC[kind];
-  const { w, h } = TOWN_SIZE[kind];
-  const bounds: Rect = { x: cx - w / 2, y: cy - h / 2, w, h };
+/** A muralha em volta de `bounds`: os trechos (com o vão de cada portão), as torres dos cantos, as do caminho e as dos portões. */
+function ringWalls(bounds: Rect, spec: Pick<KindSpec, "thickness" | "tower" | "towerEvery">, gates: readonly Gate[]): { walls: Rect[]; towers: Rect[] } {
+  const { w, h } = bounds;
   const t = spec.thickness;
-
-  // --- Muralha, torres e portões ---
-  const gates: Gate[] = spec.gates.map((side) => gateAt(side, bounds, t));
   const walls: Rect[] = [];
   const towers: Rect[] = [];
   const sides: { side: Side; from: Point; to: Point }[] = [
@@ -283,6 +279,20 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
       towers.push({ x: c.x - spec.tower / 2, y: c.y - spec.tower / 2, w: spec.tower, h: spec.tower });
     }
   }
+  return { walls, towers };
+}
+
+/** Planta do povoado `id` (tipo, centro). `ruined` = muros com brechas e casas destruídas. */
+export function townLayout(id: string, kind: SettlementKind, cx: number, cy: number, ruined = false): TownLayout {
+  const rng = createRng(seedFromText(`cidade-${id}-${kind}`));
+  const spec = SPEC[kind];
+  const { w, h } = TOWN_SIZE[kind];
+  const bounds: Rect = { x: cx - w / 2, y: cy - h / 2, w, h };
+  const t = spec.thickness;
+
+  // --- Muralha, torres e portões ---
+  const gates: Gate[] = spec.gates.map((side) => gateAt(side, bounds, t));
+  const { walls, towers } = ringWalls(bounds, spec, gates);
 
   // --- Ruas em grade e quarteirões ---
   const interior = inset(bounds, t + spec.ring);
@@ -453,6 +463,211 @@ export function townLayout(id: string, kind: SettlementKind, cx: number, cy: num
     hall: keepDoor,
     rubble,
     inner,
+  };
+}
+
+/** Etapa da cidade da sede (Marco 22, parte 4), como a planta precisa saber. */
+export type SeatStage = "CAMPTOWN" | "BURG" | "TOWN" | "CITY";
+/** Folga da cidade da sede em volta da muralha da fortaleza, de cada lado. */
+export const SEAT_MARGIN = 760;
+const SEAT_GRID = { cols: 6, rows: 6, street: 170, ring: 160 };
+const SEAT_SQUARE: Record<SeatStage, { w: number; h: number; stalls: number }> = {
+  CAMPTOWN: { w: 300, h: 240, stalls: 3 },
+  BURG: { w: 400, h: 300, stalls: 4 },
+  TOWN: { w: 400, h: 300, stalls: 6 },
+  CITY: { w: 520, h: 380, stalls: 8 },
+};
+
+/**
+ * Cidade da sede (Marco 22, parte 4): a planta da cidade inteira em volta da fortaleza do bando,
+ * do tamanho máximo, e as casas que já estão de pé (`share`, de 0 a 1) são as mais perto do portão
+ * da fortaleza. A fortaleza é desenhada pelo acampamento (`CampArea`): aqui ela é só o buraco no
+ * meio, com a praça do mercado diante do portão dela.
+ * - **Arraial:** a praça com as barracas dos mascates.
+ * - **Burgo:** casas em volta, sem muralha.
+ * - **Vila:** a paliçada de fora, os portões com a guarnição, a Casa do Conselho e o templo.
+ * - **Cidade:** a muralha de pedra.
+ * Os lugares do templo, da Casa do Conselho e da guarnição ficam reservados desde o começo: as
+ * casas não mudam de lugar quando a vila ganha muralha. `land` diz onde dá para construir (água e
+ * montanha ficam vazias).
+ */
+export function seatLayout(id: string, fort: Rect, fortGate: Side, stage: SeatStage, share: number, land: (p: Point) => boolean = () => true): TownLayout {
+  const rng = createRng(seedFromText(`sede-${id}`));
+  const walled = stage === "TOWN" || stage === "CITY";
+  const kind: SettlementKind = stage === "CITY" ? "CITY" : "VILLAGE";
+  const spec = SPEC[kind];
+  const full = inset(fort, -SEAT_MARGIN);
+  const t = walled ? spec.thickness : 0;
+  const gates: Gate[] = walled ? (["N", "S", "E", "W"] as Side[]).map((side) => gateAt(side, full, t)) : [];
+  const { walls, towers } = walled ? ringWalls(full, spec, gates) : { walls: [] as Rect[], towers: [] as Rect[] };
+  const fx = fort.x + fort.w / 2;
+  const fy = fort.y + fort.h / 2;
+  const out = OUTWARD[fortGate];
+  const across = out.x !== 0;
+  const front = { x: fx + out.x * (fort.w / 2 + 60), y: fy + out.y * (fort.h / 2 + 60) };
+
+  // --- Ruas em grade: um anel de quarteirões em volta da fortaleza (a grade não muda com a etapa) ---
+  const { cols, rows, street: S, ring } = SEAT_GRID;
+  const interior = inset(full, SPEC.CITY.thickness + ring);
+  const bw = (interior.w - (cols - 1) * S) / cols;
+  const bh = (interior.h - (rows - 1) * S) / rows;
+  const hole = inset(fort, -S * 0.6);
+  const blocks: { r: number; c: number; rect: Rect }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const rect = { x: interior.x + c * (bw + S), y: interior.y + r * (bh + S), w: bw, h: bh };
+      if (!overlaps(rect, hole)) blocks.push({ r, c, rect });
+    }
+  }
+  const xs = [interior.x - ring / 2, ...Array.from({ length: cols - 1 }, (_, c) => interior.x + (c + 1) * bw + c * S + S / 2), interior.x + interior.w + ring / 2];
+  const ys = [interior.y - ring / 2, ...Array.from({ length: rows - 1 }, (_, r) => interior.y + (r + 1) * bh + r * S + S / 2), interior.y + interior.h + ring / 2];
+  const streets: Rect[] = [
+    ...xs.slice(1, -1).map((x) => ({ x: x - S / 2, y: interior.y - ring, w: S, h: interior.h + ring * 2 })),
+    ...ys.slice(1, -1).map((y) => ({ x: interior.x - ring, y: y - S / 2, w: interior.w + ring * 2, h: S })),
+  ];
+  const nodes: Point[] = [];
+  const edges: [number, number][] = [];
+  const idx = (i: number, j: number) => j * xs.length + i;
+  for (let j = 0; j < ys.length; j++) for (let i = 0; i < xs.length; i++) nodes.push({ x: xs[i], y: ys[j] });
+  for (let j = 0; j < ys.length; j++) {
+    for (let i = 0; i < xs.length; i++) {
+      if (i + 1 < xs.length) edges.push([idx(i, j), idx(i + 1, j)]);
+      if (j + 1 < ys.length) edges.push([idx(i, j), idx(i, j + 1)]);
+    }
+  }
+  // Ninguém anda por dentro da fortaleza (ela tem a vida dela): os cruzamentos de lá saem da grade
+  dropNodesInside(nodes, edges, inset(fort, -30));
+  for (const g of gates) {
+    const near = nodes.reduce((best, p, k) => (Math.hypot(p.x - g.inside.x, p.y - g.inside.y) < Math.hypot(nodes[best].x - g.inside.x, nodes[best].y - g.inside.y) ? k : best), 0);
+    nodes.push({ ...g.outside });
+    edges.push([near, nodes.length - 1]);
+  }
+
+  // --- A praça diante do portão da fortaleza, a Casa do Conselho do outro lado dela e o templo ---
+  // (a praça cresce até a da cidade: o lugar dela, e o da Casa do Conselho, já ficam com o tamanho final)
+  const sq = SEAT_SQUARE[stage];
+  const big = SEAT_SQUARE.CITY;
+  const depth = (r: { w: number; h: number }) => (across ? r.w : r.h) / 2;
+  const sc = { x: front.x + out.x * depth(sq), y: front.y + out.y * depth(sq) };
+  const square: Rect = { x: sc.x - sq.w / 2, y: sc.y - sq.h / 2, w: sq.w, h: sq.h };
+  const bc = { x: front.x + out.x * depth(big), y: front.y + out.y * depth(big) };
+  const plaza: Rect = { x: bc.x - big.w / 2, y: bc.y - big.h / 2, w: big.w, h: big.h };
+  const hall = { w: 210, h: 140 };
+  const kc = { x: bc.x + out.x * (depth(big) + 30 + depth(hall)), y: bc.y + out.y * (depth(big) + 30 + depth(hall)) };
+  const council: Rect = { x: kc.x - hall.w / 2, y: kc.y - hall.h / 2, w: hall.w, h: hall.h };
+  const far = blocks.reduce((best, b) => (Math.hypot(b.rect.x + b.rect.w / 2 - front.x, b.rect.y + b.rect.h / 2 - front.y) > Math.hypot(best.rect.x + best.rect.w / 2 - front.x, best.rect.y + best.rect.h / 2 - front.y) ? b : best), blocks[0]);
+  const shrine: Rect = { x: far.rect.x + far.rect.w / 2 - 110, y: far.rect.y + 16, w: 220, h: far.rect.h - 32 };
+  const reserved = [inset(plaza, -30), council, shrine, inset(fort, -20)];
+  // A guarnição de cada portão (reservada desde o arraial, com as medidas da cidade)
+  const outerGates = (["N", "S", "E", "W"] as Side[]).map((side) => gateAt(side, full, SPEC.CITY.thickness));
+  const allCamps: GarrisonCamp[] = [];
+  outerGates.forEach((g, i) => {
+    const horizontal = g.side === "N" || g.side === "S";
+    const c = gateCamp(g, i, "CITY", SPEC.CITY.thickness, S, ring, horizontal ? bw : bh, horizontal ? bh : bw, reserved);
+    if (c) allCamps.push(c);
+  });
+  const lots = [...reserved, ...allCamps.map((c) => inset(c.rect, -14))];
+
+  // --- As casas da cidade inteira: duas fileiras por quarteirão, como nos povoados ---
+  const all: House[] = [];
+  for (const b of blocks) {
+    const rowH = (b.rect.h - 14) / 2;
+    for (const row of [0, 1]) {
+      let x = b.rect.x;
+      while (x < b.rect.x + b.rect.w - 80) {
+        const hw = Math.min(b.rect.x + b.rect.w - x, rng.range(110, 190));
+        if (hw < 80) break;
+        const rect: Rect = { x: x + 6, y: b.rect.y + row * (rowH + 14) + 6, w: hw - 12, h: rowH - 12 };
+        x += hw;
+        if (lots.some((s) => overlaps(s, rect))) continue;
+        if (rng.chance(0.12)) continue;
+        if (!land({ x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 }) || !land({ x: rect.x, y: rect.y }) || !land({ x: rect.x + rect.w, y: rect.y + rect.h })) continue;
+        const doorY = row === 0 ? rect.y - 8 : rect.y + rect.h + 8;
+        const streetY = row === 0 ? b.rect.y - (b.r === 0 ? ring : S) / 2 : b.rect.y + b.rect.h + (b.r === rows - 1 ? ring : S) / 2;
+        all.push({ rect, roof: rng.int(0, 3), door: { x: rect.x + rect.w / 2, y: doorY }, street: { x: rect.x + rect.w / 2, y: streetY } });
+      }
+    }
+  }
+  // De pé, só as mais perto do portão da fortaleza
+  const away = (h: House) => Math.hypot(h.rect.x + h.rect.w / 2 - front.x, h.rect.y + h.rect.h / 2 - front.y);
+  const houses = stage === "CAMPTOWN" ? [] : [...all].sort((a, b) => away(a) - away(b)).slice(0, Math.round(all.length * Math.max(0, Math.min(1, share))));
+
+  const stalls: Rect[] = [];
+  for (let k = 0; k < sq.stalls; k++) {
+    const a = (k / sq.stalls) * Math.PI * 2 + 0.3;
+    const px = sc.x + Math.cos(a) * (square.w / 2 - 70);
+    const py = sc.y + Math.sin(a) * (square.h / 2 - 60);
+    stalls.push({ x: px - 34, y: py - 22, w: 68, h: 44 });
+  }
+
+  // --- Lavouras fora da cidade inteira (a partir do burgo) ---
+  const fields: Rect[] = [];
+  const wanted = stage === "CAMPTOWN" ? 0 : stage === "BURG" ? 3 : 6;
+  for (let tries = 0; fields.length < wanted && tries < 60; tries++) {
+    const fw = rng.range(420, 760);
+    const fh = rng.range(260, 460);
+    const side = rng.pick<Side>(["N", "S", "E", "W"]);
+    const gap = rng.range(140, 420);
+    const f: Rect =
+      side === "E" || side === "W"
+        ? { x: side === "E" ? full.x + full.w + gap : full.x - gap - fw, y: rng.range(full.y - 300, full.y + full.h + 300 - fh), w: fw, h: fh }
+        : { x: rng.range(full.x - 300, full.x + full.w + 300 - fw), y: side === "S" ? full.y + full.h + gap : full.y - gap - fh, w: fw, h: fh };
+    const onGateAxis = outerGates.some((g) => overlaps(f, g.side === "N" || g.side === "S" ? { x: g.x - 260, y: f.y, w: 520, h: f.h } : { x: f.x, y: g.y - 260, w: f.w, h: 520 }));
+    if (onGateAxis || fields.some((o) => overlaps(inset(o, -60), f)) || !land({ x: f.x + f.w / 2, y: f.y + f.h / 2 })) continue;
+    fields.push(f);
+  }
+
+  // Sem muralha, a cidade é só até onde há gente: o chão de terra batida não cobre o campo vazio
+  let bounds = full;
+  if (!walled) {
+    let x0 = Math.min(fort.x, square.x);
+    let y0 = Math.min(fort.y, square.y);
+    let x1 = Math.max(fort.x + fort.w, square.x + square.w);
+    let y1 = Math.max(fort.y + fort.h, square.y + square.h);
+    for (const hs of houses) {
+      x0 = Math.min(x0, hs.rect.x);
+      y0 = Math.min(y0, hs.rect.y);
+      x1 = Math.max(x1, hs.rect.x + hs.rect.w);
+      y1 = Math.max(y1, hs.rect.y + hs.rect.h);
+    }
+    bounds = inset({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, -60);
+  }
+  // As ruas só vão até onde a cidade chegou
+  const clip = (r: Rect): Rect | null => {
+    const x = Math.max(r.x, bounds.x);
+    const y = Math.max(r.y, bounds.y);
+    const w = Math.min(r.x + r.w, bounds.x + bounds.w) - x;
+    const h = Math.min(r.y + r.h, bounds.y + bounds.h) - y;
+    return w > 0 && h > 0 ? { x, y, w, h } : null;
+  };
+  const shownStreets = stage === "CAMPTOWN" ? [] : streets.map(clip).filter((r): r is Rect => r !== null);
+  const noRect = { x: front.x, y: front.y, w: 0, h: 0 };
+  return {
+    kind,
+    ruined: false,
+    cx: fx,
+    cy: fy,
+    bounds,
+    wallKind: spec.wallKind,
+    wallThickness: t,
+    walls,
+    towers,
+    gates,
+    houses,
+    keep: walled ? council : noRect,
+    temple: walled ? shrine : null,
+    square,
+    stalls,
+    streets: shownStreets,
+    nodes,
+    edges,
+    fields,
+    camps: walled ? allCamps.map((c) => ({ ...c })) : [],
+    market: sc,
+    hall: walled ? { x: council.x + council.w / 2, y: council.y + council.h + 14 } : front,
+    rubble: [],
+    inner: null,
+    seat: { fort, front },
   };
 }
 
@@ -709,7 +924,8 @@ export function townSolids(layout: TownLayout): { rect: Rect; type: "WALL" | "BU
     ...layout.towers.map((rect) => ({ rect, type: "WALL" as const })),
     ...(layout.inner?.towers ?? []).map((rect) => ({ rect, type: "WALL" as const })),
     ...layout.houses.map((hs) => ({ rect: hs.rect, type: "BUILDING" as const })),
-    { rect: layout.keep, type: "BUILDING" as const },
+    // (a cidade da sede só tem Casa do Conselho a partir da vila)
+    ...(layout.keep.w > 0 ? [{ rect: layout.keep, type: "BUILDING" as const }] : []),
     ...(layout.temple ? [{ rect: layout.temple, type: "BUILDING" as const }] : []),
     ...layout.camps.flatMap((c) => c.tents.map((rect) => ({ rect, type: "BUILDING" as const }))),
   ];

@@ -205,7 +205,7 @@ export function MainMenuView() {
         <MenuPage title="Lendas" onBack={back}>
           <ul className="flex flex-col gap-3">
             {sagas.map((saga) => (
-              <li key={saga.id} className="flex flex-col gap-2 rounded-lg border border-white/10 bg-neutral-950/85 p-4">
+              <li key={saga.id} className="flex flex-col gap-2 frame-wood p-4">
                 <h3 className="font-serif text-xl text-amber-100">Os {saga.echo.bandName}</h3>
                 <p className="text-sm text-neutral-300">{saga.epilogue[0]}</p>
                 <div className="flex flex-wrap gap-2">
@@ -224,14 +224,14 @@ export function MainMenuView() {
       {reading && <LegendBookView book={reading.book} onClose={() => setReading(null)} />}
       {screen === "LOAD" && (
         <MenuPage title="Carregar jogo" onBack={back}>
-          <div className="rounded-lg border border-white/10 bg-neutral-950/85 p-4">
+          <div className="frame-wood p-4">
             <SavePanel canSave={false} />
           </div>
         </MenuPage>
       )}
       {screen === "OPTIONS" && (
         <MenuPage title="Opções" onBack={back}>
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-neutral-950/85 p-4">
+          <div className="flex items-center justify-between gap-4 frame-wood p-4">
             <div>
               <h3 className="font-semibold text-neutral-100">Som</h3>
               <p className="text-sm text-neutral-400">Volume geral do jogo. A tecla M liga e desliga o som durante a partida.</p>
@@ -244,7 +244,7 @@ export function MainMenuView() {
         <MenuPage title="Como jogar" onBack={back}>
           <div className="grid gap-3 sm:grid-cols-2">
             {HELP.map((group) => (
-              <section key={group.title} className="rounded-lg border border-white/10 bg-neutral-950/85 p-4">
+              <section key={group.title} className="frame-wood p-4">
                 <h3 className="mb-2 font-serif text-lg text-amber-100">{group.title}</h3>
                 <ul className="flex flex-col gap-1 text-sm text-neutral-300">
                   {group.lines.map((line) => (
@@ -253,7 +253,7 @@ export function MainMenuView() {
                 </ul>
               </section>
             ))}
-            <section className="rounded-lg border border-white/10 bg-neutral-950/85 p-4 sm:col-span-2">
+            <section className="frame-wood p-4 sm:col-span-2">
               <h3 className="mb-2 font-serif text-lg text-amber-100">As tropas</h3>
               <ul className="flex flex-col gap-2 text-sm text-neutral-300">
                 {(Object.keys(TROOPS) as TroopType[]).map((t) => (

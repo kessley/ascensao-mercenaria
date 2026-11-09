@@ -6,6 +6,7 @@ import type { GameState } from "./useGameStore";
 import { newId } from "../utils/id";
 import { takeFieldFood } from "../game/sim/logistics";
 import { captainFromCaptive, joinChance, type HeroData } from "../game/data/heroes";
+import { ready } from "../game/data/campGrid";
 
 /**
  * Prisioneiros e o preço da vitória (Marco 16): quem se rende, oficiais capturados e o Comandante
@@ -204,7 +205,7 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
           set({ captiveOfficers: s.captiveOfficers.map((x) => (x === o ? { ...x, refused: true } : x)) });
           return `${o.name} cospe no chão: "Servir a quem me venceu? Prefiro a corda."`;
         }
-        const captain = captainFromCaptive(o, s.day);
+        const captain = captainFromCaptive(o, s.day, Math.random, s.world?.culture);
         set({ captiveOfficers: left, captains: [...s.captains, captain] });
         note(`${o.name} jurou servir ao bando como capitão. Ninguém confia nele ainda.`, "info");
         return `${o.name} aceitou: agora é capitão do bando (veja o quadro de comando). A lealdade começa baixa.`;
@@ -265,7 +266,10 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
       const captives = s.captives
         .map((g) => {
           let n = g.count;
-          for (let i = 0; i < g.count; i++) if (Math.random() < PRISONERS.ESCAPE_PER_DAY) n--;
+          // O cercado de cativos (Marco 22) faz fugirem pela metade
+          // A masmorra da fortaleza segura todos; o cercado, metade
+          const escape = s.campPacked ? PRISONERS.ESCAPE_PER_DAY : ready(s.campPlan, "DUNGEON") ? 0 : PRISONERS.ESCAPE_PER_DAY * (ready(s.campPlan, "PEN") ? 0.5 : 1);
+          for (let i = 0; i < g.count; i++) if (Math.random() < escape) n--;
           return { ...g, count: n };
         })
         .filter((g) => g.count > 0);

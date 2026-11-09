@@ -22,12 +22,16 @@ import { DiplomacyPanel, WorldChronicle } from "../components/tent/RealmPanels";
 import { FollowersPanel } from "../components/tent/FollowersPanel";
 import { GamePanel } from "../components/SavePanel";
 import { BridgePanel } from "../components/BridgePanel";
-import { CampWorksPanel, InfirmaryPanel, PeddlerPanel, WagonPanel } from "../components/tent/LogisticsPanels";
+import { InfirmaryPanel, PeddlerPanel, WagonPanel } from "../components/tent/LogisticsPanels";
+import { CampBuildingContent, CampBuildingFooter, CampNeedsPanel, CampPlanPanel, TavernHire } from "../components/tent/CampPlanPanels";
+import { CAMP_BUILDINGS, has } from "../../game/data/campGrid";
+import { Button } from "../components/Button";
 import { PriceBook } from "../components/trade/PriceBook";
 import { GuildPanel } from "../components/trade/GuildPanel";
 import { DepotPanel } from "../components/trade/DepotPanel";
 import { DeparturePanel } from "../components/DeparturePanel";
 import { NobilityBook } from "../components/court/NobilityBook";
+import { PixelIcon } from "../components/PixelIcon";
 
 const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TENT: "Tenda do Comandante",
@@ -54,6 +58,8 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   MISSIONS: "Diário de missões",
   DOCK: "Cais do porto",
   SAGA: "Livro do Bando",
+  CAMP_BUILDING: "Construção",
+  CAMP_PLAN: "Planta do acampamento",
 };
 
 /** Painéis fora do acampamento (ou sobre um assunto só): sem o resumo do acampamento em cima. */
@@ -69,16 +75,16 @@ function BookButton() {
       <button
         type="button"
         onClick={() => setCampPanel({ kind: "PRICE_BOOK" })}
-        className="rounded border border-violet-400/70 bg-violet-900/40 px-3 py-2 text-left text-sm hover:bg-violet-800/50"
+        className="btn-pixel btn-wood px-3 py-2 text-left text-sm"
       >
-        📖 <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
+        <PixelIcon id="BOOK" /> <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
       </button>
       <button
         type="button"
         onClick={() => setCampPanel({ kind: "NOBILITY" })}
-        className="rounded border border-amber-400/70 bg-amber-900/30 px-3 py-2 text-left text-sm hover:bg-amber-800/40"
+        className="btn-pixel btn-wood px-3 py-2 text-left text-sm"
       >
-        👑 <b>Livro da Nobreza</b> <span className="text-xs text-neutral-400">— {met} nobre(s) conhecido(s), favores e o nome do bando</span>
+        <PixelIcon id="CROWN" /> <b>Livro da Nobreza</b> <span className="text-xs text-neutral-400">— {met} nobre(s) conhecido(s), favores e o nome do bando</span>
       </button>
     </>
   );
@@ -98,7 +104,9 @@ function BattalionCommander({ battalionId }: { battalionId: string }) {
           className="rounded bg-neutral-800 px-3 py-2 text-left hover:bg-neutral-700"
         >
           <span className="font-semibold">{fullName(lieutenant)}</span>{" "}
-          <span className="text-xs text-sky-300">★ {PASSIVES[lieutenant.passive].label}</span>
+          <span className="text-xs text-sky-300">
+            <PixelIcon id="STAR" /> {PASSIVES[lieutenant.passive].label}
+          </span>
         </button>
       ) : (
         <p className="text-xs text-neutral-500">Sem tenente. Designe um pela ficha do tenente (Tenda do Comandante).</p>
@@ -115,7 +123,40 @@ function PanelContent({ panel }: { panel: CampPanel }) {
     panel.kind === "LIEUTENANT" ? s.lieutenants.find((l) => l.id === panel.lieutenantId) : undefined,
   );
   const captain = useGameStore((s) => (panel.kind === "CAPTAIN" ? s.captains.find((c) => c.id === panel.captainId) : undefined));
+  // Os locais de antes agora são construções da planta: o rodapé de nível, mudar e desmontar
+  const content = <PanelBody panel={panel} battalion={battalion} lieutenant={lieutenant} captain={captain} />;
+  const buildingId = "buildingId" in panel && panel.kind !== "CAMP_BUILDING" ? panel.buildingId : undefined;
+  return (
+    <>
+      {content}
+      {buildingId && <CampBuildingFooter buildingId={buildingId} />}
+    </>
+  );
+}
 
+/** O botão da tenda que abre a planta do acampamento. */
+function PlanButton() {
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  return (
+    <Button variant="gold" onClick={() => setCampPanel({ kind: "CAMP_PLAN" })}>
+      Planta do acampamento: construir
+    </Button>
+  );
+}
+
+function PanelBody({
+  panel,
+  battalion,
+  lieutenant,
+  captain,
+}: {
+  panel: CampPanel;
+  battalion: ReturnType<typeof useGameStore.getState>["battalions"][number] | undefined;
+  lieutenant: ReturnType<typeof useGameStore.getState>["lieutenants"][number] | undefined;
+  captain: ReturnType<typeof useGameStore.getState>["captains"][number] | undefined;
+}) {
+  // Sem intendência (o começo humilde), o vivandeiro atende na tenda
+  const noQuartermaster = useGameStore((s) => !has(s.campPlan, "QUARTERMASTER"));
   switch (panel.kind) {
     case "MISSIONS":
       return <MissionJournal />;
@@ -123,6 +164,8 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return (
         <>
           <ContractBoard />
+          <PlanButton />
+          <CampNeedsPanel />
           <BookButton />
           <PrisonersPanel />
           <DiplomacyPanel />
@@ -131,7 +174,12 @@ function PanelContent({ panel }: { panel: CampPanel }) {
           <FollowersPanel />
           <InfirmaryPanel />
           <BattalionList />
-          <CampWorksPanel />
+          {noQuartermaster && (
+            <>
+              <MarketPanel />
+              <WagonPanel />
+            </>
+          )}
           <CampLog />
           <WorldChronicle />
         </>
@@ -189,9 +237,19 @@ function PanelContent({ panel }: { panel: CampPanel }) {
     case "PEDDLER":
       return <PeddlerPanel />;
     case "GUILD":
-    case "TAVERN":
     case "TEMPLE":
       return <GuildPanel settlementId={panel.settlementId} />;
+    case "TAVERN":
+      return (
+        <>
+          <TavernHire settlementId={panel.settlementId} />
+          <GuildPanel settlementId={panel.settlementId} />
+        </>
+      );
+    case "CAMP_BUILDING":
+      return <CampBuildingContent buildingId={panel.buildingId} />;
+    case "CAMP_PLAN":
+      return <CampPlanPanel />;
     case "PRICE_BOOK":
       return <PriceBook />;
     case "DEPARTURE":
@@ -224,6 +282,10 @@ export function PlacePanelView() {
       const c = s.captains.find((x) => x.id === panel.captainId);
       return c ? captainName(c) : undefined;
     }
+    if (panel?.kind === "CAMP_BUILDING") {
+      const b = s.campPlan.buildings.find((x) => x.id === panel.buildingId);
+      return b ? CAMP_BUILDINGS[b.kind].label : undefined;
+    }
     if (panel?.kind === "TOWN" || panel?.kind === "DOCK" || panel?.kind === "GUILD" || panel?.kind === "TAVERN" || panel?.kind === "TEMPLE") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
     return undefined;
   });
@@ -239,13 +301,13 @@ export function PlacePanelView() {
       )}
 
       {prompt && !panel && !dialog && (
-        <div className="absolute bottom-40 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/60 bg-black/75 px-5 py-2 font-mono text-sm text-amber-200">
+        <div className="hud-box absolute bottom-40 left-1/2 -translate-x-1/2 px-4 py-1 font-mono text-sm text-amber-200">
           {prompt}
         </div>
       )}
 
       {panel && (
-        <aside className="pointer-events-auto absolute bottom-0 right-0 top-0 flex w-full max-w-lg flex-col border-l border-neutral-700 bg-neutral-900/95 shadow-2xl">
+        <aside className="frame-wood pointer-events-auto absolute bottom-0 right-0 top-0 flex w-full max-w-lg flex-col shadow-2xl">
           <header className="flex items-center justify-between border-b border-neutral-700 px-4 py-3">
             <h2 className="text-lg font-bold">
               {PANEL_TITLE[panel.kind]}
@@ -254,10 +316,10 @@ export function PlacePanelView() {
             <button
               type="button"
               onClick={() => setCampPanel(null)}
-              className="rounded px-2 py-1 text-neutral-400 hover:bg-neutral-700 hover:text-white"
+              className="btn-pixel btn-wood px-1.5 py-0.5"
               aria-label="Fechar"
             >
-              ✕
+              <PixelIcon id="CLOSE" />
             </button>
           </header>
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">

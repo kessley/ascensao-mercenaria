@@ -1,4 +1,6 @@
 import { captainName, companyLimit, generateCaptain, promoteLieutenant, promotionBlock, type CaptainData } from "../game/data/captains";
+import type { CultureId } from "../game/data/planet";
+import { BAND_HOME, officerCulture } from "../game/sim/culture";
 import { CAPTAINS, LIEUTENANTS } from "../utils/constants";
 import type { BattalionData, GameState, LogTone } from "./useGameStore";
 
@@ -30,8 +32,9 @@ export interface CaptainActions {
 const addHistory = (history: string[], line: string) => [...history, line].slice(-LIEUTENANTS.HISTORY_SIZE);
 
 /** Candidatos novos: um nobre sem terra e um mercenário famoso. */
-export const freshCaptains = (day: number): CaptainData[] =>
-  Array.from({ length: CAPTAINS.CANDIDATES }, (_, i) => generateCaptain(day, i % 2 === 0 ? "NOBLE" : "TAVERN"));
+export const freshCaptains = (day: number, land: CultureId = BAND_HOME): CaptainData[] =>
+  // O nobre sem terra é da terra; o mercenário famoso, de onde vier (Marco 23)
+  Array.from({ length: CAPTAINS.CANDIDATES }, (_, i) => (i % 2 === 0 ? generateCaptain(day, "NOBLE", land) : generateCaptain(day, "TAVERN", officerCulture(Math.random(), land))));
 
 /** Capitães do bando, inclusive os que estão fora com a companhia. */
 export function allCaptains(s: Pick<GameState, "captains" | "expeditions">): CaptainData[] {

@@ -2,6 +2,9 @@ import { useGameStore, type BattleResult, type Expedition, type SiegeAction } fr
 import type { ScoutMode } from "../../game/entities/Scout";
 import type { HarpyState } from "../../game/entities/Harpy";
 import { REALM, SEASONS, SIEGE, WEATHER } from "../../utils/constants";
+import { WEATHER_ICON } from "../../game/art/icons";
+import { IconText, PixelIcon } from "../components/PixelIcon";
+import { CommanderPortrait } from "../components/Portrait";
 import { titleFor } from "../../game/sim/realm";
 import { isFemaleName } from "../../game/worldgen/names";
 import { NOBLE_TRAITS } from "../../game/sim/nobility";
@@ -65,13 +68,13 @@ function WorldClock() {
   return (
     <div className="flex flex-col gap-1">
       <div
-        className="flex w-40 flex-col gap-1 rounded bg-black/60 px-3 py-1.5"
+        className="flex w-40 flex-col gap-1 hud-box px-3 py-1.5"
         title="O dia passa com a marcha (fora do acampamento e fora de combate) e vira na aurora"
       >
         <div className="flex justify-between font-mono text-sm">
           <span className="font-bold">{scenario ? "Batalha" : `Dia ${day}`}</span>
           <span className="text-xs text-neutral-300">
-            {formatHour(progress)} {paused ? "⏸" : phase === "NIGHT" ? "☾" : phase === "DAY" ? "☀" : "◐"}
+            {formatHour(progress)} <PixelIcon id={paused ? "PAUSE" : phase === "NIGHT" ? "MOON" : phase === "DAY" ? "SUN" : "DUSK"} />
           </span>
         </div>
         <div className="h-1 rounded bg-neutral-700">
@@ -84,7 +87,12 @@ function WorldClock() {
             title={`Ano ${campaignYear(day)} · faltam ${daysToNextSeason(day)} dia(s) para a próxima estação${flood ? " · cheia: os vaus dos rios estão fundos" : ""}`}
           >
             {SEASONS.LABEL[season]} {seasonDay(day)}/{SEASONS.DAYS}
-            {flood ? " ≋" : ""}
+            {flood && (
+              <>
+                {" "}
+                <PixelIcon id="DROP" />
+              </>
+            )}
           </span>
           {hud && (
             <span
@@ -93,8 +101,13 @@ function WorldClock() {
                 hud.forecast ? ` · Amanhã (previsão do tenente Cauteloso): ${WEATHER.LABEL[hud.forecast]}` : ""
               }`}
             >
-              {WEATHER.ICON[hud.weather]}
-              {hud.forecast && <span className="text-neutral-400"> → {WEATHER.ICON[hud.forecast]}</span>}
+              <PixelIcon id={WEATHER_ICON[hud.weather]} />
+              {hud.forecast && (
+                <span className="text-neutral-400">
+                  {" "}
+                  → <PixelIcon id={WEATHER_ICON[hud.forecast]} />
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -105,9 +118,15 @@ function WorldClock() {
             type="button"
             onClick={() => sendBattleCommand({ type: "TORCHES", ids: [] })}
             title="T: tochas acesas enxergam mais à noite, mas o inimigo vê o bando de longe"
-            className={`flex-1 rounded border px-1.5 py-0.5 ${hud.torches ? "border-amber-500 text-amber-200" : "border-neutral-600 text-neutral-400"} ${night ? "" : "opacity-60"}`}
+            className={`btn-pixel flex-1 px-1.5 py-0.5 ${hud.torches ? "btn-gold" : "btn-iron text-neutral-300"} ${night ? "" : "opacity-60"}`}
           >
-            {hud.torches ? "🔥 Tochas" : "Sem tochas"}
+            {hud.torches ? (
+              <>
+                <PixelIcon id="FIRE" /> Tochas
+              </>
+            ) : (
+              "Sem tochas"
+            )}
           </button>
           {night && !scenario && (
             <button
@@ -115,7 +134,7 @@ function WorldClock() {
               disabled={!!hud.restBlocked}
               onClick={() => sendBattleCommand({ type: "REST", ids: [] })}
               title={hud.restBlocked ?? "Passa a noite de uma vez; um bando que chegue perto interrompe o descanso"}
-              className="flex-1 rounded border border-sky-700 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+              className="btn-pixel btn-blue flex-1 px-1.5 py-0.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Descansar
             </button>
@@ -132,7 +151,7 @@ function SummonsBanner() {
   const town = useGameStore((s) => s.settlements.find((t) => t.id === s.summons?.townId)?.name);
   if (!summons) return null;
   return (
-    <div className="rounded bg-black/60 px-3 py-1.5 text-xs">
+    <div className="hud-box px-3 py-1.5 text-xs">
       <span className="text-neutral-400">Convocação: </span>
       <b className="text-amber-200">reunir o bando em {town}</b>
       <span className="text-neutral-400"> · prazo dia {summons.deadline}</span>
@@ -235,7 +254,7 @@ function SiegeBanner() {
   const food = siege.food ?? 0;
   const wood = Math.floor(siege.wood ?? 0);
   return (
-    <div className="flex w-full flex-col gap-1 rounded bg-black/70 px-3 py-1.5 text-xs text-amber-100">
+    <div className="flex w-full flex-col gap-1 hud-box px-3 py-1.5 text-xs text-amber-100">
       <span>
         Cerco de {town.name} · dia {day - (siege.startDay ?? day)} · comida lá dentro: {food > 0 ? `${food} dia(s)` : `fome há ${-food} dia(s)`} · guarnição {town.garrison}
       </span>
@@ -266,6 +285,10 @@ export function FieldHudView() {
   const settlements = useGameStore((s) => s.settlements);
   const campPacked = useGameStore((s) => s.campPacked);
   const scenario = useGameStore((s) => s.scenario !== null);
+  const hasFortress = useGameStore((s) => s.fortress !== null);
+  const fieldCamp = useGameStore((s) => s.fieldCamp !== null);
+  const seatAlarm = useGameStore((s) => s.seatAlarm);
+  const startSeatSiege = useGameStore((s) => s.startSeatSiege);
   const setScenarioPaused = useGameStore((s) => s.setScenarioPaused);
   const seats = settlements.filter((t) => t.owner === "PLAYER");
   const leaderName = useGameStore((s) => s.leader.name);
@@ -277,26 +300,31 @@ export function FieldHudView() {
       <BattalionContextMenu />
       {/* Topo: Comandante, recursos e recuo */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex w-72 flex-col gap-2 rounded bg-black/60 p-3">
+        <div className="flex w-72 flex-col gap-2 hud-box p-3">
           {hud && (
             <span className="text-xs uppercase tracking-wider text-neutral-400">
               {hud.region}
               {hud.engaged && <b className="ml-2 text-red-400">· em combate</b>}
             </span>
           )}
-          <span className="text-sm font-bold">
-            {scenario ? "Comandante" : `Comandante ${leaderName}`} {!scenario && <span className="font-normal text-blue-300">· {title}</span>}
-          </span>
-          {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
+          <div className="flex items-center gap-3">
+            {!scenario && <CommanderPortrait />}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <span className="text-sm font-bold">
+                {scenario ? "Comandante" : `Comandante ${leaderName}`} {!scenario && <span className="font-normal text-blue-300">· {title}</span>}
+              </span>
+              {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
+            </div>
+          </div>
           {hud && !hud.inCamp && !scenario && (
             <button
               type="button"
               disabled={!!hud.foundBlocked}
               title={hud.foundBlocked ?? "Funda uma aldeia do bando logo à frente"}
               onClick={() => sendBattleCommand({ type: "FOUND", ids: [] })}
-              className="pointer-events-auto rounded border border-blue-700 px-2 py-1 text-left text-xs text-blue-200 hover:bg-blue-900/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+              className="btn-pixel btn-blue pointer-events-auto px-2 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ⚑ Fundar vila aqui ({REALM.FOUND_COST.gold} ouro · {REALM.FOUND_COST.iron} ferro)
+              <PixelIcon id="BANNER" /> Fundar vila aqui ({REALM.FOUND_COST.gold} ouro · {REALM.FOUND_COST.iron} ferro)
               {hud.foundBlocked && <span className="block text-[10px]">{hud.foundBlocked}</span>}
             </button>
           )}
@@ -306,10 +334,32 @@ export function FieldHudView() {
               disabled={!!hud.pitchBlocked}
               onClick={() => sendBattleCommand({ type: "PITCH_CAMP", ids: [] })}
               title={hud.pitchBlocked ?? "Um dia de trabalho: o acampamento nasce logo a leste, com o portão virado para o Comandante"}
-              className="pointer-events-auto rounded border border-amber-600 bg-amber-900/40 px-2 py-1 text-left text-xs text-amber-100 hover:bg-amber-800/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:bg-transparent disabled:text-neutral-500"
+              className="btn-pixel btn-wood pointer-events-auto px-2 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ⛺ Montar acampamento aqui (acampamento levantado)
+              <PixelIcon id="TENT" /> Montar acampamento aqui (acampamento levantado)
               {hud.pitchBlocked && <span className="block text-[10px]">{hud.pitchBlocked}</span>}
+            </button>
+          )}
+          {hud && seatAlarm && !scenario && (
+            <button
+              type="button"
+              onClick={startSeatSiege}
+              title="O inimigo está ao pé da muralha: a batalha começa com o exército que estiver em casa"
+              className="btn-pixel btn-red pointer-events-auto animate-pulse px-2 py-1 text-left text-xs font-bold"
+            >
+              <PixelIcon id="ARMS" /> Às muralhas! {seatAlarm.attackers} inimigos cercam a sede
+            </button>
+          )}
+          {hud && hasFortress && !hud.inCamp && !scenario && (
+            <button
+              type="button"
+              disabled={!fieldCamp && !!hud.fieldBlocked}
+              onClick={() => sendBattleCommand({ type: "FIELD_CAMP", ids: [] })}
+              title={fieldCamp ? "Recolhe o acampamento de campo para as carroças" : (hud.fieldBlocked ?? "Meio dia de trabalho: o kit do acampamento de campo é montado logo a leste")}
+              className="btn-pixel btn-wood pointer-events-auto px-2 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <PixelIcon id="TENT" /> {fieldCamp ? "Recolher o acampamento de campo" : "Montar o acampamento de campo"}
+              {!fieldCamp && hud.fieldBlocked && <span className="block text-[10px]">{hud.fieldBlocked}</span>}
             </button>
           )}
           {hud && hud.messengers.length > 0 && (
@@ -328,7 +378,17 @@ export function FieldHudView() {
                   }`}
                 >
                   {m.name}
-                  {m.state === "OUTBOUND" ? " ✉" : m.state === "RETURNING" ? " ↩" : ""}
+                  {m.state === "OUTBOUND" ? (
+                    <>
+                      {" "}
+                      <PixelIcon id="LETTER" />
+                    </>
+                  ) : m.state === "RETURNING" ? (
+                    <>
+                      {" "}
+                      <PixelIcon id="RETURN" />
+                    </>
+                  ) : null}
                 </span>
               ))}
             </div>
@@ -336,7 +396,7 @@ export function FieldHudView() {
           {hud?.scouts.map((s) => (
             <div
               key={s.id}
-              className={`flex items-center justify-between gap-2 rounded bg-black/40 px-2 py-1 text-xs ${s.selected ? "ring-1 ring-lime-400" : ""}`}
+              className={`flex items-center justify-between gap-2 hud-card px-2 py-1 text-xs ${s.selected ? "ring-1 ring-lime-400" : ""}`}
             >
               <button
                 type="button"
@@ -389,8 +449,8 @@ export function FieldHudView() {
         </div>
         <div className="absolute left-1/2 top-[4.5rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col items-center gap-1">
           {hud?.duel && <DuelPanel duel={hud.duel} />}
-          {hud && hud.slow.left > 0 && <div className="w-full rounded bg-sky-900/90 px-3 py-1.5 text-center text-sm font-bold text-sky-100">Câmera lenta: {Math.ceil(hud.slow.left / 1000)} s para decidir</div>}
-          {hud?.tacticalPause && <div className="w-full rounded bg-amber-900/90 px-3 py-1.5 text-center text-sm font-bold text-amber-100">⏸ Pausa tática: dê as ordens e aperte P para continuar</div>}
+          {hud && hud.slow.left > 0 && <div className="w-full hud-box px-3 py-1.5 text-center text-sm font-bold text-sky-200">Câmera lenta: {Math.ceil(hud.slow.left / 1000)} s para decidir</div>}
+          {hud?.tacticalPause && <div className="w-full hud-box px-3 py-1.5 text-center text-sm font-bold text-amber-200"><PixelIcon id="PAUSE" /> Pausa tática: dê as ordens e aperte P para continuar</div>}
           <ScenarioBanner />
           <ContractBanner />
           <ExpeditionBanner />
@@ -399,10 +459,10 @@ export function FieldHudView() {
           <CaptivityBanner />
           {/* No anel, o Comandante só vê o duelo: as notícias esperam */}
           {hud && hud.feed.length > 0 && !(hud.duel && !hud.duel.auto) && (
-            <ol className="flex w-full flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
+            <ol className="flex w-full flex-col gap-0.5 hud-box px-3 py-2 text-xs text-amber-100">
               {hud.feed.map((line, i) => (
                 <li key={i} className={i === hud.feed.length - 1 ? "" : "opacity-60"}>
-                  {line}
+                  <IconText text={line} />
                 </li>
               ))}
             </ol>
@@ -411,7 +471,6 @@ export function FieldHudView() {
         {/* Direita: relógio, recursos, som e mapa; abaixo, câmera e inimigos à vista */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-start gap-3">
-            <WorldClock />
             {!scenario && <ResourceBar />}
             <SoundControl />
             {scenario ? (
@@ -433,13 +492,14 @@ export function FieldHudView() {
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
+            <WorldClock />
             {hud && hud.enemiesInSight > 0 && (
-              <span className="rounded bg-black/60 px-3 py-1.5 font-mono text-sm text-red-300">
+              <span className="hud-box px-3 py-1.5 font-mono text-sm text-red-300">
                 À vista: {hud.enemiesInSight}
               </span>
             )}
             {hud && hud.foes.length > 0 && (
-              <div className="flex flex-col gap-0.5 rounded bg-black/60 px-2 py-1 text-xs text-red-200">
+              <div className="flex flex-col gap-0.5 hud-box px-2 py-1 text-xs text-red-200">
                 {hud.foes.slice(0, 3).map((f) => (
                   <span key={f.key} title={f.trait ? `Dizem que é ${NOBLE_TRAITS[f.trait].label.toLowerCase()}` : undefined}>
                     {f.name} · {f.status} · moral {f.morale}
@@ -448,7 +508,7 @@ export function FieldHudView() {
               </div>
             )}
             {hud && (
-              <div className="pointer-events-auto flex items-center gap-1 rounded bg-black/60 px-2 py-1.5 text-sm">
+              <div className="pointer-events-auto flex items-center gap-1 hud-box px-2 py-1.5 text-sm">
                 <button
                   type="button"
                   onClick={() =>
@@ -473,9 +533,10 @@ export function FieldHudView() {
                     })
                   }
                   title="H: centralizar no Comandante"
-                  className="rounded px-2 py-0.5 text-neutral-300 hover:bg-neutral-700"
+                  className="btn-pixel btn-iron px-1 py-0"
+                  aria-label="Centralizar no Comandante"
                 >
-                  ⌖
+                  <PixelIcon id="CENTER" />
                 </button>
                 <span className="font-mono text-xs text-neutral-400">{Math.round(hud.camera.zoom * 100)}%</span>
               </div>

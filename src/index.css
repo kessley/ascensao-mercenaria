@@ -1,5 +1,173 @@
 @import "tailwindcss";
 
+/*
+ * A fonte de pixel (G5, parte 1): desenhada por código em `src/game/art/font.ts` e registrada
+ * antes de o jogo abrir. Vale para os números (font-mono), os títulos (font-serif), os rótulos
+ * de seção (h1 a h4) e os botões do componente Button. O texto corrido fica na fonte comum.
+ */
+@theme {
+  --font-pixel: "Mercenaria Pixel", ui-monospace, monospace;
+  --font-mono: "Mercenaria Pixel", ui-monospace, monospace;
+  --font-serif: "Mercenaria Pixel", Georgia, serif;
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-pixel);
+    font-synthesis: none;
+  }
+}
+
+/* A fonte só fica nítida em 12 px e nos múltiplos: os tamanhos dela encaixam no degrau mais perto */
+@layer utilities {
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4) {
+    font-synthesis: none;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-\[9px\], .text-\[10px\], .text-\[11px\], .text-xs, .text-sm) {
+    font-size: 12px;
+    line-height: 16px;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-base, .text-lg) {
+    font-size: 18px;
+    line-height: 24px;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-xl, .text-2xl) {
+    font-size: 24px;
+    line-height: 30px;
+  }
+  :is(.font-pixel, .font-mono, .font-serif, h1, h2, h3, h4):is(.text-3xl, .text-4xl) {
+    font-size: 36px;
+    line-height: 44px;
+  }
+}
+
+/*
+ * As molduras e os botões (G5, parte 2): a arte vem de `src/game/art/frames.ts`, posta como
+ * variáveis da raiz por `ui/pixelFrames.ts`. Cada pixel da arte vale 2 px nos painéis e 1 px no HUD.
+ */
+@layer components {
+  .frame-wood,
+  .frame-iron,
+  .frame-parchment,
+  .hud-box,
+  .hud-card,
+  .btn-pixel {
+    border-style: solid;
+    border-color: transparent;
+    border-radius: 0;
+    background-color: transparent;
+    image-rendering: pixelated;
+  }
+  .frame-wood {
+    border-width: 12px;
+    border-image: var(--art-frame-wood) 6 fill / 12px round;
+    /* Dentro da madeira, os cinzas da interface viram madeira e couro */
+    --color-neutral-950: #140e0a;
+    --color-neutral-900: #1f1712;
+    --color-neutral-800: #2e231a;
+    --color-neutral-700: #4a3a2b;
+    --color-neutral-600: #6b5440;
+    --color-neutral-500: #8c7660;
+    --color-neutral-400: #b5a088;
+    --color-neutral-300: #d6c4a8;
+    --color-neutral-200: #e8dcc6;
+    --color-neutral-100: #f3ead8;
+  }
+  .frame-iron {
+    border-width: 12px;
+    border-image: var(--art-frame-iron) 6 fill / 12px round;
+  }
+  .frame-parchment {
+    border-width: 12px;
+    border-image: var(--art-frame-parchment) 6 fill / 12px round;
+    color: #3b2a1a;
+  }
+  .hud-box,
+  .hud-card {
+    border-width: 6px;
+    border-image: var(--art-frame-iron) 6 fill / 6px round;
+  }
+  .btn-pixel {
+    border-width: 6px;
+    border-image: var(--btn-up) 3 fill / 6px stretch;
+    color: #f6e7c8;
+    text-shadow: 1px 1px 0 rgb(0 0 0 / 0.6);
+  }
+  .btn-wood {
+    --btn-up: var(--art-btn-wood-up);
+    --btn-hover: var(--art-btn-wood-hover);
+    --btn-down: var(--art-btn-wood-down);
+  }
+  .btn-gold {
+    --btn-up: var(--art-btn-gold-up);
+    --btn-hover: var(--art-btn-gold-hover);
+    --btn-down: var(--art-btn-gold-down);
+  }
+  .btn-red {
+    --btn-up: var(--art-btn-red-up);
+    --btn-hover: var(--art-btn-red-hover);
+    --btn-down: var(--art-btn-red-down);
+  }
+  .btn-blue {
+    --btn-up: var(--art-btn-blue-up);
+    --btn-hover: var(--art-btn-blue-hover);
+    --btn-down: var(--art-btn-blue-down);
+  }
+  .btn-iron {
+    --btn-up: var(--art-btn-iron-up);
+    --btn-hover: var(--art-btn-iron-hover);
+    --btn-down: var(--art-btn-iron-down);
+  }
+  /* Os ícones (G5, parte 3): 12 px na linha do texto, 24 px nos botões e nas listas */
+  .pixel-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    vertical-align: -2px;
+  }
+  .pixel-icon-big {
+    vertical-align: middle;
+  }
+  /* Os retratos (G5, parte 4): moldura de bronze com luz em cima e sombra embaixo, e o contorno escuro */
+  .portrait {
+    display: inline-block;
+    flex-shrink: 0;
+    box-sizing: content-box;
+    image-rendering: pixelated;
+    border: 2px solid;
+    border-color: #c8a060 #6a4a2a #6a4a2a #c8a060;
+    outline: 2px solid #1a1522;
+    margin: 2px;
+  }
+}
+
+/* Depois dos utilitários do Tailwind: dentro das molduras, cantos retos e cartões entalhados */
+@layer utilities {
+  .btn-pixel:hover:not(:disabled) {
+    border-image-source: var(--btn-hover);
+  }
+  .btn-pixel:active:not(:disabled) {
+    border-image-source: var(--btn-down);
+  }
+  .hud-card:hover {
+    filter: brightness(1.2);
+  }
+  :is(.frame-wood, .frame-iron) :is(.rounded, .rounded-md, .rounded-lg) {
+    border-radius: 0;
+  }
+  .frame-wood .bg-neutral-800 {
+    box-shadow:
+      inset 2px 2px 0 rgb(0 0 0 / 0.35),
+      inset -2px -2px 0 rgb(255 230 190 / 0.06);
+  }
+  .frame-wood {
+    scrollbar-color: #6b5440 #1f1712;
+  }
+}
+
 /* Remove as margens padrão e impede a barra de rolagem no Canvas do jogo */
 html,
 body,

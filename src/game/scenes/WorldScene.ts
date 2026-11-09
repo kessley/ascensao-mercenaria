@@ -24,6 +24,8 @@ import { HostManager, type HostWorld } from "../systems/WarHost";
 import { TerrainMap, TerrainStreamer } from "../world/TerrainMap";
 import { ForestArt } from "../world/ForestArt";
 import { NightLayer } from "../world/NightLayer";
+import { FieldCampArt } from "../world/FieldCampArt";
+import { FIELD_RADIUS, fieldCampOf } from "../sim/fortress";
 import { CampArea, type Interactable } from "../world/CampArea";
 import { StaticCuller } from "../world/StaticCuller";
 import { SettlementLayer } from "../world/Settlements";
@@ -85,6 +87,8 @@ export class WorldScene extends Phaser.Scene {
   lastFogAt = -Infinity;
 
   campArea!: CampArea;
+  /** O acampamento de campo montado, longe da fortaleza (Marco 22, parte 3). */
+  fieldCampArt!: FieldCampArt;
   /** Rotina dos soldados e seguidores no acampamento (Marco 12). */
   campLife!: CampLife;
   /** Gente e bichos perto da câmera, e os sinais do mapa (fumaça, corvos, rastros). */
@@ -247,6 +251,16 @@ export class WorldScene extends Phaser.Scene {
 
   /** Casas dos moradores do povoado onde o Comandante está (Marco 14): todas têm porta. */
   houseCache: { townId: string; spots: Interactable[] } | null = null;
+  /** A planta da cidade da sede desenhada agora (etapa, casas de pé, portão e povoado). */
+  seatKey = "";
+  /** Do burgo em diante, a fortaleza é um mapa à parte: só se entra e sai pelo portão, com E. */
+  seatSealed = false;
+  seatSpots: { key: string; spots: Interactable[] } | null = null;
+  seatCrossing = false;
+  /** A câmera presa à fortaleza (zoom e tamanho), ou "" do lado de fora. */
+  seatViewKey = "";
+  /** O escuro em volta da fortaleza, visto de dentro. */
+  seatVeil: Phaser.GameObjects.Graphics | null = null;
 
   /** Dentro de um povoado, o Comandante vê os preços da praça: anota no Livro (uma vez por dia). */
   lastVisitNoteAt = -Infinity;
@@ -352,6 +366,13 @@ export class WorldScene extends Phaser.Scene {
     this.fatiguePos = new Map();
     this.interiorReturn = null;
     this.houseCache = null;
+    // A cena é a mesma ao recomeçar: a cidade da sede é redesenhada na camada nova
+    this.seatKey = "";
+    this.seatSealed = false;
+    this.seatSpots = null;
+    this.seatCrossing = false;
+    this.seatViewKey = "";
+    this.seatVeil = null;
 
     const store = useGameStore.getState();
     if (!store.world) throw new Error("Mundo não gerado");
@@ -396,27 +417,36 @@ export class WorldScene extends Phaser.Scene {
     // Locais de contrato (barracas, choupanas, ruínas): as peças grandes são sólidas
     this.settlementLayer.addSites(this.world.sites, (x, y) => terrain.typeAt(x, y));
     terrain.setWildSolids(this.settlementLayer.wildSolids);
+    // A cidade da sede (Marco 22, parte 4): em volta da fortaleza, do tamanho da gente que mora nela
+    this.updateSeat();
     this.settlementLayer.sync(store.settlements, store.calamities);
     // Muralhas e casas viram obstáculo (antes de a navegação avaliar qualquer célula)
     terrain.setTowns(this.settlementLayer.layouts);
     this.updateGateRules();
-    this.campArea = new CampArea(this, this.world.camp, store.campPacked, store.campWorks, this.world.culture ?? "REALMS");
-    terrain.campGround = store.campPacked ? null : { origin: this.world.camp.origin, reinforced: store.campWorks.includes("PALISADE") };
+    // O acampamento desenhado pela planta na grade (Marco 22)
+    this.campArea = new CampArea(this, this.world.camp, store.campPacked, store.campPlan, this.world.culture ?? "REALMS");
+    this.campArea.sealed = this.seatSealed;
+    terrain.campGround = this.campArea.ground;
     // Barracas, fogueira e paliçada bloqueiam todo mundo (não só o Comandante)
     this.campArea.onSolidsChanged = () => this.applyCampSolids();
-    // Fosso (obra do acampamento): lama funda em volta da paliçada
-    terrain.setDitch(!store.campPacked && store.campWorks.includes("DITCH") ? this.campArea.palisade : null);
+    // Fosso: lama funda em volta da paliçada
+    terrain.setDitch(!store.campPacked && store.campPlan.ditch ? this.campArea.palisade : null);
     this.applyCampSolids();
-    this.campLife = new CampLife(this, this.campArea, this.world.camp.origin);
+    this.campLife = new CampLife(this, this.campArea);
+    this.fieldCampArt = new FieldCampArt(this, this.world.culture ?? "REALMS");
+    this.fieldCampArt.show(store.fieldCamp, store.fortress?.kit ?? []);
     this.mapLife = new MapLife(this);
     this.campLife.setFollowers(store.campPacked ? [] : store.followers);
+    // A floresta em volta (o lenhador tira madeira dela)
+    if (!store.campPacked) store.setCampForest(this.forestAround(this.world.camp.center));
     // Chão da estação: lama na primavera e na chuva fora das estradas, neve no frio do inverno
     Unit.ground = (x, y, t) => this.groundAt(x, y, t);
     this.season = seasonOf(store.day);
     this.applySeason();
     this.lastCampStateAt = -Infinity;
 
-    this.commander = new Commander(this, this.world.camp.spawn.x, this.world.camp.spawn.y);
+    const spawn = store.campPacked ? this.world.camp.spawn : this.campArea.spawnPoint;
+    this.commander = new Commander(this, spawn.x, spawn.y);
     this.applyLeader();
     this.commander.setFacing(-Math.PI / 2);
     this.lastCommanderPos = { x: this.commander.x, y: this.commander.y };
@@ -554,7 +584,9 @@ export class WorldScene extends Phaser.Scene {
       }
       if (s.leader !== prev.leader) this.applyLeader();
       if (s.activeContract !== prev.activeContract) this.syncContract();
-      if (s.settlements !== prev.settlements || s.calamities !== prev.calamities) {
+      // A cidade da sede cresceu (casas novas, muralha, a vila no reino): antes dos povoados, que a desenham
+      const seat = (s.seatCity !== prev.seatCity || s.fortress !== prev.fortress || s.campPacked !== prev.campPacked) && this.updateSeat();
+      if (s.settlements !== prev.settlements || s.calamities !== prev.calamities || seat) {
         if (this.settlementLayer.sync(s.settlements, s.calamities)) this.applyTowns();
         this.syncCalamities();
       }
@@ -565,9 +597,11 @@ export class WorldScene extends Phaser.Scene {
       if (s.wagons.length !== prev.wagons.length) this.syncWagons();
       // Caravana própria dispensada: sai da estrada
       if (s.ownCaravans !== prev.ownCaravans) this.trade.dropOwn(new Set(s.ownCaravans.filter((c) => !c.lost).map((c) => c.id)));
-      // Obra nova: o acampamento é redesenhado com ela (paliçada, torres, fosso)
-      if (s.campWorks.length > prev.campWorks.length) this.reloadWorld();
+      // A planta mudou: o acampamento é redesenhado no lugar (construções, portão, paliçada, fosso)
+      // (só o andamento das obras: troca o texto dos rótulos, sem remontar a arte)
+      if (s.campPlan !== prev.campPlan && !s.campPacked && !prev.campPacked && !this.campArea.updateProgress(s.campPlan)) this.applyCampPlan();
       if (s.worldMapOpen && !prev.worldMapOpen) this.lastSnapshotAt = -Infinity;
+      if (s.fieldCamp !== prev.fieldCamp || s.fortress?.kit !== prev.fortress?.kit) this.fieldCampArt.show(s.fieldCamp, s.fortress?.kit ?? []);
     });
     activeScene = this;
     const cleanup = () => {
@@ -629,6 +663,8 @@ export class WorldScene extends Phaser.Scene {
     this.terrainStreamer.update(this.cameras.main);
     this.settlementLayer.updateArt(this.cameras.main);
     this.campArea.updateArt(this.cameras.main);
+    this.updateSeatView();
+    this.updateCampBuild();
     this.forestArt.update(this.cameras.main);
     this.updateNight(store.dayProgress);
     this.updateWeather(time);
@@ -957,11 +993,15 @@ export class WorldScene extends Phaser.Scene {
     const c = this.commander;
     const geo = geoOf(this.world.geo);
     const away = !this.inCamp;
-    const sheltered = this.settlementLayer.layouts.some((l) => insideTown(l, c, 600));
+    // O acampamento de campo montado (Marco 22, parte 3): com barracas, ninguém dorme ao relento
+    const field = away && !!s.fortress && !!s.fieldCamp && distance(c, s.fieldCamp) < FIELD_RADIUS;
+    const tents = field && fieldCampOf(s.fortress?.kit ?? []).shelter;
+    const sheltered = tents || this.settlementLayer.layouts.some((l) => insideTown(l, c, 600));
     s.setExposure({
       away,
+      field,
       // Acampamento de cerco que dura: a mesma doença do pântano
-      swamp: away && (c.terrainType === "SWAMP" || geo.biomeAt(c.x, c.y) === "MARSH" || (!!s.siege?.walled && s.day - (s.siege.startDay ?? s.day) >= SIEGE.CAMP_SICK_DAY)),
+      swamp: away && ((!tents && (c.terrainType === "SWAMP" || geo.biomeAt(c.x, c.y) === "MARSH")) || (!!s.siege?.walled && s.day - (s.siege.startDay ?? s.day) >= SIEGE.CAMP_SICK_DAY)),
       // Cobertores do mascate protegem do frio
       cold: away && !sheltered && s.day >= s.blanketsUntil && this.season === "WINTER" && geo.temperatureAt(c.x, c.y) < SEASONS.SNOW_BELOW,
       sickTown: s.settlements.some((t) => isSick(t, s.day) && distance(t, c) < 2500),

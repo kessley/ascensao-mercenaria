@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import { Soldier } from "./Soldier";
 import type { Unit } from "./Unit";
 import type { Commander } from "./Commander";
-import { BALANCE, CAPTAINS, COLORS, COMBAT, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import { BALANCE, CAPTAINS, COLORS, COMBAT, CULTURE, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import type { CultureId } from "../data/planet";
+import { cultureOf } from "../sim/culture";
 import type { CaptainData } from "../data/captains";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
@@ -10,6 +12,9 @@ import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
 import { battalionMods, soldierStats, type BattalionMods } from "../../utils/progression";
 import { formationOffset, formationSize, frontOf } from "../systems/formation";
 import { cycleStep, type CycleState } from "../sim/combatRules";
+import { nearestWithin } from "../systems/nearIndex";
+import { PIXEL_FONT } from "../art/font";
+import { OUTLINE, ramp } from "../art/pixel";
 
 export type BattalionOrder =
   | { type: "HOLD"; point: Point }
@@ -98,6 +103,8 @@ export class Battalion {
   captainKills = 0;
   /** Perto do capitão vivo, a moral cai menos (< 1); a cena atualiza a cada quadro. */
   captainAura = 1;
+  /** De onde a tropa veio (Marco 23). */
+  readonly culture: CultureId;
 
   constructor(
     scene: Phaser.Scene,
@@ -110,6 +117,7 @@ export class Battalion {
   ) {
     this.lieutenant = lieutenant;
     this.captain = captain;
+    this.culture = cultureOf(data);
     this.id = data.id;
     this.name = data.name;
     this.troopType = data.troopType;
@@ -162,7 +170,7 @@ export class Battalion {
     // ★ = batalhão comandado por um tenente; ⚑ = a guarda do capitão (os nomes aparecem no card do HUD)
     const title = `${captain ? "⚑ " : ""}${data.name} · Nv ${data.level}${lieutenant ? " ★" : ""}`;
     this.label = scene.add
-      .text(x, y, title, { fontFamily: "monospace", fontSize: "12px", color: "#ffffff" })
+      .text(x, y, title, { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#1a1522", strokeThickness: 3 })
       .setOrigin(0.5, 1)
       .setDepth(10);
     this.bannerGfx = scene.add.graphics().setDepth(10);
@@ -219,6 +227,11 @@ export class Battalion {
 
   get lieutenantAlive(): boolean {
     return !!this.lieutenant && !this.lieutenantDied;
+  }
+
+  /** Tenente vivo da mesma gente da tropa: ela perde menos moral (< 1; Marco 23). */
+  get kinship(): number {
+    return this.lieutenantAlive && cultureOf(this.lieutenant) === this.culture ? CULTURE.KIN_LIEUTENANT : 1;
   }
 
   /** Fração da velocidade conforme o passo: quem segue o Comandante acompanha o ritmo dele. */
@@ -580,16 +593,17 @@ export class Battalion {
     // Quem está colado num inimigo não larga a briga para correr atrás do alvo da ordem
     const fighting = !!s.target?.isAlive && s.inRange(s.target);
     if (s.target && s.target.isAlive && s.target.revealed && (fighting || distance(s.target, anchor) <= radius * 1.2)) return;
+    // Os inimigos não andam enquanto os batalhões escolhem alvo: uma grade só os de perto (nearIndex.ts)
+    const frame = this.scene.time.now;
     if (this.order.type === "ATTACK" && !s.ranged) {
-      const close = nearest(enemies, s, COMBAT.HOLD_LEASH);
+      const close = nearestWithin(enemies, frame, s, COMBAT.HOLD_LEASH, s);
       if (close) {
         s.target = close;
         return;
       }
     }
 
-    const candidates = enemies.filter((e) => distance(e, anchor) <= radius);
-    s.target = nearest(candidates, s);
+    s.target = nearestWithin(enemies, frame, anchor, radius, s);
 
     // Alvo da ordem morreu ou sumiu de vista e não há mais ninguém por perto → segura a posição
     if (!s.target && this.order.type === "ATTACK" && (!this.order.target.isAlive || (!this.order.target.revealed && distance(s, anchorPoint) < BALANCE.ENGAGE_RADIUS / 2))) {
@@ -654,17 +668,29 @@ export class Battalion {
     const top = Math.min(...this.soldiers.map((s) => s.y + s.headY)) - 8;
     const w = 60;
 
-    this.label.setPosition(c.x, top - 2);
+    // Em pixel inteiro: a fonte de pixel (G5) só fica nítida assim
+    this.label.setPosition(Math.round(c.x), Math.round(top - 2));
     // setColor redesenha o texto e o manda de novo para a placa: só quando a cor muda
     const color = this.panicking ? "#ff4d4d" : "#ffffff";
     if (this.label.style.color !== color) this.label.setColor(color);
 
+    // O estandarte (G5): a moral numa moldura de pixel, com a luz na linha de cima
     const g = this.bannerGfx;
     g.clear();
-    g.fillStyle(COLORS.HP_BG, 0.85);
-    g.fillRect(c.x - w / 2, top, w, 4);
-    g.fillStyle(this.panicking ? COLORS.PANIC : COLORS.MORALE, 1);
-    g.fillRect(c.x - w / 2, top, w * (this.morale / BALANCE.MORALE.MAX), 4);
+    const x0 = Math.round(c.x - w / 2);
+    const y0 = Math.round(top);
+    const fill = Math.round(w * Math.max(0, Math.min(1, this.morale / BALANCE.MORALE.MAX)));
+    const tone = this.panicking ? COLORS.PANIC : COLORS.MORALE;
+    g.fillStyle(OUTLINE, 0.9);
+    g.fillRect(x0 - 1, y0 - 1, w + 2, 6);
+    g.fillStyle(COLORS.HP_BG, 1);
+    g.fillRect(x0, y0, w, 4);
+    g.fillStyle(tone, 1);
+    g.fillRect(x0, y0, fill, 4);
+    g.fillStyle(ramp(tone).light, 1);
+    g.fillRect(x0, y0, fill, 1);
+    g.fillStyle(ramp(tone).dark, 1);
+    g.fillRect(x0, y0 + 3, fill, 1);
 
     const sel = this.selectionGfx;
     sel.clear();

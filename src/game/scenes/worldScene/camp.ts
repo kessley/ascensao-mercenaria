@@ -2,16 +2,17 @@ import Phaser from "phaser";
 import { Battalion } from "../../entities/Battalion";
 import { Enemy } from "../../entities/Enemy";
 import { Unit } from "../../entities/Unit";
-import { CAMP_HEIGHT, CAMP_WIDTH } from "../../data/campLayout";
+import { CAMP_BUILDINGS, CELL, WOOD_PER_FOREST_CELL, buildProblem, cooksOf, placeProblem, ready, shortOf, sickBedsOf } from "../../data/campGrid";
 import type { Light } from "../../world/NightLayer";
 import type { Interactable } from "../../world/CampArea";
 import { insideTown, specialHouses } from "../../world/townLayout";
 import { nobleName } from "../../sim/nobility";
+import { FIELD_MIN_DISTANCE, FIELD_RADIUS } from "../../sim/fortress";
 import type { CampState } from "../../world/CampLife";
 import { FRIEND_AT, bondOf } from "../../sim/campEvents";
 import { geoOf } from "../../worldgen/geoMap";
 import { isFactionOwner } from "../../sim/realm";
-import { mutinyLeader, useGameStore } from "../../../store/useGameStore";
+import { campStaffing, inCampOf, mutinyLeader, useGameStore, type GameState } from "../../../store/useGameStore";
 import { TIME, TROOPS, WORLD, CAMP_MOVE, ECONOMY, SUPPLY, WAR_AI } from "../../../utils/constants";
 import { campMoraleBonus, dailyRations, startingMorale } from "../../../utils/economy";
 import { darknessAt, hourOf } from "../../../utils/time";
@@ -23,6 +24,20 @@ import type { WorldScene } from "../WorldScene";
  * O acampamento, as cidades e a caminhada; forragear, o acampamento móvel, a vida no acampamento e a noite.
  * Uma parte da `WorldScene`: os métodos entram no protótipo dela (ver o fim de `WorldScene.ts`).
  */
+/** As faltas que aparecem no acampamento antes do painel (Marco 22, parte 2). */
+function campShortages(s: GameState): Pick<CampState, "raw" | "sickGround" | "noStable" | "shifts"> {
+  if (s.campPacked) return {};
+  const working = campStaffing(s).working;
+  const home = inCampOf(s);
+  const patients = home.reduce((n, b) => n + (b.wounded ?? 0) + (b.sick ?? 0), 0);
+  return {
+    raw: home.slice(cooksOf(s.campPlan, working)).map((b) => b.id),
+    sickGround: patients > sickBedsOf(s.campPlan, working),
+    noStable: !s.campPlan.legacy && !ready(s.campPlan, "STABLE"),
+    shifts: s.shifts,
+  };
+}
+
 export const campMethods = {
   // --- Acampamento, cidades e caminhada ---
 
@@ -51,6 +66,8 @@ export const campMethods = {
       this.autosave();
       // Às vezes o acampamento tem algo para o Comandante resolver
       store.campTick("ENTER");
+      // Em casa, o acampamento de campo volta para as carroças (Marco 22, parte 3)
+      if (store.fieldCamp) store.strikeFieldCamp();
     } else {
       const training = new Set(store.training.map((t) => t.battalionId));
       // Marco 14: quem o Comandante escolheu deixar fica de guarda no acampamento
@@ -76,6 +93,68 @@ export const campMethods = {
       );
     }
     this.campArea.buildQuarters(store, this.awayBattalions());
+  },
+
+  /**
+   * A planta mudou (Marco 22): o acampamento é redesenhado no lugar, sem recriar o mundo. O chão
+   * e o fosso são repintados, os seguidores vão para os lugares novos e quem descansava vai para
+   * o alojamento novo.
+   */
+  applyCampPlan(this: WorldScene): void {
+    const store = useGameStore.getState();
+    this.campArea.setPlan(store.campPlan, store, this.awayBattalions());
+    const terrain = Unit.terrain;
+    if (terrain) {
+      terrain.campGround = this.campArea.ground;
+      terrain.setDitch(store.campPlan.ditch ? this.campArea.palisade : null);
+      const p = this.campArea.palisade;
+      this.terrainStreamer.invalidate({ x: p.cx, y: p.cy }, p.half + 160);
+    }
+    this.campLife.relayout();
+    this.campLife.setFollowers(store.followers);
+    store.battalions.forEach((data, i) => {
+      const b = this.battalions.find((x) => x.id === data.id);
+      const slot = this.campArea.quarterSlot(i);
+      if (b && slot && this.quartered.has(b.id)) this.quarter(b, i, slot);
+    });
+  },
+
+  /** Modo construção: a peça fantasma segue o ponteiro, verde onde cabe e vermelha onde não cabe. */
+  updateCampBuild(this: WorldScene): void {
+    const store = useGameStore.getState();
+    const build = store.campBuild;
+    if (!build) return this.campArea.hideGhost();
+    if (this.campArea.packed || !this.inCamp || this.engagement) {
+      this.campArea.hideGhost();
+      store.setCampBuild(null);
+      return;
+    }
+    const p = this.input.activePointer;
+    const at = this.cameras.main.getWorldPoint(p.x, p.y);
+    const [x, y] = this.campArea.cellUnder(at, build.kind);
+    this.campArea.showGhost(build.kind, x, y, this.campBuildProblem(x, y), !build.moveId);
+  },
+
+  /** Por que a peça do modo construção não fica ali (null = fica). */
+  campBuildProblem(this: WorldScene, x: number, y: number): string | null {
+    const s = useGameStore.getState();
+    const build = s.campBuild;
+    if (!build) return null;
+    if (build.moveId) return placeProblem(s.campPlan, build.kind, x, y, build.moveId);
+    return buildProblem(s.campPlan, build.kind) ?? placeProblem(s.campPlan, build.kind, x, y) ?? shortOf(CAMP_BUILDINGS[build.kind].cost, { gold: s.gold, wood: s.depot.WOOD ?? 0, iron: s.iron });
+  },
+
+  /** Clique no modo construção: ergue (ou muda de lugar) a peça. Com Shift, continua construindo. */
+  placeCampBuild(this: WorldScene, pointer: Phaser.Input.Pointer, keep: boolean): void {
+    const store = useGameStore.getState();
+    const build = store.campBuild;
+    if (!build) return;
+    const [x, y] = this.campArea.cellUnder({ x: pointer.worldX, y: pointer.worldY }, build.kind);
+    const why = build.moveId ? store.moveBuilding(build.moveId, x, y) : store.placeBuilding(build.kind, x, y);
+    if (why) return this.pushFeed(why);
+    const label = CAMP_BUILDINGS[build.kind].label;
+    this.pushFeed(build.moveId ? `${label}: mudada de lugar.` : `${label}: construída.`);
+    if (!keep || build.moveId) store.setCampBuild(null);
   },
 
   /** Passado o combate, quem ficou parado ou seguindo dentro da paliçada (ex.: se recompôs do pânico) vai descansar. */
@@ -118,7 +197,7 @@ export const campMethods = {
   },
 
   spots(this: WorldScene): Interactable[] {
-    return [...this.campArea.interactables, ...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()];
+    return [...this.campArea.interactables, ...this.seatGateSpots(), ...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()];
   },
 
   /** Exércitos à vista, em paz com o bando: dá para ir à tenda do lorde (Marco 15). */
@@ -160,9 +239,11 @@ export const campMethods = {
   },
 
   updatePrompt(this: WorldScene): void {
-    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()]);
+    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.seatGateSpots(), ...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()]);
     const store = useGameStore.getState();
-    store.setCampPrompt(this.nearestSpot && !store.campPanel ? `E — ${this.nearestSpot.enter ? "Entrar: " : ""}${this.nearestSpot.label}` : null);
+    const spot = this.nearestSpot;
+    const verb = spot?.enter && spot.enter !== "seat:out" ? "Entrar: " : "";
+    store.setCampPrompt(spot && !store.campPanel ? `E — ${verb}${spot.label}` : null);
   },
 
   houseSpots(this: WorldScene): Interactable[] {
@@ -220,6 +301,8 @@ export const campMethods = {
       this.pushFeed(store.lootBattlefield(Number(x), Number(y)));
       return;
     }
+    // A fortaleza selada (Marco 22, parte 4): o portão leva de um lado ao outro, mesmo com inimigos
+    if (spot.enter.startsWith("seat:")) return this.crossSeatGate(spot.enter === "seat:in");
     if (this.engagement || this.enemies.some((e) => e.isAlive && e.hostile && distance(e, this.commander) < 900)) {
       this.pushFeed("Inimigos por perto: não é hora de entrar em lugar nenhum.");
       return;
@@ -365,9 +448,108 @@ export const campMethods = {
     this.updateVision(this.time.now);
   },
 
-  /** Onde nasce o acampamento montado aqui: a leste do Comandante, com o portão (oeste) virado para ele. */
+  /** Onde nasce o acampamento montado aqui: a leste do Comandante, com o quadrado da planta logo depois dele. */
   pitchSite(this: WorldScene): Point {
-    return { x: Math.round(this.commander.x + CAMP_WIDTH / 2 + 260), y: Math.round(this.commander.y) };
+    const half = (useGameStore.getState().campPlan.size / 2) * CELL;
+    return { x: Math.round(this.commander.x + half + 260), y: Math.round(this.commander.y) };
+  },
+
+  /**
+   * Madeira das árvores de dentro do quadrado (Marco 22): cada célula de floresta cortada vira
+   * um pouco de madeira. Amostra o quadrado numa grade de 10×10.
+   */
+  pitchWood(this: WorldScene, site: Point): number {
+    const size = useGameStore.getState().campPlan.size;
+    const half = (size / 2) * CELL;
+    const terrain = Unit.terrain;
+    if (!terrain) return 0;
+    let forest = 0;
+    for (let j = 0; j < 10; j++) {
+      for (let i = 0; i < 10; i++) {
+        const p = { x: site.x - half + ((i + 0.5) * 2 * half) / 10, y: site.y - half + ((j + 0.5) * 2 * half) / 10 };
+        if (terrain.typeAt(p.x, p.y) === "FOREST") forest++;
+      }
+    }
+    return Math.round((forest / 100) * size * size * WOOD_PER_FOREST_CELL);
+  },
+
+  /** Quanto da volta do acampamento (até duas vezes o lado da paliçada grande) é floresta: o lenhador tira dela. */
+  forestAround(this: WorldScene, site: Point): number {
+    const terrain = Unit.terrain;
+    if (!terrain) return 0;
+    const reach = 28 * CELL;
+    let forest = 0;
+    let n = 0;
+    for (let j = 0; j < 12; j++) {
+      for (let i = 0; i < 12; i++) {
+        const p = { x: site.x - reach + ((i + 0.5) * 2 * reach) / 12, y: site.y - reach + ((j + 0.5) * 2 * reach) / 12 };
+        n++;
+        if (terrain.typeAt(p.x, p.y) === "FOREST") forest++;
+      }
+    }
+    return Math.round((forest / n) * 100) / 100;
+  },
+
+  /**
+   * O quadrado da fortaleza (34×34, com a muralha) cabe em volta do acampamento? Só a faixa de
+   * fora da paliçada grande é conferida: dentro, já é do bando (Marco 22, parte 3).
+   */
+  standardBlocked(this: WorldScene): string | null {
+    const s = useGameStore.getState();
+    if (this.run) return "Só na campanha";
+    if (s.campPacked || s.campPlan.size !== 28 || s.fortress) return null;
+    const geo = geoOf(this.world.geo);
+    const c = this.world.camp.center;
+    const inner = 14 * CELL + 20;
+    const outer = 17 * CELL + 60;
+    for (let j = 0; j <= 12; j++) {
+      for (let i = 0; i <= 12; i++) {
+        const p = { x: c.x - outer + (2 * outer * i) / 12, y: c.y - outer + (2 * outer * j) / 12 };
+        if (Math.abs(p.x - c.x) < inner && Math.abs(p.y - c.y) < inner) continue;
+        if (!geo.isOpenLand(p, 30)) return "A muralha da fortaleza não cabe aqui: água, rio ou rocha em volta da paliçada";
+        if (this.settlementLayer.layouts.some((l) => insideTown(l, p, -40))) return "A muralha da fortaleza encostaria num povoado";
+      }
+    }
+    return null;
+  },
+
+  /** Onde nasce o acampamento de campo: logo a leste do Comandante. */
+  fieldSite(this: WorldScene): Point {
+    return { x: Math.round(this.commander.x + 220), y: Math.round(this.commander.y) };
+  },
+
+  fieldBlocked(this: WorldScene): string | null {
+    const s = useGameStore.getState();
+    if (this.run || !s.fortress) return "Só com a fortaleza";
+    if (s.fieldCamp) return null;
+    if (this.inCamp) return "Na fortaleza, o bando dorme nela";
+    if (this.engagement) return "Em combate";
+    if (this.visibleEnemies().some((e) => distance(e, this.commander) < WORLD.TRAVEL_BLOCK_RADIUS)) return "Inimigos à vista";
+    if (s.train !== "ARMY") return "O kit vai nas carroças: elas precisam estar com o exército";
+    const site = this.fieldSite();
+    if (distance(site, this.world.camp.center) < FIELD_MIN_DISTANCE) return "Perto demais da fortaleza";
+    const geo = geoOf(this.world.geo);
+    for (const [dx, dy] of [[0, 0], [-160, 0], [160, 0], [0, -140], [0, 140]]) {
+      const p = { x: site.x + dx, y: site.y + dy };
+      if (!geo.isOpenLand(p, 30) || Unit.terrain?.isBlocked(p.x, p.y)) return "Não há chão livre aqui";
+    }
+    return null;
+  },
+
+  /** Monta o acampamento de campo (meio dia de trabalho) ou o recolhe, se já estiver montado. */
+  toggleFieldCamp(this: WorldScene): void {
+    const s = useGameStore.getState();
+    if (s.fieldCamp) {
+      if (distance(this.commander, s.fieldCamp) > FIELD_RADIUS * 2) return this.pushFeed("O acampamento de campo só se recolhe de perto.");
+      this.passTime(0.25);
+      s.strikeFieldCamp();
+      return;
+    }
+    const why = this.fieldBlocked();
+    if (why) return this.pushFeed(`Não dá para montar o acampamento de campo: ${why.toLowerCase()}.`);
+    this.passTime(0.5);
+    const out = useGameStore.getState().pitchFieldCamp(this.fieldSite());
+    if (out) this.pushFeed(out);
   },
 
   pitchBlocked(this: WorldScene): string | null {
@@ -380,13 +562,13 @@ export const campMethods = {
     const site = this.pitchSite();
     const near = [...s.settlements, ...this.world.sites.map((x) => x.center)].some((t) => distance(t, site) < CAMP_MOVE.MIN_TOWN_DISTANCE);
     if (near) return "Perto demais de um povoado ou de um local";
+    // O quadrado da planta precisa caber: água e rocha impedem (as árvores viram madeira)
     const geo = geoOf(this.world.geo);
-    const w = CAMP_WIDTH + 200;
-    const h = CAMP_HEIGHT + 200;
-    for (let j = 0; j <= 4; j++) {
-      for (let i = 0; i <= 4; i++) {
-        const p = { x: site.x - w / 2 + (w * i) / 4, y: site.y - h / 2 + (h * j) / 4 };
-        if (!geo.isOpenLand(p, 60) || Unit.terrain?.isBlocked(p.x, p.y)) return "Terreno impróprio (água, rio, montanha ou construções)";
+    const w = s.campPlan.size * CELL + 160;
+    for (let j = 0; j <= 6; j++) {
+      for (let i = 0; i <= 6; i++) {
+        const p = { x: site.x - w / 2 + (w * i) / 6, y: site.y - w / 2 + (w * j) / 6 };
+        if (!geo.isOpenLand(p, 40) || Unit.terrain?.isBlocked(p.x, p.y)) return `O quadrado de ${s.campPlan.size}×${s.campPlan.size} não cabe: água, rio, rocha ou construções`;
       }
     }
     return null;
@@ -413,10 +595,11 @@ export const campMethods = {
     const why = this.pitchBlocked();
     if (why) return this.pushFeed(`Não dá para montar o acampamento aqui: ${why.toLowerCase()}.`);
     const site = this.pitchSite();
+    const wood = this.pitchWood(site);
     this.passTime(CAMP_MOVE.PITCH_DAYS);
     const field = this.captureField();
     if (typeof field === "string") return this.pushFeed(field);
-    useGameStore.getState().pitchCamp(site, field);
+    useGameStore.getState().pitchCamp(site, field, wood, this.forestAround(site));
   },
 
   /** Recria o mundo com o campo como está (acampamento redesenhado, levantado ou montado). */
@@ -473,6 +656,7 @@ export const campMethods = {
         // Dia do soldo (pago em dia): de manhã, fila diante da tenda do Comandante
         payday: s.day % ECONOMY.PAYDAY_INTERVAL === 0 && s.arrearsWeeks === 0 && hourOf(s.dayProgress) >= 8 && hourOf(s.dayProgress) < 13,
         iron: s.iron > 0,
+        ...campShortages(s),
       };
       this.campLife.setState(state);
       // Treino: o que falta, sobre o Campo de Treino; terminado, o XP entra

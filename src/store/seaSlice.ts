@@ -24,7 +24,8 @@ export const CONTINENT_KEYS = [
   "revolts", "extraFactions", "rumors", "rumorSeq", "commanderAt", "knights", "liege", "spouseId", "wanted", "passLetters",
   "passes", "audiences", "quests", "summons", "contracts", "activeContract", "priceBook", "depot", "posts", "stakes", "loans",
   "ownCaravans", "marketTaxIncome", "stolenCargo", "townIntel", "battlefields", "burnedBridges", "siege", "forage", "campAt",
-  "campPacked", "campWorks", "campStay", "followers", "exposure", "fame", "fear", "nestsFound", "siteLife", "training", "captives", "captiveOfficers",
+  "campPacked", "campPlan", "campForest", "campStay", "followers", "exposure", "fame", "fear", "nestsFound", "siteLife", "training", "captives", "captiveOfficers",
+  "fortress", "fieldCamp", "seatAlarm", "seatCity",
 ] as const satisfies readonly (keyof GameState)[];
 
 export type ContinentKey = (typeof CONTINENT_KEYS)[number];

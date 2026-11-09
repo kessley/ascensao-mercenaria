@@ -2,13 +2,15 @@
 
 Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel art** (já convertido) ou **greybox** (formas de código, como era). Por que pixel art, perspectiva e etapas: [PLANO_GRAFICO.md](PLANO_GRAFICO.md). Etapas no roadmap: [Fase 3](ROADMAP_FASE_3.md).
 
-**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão) e G3 (construções) ✅ OK. Já são pixel art:
+**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão), G3 (construções) e G4 (resto do elenco) ✅ OK. Já são pixel art:
 - todo soldado, inimigo e bicho que luta;
 - o chão, em todos os degraus do zoom, com água que se mexe, pontes, vaus, balsas e picos;
 - as matas: árvores, moitas e pedras;
-- as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades.
+- as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades;
+- as carroças, os aríetes, as escadas, as harpias, os navios e a gente do mapa e do acampamento (G4);
+- os interiores das construções, a Cidade Alta das capitais e a Liça dos duelos (G4, parte 5).
 
-Interiores, interface e efeitos ainda são greybox.
+A interface e os efeitos ainda são greybox.
 
 ## Como a arte é feita
 - **Por código, em camadas** (`src/game/art/`). Nenhuma imagem é carregada: as folhas são desenhadas na primeira vez que alguém veste aquele visual e guardadas como textura.
@@ -96,7 +98,8 @@ Interiores, interface e efeitos ainda são greybox.
 | --- | --- | --- |
 | 9 tropas do jogador (infantaria, lanceiros, guarda pesada, arqueiros, besteiros, dardeiros, cavalaria, cavaleiros, arqueiros montados) | `Soldier` | ✅ pixel art |
 | Comandante (penacho e capa), batedor e mensageiro | `Commander`, `Scout`, `Messenger` | ✅ pixel art |
-| 53 dos 55 tipos de inimigo: goblins, orcs, esqueletos, salteadores, piratas, soldados dos reinos, tropas de ultramar, amotinados, civis, mercadores, arautos, lobos e cavaleiros de lobo | `Enemy` | ✅ pixel art |
+| 53 dos 55 tipos de inimigo: goblins, orcs, esqueletos, salteadores, piratas, soldados dos reinos, tropas de ultramar, amotinados, civis, mercadores, arautos, lobos e cavaleiros de lobo (os outros 2, a carroça e o aríete, vieram no G4) | `Enemy` | ✅ pixel art |
+| Cavalo de frente e de costas | `figures.ts` | ✅ pixel art, refeito no G4 (parte 6): de frente, a cara comprida com a lista branca e a barriga dos dois lados; de costas, as duas ancas e o rabo que balança |
 | Chefes de calamidade (Necromante, Senhor da Guerra orc) | `Enemy` | ✅ pixel art no dobro do tamanho, ampliada com Scale2x e retocada: Necromante com olhos acesos e friso violeta, Senhor da Guerra com chifres e capa escura |
 | Corpos depois do combate | `Corpses` | ✅ ficam no chão |
 | Guarnições, patrulhas e alcateias | `Enemy` | ✅ pixel art |
@@ -105,18 +108,18 @@ Interiores, interface e efeitos ainda são greybox.
 | Carroça de mercador e aríete inimigo | `Enemy` (CART, SIEGE_RAM), `vehicles.ts` | ✅ pixel art (G4): mula e toldo listrado na cor da caravana; aríete coberto na cor de quem assalta |
 | Carroças do bando | `Wagon`, `vehicles.ts` | ✅ pixel art (G4): carro de bois com lona e carroceiro; as rodas giram e o destroço fica no chão |
 | Escadas e aríete do jogador nos cercos | `SiegeWorks`, `ladderPiece` em `buildings.ts`, `vehicles.ts` | ✅ pixel art (G4): a viga do aríete bate no portão; as escadas encostam do lado de fora, nos quatro lados |
-| Harpias | `Harpy` | greybox |
+| Harpias | `Harpy`, `harpy.ts` | ✅ pixel art (G4): águia de asas largas que bate as asas e plana, com a sombra no chão mostrando a altura |
 | Coluna de tropas em expedição e comboio de suprimentos | `ExpeditionParty` | ✅ pixel art (G4): figuras do G1 em filas de três, o porta-estandarte na frente (dourado com capitão) e os carros de bois atrás |
 
 ### Gente que não luta
 | O quê | Onde no código | Estado |
 | --- | --- | --- |
-| Viajantes, caravanas e barcos no mapa | `MapLife` | greybox (círculos) |
-| Seguidores do acampamento (cozinheira, ferreiro, crianças) e cargas | `CampLife` | greybox |
-| Tenentes sentados na fogueira | `CampArea` | greybox |
-| Gente dos interiores | `InteriorScene` | greybox |
-| Cidade Alta das capitais | `CapitalScene` | greybox |
-| Duelos da Liça | `DuelScene` | greybox |
+| Moradores, camponeses, viajantes, peregrinos, caçadores e cervos no mapa | `MapLife`, `Extra` | ✅ pixel art (G4): figuras do G1; o camponês trabalha a terra com a enxada e o caçador volta com o cervo nas costas |
+| Seguidores do acampamento e cargas | `CampLife`, `campProps.ts` | ✅ pixel art (G4): figuras do G1 com a roupa do ofício, os lugares de trabalho (caldeirão, banca, enfermaria, púlpito, bigorna, varal) e a carga de ferro; as crianças ficaram para depois |
+| Tenentes sentados na fogueira | `CampArea`, `Extra` | ✅ pixel art (G4): sentados, virados para o fogo, com o anel prateado |
+| Gente dos interiores | `InteriorScene`, `Extra` | ✅ pixel art (G4): guardas, nobres (quem reina, de coroa), escrivães, sacerdotes, ladrões e o rato dos esgotos; quem dorme deita no catre |
+| Cidade Alta das capitais | `CapitalScene`, `Extra` | ✅ pixel art (G4): o povo, os criados, os guardas e os nobres; disfarçado, o Comandante usa capuz |
+| Duelos da Liça | `DuelScene`, `Extra` | ✅ pixel art (G4): os dois lutadores no dobro do tamanho, com as poses do duelo, e a arquibancada cheia |
 
 ### Efeitos
 | O quê | Onde no código | Estado |
@@ -152,8 +155,9 @@ Interiores, interface e efeitos ainda são greybox.
 | Muralhas, paliçadas, torres e portões; o portão fechado e o arrombado no cerco | `TownArt`, `SiegeWorks` | ✅ pixel art |
 | Pátios da guarnição (tendas, cerca, fogueira, armeiro, bonecos) | `TownArt` | ✅ pixel art |
 | Chão dos povoados (lavouras, ruas, praça, pátios) | `TerrainMap` | ✅ pintado no chão, com o filtro do G2 de perto |
-| Cidade Alta vista de fora | `TownArt` | ✅ pixel art (por dentro é G4) |
+| Cidade Alta vista de fora | `TownArt` | ✅ pixel art (por dentro também: G4, parte 5) |
 | Acampamento do bando (paliçada, torres, pavilhão, intendência, recrutamento, estábulo, ferraria, treino, poço, tendas dos batalhões) | `CampArea` | ✅ pixel art |
+| Cidade da sede (Marco 22, parte 4): arraial, burgo, vila e cidade em volta da fortaleza | `seatLayout` em `townLayout.ts`, `TownArt`, `Settlements` | ✅ pixel art: as mesmas peças dos povoados, sem peça nova |
 | Bandeiras dos povoados (paço, portões, guarnição), na cor do dono | `Settlements`, `TownArt` | ✅ pixel art |
 | Locais de contrato: barracas de bandidos, choupanas goblins, ruínas assombradas, vau do pântano | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão pisado pintado no chão |
 | Covis das calamidades: torre negra do necromante com sepulturas; acampamento de guerra orc com barracas de couro, totens e cavalos-de-frisa | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão do covil |
@@ -163,32 +167,32 @@ Interiores, interface e efeitos ainda são greybox.
 | O quê | Estado |
 | --- | --- |
 | Carroças, aríetes e escadas (ver acima) | ✅ pixel art (G4, parte 1) |
-| Harpias (ver acima) | greybox |
-| Navios e convés | greybox |
-| Interiores das construções | greybox |
-| Cidade Alta das capitais | greybox |
+| Harpias (ver acima) | ✅ pixel art (G4, parte 3) |
+| Barcaças e navios de comércio | ✅ pixel art (G4, parte 3), `ships.ts`: casco, velas e espuma; vela recolhida no porto durante a tempestade |
+| Convés da abordagem | ✅ pixel art (G4, parte 3), `deck.ts`: os dois navios, as pranchas e o mar que corre |
+| Gente do mapa e do acampamento (ver acima) | ✅ pixel art (G4, parte 4) |
+| Interiores das construções | ✅ pixel art (G4, parte 5), `interiors.ts`: a sala numa imagem só e os móveis como peças, cada um com a sua altura |
+| Cidade Alta das capitais | ✅ pixel art (G4, parte 5), `cityArt.ts` e `capitalArt.ts`: o chão com o filtro do G2 e o calçamento; os prédios do G3 e os novos (torre de menagem, paços, palácios com jardim, chafariz) |
 
 ### Interface (G5)
 | O quê | Estado |
 | --- | --- |
-| Fonte com acentos do português | pendente: escolher |
-| Molduras, botões e painéis (React) | estilo atual, sem pixel art |
-| Ícones das ordens e formações | ícones de linha atuais |
-| Retratos do Comandante e dos tenentes | não existem |
+| Fonte com acentos do português | ✅ pixel art (G5, parte 1): `art/font.ts`, desenhada por código e montada em TrueType no jogo; títulos, números, rótulos, botões e os nomes do mapa |
+| Molduras, botões e painéis (React) | ✅ pixel art (G5, parte 2): `art/frames.ts`; madeira nos painéis e no menu, ferro no HUD, pergaminho no diário, botões em cinco tons |
+| Ícones (tropas, bens, construções, ordens, formações, tempo e sinais do texto) | ✅ pixel art (G5, parte 3): `art/iconArt.ts` e `art/icons.ts`; 12 px na linha do texto, 24 px nos botões e nas listas |
+| Retratos do Comandante, dos capitães, dos tenentes e dos nobres | ✅ pixel art (G5, parte 4): `art/portraits.ts` e `art/portraitSpecs.ts`; busto de 32×32 com a cultura, a idade, as cicatrizes e o papel; 32 px nas listas, 64 px nas fichas e no HUD |
 | Mapa do Continente e Mapa Múndi | greybox |
 
 ## O que falta, por etapa
-1. **G1, acabamento** (feito: chefes no dobro, corpos no chão, escala inteira da tela). Continua fraco:
-   - cavalo de frente e de costas: lê como cavalo, mas ainda é a pose mais fraca;
-   - estandarte e nome do batalhão ainda são greybox (ficam para o G5, com a fonte).
+1. **G1, acabamento ✅ OK** (chefes no dobro, corpos no chão, escala inteira da tela e, no G4, o cavalo de frente e de costas). Ficou para depois: o estandarte e o nome do batalhão ainda são greybox (ficam para o G5, com a fonte).
 2. **G2, chão ✅ OK.** Ficou para depois:
    - a água só se mexe de perto (100% e 200%), e não há onda que corre na praia;
    - o chão comum de baixo ainda é pintado na linha principal (barato agora: 1,5 ms por pedaço na mediana).
 3. **G3, construções ✅ OK.** Ficou para depois:
    - as peças das construções novas do Marco 22 (cerca de 50, no catálogo da [GDD, seção 9.5](GDD.md#95-o-catálogo)), feitas junto com cada parte dele. A muralha da fortaleza e a cidade do bando saem das peças que já existem;
    - a chama da fogueira e o brilho da forja (G6, com o fogo e a noite).
-4. **G4, resto do elenco,** em seis partes. As duas primeiras estão feitas: carroças, aríetes e escadas; a coluna das expedições e do comboio. Falta: harpias, navios, convés, interiores e Cidade Alta, e a gente do mapa e do acampamento com as figuras do G1.
+4. **G4, resto do elenco ✅ OK,** em seis partes: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1 (o cavalo de frente e de costas).
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
-5. **G5, interface:** fonte, molduras, ícones e retratos.
+5. **G5, interface ✅ OK,** em quatro partes: a fonte, as molduras e os botões, os ícones e os retratos.
 6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue).

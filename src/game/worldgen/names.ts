@@ -117,6 +117,12 @@ export function firstName(rng: Rng, female: boolean): string {
   return rng.pick(female ? tongue.female : tongue.male);
 }
 
+/** Um primeiro nome numa língua dada, fora do gerador com semente (gente de outra terra que entra no bando). */
+export function nameIn(id: TongueId, female: boolean, r: () => number = Math.random): string {
+  const list = female ? TONGUES[id].female : TONGUES[id].male;
+  return list[Math.floor(r() * list.length)];
+}
+
 /** O nome é de mulher? (reis e rainhas vêm da história como texto). */
 export function isFemaleName(name: string): boolean {
   return Object.values(TONGUES).some((t) => t.female.includes(name.split(" ")[0]));

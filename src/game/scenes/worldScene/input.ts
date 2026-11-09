@@ -12,6 +12,7 @@ import { BALANCE, CAMERA, COLORS, COMBAT, FORMATIONS } from "../../../utils/cons
 import { angleTo, centroid, distance, nearest, type Point } from "../../../utils/math";
 import { type BattleKeys, FORMATION_KEYS, COMBAT_RUN_COLOR, DRAG_THRESHOLD, isShiftHeld } from "./shared";
 import type { WorldScene } from "../WorldScene";
+import { PIXEL_FONT } from "../../art/font";
 
 /**
  * A entrada: teclado, mouse, as ordens da interface, a seleção e a câmera.
@@ -143,7 +144,7 @@ export const inputMethods = {
     this.linePreview = this.add.graphics().setDepth(19);
     this.destinationGfx = this.add.graphics().setDepth(-4);
     this.lineLabel = this.add
-      .text(0, 0, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 })
+      .text(0, 0, "", { fontFamily: PIXEL_FONT, fontSize: "12px", color: "#ffffff", stroke: "#000000", strokeThickness: 3 })
       .setOrigin(0.5, 1)
       .setDepth(21)
       .setVisible(false);
@@ -178,6 +179,12 @@ export const inputMethods = {
         return;
       }
       useGameStore.getState().setContextMenu(null);
+      // Modo construção (Marco 22): o clique põe a peça; o botão direito desiste
+      if (useGameStore.getState().campBuild && !pointer.middleButtonDown()) {
+        if (pointer.rightButtonDown()) useGameStore.getState().setCampBuild(null);
+        else if (pointer.leftButtonDown()) this.placeCampBuild(pointer, isShiftHeld(pointer));
+        return;
+      }
 
       if (pointer.middleButtonDown()) {
         // Arrastar a visão solta a câmera
@@ -281,6 +288,7 @@ export const inputMethods = {
       // Soltar a linha de batalha sem dar a ordem
       if (this.lineDrag) return this.cancelLine();
       const store = useGameStore.getState();
+      if (store.campBuild) return store.setCampBuild(null);
       // Batalha personalizada: com nada selecionado, Esc abre (ou fecha) a pausa
       if (this.run && !store.scenarioResult && (store.scenarioPaused || !this.battalions.some((b) => b.selected))) {
         store.setScenarioPaused(!store.scenarioPaused);
@@ -690,6 +698,9 @@ export const inputMethods = {
           break;
         case "PITCH_CAMP":
           this.pitchCamp();
+          break;
+        case "FIELD_CAMP":
+          this.toggleFieldCamp();
           break;
         case "FERRY":
           this.crossFerry(cmd.ferryId);

@@ -3,6 +3,9 @@ import type { Commander } from "./Commander";
 import type { Scout, ScoutOrder, ScoutReport } from "./Scout";
 import type { Enemy } from "./Enemy";
 import { SUPPORT } from "../../utils/constants";
+import { HARPY_CELL, HARPY_FRAMES } from "../art/harpy";
+import { harpyKeys, LOD_SCALE } from "../art/atlas";
+import { Unit } from "./Unit";
 import { distance, type Point } from "../../utils/math";
 
 export type HarpyState = "PERCHED" | "TO_COMMANDER" | "AT_COMMANDER" | "TO_SCOUT";
@@ -33,8 +36,19 @@ export type HarpyEvent =
  * por cima de tudo e não luta), mas é real: leva o relatório na garra e, se um arqueiro a
  * derrubar, o que ela levava se perde.
  */
+/** Altura do voo: a sombra fica este tanto abaixo da ave, no chão. */
+const ALTITUDE = 34;
+/** Um bater de asas (os 4 quadros) e o ciclo de bater e planar. */
+const FLAP_MS = 440;
+const CYCLE_MS = 2600;
+const FLAPPING_MS = 1320;
+
 export class Harpy {
-  readonly gfx: Phaser.GameObjects.Graphics;
+  readonly body: Phaser.GameObjects.Image;
+  readonly shadow: Phaser.GameObjects.Image;
+  /** Linha da folha (0 de frente, 1 de lado, 2 de costas) e o lado (oeste = leste espelhado). */
+  private row = 2;
+  private west = false;
   state: HarpyState = "PERCHED";
   x: number;
   y: number;
@@ -56,12 +70,13 @@ export class Harpy {
     this.x = scout.x;
     this.y = scout.y;
     this.lastFlightAt = now;
-    this.gfx = scene.add.graphics().setDepth(17).setVisible(false);
-    this.gfx.fillStyle(0x2b2118, 1);
-    this.gfx.fillTriangle(-16, -4, 0, -1, -4, 7);
-    this.gfx.fillTriangle(16, -4, 0, -1, 4, 7);
-    this.gfx.fillStyle(0xf0e6d2, 1);
-    this.gfx.fillCircle(0, -3, 3);
+    const keys = harpyKeys(scene);
+    this.body = scene.add
+      .image(this.x, this.y, keys.body, 0)
+      .setOrigin(HARPY_CELL.cx / HARPY_CELL.w, HARPY_CELL.cy / HARPY_CELL.h)
+      .setDepth(17)
+      .setVisible(false);
+    this.shadow = scene.add.image(this.x, this.y, keys.shadow, 0).setDepth(-0.6).setVisible(false);
   }
 
   get airborne(): boolean {
@@ -87,15 +102,14 @@ export class Harpy {
     }
     this.x += ((to.x - this.x) / d) * step;
     this.y += ((to.y - this.y) / d) * step;
-    this.gfx.setRotation(Math.atan2(to.y - this.y, to.x - this.x) + Math.PI / 2);
+    this.face(to.x - this.x, to.y - this.y);
     return false;
   }
 
   update(dt: number, world: HarpyWorld): HarpyEvent | null {
     const H = SUPPORT.HARPY;
     const out = this.airborne;
-    this.gfx.setVisible(out && !this.sheltering && world.canSee(this));
-    this.gfx.setPosition(this.x, this.y);
+    this.draw(out && !this.sheltering && world.canSee(this), world.time);
     if (this.state === "AT_COMMANDER") {
       if (world.time < this.restUntil || !world.canFly(this)) return null;
       this.state = "TO_SCOUT";
@@ -129,7 +143,35 @@ export class Harpy {
     return orders.length > 0 ? { type: "AT_SCOUT", orders } : null;
   }
 
+  /** Vira para onde voa, com folga para não ficar trocando de linha numa diagonal. */
+  private face(dx: number, dy: number): void {
+    const ax = Math.abs(dx);
+    const ay = Math.abs(dy);
+    if (ax === 0 && ay === 0) return;
+    if (ax >= ay * (this.row === 1 ? 0.85 : 1.4)) {
+      this.row = 1;
+      this.west = dx < 0;
+    } else this.row = dy > 0 ? 0 : 2;
+  }
+
+  /** A ave bate as asas um pouco e plana um pouco; a sombra vai no chão, embaixo. */
+  private draw(visible: boolean, time: number): void {
+    this.body.setVisible(visible);
+    this.shadow.setVisible(visible);
+    if (!visible) return;
+    const t = time % CYCLE_MS;
+    const flap = t < FLAPPING_MS ? Math.floor((t / FLAP_MS) * HARPY_FRAMES) % HARPY_FRAMES : 1;
+    const scale = LOD_SCALE[Unit.lod];
+    this.body
+      .setFrame(this.row * HARPY_FRAMES + flap)
+      .setFlipX(this.row === 1 && this.west)
+      .setScale(scale)
+      .setPosition(this.x, this.y);
+    this.shadow.setScale(scale * (flap === 1 || flap === 3 ? 1 : 0.8), scale).setPosition(this.x, this.y + ALTITUDE * scale);
+  }
+
   destroy(): void {
-    this.gfx.destroy();
+    this.body.destroy();
+    this.shadow.destroy();
   }
 }

@@ -4,7 +4,7 @@ import { campMoraleBonus, dailyRations, daysUntilPayday, startingMorale, weeklyW
 
 function Stat({ label, value, hint, tone = "" }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
-    <div className="flex flex-col rounded bg-black/60 px-3 py-1.5 backdrop-blur-sm">
+    <div className="flex flex-col bg-neutral-800 px-3 py-1.5">
       <span className="text-[10px] uppercase tracking-wider text-neutral-400">{label}</span>
       <span className={`font-mono text-base font-bold leading-tight ${tone}`}>{value}</span>
       {hint && <span className="text-xs text-neutral-400">{hint}</span>}
