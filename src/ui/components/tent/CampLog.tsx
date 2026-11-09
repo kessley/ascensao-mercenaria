@@ -1,4 +1,5 @@
 import { useGameStore, type LogTone } from "../../../store/useGameStore";
+import { IconText } from "../PixelIcon";
 
 /** Tinta no pergaminho (G5, parte 2). */
 const TONE: Record<LogTone, string> = {
@@ -18,7 +19,7 @@ export function CampLog() {
         {[...log].reverse().map((e) => (
           <li key={e.id} className={TONE[e.tone]}>
             <span className="font-mono text-[#8a6a3e]">Dia {e.day} · </span>
-            {e.text}
+            <IconText text={e.text} />
           </li>
         ))}
       </ol>

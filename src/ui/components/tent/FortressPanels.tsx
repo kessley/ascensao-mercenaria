@@ -32,6 +32,8 @@ import {
 } from "../../../game/sim/fortress";
 import { fullName } from "../../../game/data/lieutenants";
 import { Button } from "../Button";
+import { BUILDING_ICON } from "../../../game/art/icons";
+import { PixelIcon } from "../PixelIcon";
 
 function useStock() {
   const gold = useGameStore((s) => s.gold);
@@ -175,7 +177,7 @@ export function FortressPanel() {
             onClick={() => toggle(k)}
             className={`rounded border px-2 py-1 text-xs ${fortress.kit.includes(k) ? "border-amber-400 bg-amber-900/40 text-amber-200" : "border-neutral-600 bg-neutral-800 text-neutral-300 hover:border-neutral-400"}`}
           >
-            {CAMP_BUILDINGS[k].label}
+            <PixelIcon id={BUILDING_ICON[k]} /> {CAMP_BUILDINGS[k].label}
           </button>
         ))}
       </div>

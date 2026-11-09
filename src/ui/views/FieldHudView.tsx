@@ -2,6 +2,8 @@ import { useGameStore, type BattleResult, type Expedition, type SiegeAction } fr
 import type { ScoutMode } from "../../game/entities/Scout";
 import type { HarpyState } from "../../game/entities/Harpy";
 import { REALM, SEASONS, SIEGE, WEATHER } from "../../utils/constants";
+import { WEATHER_ICON } from "../../game/art/icons";
+import { IconText, PixelIcon } from "../components/PixelIcon";
 import { titleFor } from "../../game/sim/realm";
 import { isFemaleName } from "../../game/worldgen/names";
 import { NOBLE_TRAITS } from "../../game/sim/nobility";
@@ -71,7 +73,7 @@ function WorldClock() {
         <div className="flex justify-between font-mono text-sm">
           <span className="font-bold">{scenario ? "Batalha" : `Dia ${day}`}</span>
           <span className="text-xs text-neutral-300">
-            {formatHour(progress)} {paused ? "⏸" : phase === "NIGHT" ? "☾" : phase === "DAY" ? "☀" : "◐"}
+            {formatHour(progress)} <PixelIcon id={paused ? "PAUSE" : phase === "NIGHT" ? "MOON" : phase === "DAY" ? "SUN" : "DUSK"} />
           </span>
         </div>
         <div className="h-1 rounded bg-neutral-700">
@@ -84,7 +86,12 @@ function WorldClock() {
             title={`Ano ${campaignYear(day)} · faltam ${daysToNextSeason(day)} dia(s) para a próxima estação${flood ? " · cheia: os vaus dos rios estão fundos" : ""}`}
           >
             {SEASONS.LABEL[season]} {seasonDay(day)}/{SEASONS.DAYS}
-            {flood ? " ≋" : ""}
+            {flood && (
+              <>
+                {" "}
+                <PixelIcon id="DROP" />
+              </>
+            )}
           </span>
           {hud && (
             <span
@@ -93,8 +100,13 @@ function WorldClock() {
                 hud.forecast ? ` · Amanhã (previsão do tenente Cauteloso): ${WEATHER.LABEL[hud.forecast]}` : ""
               }`}
             >
-              {WEATHER.ICON[hud.weather]}
-              {hud.forecast && <span className="text-neutral-400"> → {WEATHER.ICON[hud.forecast]}</span>}
+              <PixelIcon id={WEATHER_ICON[hud.weather]} />
+              {hud.forecast && (
+                <span className="text-neutral-400">
+                  {" "}
+                  → <PixelIcon id={WEATHER_ICON[hud.forecast]} />
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -105,9 +117,15 @@ function WorldClock() {
             type="button"
             onClick={() => sendBattleCommand({ type: "TORCHES", ids: [] })}
             title="T: tochas acesas enxergam mais à noite, mas o inimigo vê o bando de longe"
-            className={`flex-1 rounded border px-1.5 py-0.5 ${hud.torches ? "border-amber-500 text-amber-200" : "border-neutral-600 text-neutral-400"} ${night ? "" : "opacity-60"}`}
+            className={`btn-pixel flex-1 px-1.5 py-0.5 ${hud.torches ? "btn-gold" : "btn-iron text-neutral-300"} ${night ? "" : "opacity-60"}`}
           >
-            {hud.torches ? "🔥 Tochas" : "Sem tochas"}
+            {hud.torches ? (
+              <>
+                <PixelIcon id="FIRE" /> Tochas
+              </>
+            ) : (
+              "Sem tochas"
+            )}
           </button>
           {night && !scenario && (
             <button
@@ -115,7 +133,7 @@ function WorldClock() {
               disabled={!!hud.restBlocked}
               onClick={() => sendBattleCommand({ type: "REST", ids: [] })}
               title={hud.restBlocked ?? "Passa a noite de uma vez; um bando que chegue perto interrompe o descanso"}
-              className="flex-1 rounded border border-sky-700 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+              className="btn-pixel btn-blue flex-1 px-1.5 py-0.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Descansar
             </button>
@@ -235,7 +253,7 @@ function SiegeBanner() {
   const food = siege.food ?? 0;
   const wood = Math.floor(siege.wood ?? 0);
   return (
-    <div className="flex w-full flex-col gap-1 rounded bg-black/70 px-3 py-1.5 text-xs text-amber-100">
+    <div className="flex w-full flex-col gap-1 hud-box px-3 py-1.5 text-xs text-amber-100">
       <span>
         Cerco de {town.name} · dia {day - (siege.startDay ?? day)} · comida lá dentro: {food > 0 ? `${food} dia(s)` : `fome há ${-food} dia(s)`} · guarnição {town.garrison}
       </span>
@@ -298,9 +316,9 @@ export function FieldHudView() {
               disabled={!!hud.foundBlocked}
               title={hud.foundBlocked ?? "Funda uma aldeia do bando logo à frente"}
               onClick={() => sendBattleCommand({ type: "FOUND", ids: [] })}
-              className="pointer-events-auto rounded border border-blue-700 px-2 py-1 text-left text-xs text-blue-200 hover:bg-blue-900/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500"
+              className="btn-pixel btn-blue pointer-events-auto px-2 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ⚑ Fundar vila aqui ({REALM.FOUND_COST.gold} ouro · {REALM.FOUND_COST.iron} ferro)
+              <PixelIcon id="BANNER" /> Fundar vila aqui ({REALM.FOUND_COST.gold} ouro · {REALM.FOUND_COST.iron} ferro)
               {hud.foundBlocked && <span className="block text-[10px]">{hud.foundBlocked}</span>}
             </button>
           )}
@@ -310,9 +328,9 @@ export function FieldHudView() {
               disabled={!!hud.pitchBlocked}
               onClick={() => sendBattleCommand({ type: "PITCH_CAMP", ids: [] })}
               title={hud.pitchBlocked ?? "Um dia de trabalho: o acampamento nasce logo a leste, com o portão virado para o Comandante"}
-              className="pointer-events-auto rounded border border-amber-600 bg-amber-900/40 px-2 py-1 text-left text-xs text-amber-100 hover:bg-amber-800/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:bg-transparent disabled:text-neutral-500"
+              className="btn-pixel btn-wood pointer-events-auto px-2 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ⛺ Montar acampamento aqui (acampamento levantado)
+              <PixelIcon id="TENT" /> Montar acampamento aqui (acampamento levantado)
               {hud.pitchBlocked && <span className="block text-[10px]">{hud.pitchBlocked}</span>}
             </button>
           )}
@@ -321,9 +339,9 @@ export function FieldHudView() {
               type="button"
               onClick={startSeatSiege}
               title="O inimigo está ao pé da muralha: a batalha começa com o exército que estiver em casa"
-              className="pointer-events-auto animate-pulse rounded border border-red-500 bg-red-900/60 px-2 py-1 text-left text-xs font-bold text-red-100 hover:bg-red-800/70"
+              className="btn-pixel btn-red pointer-events-auto animate-pulse px-2 py-1 text-left text-xs font-bold"
             >
-              ⚔ Às muralhas! {seatAlarm.attackers} inimigos cercam a sede
+              <PixelIcon id="ARMS" /> Às muralhas! {seatAlarm.attackers} inimigos cercam a sede
             </button>
           )}
           {hud && hasFortress && !hud.inCamp && !scenario && (
@@ -332,9 +350,9 @@ export function FieldHudView() {
               disabled={!fieldCamp && !!hud.fieldBlocked}
               onClick={() => sendBattleCommand({ type: "FIELD_CAMP", ids: [] })}
               title={fieldCamp ? "Recolhe o acampamento de campo para as carroças" : (hud.fieldBlocked ?? "Meio dia de trabalho: o kit do acampamento de campo é montado logo a leste")}
-              className="pointer-events-auto rounded border border-amber-600 bg-amber-900/40 px-2 py-1 text-left text-xs text-amber-100 hover:bg-amber-800/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:bg-transparent disabled:text-neutral-500"
+              className="btn-pixel btn-wood pointer-events-auto px-2 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {fieldCamp ? "⛺ Recolher o acampamento de campo" : "⛺ Montar o acampamento de campo"}
+              <PixelIcon id="TENT" /> {fieldCamp ? "Recolher o acampamento de campo" : "Montar o acampamento de campo"}
               {!fieldCamp && hud.fieldBlocked && <span className="block text-[10px]">{hud.fieldBlocked}</span>}
             </button>
           )}
@@ -354,7 +372,17 @@ export function FieldHudView() {
                   }`}
                 >
                   {m.name}
-                  {m.state === "OUTBOUND" ? " ✉" : m.state === "RETURNING" ? " ↩" : ""}
+                  {m.state === "OUTBOUND" ? (
+                    <>
+                      {" "}
+                      <PixelIcon id="LETTER" />
+                    </>
+                  ) : m.state === "RETURNING" ? (
+                    <>
+                      {" "}
+                      <PixelIcon id="RETURN" />
+                    </>
+                  ) : null}
                 </span>
               ))}
             </div>
@@ -362,7 +390,7 @@ export function FieldHudView() {
           {hud?.scouts.map((s) => (
             <div
               key={s.id}
-              className={`flex items-center justify-between gap-2 rounded bg-black/40 px-2 py-1 text-xs ${s.selected ? "ring-1 ring-lime-400" : ""}`}
+              className={`flex items-center justify-between gap-2 hud-card px-2 py-1 text-xs ${s.selected ? "ring-1 ring-lime-400" : ""}`}
             >
               <button
                 type="button"
@@ -415,8 +443,8 @@ export function FieldHudView() {
         </div>
         <div className="absolute left-1/2 top-[4.5rem] flex w-[30rem] max-w-[40vw] -translate-x-1/2 flex-col items-center gap-1">
           {hud?.duel && <DuelPanel duel={hud.duel} />}
-          {hud && hud.slow.left > 0 && <div className="w-full rounded bg-sky-900/90 px-3 py-1.5 text-center text-sm font-bold text-sky-100">Câmera lenta: {Math.ceil(hud.slow.left / 1000)} s para decidir</div>}
-          {hud?.tacticalPause && <div className="w-full rounded bg-amber-900/90 px-3 py-1.5 text-center text-sm font-bold text-amber-100">⏸ Pausa tática: dê as ordens e aperte P para continuar</div>}
+          {hud && hud.slow.left > 0 && <div className="w-full hud-box px-3 py-1.5 text-center text-sm font-bold text-sky-200">Câmera lenta: {Math.ceil(hud.slow.left / 1000)} s para decidir</div>}
+          {hud?.tacticalPause && <div className="w-full hud-box px-3 py-1.5 text-center text-sm font-bold text-amber-200"><PixelIcon id="PAUSE" /> Pausa tática: dê as ordens e aperte P para continuar</div>}
           <ScenarioBanner />
           <ContractBanner />
           <ExpeditionBanner />
@@ -425,10 +453,10 @@ export function FieldHudView() {
           <CaptivityBanner />
           {/* No anel, o Comandante só vê o duelo: as notícias esperam */}
           {hud && hud.feed.length > 0 && !(hud.duel && !hud.duel.auto) && (
-            <ol className="flex w-full flex-col gap-0.5 rounded bg-black/55 px-3 py-2 text-xs text-amber-100">
+            <ol className="flex w-full flex-col gap-0.5 hud-box px-3 py-2 text-xs text-amber-100">
               {hud.feed.map((line, i) => (
                 <li key={i} className={i === hud.feed.length - 1 ? "" : "opacity-60"}>
-                  {line}
+                  <IconText text={line} />
                 </li>
               ))}
             </ol>
@@ -437,7 +465,6 @@ export function FieldHudView() {
         {/* Direita: relógio, recursos, som e mapa; abaixo, câmera e inimigos à vista */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-start gap-3">
-            <WorldClock />
             {!scenario && <ResourceBar />}
             <SoundControl />
             {scenario ? (
@@ -459,6 +486,7 @@ export function FieldHudView() {
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
+            <WorldClock />
             {hud && hud.enemiesInSight > 0 && (
               <span className="hud-box px-3 py-1.5 font-mono text-sm text-red-300">
                 À vista: {hud.enemiesInSight}
@@ -499,9 +527,10 @@ export function FieldHudView() {
                     })
                   }
                   title="H: centralizar no Comandante"
-                  className="rounded px-2 py-0.5 text-neutral-300 hover:bg-neutral-700"
+                  className="btn-pixel btn-iron px-1 py-0"
+                  aria-label="Centralizar no Comandante"
                 >
-                  ⌖
+                  <PixelIcon id="CENTER" />
                 </button>
                 <span className="font-mono text-xs text-neutral-400">{Math.round(hud.camera.zoom * 100)}%</span>
               </div>

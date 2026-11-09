@@ -13,7 +13,7 @@ export function InteriorView() {
   if (!interior) return null;
   return (
     <div className="pointer-events-none absolute inset-0 text-white">
-      <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-amber-300/50 bg-black/75 px-5 py-1.5 text-base font-bold tracking-wide text-amber-200">
+      <div className="absolute left-1/2 top-3 -translate-x-1/2 hud-box px-5 py-1.5 font-serif text-base font-bold tracking-wide text-amber-200">
         {interior.title}
       </div>
       <div className="absolute bottom-3 right-3">

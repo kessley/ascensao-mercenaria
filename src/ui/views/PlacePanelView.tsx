@@ -31,6 +31,7 @@ import { GuildPanel } from "../components/trade/GuildPanel";
 import { DepotPanel } from "../components/trade/DepotPanel";
 import { DeparturePanel } from "../components/DeparturePanel";
 import { NobilityBook } from "../components/court/NobilityBook";
+import { PixelIcon } from "../components/PixelIcon";
 
 const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   TENT: "Tenda do Comandante",
@@ -74,16 +75,16 @@ function BookButton() {
       <button
         type="button"
         onClick={() => setCampPanel({ kind: "PRICE_BOOK" })}
-        className="rounded border border-violet-400/70 bg-violet-900/40 px-3 py-2 text-left text-sm hover:bg-violet-800/50"
+        className="btn-pixel btn-wood px-3 py-2 text-left text-sm"
       >
-        📖 <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
+        <PixelIcon id="BOOK" /> <b>Livro de Preços</b> <span className="text-xs text-neutral-400">— {known} mercado(s) anotado(s), com a idade de cada notícia</span>
       </button>
       <button
         type="button"
         onClick={() => setCampPanel({ kind: "NOBILITY" })}
-        className="rounded border border-amber-400/70 bg-amber-900/30 px-3 py-2 text-left text-sm hover:bg-amber-800/40"
+        className="btn-pixel btn-wood px-3 py-2 text-left text-sm"
       >
-        👑 <b>Livro da Nobreza</b> <span className="text-xs text-neutral-400">— {met} nobre(s) conhecido(s), favores e o nome do bando</span>
+        <PixelIcon id="CROWN" /> <b>Livro da Nobreza</b> <span className="text-xs text-neutral-400">— {met} nobre(s) conhecido(s), favores e o nome do bando</span>
       </button>
     </>
   );
@@ -103,7 +104,9 @@ function BattalionCommander({ battalionId }: { battalionId: string }) {
           className="rounded bg-neutral-800 px-3 py-2 text-left hover:bg-neutral-700"
         >
           <span className="font-semibold">{fullName(lieutenant)}</span>{" "}
-          <span className="text-xs text-sky-300">★ {PASSIVES[lieutenant.passive].label}</span>
+          <span className="text-xs text-sky-300">
+            <PixelIcon id="STAR" /> {PASSIVES[lieutenant.passive].label}
+          </span>
         </button>
       ) : (
         <p className="text-xs text-neutral-500">Sem tenente. Designe um pela ficha do tenente (Tenda do Comandante).</p>
@@ -313,10 +316,10 @@ export function PlacePanelView() {
             <button
               type="button"
               onClick={() => setCampPanel(null)}
-              className="rounded px-2 py-1 text-neutral-400 hover:bg-neutral-700 hover:text-white"
+              className="btn-pixel btn-wood px-1.5 py-0.5"
               aria-label="Fechar"
             >
-              ✕
+              <PixelIcon id="CLOSE" />
             </button>
           </header>
           <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">

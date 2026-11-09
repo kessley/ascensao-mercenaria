@@ -3,6 +3,8 @@ import { troopFacts } from "../../../game/data/troopFacts";
 import { BALANCE, FORMATIONS, PROGRESSION, TRADE, TROOPS, type TroopType } from "../../../utils/constants";
 import { battalionWage, reinforceCostPerSoldier } from "../../../utils/economy";
 import { xpToNextLevel } from "../../../utils/progression";
+import { PixelIcon } from "../PixelIcon";
+import { TroopIcon } from "../battle/BattleIcons";
 
 /** Um batalhão: efetivo, tropa, formação, salário e reforço de soldados perdidos. */
 export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
@@ -18,6 +20,7 @@ export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
     <div className="flex flex-col gap-1 rounded bg-neutral-800 px-3 py-2 text-sm">
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-2 font-semibold">
+          <TroopIcon troop={b.troopType} scale={2} />
           <span className="rounded bg-amber-700/80 px-1.5 font-mono text-xs text-amber-100">Nv {b.level}</span>
           {b.name}
           {b.skillPoints > 0 && (
@@ -108,9 +111,14 @@ export function RecruitPanel() {
               onClick={() => recruitBattalion(type)}
               className="flex flex-col gap-1 rounded border border-neutral-700 bg-neutral-800 p-3 text-left hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-700"
             >
-              <span className="font-semibold">
+              <span className="flex items-center gap-1.5 font-semibold">
+                <TroopIcon troop={type} scale={2} />
                 {TROOPS[type].label}
-                {locked && <span className="ml-2 text-xs font-normal text-red-300">🔒 {locked}</span>}
+                {locked && (
+                  <span className="ml-1 text-xs font-normal text-red-300">
+                    <PixelIcon id="LOCK" /> {locked}
+                  </span>
+                )}
               </span>
               <span className="font-mono text-xs text-yellow-400">
                 {cost} ouro · +{Math.ceil(TROOPS[type].wagePerSoldier * 8)}/sem.

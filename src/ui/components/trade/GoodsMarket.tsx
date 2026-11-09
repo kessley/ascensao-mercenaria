@@ -6,6 +6,8 @@ import type { Settlement } from "../../../game/sim/realm";
 import { GOODS, GOOD_LIST, MARKET, TRADE, type Good } from "../../../utils/constants";
 import { cargoCapacity } from "../../../utils/economy";
 import { Sparkline, priceTint } from "./Sparkline";
+import { GOOD_ICON } from "../../../game/art/icons";
+import { PixelIcon } from "../PixelIcon";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 const small = "rounded border px-1.5 py-0.5 text-[11px] font-semibold disabled:opacity-30";
@@ -63,8 +65,10 @@ export function GoodsMarket({ t }: { t: Settlement }) {
           return (
             <div key={g} className="contents">
               <span className="truncate" title={`${d.label}: preço base ${d.base}, peso ${d.weight} por unidade`}>
-                {d.icon} {d.label}
-                {contraband && <span className="ml-1 text-[10px] text-amber-400" title="Carga de um reino em guerra com este: contrabando (paga mais, mas os guardas podem confiscar)">⚠ contrabando</span>}
+                <PixelIcon id={GOOD_ICON[g]} /> {d.label}
+                {contraband && <span className="ml-1 text-[10px] text-amber-400" title="Carga de um reino em guerra com este: contrabando (paga mais, mas os guardas podem confiscar)">
+                    <PixelIcon id="WARN" /> contrabando
+                  </span>}
               </span>
               <span className="flex items-center gap-1">
                 <Sparkline values={t.econ.history[g] ?? []} base={d.base} label={d.label} width={56} height={18} />
@@ -108,12 +112,17 @@ export function GoodsMarket({ t }: { t: Settlement }) {
 /** Quem vive no povoado e o que as oficinas fazem (produção e consumo de ontem). */
 function TownEconomy({ t }: { t: Settlement }) {
   const g = strata(t);
-  const list = (stock: Record<Good, number>) =>
-    GOOD_LIST.filter((x) => stock[x] >= 0.1)
+  const list = (stock: Record<Good, number>) => {
+    const top = GOOD_LIST.filter((x) => stock[x] >= 0.1)
       .sort((a, b) => stock[b] * GOODS[b].base - stock[a] * GOODS[a].base)
-      .slice(0, 5)
-      .map((x) => `${GOODS[x].icon} ${stock[x].toFixed(1)}`)
-      .join("  ");
+      .slice(0, 5);
+    if (top.length === 0) return "nada";
+    return top.map((x) => (
+      <span key={x} className="mr-2 whitespace-nowrap">
+        <PixelIcon id={GOOD_ICON[x]} /> {stock[x].toFixed(1)}
+      </span>
+    ));
+  };
   return (
     <details className="text-xs text-neutral-400">
       <summary className="cursor-pointer text-neutral-300">Gente e oficinas</summary>
@@ -121,8 +130,8 @@ function TownEconomy({ t }: { t: Settlement }) {
         Camponeses ~{Math.round(g.peasants)} · burgueses ~{Math.round(g.burghers)} · nobres ~{Math.round(g.nobles)} · guarnição {t.garrison}
       </p>
       <p>Oficinas: {industriesOf(t).map((i) => `${INDUSTRIES[i.id].label} ${i.level.toFixed(1)}`).join(" · ")}</p>
-      <p>Produziu ontem: {list(t.econ.made) || "nada"}</p>
-      <p>Consumiu ontem: {list(t.econ.used) || "nada"}</p>
+      <p>Produziu ontem: {list(t.econ.made)}</p>
+      <p>Consumiu ontem: {list(t.econ.used)}</p>
       <p className="text-neutral-500">Oficina que vende barato produz menos; vendendo caro, contrata mais gente.</p>
     </details>
   );

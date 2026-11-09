@@ -109,4 +109,41 @@ export async function ui({ page, ev }, { check }) {
   });
   await page.waitForTimeout(1500);
   await page.screenshot({ path: "tests/battle/.shots-g5-comando.png" });
+
+  // --- Parte 3: os ícones ---
+  // Os sinais que viravam emoji ou fonte do sistema: nenhum pode sobrar como texto na interface
+  const SYMBOLS = "⚑★✓✗✕☠♛👑⚔⚓✉↩✦⚠🔒📖🔥⛺🛒🎒⚖☾☀◐⏸☔🌫❄⛈🌾🥩🧂🪵⛓🧵🍺🐎💎";
+  const leftovers = (sym) => ev((s) => [...s].filter((c) => document.getElementById("root").innerText.includes(c)), sym);
+  const bar = await ev(() => {
+    const icons = [...document.querySelectorAll(".btn-pixel img.pixel-icon")];
+    return { icons: icons.length, png: icons.every((i) => i.src.startsWith("data:image/png")), ids: [...new Set(icons.map((i) => i.dataset.icon))].slice(0, 8) };
+  });
+  console.log("   barra:", JSON.stringify(bar));
+  check("os botões da barra de comando são ícones de pixel", bar.icons >= 6 && bar.png, JSON.stringify(bar));
+  const hudIcons = await ev(() => [...document.querySelectorAll(".hud-box img.pixel-icon")].map((i) => i.dataset.icon));
+  check("o HUD mostra ouro, rações e ferro em ícone", ["GOLD", "FOOD", "IRON"].every((id) => hudIcons.includes(id)), JSON.stringify(hudIcons.slice(0, 12)));
+  const hudLeft = await leftovers(SYMBOLS);
+  check("nenhum emoji sobra no HUD de campo", hudLeft.length === 0, hudLeft.join(" "));
+  await page.screenshot({ path: "tests/battle/.shots-g5-icones-hud.png" });
+
+  // A planta do acampamento: cada construção com o seu ícone
+  await ev(() => window.__store.getState().setCampPanel({ kind: "CAMP_PLAN" }));
+  await page.waitForTimeout(500);
+  const plan = await ev(() => {
+    const icons = [...document.querySelectorAll("aside img.pixel-icon")].map((i) => i.dataset.icon);
+    return { total: icons.length, distinct: new Set(icons).size };
+  });
+  console.log("   planta:", JSON.stringify(plan));
+  check("a planta mostra um ícone para cada construção", plan.distinct >= 40, JSON.stringify(plan));
+  const planLeft = await leftovers(SYMBOLS);
+  check("nenhum emoji sobra na planta", planLeft.length === 0, planLeft.join(" "));
+  await page.screenshot({ path: "tests/battle/.shots-g5-icones-planta.png" });
+
+  // A tenda, com o quadro de comando e o diário
+  await ev(() => window.__store.getState().setCampPanel({ kind: "TENT" }));
+  await page.waitForTimeout(500);
+  const tentLeft = await leftovers(SYMBOLS);
+  check("nenhum emoji sobra na tenda, no quadro de comando e no diário", tentLeft.length === 0, tentLeft.join(" "));
+  await page.screenshot({ path: "tests/battle/.shots-g5-icones-tenda.png" });
+  await ev(() => window.__store.getState().setCampPanel(null));
 }

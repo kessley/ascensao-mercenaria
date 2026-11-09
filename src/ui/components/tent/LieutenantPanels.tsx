@@ -6,6 +6,7 @@ import type { Contract } from "../../../game/data/contracts";
 import { CAPTAINS, LIEUTENANTS } from "../../../utils/constants";
 import { promotionBlock } from "../../../game/data/captains";
 import { allCaptains } from "../../../store/captainSlice";
+import { PixelIcon } from "../PixelIcon";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -31,7 +32,7 @@ function Traits({ l }: { l: LieutenantData }) {
         </span>
       ))}
       <span title={PASSIVES[l.passive].description} className="rounded bg-sky-900/70 px-2 py-0.5 text-sky-200">
-        ★ {PASSIVES[l.passive].label}
+        <PixelIcon id="STAR" /> {PASSIVES[l.passive].label}
       </span>
     </div>
   );

@@ -1783,7 +1783,6 @@ export const SEASONS = {
 /** Clima diário por região (Marco 13). */
 export const WEATHER = {
   LABEL: { CLEAR: "Céu limpo", RAIN: "Chuva", FOG: "Nevoeiro", SNOW: "Neve", STORM: "Tempestade" } as Record<Weather, string>,
-  ICON: { CLEAR: "☀", RAIN: "☔", FOG: "🌫", SNOW: "❄", STORM: "⛈" } as Record<Weather, string>,
   /** Cada célula de clima tem este tamanho (2×2 regiões): o tempo muda de lugar para lugar. */
   CELL_REGIONS: 2,
   /** Chance de chuva (ou neve, no frio do inverno) e de nevoeiro por estação. */
@@ -2142,18 +2141,19 @@ export const GOOD_LIST: readonly Good[] = ["GRAIN", "MEAT", "SALT", "WOOD", "IRO
 /**
  * Bens: preço base (ouro por unidade) e peso nas carroças (cada carroça leva 60; uma ração
  * pesa 1). Cavalos andam sozinhos (peso 0). Uma unidade de grão ou de carne vira 10 rações.
+ * O ícone de cada bem fica em `game/art/icons.ts` (`GOOD_ICON`).
  */
-export const GOODS: Record<Good, { label: string; icon: string; base: number; weight: number; color: string }> = {
-  GRAIN: { label: "Grão", icon: "🌾", base: 10, weight: 10, color: "#d9b44a" },
-  MEAT: { label: "Carne", icon: "🥩", base: 14, weight: 10, color: "#c0584a" },
-  SALT: { label: "Sal", icon: "🧂", base: 16, weight: 5, color: "#e8e4dc" },
-  WOOD: { label: "Madeira", icon: "🪵", base: 6, weight: 15, color: "#a0784a" },
-  IRON: { label: "Ferro", icon: "⛓", base: 8, weight: 2, color: "#8fa6b8" },
-  CLOTH: { label: "Tecido", icon: "🧵", base: 20, weight: 4, color: "#b07ac0" },
-  ALE: { label: "Cerveja e vinho", icon: "🍺", base: 12, weight: 6, color: "#e0a040" },
-  ARMS: { label: "Armas e armaduras", icon: "⚔", base: 45, weight: 6, color: "#a0a8b0" },
-  HORSES: { label: "Cavalos", icon: "🐎", base: 55, weight: 0, color: "#c08a50" },
-  LUXURY: { label: "Luxos", icon: "💎", base: 80, weight: 1, color: "#e07ac0" },
+export const GOODS: Record<Good, { label: string; base: number; weight: number; color: string }> = {
+  GRAIN: { label: "Grão", base: 10, weight: 10, color: "#d9b44a" },
+  MEAT: { label: "Carne", base: 14, weight: 10, color: "#c0584a" },
+  SALT: { label: "Sal", base: 16, weight: 5, color: "#e8e4dc" },
+  WOOD: { label: "Madeira", base: 6, weight: 15, color: "#a0784a" },
+  IRON: { label: "Ferro", base: 8, weight: 2, color: "#8fa6b8" },
+  CLOTH: { label: "Tecido", base: 20, weight: 4, color: "#b07ac0" },
+  ALE: { label: "Cerveja e vinho", base: 12, weight: 6, color: "#e0a040" },
+  ARMS: { label: "Armas e armaduras", base: 45, weight: 6, color: "#a0a8b0" },
+  HORSES: { label: "Cavalos", base: 55, weight: 0, color: "#c08a50" },
+  LUXURY: { label: "Luxos", base: 80, weight: 1, color: "#e07ac0" },
 };
 
 /** Necessidade (o que a gente consome): os bens e a comida (grão ou carne). */

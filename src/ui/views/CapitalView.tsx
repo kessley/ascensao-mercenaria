@@ -68,7 +68,7 @@ export function CapitalView() {
   return (
     <div className="pointer-events-none absolute inset-0 text-white">
       <div className="absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-1">
-        <div className="rounded-full border border-amber-300/50 bg-black/75 px-5 py-1.5 text-base font-bold tracking-wide text-amber-200">
+        <div className="hud-box px-5 py-1.5 font-serif text-base font-bold tracking-wide text-amber-200">
           {city.name} · {city.district}
         </div>
         <div className="hud-box px-3 py-0.5 font-mono text-xs text-neutral-200">
@@ -78,10 +78,10 @@ export function CapitalView() {
       </div>
       <div className="pointer-events-auto absolute right-3 top-3 flex flex-col items-end gap-1">
         <div className="flex gap-1">
-          <button type="button" onClick={() => setCampPanel({ kind: "NOBILITY" })} className="rounded border border-amber-400/70 bg-black/70 px-3 py-1 text-xs text-amber-100 hover:bg-amber-900/50">
+          <button type="button" onClick={() => setCampPanel({ kind: "NOBILITY" })} className="btn-pixel btn-gold px-3 py-1 font-pixel text-xs font-bold">
             Livro da Nobreza
           </button>
-          <button type="button" onClick={() => setCampPanel({ kind: "GAME" })} className="rounded border border-neutral-500 bg-black/70 px-3 py-1 text-xs text-neutral-100 hover:bg-neutral-700">
+          <button type="button" onClick={() => setCampPanel({ kind: "GAME" })} className="btn-pixel btn-wood px-3 py-1 font-pixel text-xs font-bold">
             Jogo
           </button>
         </div>

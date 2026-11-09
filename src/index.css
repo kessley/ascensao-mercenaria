@@ -121,6 +121,16 @@
     --btn-hover: var(--art-btn-iron-hover);
     --btn-down: var(--art-btn-iron-down);
   }
+  /* Os ícones (G5, parte 3): 12 px na linha do texto, 24 px nos botões e nas listas */
+  .pixel-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    vertical-align: -2px;
+  }
+  .pixel-icon-big {
+    vertical-align: middle;
+  }
 }
 
 /* Depois dos utilitários do Tailwind: dentro das molduras, cantos retos e cartões entalhados */

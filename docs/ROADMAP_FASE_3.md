@@ -18,7 +18,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G5 (etapa 13, a interface), em quatro partes. As partes 1 e 2 (a fonte, as molduras e os botões) estão feitas; a seguir, a parte 3, os ícones.
+- **A seguir:** o G5 (etapa 13, a interface), em quatro partes. As partes 1 a 3 (a fonte, as molduras e os botões, os ícones) estão feitas; a seguir, a parte 4, os retratos.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -49,7 +49,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
-| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | partes 1 e 2 (fonte e molduras) feitas; a seguir, os ícones |
+| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | partes 1 a 3 (fonte, molduras e ícones) feitas; a seguir, os retratos |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
@@ -965,6 +965,18 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - os botões do componente `Button` e os botões de ordem da barra de comando (ferro; o ativo, ouro).
 - **Conserto:** o diário da tenda encolhia até sumir no painel (a seção podia encolher dentro da coluna que rola). Agora ele fica do tamanho dele.
 - **Testes:** 4 de regras (`tests/unit/frames.test.ts`) e 4 verificações novas na suíte `interface` (9 no total).
+
+**Feito na parte 3, os ícones:**
+- **Os desenhos** ficam em `src/game/art/iconArt.ts`: 103 desenhos de 10×10 (111 ícones, contando os derivados), uma letra por cor, com o contorno escuro posto depois (o ícone pronto tem 12×12, a altura da fonte). `art/icons.ts` tem a paleta, os derivados (a retirada é o avanço de cabeça para baixo; o cavaleiro é o cavalo de ferro) e as tabelas:
+  - as 9 tropas (espada, lança, elmo, arco, besta, dardos, cavalo, cavalo com barda, cavalo com flecha);
+  - os 10 bens, o ouro, as rações, a mochila, a carroça, a fama, a honra e o temor;
+  - as 50 construções do Marco 22, cada uma pelo que faz (a cozinha é um caldeirão, a ferraria uma bigorna, o estábulo uma ferradura...), e as 7 necessidades;
+  - os 16 botões de ordem e as 4 formações da barra de comando;
+  - o tempo, a hora do dia e os sinais do texto (⚑, ★, ☠, ♛, ⚔, ⚓, ✉, ✓...).
+- **Na interface:** o componente `PixelIcon` mostra o ícone em 12 px (na linha do texto) ou 24 px (botões e listas), sem suavizar; `IconText` troca os sinais de um texto pelos ícones, e assim as notícias do campo, o diário e os rótulos que vêm do jogo não mostram mais emoji. No mapa do continente, os rótulos desenham os ícones no canvas, e o tempo de cada região também é ícone.
+- **Onde entram:** a barra de comando inteira, o cartão de cada batalhão, o HUD de recursos (ouro, rações, ferro e o nome do bando viram ícone com número), o relógio e o tempo, a planta do acampamento (cada construção, cada posto, cada obra e cada necessidade), o quadro de comando, o exército da tenda, o comércio e o Livro de Preços.
+- **Junto:** as caixas pretas que sobravam no HUD de batalha (dicas dos botões, ajuda, duelo, pausa, câmera lenta, notícias, cenário) viraram ferro, e os botões do campo (tochas, descansar, fundar vila, montar acampamento, às muralhas) viraram botões de pixel. O relógio desceu para a coluna da direita: numa tela de 1280, as notícias o cobriam. Os emojis dos bens e do tempo saíram de `constants.ts`, e a fonte ganhou ♪, ♫ e ☺ para as falas do acampamento.
+- **Testes:** 5 de regras (`tests/unit/icons.test.ts`: o tamanho e as cores de cada desenho, o contorno, um ícone para cada tropa, bem e construção, os derivados e o corte do texto) e 6 verificações novas na suíte `interface` (15 no total), entre elas a de que nenhum emoji sobra no HUD, na planta, na tenda, no quadro de comando e no diário.
 
 ## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.

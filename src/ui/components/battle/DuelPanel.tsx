@@ -1,4 +1,5 @@
 import type { DuelHud, DuelistHud } from "../../../store/useGameStore";
+import { PixelIcon } from "../PixelIcon";
 
 function Bar({ value, color, tall }: { value: number; color: string; tall?: boolean }) {
   const pct = Math.max(0, Math.min(100, value * 100));
@@ -25,9 +26,9 @@ function Duelist({ f, right }: { f: DuelistHud; right?: boolean }) {
 export function DuelPanel({ duel }: { duel: DuelHud }) {
   const [ours, foe] = duel.fighters;
   return (
-    <div className="flex w-full flex-col items-center gap-1 rounded bg-black/80 px-3 py-2">
+    <div className="flex w-full flex-col items-center gap-1 hud-box px-3 py-2">
       <span className="text-xs font-bold uppercase tracking-wider text-amber-200">
-        ⚔ Duelo{duel.auto ? " · os dois lutam sozinhos" : ""} · {duel.left} s
+        <PixelIcon id="ARMS" /> Duelo{duel.auto ? " · os dois lutam sozinhos" : ""} · {duel.left} s
       </span>
       <div className="flex w-full items-start justify-between gap-4">
         <Duelist f={ours} />
@@ -42,7 +43,7 @@ export function DuelPanel({ duel }: { duel: DuelHud }) {
 export function DuelControls() {
   return (
     <div className="absolute inset-x-0 bottom-3 flex justify-center">
-      <div className="max-w-3xl rounded bg-black/80 px-3 py-1.5 text-center font-mono text-xs leading-5 text-neutral-200">
+      <div className="max-w-3xl hud-box px-3 py-1.5 text-center font-mono text-xs leading-5 text-neutral-200">
         WASD anda · Espaço ou clique: golpe leve · Q ou botão direito: pesado · Shift: bloquear (na hora certa, apara)
         <br />F: esquiva · E: empurrão · o arco vermelho avisa o golpe; o largo e escuro é o pesado
       </div>

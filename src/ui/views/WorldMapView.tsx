@@ -14,6 +14,13 @@ import { groundColor } from "../../game/world/TerrainMap";
 import { dailyRations } from "../../utils/economy";
 import { distance, type Point } from "../../utils/math";
 import { Button } from "../components/Button";
+import { ICON_SIZE, WEATHER_ICON, splitIcons } from "../../game/art/icons";
+import { PIXEL_FONT } from "../../game/art/font";
+import { PixelIcon } from "../components/PixelIcon";
+import { iconCanvas } from "../pixelIcons";
+
+/** Os nomes no mapa, na fonte de pixel (só fica nítida em 12 px). */
+const MAP_FONT = `12px ${PIXEL_FONT}`;
 
 export const MAP_W = 1024;
 
@@ -140,13 +147,29 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
     ctx.stroke();
   }
 
-  ctx.font = "11px monospace";
+  ctx.font = MAP_FONT;
   ctx.textAlign = "center";
+  // O rótulo com os sinais (♛, ⚔, ⚓, ★, ☠) trocados pelos ícones de pixel (G5, parte 3)
   const label = (text: string, p: Point, dy: number, color: string) => {
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillText(text, p.x * s + 1, p.y * s + dy + 1);
-    ctx.fillStyle = color;
-    ctx.fillText(text, p.x * s, p.y * s + dy);
+    const parts = splitIcons(text);
+    const widthOf = (q: (typeof parts)[number]) => (q.icon ? ICON_SIZE + 1 : ctx.measureText(q.text).width);
+    let x = Math.round(p.x * s - parts.reduce((sum, q) => sum + widthOf(q), 0) / 2);
+    const y = Math.round(p.y * s + dy);
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.imageSmoothingEnabled = false;
+    for (const q of parts) {
+      if (q.icon) {
+        ctx.drawImage(iconCanvas(q.icon), x, y - ICON_SIZE + 2);
+      } else {
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillText(q.text, x + 1, y + 1);
+        ctx.fillStyle = color;
+        ctx.fillText(q.text, x, y);
+      }
+      x += widthOf(q);
+    }
+    ctx.restore();
   };
 
   // Pontes (quadradinho marrom; queimadas, preto) e vaus (pontos claros)
@@ -213,8 +236,7 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
   if (snap && layers.day !== undefined) {
     const cw = WORLD.REGION_WIDTH * WEATHER.CELL_REGIONS;
     const ch = WORLD.REGION_HEIGHT * WEATHER.CELL_REGIONS;
-    ctx.font = "16px sans-serif";
-    ctx.textAlign = "center";
+    ctx.imageSmoothingEnabled = false;
     for (let y = ch / 2; y < WORLD_HEIGHT; y += ch) {
       for (let x = cw / 2; x < WORLD_WIDTH; x += cw) {
         const p = { x, y };
@@ -222,11 +244,11 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
         const w = weatherAt(world.seed, layers.day, p, geoOf(world.geo));
         if (w === "CLEAR") continue;
         ctx.globalAlpha = 0.8;
-        ctx.fillText(WEATHER.ICON[w], x * s, y * s);
+        ctx.drawImage(iconCanvas(WEATHER_ICON[w]), Math.round(x * s) - ICON_SIZE, Math.round(y * s) - ICON_SIZE, ICON_SIZE * 2, ICON_SIZE * 2);
         ctx.globalAlpha = 1;
       }
     }
-    ctx.font = "11px monospace";
+    ctx.imageSmoothingEnabled = true;
   }
 
   // Acampamento, povoados (cor do dono) e locais de contrato
@@ -533,14 +555,24 @@ export function WorldMapView() {
           <span><span className="text-sky-400">◆</span> tropa em missão (- - - rumo)</span>
           <span><span className="text-red-500">■</span> bando à vista (- - - rumo)</span>
           <span><span className="text-red-500/50">■</span> ? última posição conhecida</span>
-          <span><span className="text-red-400">☠</span> covil de calamidade</span>
-          <span><span className="text-amber-400">★</span> contrato ativo</span>
+          <span>
+            <PixelIcon id="SKULL" /> covil de calamidade
+          </span>
+          <span>
+            <PixelIcon id="STAR" /> contrato ativo
+          </span>
           <span><span className="text-sky-500">━</span> rio</span>
           <span><span className="text-amber-700">■</span> ponte</span>
           <span><span className="text-sky-100">●</span> vau</span>
-          <span>⚓ porto</span>
-          <span>♛ capital</span>
-          <span>⚔ sob cerco</span>
+          <span>
+            <PixelIcon id="ANCHOR" /> porto
+          </span>
+          <span>
+            <PixelIcon id="CROWN" /> capital
+          </span>
+          <span>
+            <PixelIcon id="ARMS" /> sob cerco
+          </span>
           <span><span className="text-violet-400">■</span> exército de um reino (em paz com o bando)</span>
         </div>
       </div>

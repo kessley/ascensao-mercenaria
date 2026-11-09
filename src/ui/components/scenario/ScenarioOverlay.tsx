@@ -18,7 +18,7 @@ function SiegeBar() {
   if (!siege || !hud) return null;
   const button = "pointer-events-auto rounded border border-amber-700 px-2 py-0.5 hover:border-amber-300 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-500";
   return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded bg-black/70 px-3 py-1.5 text-xs text-amber-100">
+    <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 hud-box px-3 py-1.5 text-xs text-amber-100">
       <span className="capitalize-first">
         {SIEGE_TOWNS[siege.town].label}: portões {hud.gatesUp}/{hud.gates}
         {hud.gatesUp > 0 && hud.weakest < 1 ? ` (o mais batido a ${Math.round(hud.weakest * 100)}%)` : ""} · escadas nos muros {hud.ladders}
@@ -51,7 +51,7 @@ export function ScenarioBanner() {
   const left = scenario.surviveMinutes * 60 - (hud?.seconds ?? 0);
   return (
     <>
-      <div className="flex w-full flex-wrap items-center justify-between gap-x-3 rounded bg-black/70 px-3 py-1.5 text-xs text-neutral-200">
+      <div className="flex w-full flex-wrap items-center justify-between gap-x-3 hud-box px-3 py-1.5 text-xs text-neutral-200">
         <b className="text-amber-200">{SCENARIO_OBJECTIVES[scenario.objective].label}</b>
         <span className="font-mono">{scenario.objective === "SURVIVE" ? `faltam ${clock(left)}` : clock(hud?.seconds ?? 0)}</span>
         <span>

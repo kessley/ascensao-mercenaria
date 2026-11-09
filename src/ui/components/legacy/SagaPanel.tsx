@@ -6,6 +6,7 @@ import { LEADER_TRAITS, fallDeathChance, leaderAge } from "../../../game/sim/leg
 import { useGameStore } from "../../../store/useGameStore";
 import { TRAITS } from "../../../game/data/lieutenants";
 import { Button } from "../Button";
+import { PixelIcon } from "../PixelIcon";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -79,7 +80,7 @@ export function SagaPanel() {
                 <div className="flex items-center justify-between gap-2">
                   <span className={finished ? "text-emerald-300" : ""}>
                     {a.label}
-                    {finished && " ✓"}
+                    {finished && <> <PixelIcon id="CHECK" /></>}
                   </span>
                   {!finished && (
                     <button type="button" disabled={!active && ambitions.length >= AMBITION_SLOTS} onClick={() => (active ? dropAmbition(id) : pickAmbition(id))} className={`rounded border px-2 py-0.5 text-xs disabled:opacity-40 ${active ? "border-amber-400 text-amber-200" : "border-neutral-600 text-neutral-200"}`}>

@@ -37,6 +37,8 @@ import {
   type CampSide,
 } from "../../../game/data/campGrid";
 import { CAMP_MOVE, TROOPS } from "../../../utils/constants";
+import { BUILDING_ICON, NEED_ICON } from "../../../game/art/icons";
+import { PixelIcon } from "../PixelIcon";
 import {
   CARPENTRY,
   LABOR,
@@ -122,7 +124,7 @@ export function CampNeedsPanel() {
             title={HINT[k]}
           >
             <span className={short ? "text-red-300" : "text-emerald-300"}>
-              {short ? "✗" : "✓"} {NEED_LABEL[k]}
+              <PixelIcon id={short ? "CROSS" : "CHECK"} /> <PixelIcon id={NEED_ICON[k]} /> {NEED_LABEL[k]}
               {short && (
                 <span className="ml-1 text-xs text-red-300/70">
                   — {NEED_SHORT[k]}
@@ -211,7 +213,7 @@ export function CampLifePanel() {
             className="flex items-baseline justify-between gap-2 text-sm"
           >
             <span className="text-neutral-200">
-              {CAMP_BUILDINGS[b.kind].label}
+              <PixelIcon id={BUILDING_ICON[b.kind]} /> {CAMP_BUILDINGS[b.kind].label}
             </span>
             <span
               className={`text-xs ${b.off ? "text-neutral-500" : staffing.staff.has(b.id) ? "text-emerald-300" : "text-red-300"}`}
@@ -248,7 +250,7 @@ export function CampLifePanel() {
             <div key={b.id} className="flex flex-col gap-0.5 text-sm">
               <div className="flex justify-between gap-2">
                 <span className="text-neutral-200">
-                  {CAMP_BUILDINGS[b.kind].label}
+                  <PixelIcon id={BUILDING_ICON[b.kind]} /> {CAMP_BUILDINGS[b.kind].label}
                 </span>
                 <span className="text-xs text-neutral-400">
                   {done} de {total} ·{" "}
@@ -404,7 +406,8 @@ export function CampPlanPanel() {
                   key={kind}
                   className="flex items-center justify-between gap-2 rounded border border-neutral-800 bg-neutral-800/50 px-2 py-1 text-sm"
                 >
-                  <span className="text-neutral-200">
+                  <PixelIcon id={BUILDING_ICON[kind]} scale={2} className="self-start" />
+                  <span className="flex-1 text-neutral-200">
                     {def.label}{" "}
                     <span className="text-xs text-neutral-500">
                       {def.size}×{def.size} · {workOf(kind)} de trabalho
@@ -498,7 +501,8 @@ export function CampBuildingFooter({ buildingId }: { buildingId: string }) {
       : null;
   return (
     <section className="flex flex-col gap-2 border-t border-neutral-700 pt-3">
-      <h2 className={sectionTitle}>
+      <h2 className={`${sectionTitle} flex items-center gap-2`}>
+        <PixelIcon id={BUILDING_ICON[b.kind]} scale={2} />
         {def.label}
         {def.upgrades && (
           <span className="font-normal normal-case text-neutral-500">

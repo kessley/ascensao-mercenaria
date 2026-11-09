@@ -7,6 +7,7 @@ import { freightOf } from "../../../game/sim/trade";
 import { TROOPS } from "../../../utils/constants";
 import { captainName, temperOf, TEMPER_LABEL, type CaptainData } from "../../../game/data/captains";
 import type { Point } from "../../../utils/math";
+import { PixelIcon } from "../PixelIcon";
 
 /** Onde o bando está agora (no acampamento, antes de o HUD publicar, é o próprio acampamento). */
 export function useArmyAt(): Point | null {
@@ -41,7 +42,7 @@ export function MissionSteps({ plan, army }: { plan: MissionPlan; army: Point | 
     <ol className="flex flex-col gap-1 text-sm">
       {plan.steps.map((step, i) => (
         <li key={step.text} className={`flex gap-2 ${step.done ? "text-neutral-500 line-through" : i === current ? "text-white" : "text-neutral-300"}`}>
-          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? "bg-emerald-800 text-emerald-100" : i === current ? "bg-amber-500 text-black" : "bg-neutral-700"}`}>{step.done ? "✓" : i + 1}</span>
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? "bg-emerald-800 text-emerald-100" : i === current ? "bg-amber-500 text-black" : "bg-neutral-700"}`}>{step.done ? <PixelIcon id="CHECK" /> : i + 1}</span>
           <span>
             {step.text}
             {step.at && army && !step.done && <span className="block text-xs text-amber-200">{wayTo(army, step.at)}</span>}

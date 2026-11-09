@@ -18,6 +18,7 @@ import {
 } from "../../utils/constants";
 import { Button } from "../components/Button";
 import { MAP_W, drawWorldMap, mapHeight } from "./WorldMapView";
+import { PixelIcon } from "../components/PixelIcon";
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
 
@@ -141,7 +142,7 @@ export function NewWorldView({ onBack }: { onBack: () => void }) {
             style={{ aspectRatio: `${MAP_W} / ${mapHeight(world)}` }}
           />
           <p className="text-xs text-neutral-500">
-            Quadrados = povoados na cor do reino dono (claro = livres) · ⚓ = porto · círculos = locais de contrato · quadrado dourado = o seu
+            Quadrados = povoados na cor do reino dono (claro = livres) · <PixelIcon id="ANCHOR" /> = porto · círculos = locais de contrato · quadrado dourado = o seu
             acampamento · azul = rios · marrom = pontes · pontos claros = vaus.
           </p>
           <p className="text-xs text-neutral-300">

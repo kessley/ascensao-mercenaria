@@ -156,6 +156,10 @@ const BASE: Record<string, Glyph> = {
   "«": g(5, "..X..X", ".X..X.", "X..X..", ".X..X.", "..X..X"),
   "»": g(5, "X..X..", ".X..X.", "..X..X", ".X..X.", "X..X.."),
   "⚑": cap("XXXX.", "XXXXX", "XXXX.", "X....", "X....", "X....", "X...."),
+  // As falas do acampamento (CampLife)
+  "♪": cap("..X..", "..XX.", "..X.X", "..X..", ".XX..", "XXX..", ".X..."),
+  "♫": cap(".XXXX", ".X..X", ".X..X", ".X..X", "XX.XX", "XX.XX"),
+  "☺": cap(".XXXXX.", "X.....X", "X.X.X.X", "X.....X", "X.XXX.X", "X.....X", ".XXXXX."),
   "“": cap("X.X", "X.X"),
   "”": cap("X.X", "X.X"),
   "‘": cap("X"),

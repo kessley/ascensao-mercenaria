@@ -5,6 +5,8 @@ import { captainName, companyLimit, ORIGIN_LABEL, temperOf, TEMPER_LABEL, type C
 import { fullName, TRAITS } from "../../../game/data/lieutenants";
 import { CAPTAINS, TROOPS } from "../../../utils/constants";
 import { LoyaltyBar } from "./LieutenantPanels";
+import { PixelIcon } from "../PixelIcon";
+import { TroopIcon } from "../battle/BattleIcons";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -80,8 +82,8 @@ export function CaptainSheet({ captain: c }: { captain: CaptainData }) {
         {company.map((b, i) => (
           <div key={b.id} className="flex items-center justify-between gap-2 rounded bg-neutral-800 px-2 py-1 text-xs">
             <span>
-              {i === 0 ? "⚑ " : ""}
-              <b>{b.name}</b> · {TROOPS[b.troopType].label} · {b.soldiers} soldados
+              {i === 0 && <><PixelIcon id="BANNER" /> </>}
+              <TroopIcon troop={b.troopType} /> <b>{b.name}</b> · {TROOPS[b.troopType].label} · {b.soldiers} soldados
               {i === 0 && <span className="text-amber-200"> · guarda (ele marcha com ela)</span>}
             </span>
             <span className="flex gap-1">
@@ -149,8 +151,8 @@ function BattalionCard({ b, guard, onDrop }: { b: BattalionData; guard: boolean;
     >
       <div className="flex justify-between gap-2">
         <span>
-          {guard ? "⚑ " : ""}
-          <b>{b.name}</b> <span className="text-neutral-400">{TROOPS[b.troopType].label} · {b.soldiers} · nv {b.level}</span>
+          {guard && <><PixelIcon id="BANNER" /> </>}
+          <TroopIcon troop={b.troopType} /> <b>{b.name}</b> <span className="text-neutral-400">{TROOPS[b.troopType].label} · {b.soldiers} · nv {b.level}</span>
         </span>
       </div>
       <span className={lieutenant ? "text-sky-300" : "text-neutral-500"}>{lieutenant ? `tenente ${fullName(lieutenant)}` : "sem tenente (arraste um para cá)"}</span>
@@ -213,7 +215,7 @@ export function CommandBoard() {
             className={`cursor-grab rounded border px-2 py-0.5 ${l.battalionId ? "border-sky-800 text-sky-300" : "border-sky-500 text-sky-100"}`}
             title="Arraste para um batalhão"
           >
-            {fullName(l)}
+            <PixelIcon id="STAR" /> {fullName(l)}
           </span>
         ))}
       </div>
@@ -230,7 +232,7 @@ export function CommandBoard() {
           return (
             <div key={c.id} {...column(c.id)} data-company={c.id} className="flex flex-col gap-1 rounded border border-dashed border-amber-700/70 p-2">
               <button type="button" onClick={() => setCampPanel({ kind: "CAPTAIN", captainId: c.id })} className="text-left text-xs font-semibold text-amber-200 hover:underline">
-                Capitão {captainName(c)} <span className="font-normal text-neutral-400">· {company.length}/{companyLimit(c)}</span>
+                <PixelIcon id="BANNER" /> Capitão {captainName(c)} <span className="font-normal text-neutral-400">· {company.length}/{companyLimit(c)}</span>
               </button>
               {company.length === 0 && <p className="text-[11px] text-neutral-500">Arraste batalhões para cá.</p>}
               {company.map((b, i) => (
