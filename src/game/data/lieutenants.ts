@@ -1,5 +1,7 @@
 import type { Contract } from "./contracts";
 import { newId } from "../../utils/id";
+import { CULTURES, type CultureId } from "./planet";
+import { nameIn } from "../worldgen/names";
 
 export type TraitId = "GREEDY" | "BRAVE" | "CAUTIOUS" | "BLOODTHIRSTY" | "HONORABLE" | "AMBITIOUS" | "LOYAL";
 export type PassiveId = "INSPIRING" | "STALWART" | "DRILLMASTER" | "TACTICIAN" | "MARKSMAN" | "FRUGAL" | "BERSERKER";
@@ -91,18 +93,23 @@ export interface LieutenantData {
   kills: number;
   /** Crônica pessoal (mais recente por último). */
   history: string[];
+  /** De onde ele vem (Marco 23); sem o campo, da terra natal do bando. */
+  culture?: CultureId;
 }
 
 const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 
-export function generateLieutenant(day: number): LieutenantData {
+/** Um tenente à procura de trabalho; quem vem de outra terra tem nome e passado de lá (Marco 23). */
+export function generateLieutenant(day: number, culture: CultureId = "REALMS"): LieutenantData {
   const traits = [...(Object.keys(TRAITS) as TraitId[])].sort(() => Math.random() - 0.5).slice(0, 2);
-  const name = pick(NAMES);
+  const home = culture === "REALMS";
+  const name = home ? pick(NAMES) : nameIn(culture, Math.random() < 0.5);
   return {
     id: newId(),
     name,
     epithet: pick(EPITHETS),
-    backstory: `${pick(ORIGINS)} ${pick(EVENTS)}`,
+    backstory: `${home ? pick(ORIGINS) : `Veio dos ${CULTURES[culture].label} atrás de soldo.`} ${pick(EVENTS)}`,
+    culture,
     traits,
     passive: pick(Object.keys(PASSIVES) as PassiveId[]),
     loyalty: traits.includes("LOYAL") ? 70 : 55,

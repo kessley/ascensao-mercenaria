@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Culture } from "../../src/game/art/buildings";
 import { OUTLINE } from "../../src/game/art/pixel";
 import { PORTRAIT_SIZE, agedHair, portraitBitmap, portraitKey, portraitTraits, type PortraitRole, type PortraitSpec } from "../../src/game/art/portraits";
-import { BAND_HOME, bandCulture, captainPortrait, commanderPortrait, isWoman, lieutenantPortrait, noblePortrait } from "../../src/game/art/portraitSpecs";
+import { BAND_HOME, captainPortrait, commanderPortrait, isWoman, lieutenantPortrait, noblePortrait } from "../../src/game/art/portraitSpecs";
 
 const base: PortraitSpec = { seed: "teste", female: false, age: 30, culture: "REALMS", scars: 0, role: "CAPTAIN", color: 0x2f6fdf };
 
@@ -70,27 +70,23 @@ describe("retratos (G5, parte 4)", () => {
     expect(isWoman("Ysolde")).toBe(true);
     expect(isWoman("Brunhild a Brava")).toBe(true);
     expect(isWoman("Garrick")).toBe(false);
-    // Metade do bando é da terra natal, e quase todo o resto da terra onde ele está
-    const seen = { home: 0, here: 0 };
-    for (let i = 0; i < 400; i++) {
-      const c = bandCulture(`L${i}`, "SANDS");
-      if (c === BAND_HOME) seen.home++;
-      else if (c === "SANDS") seen.here++;
-    }
-    expect(seen.home).toBeGreaterThan(150);
-    expect(seen.here).toBeGreaterThan(100);
+    // A terra é a guardada em cada um (Marco 23); sem ela, a terra natal do bando
+    const lt = lieutenantPortrait({ id: "lt-7", name: "Oda", kills: 0, culture: "JADE" });
+    expect(lt.culture).toBe("JADE");
+    expect(lieutenantPortrait({ id: "lt-8", name: "Bran", kills: 0 }).culture).toBe(BAND_HOME);
     // O tenente que herda o estandarte leva o rosto e a terra
-    const lt = lieutenantPortrait({ id: "lt-7", name: "Oda", kills: 0 }, "JADE");
-    const heir = commanderPortrait({ name: "Oda", generation: 2, wounds: 0, face: "lt-7" }, 30, "JADE");
+    const heir = commanderPortrait({ name: "Oda", generation: 2, wounds: 0, face: "lt-7", culture: "JADE" }, 30);
     expect(heir.seed).toBe(lt.seed);
     expect(heir.culture).toBe(lt.culture);
     expect(heir.female).toBe(true);
     // O fundador vem da terra natal do bando
-    expect(commanderPortrait({ name: "Aldo", generation: 1, wounds: 2 }, 40, "ISLES").culture).toBe(BAND_HOME);
+    expect(commanderPortrait({ name: "Aldo", generation: 1, wounds: 2 }, 40).culture).toBe(BAND_HOME);
     // O capitão promovido mantém o rosto do tenente; as batalhas deixam cicatrizes
-    const cap = captainPortrait({ id: "lt-7", name: "Oda", origin: "PROMOTED", battles: 12 }, "JADE");
+    const cap = captainPortrait({ id: "lt-7", name: "Oda", origin: "PROMOTED", battles: 12, culture: "JADE" }, "REALMS");
     expect(cap.seed).toBe(lt.seed);
     expect(cap.scars).toBe(2);
+    // Sem terra guardada, o inimigo que mudou de lado é da terra onde foi pego
+    expect(captainPortrait({ id: "c1", name: "Harun", origin: "CAPTURED", battles: 0 }, "SANDS").culture).toBe("SANDS");
     // A coroa é do rei; o diadema, do consorte e do herdeiro
     const noble = { id: "n1", female: true, age: 50, martial: 3 };
     expect(noblePortrait({ ...noble, rank: "RULER" }, 0xaa0000, "REALMS").crown).toBe("CROWN");

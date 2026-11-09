@@ -16,10 +16,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
   - o Marco 22 inteiro (etapa 12 ✅ OK): o bivaque e a grade, a vida no acampamento, a fortaleza e a cidade que nasce sozinha em volta dela.
   - o G5 inteiro (etapa 13 ✅ OK): a fonte de pixel, as molduras e os botões, os ícones e os retratos.
+  - a parte 1 do Marco 23 (etapa 14.1): a gente de cada lugar, de onde vem cada um no bando e o povoado governado por gente de fora.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o Marco 23 (etapa 14): cultura, religião e língua.
+- **A seguir:** a parte 2 do Marco 23 (etapa 14.2): as fés.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -1024,6 +1025,37 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - chegar a outro continente muda como o bando conversa, negocia e recruta;
 - um dia santo ou um preceito obriga o jogador a decidir;
 - a mistura de culturas e de fés do bando pesa na moral.
+
+**Em quatro partes,** cada uma com o seu commit:
+1. **14.1, a gente de cada lugar:** a mistura de culturas de cada povoado (mais estrangeiros nos portos e nas cidades), a origem de cada batalhão, tenente, capitão e Comandante, guardada desde a contratação. Quem se alista vem da gente do lugar. O povoado governado por gente de fora fica descontente, e o tenente e o capitão da cultura da tropa seguram mais a moral. O painel do povoado, a tenda e as fichas mostram de onde cada um vem.
+2. **14.2, as fés:** quatro fés, uma de cada cultura, e uma quinta, de pregadores, que corre entre elas. Cada uma tem templo, clero, calendário e preceitos (o dia santo, enterrar os mortos antes de marchar, o jejum, não tocar em magia). No bando: a fé de cada batalhão, o altar e o templo do acampamento, o capelão, o atrito entre fés e as festas de cada cultura. Na política: a voz dos templos na corte e a guerra santa.
+3. **14.3, as línguas:** o Comandante aprende a língua do lugar com o tempo passado ali, e o intérprete (um seguidor novo), o tenente e o capitão falam por ele. Sem quem fale a língua, os preços pioram, os contratos vêm com menos detalhe, os boatos chegam truncados, os prisioneiros dizem menos e as falas aparecem com palavras da língua de lá. Na batalha, a ordem a um batalhão estrangeiro passa pelo tenente, que precisa falar as duas línguas.
+4. **14.4, outra terra:** cruzar o mar junta tudo de uma vez (a chegada avisa o que muda), e o fechamento: uma viagem de teste a cada continente confere os três "Pronto quando".
+
+**Feito na parte 1, a gente de cada lugar:**
+- **As regras** ficam em `src/game/sim/culture.ts`, sem nada do Phaser nem da loja.
+- **A gente de cada povoado** sai do id dele, então é sempre a mesma e não ocupa o save. Quase toda é da terra; o resto vem de fora:
+  - a aldeia tem 4% de gente de fora, o forte 8%, a cidade 12% e a capital 18%;
+  - o porto ganha mais 12%;
+  - a vila da sede do bando é quase metade gente do bando.
+- **A origem fica guardada** (o campo `culture`) em cada batalhão, tenente, capitão e Comandante, desde a contratação. Quem é de save antigo é dos Reinos, a terra natal do bando.
+  - **Os soldados:** quem se alista no Posto de Recrutamento ou se apresenta como voluntário é sorteado da gente do povoado mais perto do acampamento; na taverna, da gente daquele povoado. Os prisioneiros que mudam de lado são da terra.
+  - **Os oficiais:** fora de casa, 30% vêm da terra natal e o resto da terra onde o bando está; em casa, 90% são da terra natal. O nobre sem terra é da terra. O oficial estrangeiro tem nome na língua dele e diz na história de onde veio.
+  - **O Comandante:** o herdeiro leva a origem dele para o estandarte. O veterano escolhido pela tropa é da gente que mais tem no bando.
+- **O povoado governado por gente de fora** perde até 16 pontos na lealdade que busca, conforme o peso da gente principal dele. O povoado do bando é governado pela gente do Comandante; o de um reino, pela gente da terra.
+- **Na batalha:**
+  - o tenente da mesma gente da tropa faz o batalhão perder 12% menos moral;
+  - o capitão da mesma gente reforça a aura dele em 6%.
+- **Na tela:**
+  - o painel do povoado mostra a gente dele e avisa quando está "governada por gente de fora";
+  - cada batalhão da tenda diz de onde vem, e marca o "tenente da terra";
+  - as fichas e os candidatos a tenente e a capitão mostram a origem;
+  - o Livro do Bando mostra a do Comandante.
+  - Os retratos do G5 passam a usar a origem guardada, no lugar do sorteio pela terra onde o bando está.
+- **Junto:** a suíte `progressao` estava quebrada desde o Marco 22, porque o bando passou a começar com um batalhão só. Agora ela traz os arqueiros que testa.
+- **Testes:**
+  - 6 de regras em `tests/unit/culture.test.ts`: a gente de cada povoado, o sorteio, a lealdade, a origem dos oficiais, a moral com o tenente da mesma gente e a mistura do bando;
+  - a suíte nova `cultura`, com 7 verificações.
 
 ## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.

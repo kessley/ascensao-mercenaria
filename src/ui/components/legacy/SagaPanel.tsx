@@ -8,6 +8,7 @@ import { TRAITS } from "../../../game/data/lieutenants";
 import { Button } from "../Button";
 import { PixelIcon } from "../PixelIcon";
 import { CaptainPortrait, CommanderPortrait, FormerPortrait, LieutenantPortrait } from "../Portrait";
+import { cultureOf, peopleOf } from "../../../game/sim/culture";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -38,7 +39,7 @@ export function SagaPanel() {
           <div className="flex flex-col gap-1">
             <h3 className="font-serif text-xl text-amber-100">{leader.name}</h3>
             <p className="text-neutral-300">
-              {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es) · {leader.origin}
+              {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es) · {leader.origin} · {peopleOf(cultureOf(leader))}
             </p>
             <p className="text-xs text-neutral-400">Chance de não se levantar se cair em combate: {Math.round(fallDeathChance(age, leader.wounds) * 100)}%.</p>
           </div>

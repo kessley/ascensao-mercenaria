@@ -4,6 +4,8 @@ import { epilogueOf, mentioned, trimAnnals, type AnnalEntry, type BattleRecord, 
 import { storeSaga, yearsLater, type SagaEcho } from "../game/data/sagas";
 import { SETTLEMENT_KIND_LABEL } from "../game/data/world";
 import { nobleName } from "../game/sim/nobility";
+import type { CultureId } from "../game/data/planet";
+import { bandMix, cultureOf, mainCulture } from "../game/sim/culture";
 import { LEGACY } from "../utils/constants";
 import { newId } from "../utils/id";
 import type { GameState, LogTone } from "./useGameStore";
@@ -137,9 +139,9 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
       const s = get();
       const old = s.leader;
       const age = leaderAge(old, s.day);
-      const former: FormerLeader = { name: old.name, generation: old.generation, from: old.since, to: s.day, age, cause, origin: old.origin, face: old.face, wounds: old.wounds };
+      const former: FormerLeader = { name: old.name, generation: old.generation, from: old.since, to: s.day, age, cause, origin: old.origin, face: old.face, wounds: old.wounds, culture: old.culture };
       // Capitães (Marco 20) entram na sucessão como os tenentes: sem testamento, herda o mais leal
-      const heir = chooseHeir<{ id: string; loyalty: number; name: string; traits: Leader["traits"] }>([...s.captains, ...s.lieutenants], s.heirId);
+      const heir = chooseHeir<{ id: string; loyalty: number; name: string; traits: Leader["traits"]; culture?: CultureId }>([...s.captains, ...s.lieutenants], s.heirId);
       const captain = heir ? s.captains.find((c) => c.id === heir.id) : undefined;
       const unitId = captain ? captain.battalionIds[0] : s.lieutenants.find((l) => l.id === heir?.id)?.battalionId;
       const unit = unitId ? s.battalions.find((b) => b.id === unitId) : undefined;
@@ -154,6 +156,8 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
         wounds: 0,
         origin,
         face: heir?.id,
+        // O herdeiro leva a terra dele; o veterano escolhido pela tropa é da gente que mais tem no bando (Marco 23)
+        culture: heir ? cultureOf(heir) : mainCulture(bandMix(s.battalions)),
       };
       set({
         leader,

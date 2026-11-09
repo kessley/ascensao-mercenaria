@@ -4,19 +4,16 @@ import { CAPTAIN_WOMEN, type CaptainData } from "../data/captains";
 import { LIEUTENANT_WOMEN, type LieutenantData } from "../data/lieutenants";
 import type { Leader } from "../sim/legacy";
 import type { Noble } from "../sim/nobility";
+import { BAND_HOME } from "../sim/culture";
 import { isFemaleName } from "../worldgen/names";
 import { COLORS } from "../../utils/constants";
 
 /**
  * De quem é cada retrato (G5, parte 4): o que o jogo sabe de cada personagem vira um `PortraitSpec`.
- * O bando vem dos Reinos (é estrangeiro nas outras terras, Marco 17); quem entra nele vem de toda
- * parte; os nobres são da terra.
+ * A cultura é a guardada em cada um desde que entrou no bando (Marco 23); os nobres são da terra.
  */
 
-const CULTURES: readonly Culture[] = ["REALMS", "SANDS", "ISLES", "JADE"];
-
-/** A terra de onde o bando saiu. */
-export const BAND_HOME: Culture = "REALMS";
+export { BAND_HOME };
 
 /** O nome é de mulher? (as listas dos reinos, dos capitães e dos tenentes) */
 export function isWoman(name: string): boolean {
@@ -24,52 +21,42 @@ export function isWoman(name: string): boolean {
   return isFemaleName(name) || CAPTAIN_WOMEN.has(first) || LIEUTENANT_WOMEN.has(first);
 }
 
-/** Metade do bando é da terra natal, a maior parte do resto é da terra onde ele está, e um ou outro veio de mais longe. */
-export function bandCulture(seed: string, world: Culture): Culture {
-  const r = hashSeed(`${seed}#terra`) % 100;
-  if (r < 50) return BAND_HOME;
-  if (r < 85) return world;
-  return CULTURES[r % CULTURES.length];
-}
-
 /** Idade de quem não tem idade guardada: sai da semente (22 a 45). */
 export function bandAge(seed: string): number {
   return 22 + (hashSeed(`${seed}#idade`) % 24);
 }
 
-export function commanderPortrait(leader: Pick<Leader, "name" | "generation" | "wounds" | "face">, age: number, world: Culture): PortraitSpec {
-  const seed = leader.face ?? `${leader.name}#${leader.generation}`;
+export function commanderPortrait(leader: Pick<Leader, "name" | "generation" | "wounds" | "face" | "culture">, age: number): PortraitSpec {
   return {
-    seed,
+    seed: leader.face ?? `${leader.name}#${leader.generation}`,
     female: isWoman(leader.name),
     age,
-    // Quem fundou o bando é da terra natal; os herdeiros, de onde vieram
-    culture: leader.generation === 1 && !leader.face ? BAND_HOME : bandCulture(seed, world),
+    culture: leader.culture ?? BAND_HOME,
     scars: leader.wounds,
     role: "COMMANDER",
     color: COLORS.ALLY,
   };
 }
 
-export function captainPortrait(c: Pick<CaptainData, "id" | "name" | "origin" | "battles">, world: Culture): PortraitSpec {
+export function captainPortrait(c: Pick<CaptainData, "id" | "name" | "origin" | "battles" | "culture">, world: Culture): PortraitSpec {
   return {
     seed: c.id,
     female: isWoman(c.name),
     age: bandAge(c.id) + Math.floor(c.battles / 8),
-    // O nobre sem terra e o inimigo que mudou de lado são da terra
-    culture: c.origin === "NOBLE" || c.origin === "CAPTURED" ? world : bandCulture(c.id, world),
+    // Sem origem guardada: o nobre sem terra e o inimigo que mudou de lado são da terra
+    culture: c.culture ?? (c.origin === "NOBLE" || c.origin === "CAPTURED" ? world : BAND_HOME),
     scars: Math.min(4, Math.floor(c.battles / 5)),
     role: "CAPTAIN",
     color: COLORS.ALLY,
   };
 }
 
-export function lieutenantPortrait(l: Pick<LieutenantData, "id" | "name" | "kills">, world: Culture): PortraitSpec {
+export function lieutenantPortrait(l: Pick<LieutenantData, "id" | "name" | "kills" | "culture">): PortraitSpec {
   return {
     seed: l.id,
     female: isWoman(l.name),
     age: bandAge(l.id),
-    culture: bandCulture(l.id, world),
+    culture: l.culture ?? BAND_HOME,
     scars: Math.min(3, Math.floor(l.kills / 30)),
     role: "LIEUTENANT",
     color: COLORS.ALLY,

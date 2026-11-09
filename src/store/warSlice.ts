@@ -205,7 +205,7 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
           set({ captiveOfficers: s.captiveOfficers.map((x) => (x === o ? { ...x, refused: true } : x)) });
           return `${o.name} cospe no chão: "Servir a quem me venceu? Prefiro a corda."`;
         }
-        const captain = captainFromCaptive(o, s.day);
+        const captain = captainFromCaptive(o, s.day, Math.random, s.world?.culture);
         set({ captiveOfficers: left, captains: [...s.captains, captain] });
         note(`${o.name} jurou servir ao bando como capitão. Ninguém confia nele ainda.`, "info");
         return `${o.name} aceitou: agora é capitão do bando (veja o quadro de comando). A lealdade começa baixa.`;

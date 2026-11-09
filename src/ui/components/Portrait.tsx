@@ -61,24 +61,21 @@ type Size = Pick<PortraitProps, "scale" | "className">;
 export function CommanderPortrait(props: Size) {
   const leader = useGameStore((s) => s.leader);
   const day = useGameStore((s) => s.day);
-  const culture = useWorldCulture();
-  return <Portrait spec={commanderPortrait(leader, leaderAge(leader, day), culture)} title={leader.name} {...props} />;
+  return <Portrait spec={commanderPortrait(leader, leaderAge(leader, day))} title={leader.name} {...props} />;
 }
 
 /** Um Comandante que já se foi, como era ao morrer. */
 export function FormerPortrait({ former, ...props }: Size & { former: FormerLeader }) {
-  const culture = useWorldCulture();
-  return <Portrait spec={commanderPortrait({ ...former, wounds: former.wounds ?? 0 }, former.age, culture)} title={former.name} {...props} />;
+  return <Portrait spec={commanderPortrait({ ...former, wounds: former.wounds ?? 0 }, former.age)} title={former.name} {...props} />;
 }
 
-export function CaptainPortrait({ captain, ...props }: Size & { captain: Pick<CaptainData, "id" | "name" | "origin" | "battles"> }) {
+export function CaptainPortrait({ captain, ...props }: Size & { captain: Pick<CaptainData, "id" | "name" | "origin" | "battles" | "culture"> }) {
   const culture = useWorldCulture();
   return <Portrait spec={captainPortrait(captain, culture)} title={captain.name} {...props} />;
 }
 
-export function LieutenantPortrait({ lieutenant, ...props }: Size & { lieutenant: Pick<LieutenantData, "id" | "name" | "kills"> }) {
-  const culture = useWorldCulture();
-  return <Portrait spec={lieutenantPortrait(lieutenant, culture)} title={lieutenant.name} {...props} />;
+export function LieutenantPortrait({ lieutenant, ...props }: Size & { lieutenant: Pick<LieutenantData, "id" | "name" | "kills" | "culture"> }) {
+  return <Portrait spec={lieutenantPortrait(lieutenant)} title={lieutenant.name} {...props} />;
 }
 
 /** O nobre, na cor do reino dele. */

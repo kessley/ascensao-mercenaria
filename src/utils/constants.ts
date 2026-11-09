@@ -1444,6 +1444,21 @@ export const COMBAT = {
  * Legado (Marco 18). A idade corre mais depressa que o calendário: uma campanha de verdade dura
  * poucos anos, e sem isso o Comandante nunca envelheceria.
  */
+/** Cultura (Marco 23, parte 1): a gente de cada lugar e a origem de cada um no bando. */
+export const CULTURE = {
+  /** Gente de fora num povoado: aldeia, cidade, forte, capital; o porto soma mais. */
+  FOREIGN_SHARE: { VILLAGE: 0.04, CITY: 0.12, FORT: 0.08, CAPITAL: 0.18 },
+  FOREIGN_PORT: 0.12,
+  /** Povoado governado por gente de outra cultura: lealdade a menos, conforme a parte da gente que é de fora. */
+  FOREIGN_RULE: 16,
+  /** Quem se candidata a tenente ou capitão: a parte que vem da terra natal do bando (o resto, da terra onde ele está). */
+  OFFICER_FROM_HOME: 0.3,
+  /** Tenente da cultura da tropa: perde menos moral (multiplica a perda). */
+  KIN_LIEUTENANT: 0.88,
+  /** Capitão da cultura da tropa: a aura dele segura mais. */
+  KIN_CAPTAIN: 0.94,
+} as const;
+
 export const LEGACY = {
   START_AGE: [30, 38] as const,
   HEIR_AGE: [24, 40] as const,

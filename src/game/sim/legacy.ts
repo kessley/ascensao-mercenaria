@@ -1,5 +1,6 @@
 import { LEGACY, SEASONS } from "../../utils/constants";
 import type { TraitId } from "../data/lieutenants";
+import type { CultureId } from "../data/planet";
 import { clamp } from "../../utils/math";
 
 /**
@@ -22,6 +23,8 @@ export interface Leader {
   origin: string;
   /** A semente do retrato: o herdeiro que era capitão ou tenente leva o rosto que já tinha (G5). */
   face?: string;
+  /** De onde ele vem (Marco 23); sem o campo, da terra natal do bando. */
+  culture?: CultureId;
 }
 
 export interface FormerLeader {
@@ -34,6 +37,7 @@ export interface FormerLeader {
   origin: string;
   face?: string;
   wounds?: number;
+  culture?: CultureId;
 }
 
 const DAYS_PER_YEAR = SEASONS.DAYS * 4;

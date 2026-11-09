@@ -4,6 +4,7 @@ import type { DuelTemper, DuelWeapon } from "../sim/duel";
 import type { NobleTrait } from "../sim/nobility";
 import type { CaptainData } from "./captains";
 import type { TraitId } from "./lieutenants";
+import type { CultureId } from "./planet";
 
 /**
  * Heróis do outro lado (Marco 21): os capitães e chefes das forças inimigas têm nome, mão no um
@@ -131,7 +132,7 @@ export function joinChance(h: Pick<HeroData, "trait"> | undefined, fame: number)
 }
 
 /** O oficial que mudou de lado vira capitão do bando: a mão que mostrou em campo, lealdade baixa no começo. */
-export function captainFromCaptive(o: { name: string; hero?: HeroData }, day: number, random: () => number = Math.random): CaptainData {
+export function captainFromCaptive(o: { name: string; hero?: HeroData }, day: number, random: () => number = Math.random, culture?: CultureId): CaptainData {
   const [first, ...rest] = o.name.split(" ");
   const trait = o.hero?.trait ? TRAIT_OF[o.hero.trait] : undefined;
   const traits: TraitId[] = trait ? [trait] : [];
@@ -145,6 +146,8 @@ export function captainFromCaptive(o: { name: string; hero?: HeroData }, day: nu
     epithet: rest.join(" ") || "o Vira-Casaca",
     backstory: "Lutou contra o bando e foi pego. Jurou servir a quem o venceu, e todos ainda o olham de lado.",
     origin: "CAPTURED",
+    // Gente da terra onde foi pego (Marco 23)
+    culture,
     traits,
     command,
     tactics,

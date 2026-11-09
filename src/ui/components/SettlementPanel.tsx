@@ -20,6 +20,7 @@ import { seasonOf } from "../../utils/season";
 import { foodGood } from "../../game/sim/market";
 import { canHost, freightWeight } from "../../game/sim/trade";
 import { ContractDelivery, GoodsMarket } from "./trade/GoodsMarket";
+import { BAND_HOME, cultureOf, folkOf, foreignRule, mixText, rulerCulture } from "../../game/sim/culture";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -198,6 +199,7 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const intel = useGameStore((s) => s.townIntel[settlementId]);
   const rebuild = useGameStore((s) => s.rebuildSettlement);
   const nobles = useGameStore((s) => s.nobles);
+  const leader = useGameStore((s) => s.leader);
   if (!t || !world) return <p className="text-sm text-neutral-400">Este povoado não existe mais.</p>;
 
   const prosperity = prosperityLabel(t.prosperity);
@@ -205,6 +207,10 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
   const factionDef = faction ? world.factions.find((f) => f.id === faction.id) : null;
   const occupied = isCalamityOwner(t.owner);
   const lord = nobles.find((n) => n.alive && n.fiefs.includes(t.id));
+  // A gente do lugar e quem a governa (Marco 23)
+  const land = world.culture ?? BAND_HOME;
+  const folk = folkOf(t, land, cultureOf(leader));
+  const foreign = foreignRule(folk, rulerCulture(t.owner, land, cultureOf(leader)));
 
   return (
     <>
@@ -213,6 +219,12 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
         <p className="text-xs text-neutral-400">
           {SETTLEMENT_KIND_LABEL[t.kind]} · <b>{ownerLabel(world, calamities, t.owner)}</b> · {t.population} habitantes · guarnição {t.garrison}
         </p>
+        {t.owner !== "RUINED" && (
+          <p className="text-xs text-neutral-400" data-folk>
+            Gente: {mixText(folk)}
+            {foreign > 0 && <b className="text-yellow-300"> · governada por gente de fora: lealdade −{Math.round(foreign)}</b>}
+          </p>
+        )}
         {(at === "CAMP" || at === "GATE") && t.owner !== "RUINED" && (
           <p className="text-xs text-neutral-400">
             {t.garrison > 0

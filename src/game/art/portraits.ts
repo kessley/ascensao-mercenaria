@@ -1,5 +1,6 @@
 import type { Culture } from "./buildings";
 import { Grid, gridBitmap, ramp, seeded, type Bitmap, type Ramp } from "./pixel";
+import { hashString } from "../../utils/hash";
 
 /**
  * Os retratos (G5, parte 4): o busto de um personagem em 32×32, feito por código como as figuras.
@@ -57,15 +58,8 @@ function mix(a: number, b: number, t: number): number {
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }
 
-/** FNV-1a: a semente vira um número. */
-export function hashSeed(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+/** A semente vira um número. */
+export const hashSeed = hashString;
 
 /** O que muda o desenho, numa chave (para guardar a imagem pronta). */
 export function portraitKey(p: PortraitSpec): string {

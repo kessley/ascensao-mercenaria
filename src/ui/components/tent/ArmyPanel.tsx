@@ -5,10 +5,14 @@ import { battalionWage, reinforceCostPerSoldier } from "../../../utils/economy";
 import { xpToNextLevel } from "../../../utils/progression";
 import { PixelIcon } from "../PixelIcon";
 import { TroopIcon } from "../battle/BattleIcons";
+import { cultureOf, peopleOf } from "../../../game/sim/culture";
 
 /** Um batalhão: efetivo, tropa, formação, salário e reforço de soldados perdidos. */
 export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
   const gold = useGameStore((s) => s.gold);
+  // O tenente da mesma gente da tropa segura mais a moral (Marco 23)
+  const lieutenant = useGameStore((s) => s.lieutenants.find((l) => l.battalionId === b.id));
+  const kin = !!lieutenant && cultureOf(lieutenant) === cultureOf(b);
   const reinforceBattalion = useGameStore((s) => s.reinforceBattalion);
   const missing = b.maxSoldiers - b.soldiers;
   const per = reinforceCostPerSoldier(b);
@@ -45,7 +49,11 @@ export function BattalionCard({ battalion: b }: { battalion: BattalionData }) {
       </div>
       <div className="flex items-center justify-between gap-3 text-xs text-neutral-400">
         <span>
-          {TROOPS[b.troopType].label} · {FORMATIONS[b.formation].label} · salário {battalionWage(b)}/sem.
+          {TROOPS[b.troopType].label} · {FORMATIONS[b.formation].label} · salário {battalionWage(b)}/sem. ·{" "}
+          <span data-origin={cultureOf(b)} title={kin ? "O tenente é da mesma gente: a tropa perde menos moral" : undefined} className={kin ? "text-emerald-300" : undefined}>
+            {peopleOf(cultureOf(b))}
+            {kin ? " (tenente da terra)" : ""}
+          </span>
         </span>
         {missing > 0 && (
           <button

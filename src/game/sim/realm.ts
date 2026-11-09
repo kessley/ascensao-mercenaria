@@ -8,6 +8,7 @@ import { distance, type Point } from "../../utils/math";
 import { diffuse, initEconomy, marketDay, needsOf, quote, rationPackPrice, type Economy } from "./market";
 import { courtCalendar, kingdomsWeek, loyaltyDay, noblesWeek, siegesDay, type Alliance, type CourtEvent, type FieldArmy, type KingdomPlan } from "./kingdoms";
 import type { Noble, Plot } from "./nobility";
+import type { CultureId } from "../data/planet";
 
 /**
  * Simulação do reino e do mundo vivo (Marco 9), em funções puras usadas pelo store:
@@ -150,6 +151,8 @@ export interface RealmState {
   liege: string | null;
   spouseId: string | null;
   wanted: Record<string, number>;
+  /** A cultura de quem governa pelo bando: a do Comandante (Marco 23). */
+  bandCulture?: CultureId;
 }
 
 /**

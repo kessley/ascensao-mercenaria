@@ -62,6 +62,7 @@ import {
   type FactionState,
   type KingdomWar,
   type RaidOutcome,
+  type RealmState,
   type Settlement,
 } from "../game/sim/realm";
 import { applyTrade, foodGood, initEconomy, quote, rationPackPrice } from "../game/sim/market";
@@ -103,7 +104,8 @@ import {
 } from "../game/sim/trade";
 import { ofRealm, settlementName } from "../game/worldgen/names";
 import { continentWorld, generateWorld } from "../game/worldgen/generateWorld";
-import { generatePlanet } from "../game/data/planet";
+import { generatePlanet, type CultureId } from "../game/data/planet";
+import { BAND_HOME, cultureOf, folkOf, nearestFolk, officerCulture, pickCulture } from "../game/sim/culture";
 import { LEGACY } from "../utils/constants";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
 import {
@@ -275,6 +277,8 @@ export interface BattalionData {
   /** Comida na mochila (rações refeitas na Fase 3): ver `packCapacity`. */
   pack?: number;
   sickness?: Sickness;
+  /** De onde a tropa veio (Marco 23); sem o campo, da terra natal do bando. */
+  culture?: CultureId;
 }
 
 /** O que o mascate vende na banca dele (Marco 12). */
@@ -1138,7 +1142,7 @@ const BATTALION_NAMES = [
   "Martelos Rubros",
 ];
 
-function newBattalion(existing: BattalionData[], troopType: TroopType): BattalionData {
+function newBattalion(existing: BattalionData[], troopType: TroopType, culture?: CultureId): BattalionData {
   const used = new Set(existing.map((b) => b.name));
   const name = BATTALION_NAMES.find((n) => !used.has(n)) ?? `Companhia ${existing.length + 1}`;
   return {
@@ -1154,7 +1158,20 @@ function newBattalion(existing: BattalionData[], troopType: TroopType): Battalio
     totalKills: 0,
     soldiers: BALANCE.BATTALION_SIZE,
     maxSoldiers: BALANCE.BATTALION_SIZE,
+    ...(culture ? { culture } : {}),
   };
+}
+
+/** Quem se alista perto de um ponto: a gente do povoado mais perto (Marco 23). */
+function localRecruits(s: Pick<GameState, "settlements" | "world">, at: { x: number; y: number } | undefined): CultureId {
+  const land = s.world?.culture ?? BAND_HOME;
+  const town = at ? nearestFolk(s.settlements.filter((t) => t.owner !== "RUINED"), at) : null;
+  return town ? pickCulture(folkOf(town, land), Math.random()) : land;
+}
+
+/** Candidatos a tenente: gente da terra onde o bando está, e uns da terra natal (Marco 23). */
+function freshLieutenants(day: number, land: CultureId = BAND_HOME): LieutenantData[] {
+  return Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(day, officerCulture(Math.random(), land)));
 }
 
 /** Bando inicial (Marco 22, GDD 9.9): um batalhão de infantaria só. */
@@ -1879,7 +1896,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     pendingMutiny: false,
     battalions: army,
     lieutenants: [],
-    lieutenantCandidates: Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(1)),
+    lieutenantCandidates: freshLieutenants(1, world?.culture),
     scouts: Array.from({ length: SUPPORT.START_SCOUTS }, newScout),
     harpyChicks: 0,
     nestsFound: [],
@@ -1953,7 +1970,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     ...INITIAL_LEGACY,
     ...INITIAL_CAPTAINS,
     ...INITIAL_FORTRESS,
-    captainCandidates: freshCaptains(1),
+    captainCandidates: freshCaptains(1, world?.culture),
     leader: { ...FOUNDER, name: personName(r), age: r.int(LEGACY.START_AGE[0], LEGACY.START_AGE[1]) },
     planet: world ? generatePlanet(world) : null,
     nobles: world ? generateNobles(world, settlements) : [],
@@ -2033,8 +2050,8 @@ function contractClosing(s: GameState, c: Contract, success: boolean, text: stri
       return success && f.id === c.rival ? { ...f, relation: Math.max(-100, f.relation - 12) } : f;
     }),
     nobles: rivalRuler ? s.nobles.map((n) => (n.id === rivalRuler.id ? { ...n, opinion: Math.max(-100, n.opinion - 12), memory: [...n.memory, { day: s.day, text: `o bando trabalhou contra o reino: ${c.title}`, delta: -12 }].slice(-8) } : n)) : s.nobles,
-    lieutenantCandidates: success ? Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)) : s.lieutenantCandidates,
-    captainCandidates: success ? freshCaptains(s.day) : s.captainCandidates,
+    lieutenantCandidates: success ? freshLieutenants(s.day, s.world?.culture) : s.lieutenantCandidates,
+    captainCandidates: success ? freshCaptains(s.day, s.world?.culture) : s.captainCandidates,
     log: appendLog(s.log, [entry(s.day, text, success ? "good" : "bad")]),
   };
 }
@@ -2139,7 +2156,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const horses = TROOPS[troopType].family === "CAVALRY" ? horseDeal(s, BALANCE.BATTALION_SIZE * TRADE.HORSES_PER_RIDER) : null;
     const cost = TROOPS[troopType].cost + (horses?.cost ?? 0);
     if (s.gold < cost || (horses && !horses.ok) || recruitProblem(s, troopType)) return false;
-    const b = newBattalion(s.battalions, troopType);
+    const b = newBattalion(s.battalions, troopType, localRecruits(s, s.world?.camp.center));
     set({
       gold: s.gold - cost,
       battalions: [...s.battalions, b],
@@ -2152,7 +2169,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   recruitCaptives: (troop, count, label) => {
     const s = get();
     const n = Math.min(count, BALANCE.BATTALION_SIZE);
-    const b: BattalionData = { ...newBattalion(s.battalions, troop), soldiers: n, turncoatUntil: s.day + PRISONERS.TURNCOAT_DAYS };
+    const b: BattalionData = { ...newBattalion(s.battalions, troop, s.world?.culture), soldiers: n, turncoatUntil: s.day + PRISONERS.TURNCOAT_DAYS };
     set({ battalions: [...s.battalions, b], log: appendLog(s.log, [entry(s.day, `${n} ${label} formam ${b.name}. Ninguém confia neles ainda.`)]) });
     return n;
   },
@@ -2375,7 +2392,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       return;
     }
     let state = dayState(s);
-    let realm = {
+    let realm: RealmState = {
       settlements: s.settlements,
       factions: s.factions,
       calamities: s.calamities,
@@ -2396,6 +2413,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
       liege: s.liege,
       spouseId: s.spouseId,
       wanted: s.wanted,
+      bandCulture: cultureOf(s.leader),
     };
     const entries: LogEntry[] = [];
     // Notícias na estrada (Marco 15)
@@ -2543,7 +2561,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (activeContract && state.day > activeContract.deadline) {
       entries.push(entry(state.day, `Prazo esgotado: "${activeContract.contract.title}" foi entregue a outro bando.`, "bad"));
       activeContract = null;
-      lieutenantCandidates = Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(state.day));
+      lieutenantCandidates = freshLieutenants(state.day, s.world?.culture);
     }
     // Ofertas de reinos que entraram em guerra conosco somem da mesa
     const clients = new Set(contractClients(realm.settlements, realm.factions).map((t) => t.id));
@@ -3332,8 +3350,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       logEntries.push(entry(s.day, `Contrato cumprido: "${title}". Bônus: ${goldEarned} de ouro.`, "good"));
       activeContract = null;
       // A notícia corre: novos aventureiros procuram o bando
-      lieutenantCandidates = Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day));
-      captainCandidates = freshCaptains(s.day);
+      lieutenantCandidates = freshLieutenants(s.day, s.world?.culture);
+      captainCandidates = freshCaptains(s.day, s.world?.culture);
     } else if (activeContract && result === "DEFEAT") {
       notes.push(`O contrato "${activeContract.contract.title}" continua de pé até o dia ${activeContract.deadline}.`);
     }
@@ -3948,7 +3966,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (s.volunteers < VOLUNTEERS.CAP) return `Faltam ${VOLUNTEERS.CAP - s.volunteers} voluntários.`;
     const cost = Math.round(TROOPS.INFANTRY.cost * VOLUNTEER_COST);
     if (s.gold < cost) return `Faltam ${cost - s.gold} de ouro para o equipamento.`;
-    const b = newBattalion(s.battalions, "INFANTRY");
+    const b = newBattalion(s.battalions, "INFANTRY", localRecruits(s, s.world?.camp.center));
     set({
       gold: s.gold - cost,
       volunteers: s.volunteers - VOLUNTEERS.CAP,
@@ -3966,7 +3984,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     if (last !== undefined && s.day - last < TAVERN_HIRE.EVERY_DAYS) return `Ninguém mais quer assinar esta semana. Volte em ${TAVERN_HIRE.EVERY_DAYS - (s.day - last)} dia(s).`;
     const cost = Math.round(TROOPS.INFANTRY.cost * TAVERN_HIRE.COST);
     if (s.gold < cost) return `Faltam ${cost - s.gold} de ouro.`;
-    const b = newBattalion(s.battalions, "INFANTRY");
+    const b = newBattalion(s.battalions, "INFANTRY", localRecruits(s, t));
     set({
       gold: s.gold - cost,
       battalions: [...s.battalions, b],
@@ -4134,8 +4152,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
       factions,
       settlements: s.settlements.map((x) => (x.id === t.id ? { ...x, econ: restock(x.econ, { [c.good as Good]: c.qty }), prosperity: Math.min(100, x.prosperity + 5) } : x)),
       activeContract: null,
-      lieutenantCandidates: Array.from({ length: LIEUTENANTS.CANDIDATES }, () => generateLieutenant(s.day)),
-      captainCandidates: freshCaptains(s.day),
+      lieutenantCandidates: freshLieutenants(s.day, s.world?.culture),
+      captainCandidates: freshCaptains(s.day, s.world?.culture),
       log: appendLog(s.log, [entry(s.day, `Contrato cumprido: "${c.title}". ${t.name} pagou ${c.reward} de ouro.`, "good")]),
     });
     return null;

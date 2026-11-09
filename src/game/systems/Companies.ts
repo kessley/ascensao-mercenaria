@@ -1,4 +1,5 @@
-import { CAPTAINS, TROOPS, WAR_AI } from "../../utils/constants";
+import { CAPTAINS, CULTURE, TROOPS, WAR_AI } from "../../utils/constants";
+import { cultureOf } from "../sim/culture";
 import { distance, type Point } from "../../utils/math";
 import type { CaptainData } from "../data/captains";
 import type { Battalion } from "../entities/Battalion";
@@ -157,7 +158,9 @@ export class Companies {
       const at = c.fallen ? null : guard?.captainAt;
       if (at) {
         const aura = 1 - c.captain.command * CAPTAINS.AURA_PER_COMMAND;
-        for (const b of members) if (distance(b.center, at) <= CAPTAINS.AURA_RADIUS) b.captainAura = aura;
+        // O capitão da mesma gente da tropa segura mais (Marco 23)
+        const kin = cultureOf(c.captain);
+        for (const b of members) if (distance(b.center, at) <= CAPTAINS.AURA_RADIUS) b.captainAura = aura * (b.culture === kin ? CULTURE.KIN_CAPTAIN : 1);
       }
       if (time >= c.nextThink) {
         c.nextThink = time + CAPTAINS.THINK_MS;

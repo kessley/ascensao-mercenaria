@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import { Soldier } from "./Soldier";
 import type { Unit } from "./Unit";
 import type { Commander } from "./Commander";
-import { BALANCE, CAPTAINS, COLORS, COMBAT, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import { BALANCE, CAPTAINS, COLORS, COMBAT, CULTURE, FATIGUE, LIEUTENANTS, TROOPS, type Formation, type TroopType, type UnitStats } from "../../utils/constants";
+import type { CultureId } from "../data/planet";
+import { cultureOf } from "../sim/culture";
 import type { CaptainData } from "../data/captains";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
@@ -101,6 +103,8 @@ export class Battalion {
   captainKills = 0;
   /** Perto do capitão vivo, a moral cai menos (< 1); a cena atualiza a cada quadro. */
   captainAura = 1;
+  /** De onde a tropa veio (Marco 23). */
+  readonly culture: CultureId;
 
   constructor(
     scene: Phaser.Scene,
@@ -113,6 +117,7 @@ export class Battalion {
   ) {
     this.lieutenant = lieutenant;
     this.captain = captain;
+    this.culture = cultureOf(data);
     this.id = data.id;
     this.name = data.name;
     this.troopType = data.troopType;
@@ -222,6 +227,11 @@ export class Battalion {
 
   get lieutenantAlive(): boolean {
     return !!this.lieutenant && !this.lieutenantDied;
+  }
+
+  /** Tenente vivo da mesma gente da tropa: ela perde menos moral (< 1; Marco 23). */
+  get kinship(): number {
+    return this.lieutenantAlive && cultureOf(this.lieutenant) === this.culture ? CULTURE.KIN_LIEUTENANT : 1;
   }
 
   /** Fração da velocidade conforme o passo: quem segue o Comandante acompanha o ritmo dele. */
