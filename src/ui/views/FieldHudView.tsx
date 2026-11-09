@@ -65,7 +65,7 @@ function WorldClock() {
   return (
     <div className="flex flex-col gap-1">
       <div
-        className="flex w-40 flex-col gap-1 rounded bg-black/60 px-3 py-1.5"
+        className="flex w-40 flex-col gap-1 hud-box px-3 py-1.5"
         title="O dia passa com a marcha (fora do acampamento e fora de combate) e vira na aurora"
       >
         <div className="flex justify-between font-mono text-sm">
@@ -132,7 +132,7 @@ function SummonsBanner() {
   const town = useGameStore((s) => s.settlements.find((t) => t.id === s.summons?.townId)?.name);
   if (!summons) return null;
   return (
-    <div className="rounded bg-black/60 px-3 py-1.5 text-xs">
+    <div className="hud-box px-3 py-1.5 text-xs">
       <span className="text-neutral-400">Convocação: </span>
       <b className="text-amber-200">reunir o bando em {town}</b>
       <span className="text-neutral-400"> · prazo dia {summons.deadline}</span>
@@ -281,7 +281,7 @@ export function FieldHudView() {
       <BattalionContextMenu />
       {/* Topo: Comandante, recursos e recuo */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex w-72 flex-col gap-2 rounded bg-black/60 p-3">
+        <div className="flex w-72 flex-col gap-2 hud-box p-3">
           {hud && (
             <span className="text-xs uppercase tracking-wider text-neutral-400">
               {hud.region}
@@ -460,12 +460,12 @@ export function FieldHudView() {
           </div>
           <div className="flex flex-col items-end gap-2">
             {hud && hud.enemiesInSight > 0 && (
-              <span className="rounded bg-black/60 px-3 py-1.5 font-mono text-sm text-red-300">
+              <span className="hud-box px-3 py-1.5 font-mono text-sm text-red-300">
                 À vista: {hud.enemiesInSight}
               </span>
             )}
             {hud && hud.foes.length > 0 && (
-              <div className="flex flex-col gap-0.5 rounded bg-black/60 px-2 py-1 text-xs text-red-200">
+              <div className="flex flex-col gap-0.5 hud-box px-2 py-1 text-xs text-red-200">
                 {hud.foes.slice(0, 3).map((f) => (
                   <span key={f.key} title={f.trait ? `Dizem que é ${NOBLE_TRAITS[f.trait].label.toLowerCase()}` : undefined}>
                     {f.name} · {f.status} · moral {f.morale}
@@ -474,7 +474,7 @@ export function FieldHudView() {
               </div>
             )}
             {hud && (
-              <div className="pointer-events-auto flex items-center gap-1 rounded bg-black/60 px-2 py-1.5 text-sm">
+              <div className="pointer-events-auto flex items-center gap-1 hud-box px-2 py-1.5 text-sm">
                 <button
                   type="button"
                   onClick={() =>

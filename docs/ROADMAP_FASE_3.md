@@ -18,7 +18,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G5 (etapa 13, a interface), em quatro partes. A parte 1 (a fonte) está feita; a seguir, a parte 2, as molduras e os botões.
+- **A seguir:** o G5 (etapa 13, a interface), em quatro partes. As partes 1 e 2 (a fonte, as molduras e os botões) estão feitas; a seguir, a parte 3, os ícones.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -49,7 +49,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
-| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | parte 1 (a fonte) feita; a seguir, as molduras |
+| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | partes 1 e 2 (fonte e molduras) feitas; a seguir, os ícones |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
@@ -950,6 +950,21 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Os tamanhos:** a fonte só fica nítida em 12 px e nos múltiplos, e o CSS encaixa cada tamanho no degrau mais perto (12, 18, 24 ou 36). O texto corrido dos painéis continua na fonte comum.
 - **O estandarte dos batalhões:** o nome tem contorno escuro, e a barra da moral tem moldura de pixel, com luz em cima e sombra embaixo.
 - **Testes:** 6 de regras (`tests/unit/pixelFont.test.ts`): as tabelas e as somas do arquivo, a cobertura do português, os contornos e o negrito. A suíte de navegador `interface` confere que o navegador aceita as duas faces e onde a fonte aparece, e tira as fotos `.shots-g5-*.png`.
+
+**Feito na parte 2, as molduras e os botões:**
+- **As peças** ficam em `src/game/art/frames.ts`, desenhadas na grade de pixel das figuras:
+  - madeira, com tábuas, veio, a linha funda e cantoneiras de ferro com rebite;
+  - ferro, com trilho de 3 pixels e rebites nos cantos, e o meio deixando ver o mundo;
+  - pergaminho, com a borda queimada;
+  - botões de 9 pixels em cinco tons (madeira, ouro, vermelho, azul e ferro), cada um em cima, com o mouse e apertado.
+- **No CSS:** `ui/pixelFrames.ts` transforma cada peça em imagem e a põe como variável da raiz. As classes `frame-wood`, `frame-iron`, `frame-parchment`, `hud-box`, `hud-card` e `btn-pixel` usam essas imagens no `border-image`, sem suavizar: cada pixel vale 2 px nos painéis e 1 px no HUD.
+- **Onde entram:**
+  - madeira: o painel do lado (tenda, quadro de comando, construções e povoados) e as caixas do menu. Dentro dela, os cinzas da interface viram tons de madeira e couro só pela troca das variáveis de cor, e os cartões ficam entalhados;
+  - ferro: as caixas do HUD (Comandante, dia, recursos, som, câmera, o aviso do E), a barra de comando e os cartões dos batalhões;
+  - pergaminho: o diário, com tinta escura;
+  - os botões do componente `Button` e os botões de ordem da barra de comando (ferro; o ativo, ouro).
+- **Conserto:** o diário da tenda encolhia até sumir no painel (a seção podia encolher dentro da coluna que rola). Agora ele fica do tamanho dele.
+- **Testes:** 4 de regras (`tests/unit/frames.test.ts`) e 4 verificações novas na suíte `interface` (9 no total).
 
 ## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.

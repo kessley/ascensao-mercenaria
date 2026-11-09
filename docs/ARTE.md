@@ -178,7 +178,7 @@ A interface e os efeitos ainda são greybox.
 | O quê | Estado |
 | --- | --- |
 | Fonte com acentos do português | ✅ pixel art (G5, parte 1): `art/font.ts`, desenhada por código e montada em TrueType no jogo; títulos, números, rótulos, botões e os nomes do mapa |
-| Molduras, botões e painéis (React) | estilo atual, sem pixel art |
+| Molduras, botões e painéis (React) | ✅ pixel art (G5, parte 2): `art/frames.ts`; madeira nos painéis e no menu, ferro no HUD, pergaminho no diário, botões em cinco tons |
 | Ícones das ordens e formações | ícones de linha atuais |
 | Retratos do Comandante e dos tenentes | não existem |
 | Mapa do Continente e Mapa Múndi | greybox |
@@ -194,5 +194,5 @@ A interface e os efeitos ainda são greybox.
 4. **G4, resto do elenco ✅ OK,** em seis partes: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1 (o cavalo de frente e de costas).
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
-5. **G5, interface,** em quatro partes: a fonte (✅ feita), as molduras e os botões, os ícones e os retratos.
+5. **G5, interface,** em quatro partes: a fonte (✅ feita), as molduras e os botões (✅ feitos), os ícones e os retratos.
 6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue).

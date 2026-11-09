@@ -71,7 +71,7 @@ export function CapitalView() {
         <div className="rounded-full border border-amber-300/50 bg-black/75 px-5 py-1.5 text-base font-bold tracking-wide text-amber-200">
           {city.name} · {city.district}
         </div>
-        <div className="rounded bg-black/60 px-3 py-0.5 font-mono text-xs text-neutral-200">
+        <div className="hud-box px-3 py-0.5 font-mono text-xs text-neutral-200">
           Dia {day}, {formatHour(progress)} · aqui o senhor é <b className={standing < 0 ? "text-red-400" : "text-amber-200"}>{city.factionId === "PLAYER" ? "o dono da cidade" : STANDING_LABEL[standing]}</b>
           {disguised && <span className="text-sky-300"> · de libré</span>}
         </div>
@@ -89,7 +89,7 @@ export function CapitalView() {
       <div className="absolute bottom-3 right-3">
         <ResourceBar />
       </div>
-      <div className="absolute bottom-3 left-3 rounded bg-black/60 px-3 py-1 font-mono text-[11px] text-neutral-300">
+      <div className="absolute bottom-3 left-3 hud-box px-3 py-1 font-mono text-[11px] text-neutral-300">
         WASD andar · Shift correr · E falar/entrar · M mapa · Portão Velho sai
       </div>
       {map && <CityMap townId={city.townId} x={city.x} y={city.y} />}

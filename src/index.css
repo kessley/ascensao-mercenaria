@@ -44,6 +44,109 @@
   }
 }
 
+/*
+ * As molduras e os botões (G5, parte 2): a arte vem de `src/game/art/frames.ts`, posta como
+ * variáveis da raiz por `ui/pixelFrames.ts`. Cada pixel da arte vale 2 px nos painéis e 1 px no HUD.
+ */
+@layer components {
+  .frame-wood,
+  .frame-iron,
+  .frame-parchment,
+  .hud-box,
+  .hud-card,
+  .btn-pixel {
+    border-style: solid;
+    border-color: transparent;
+    border-radius: 0;
+    background-color: transparent;
+    image-rendering: pixelated;
+  }
+  .frame-wood {
+    border-width: 12px;
+    border-image: var(--art-frame-wood) 6 fill / 12px round;
+    /* Dentro da madeira, os cinzas da interface viram madeira e couro */
+    --color-neutral-950: #140e0a;
+    --color-neutral-900: #1f1712;
+    --color-neutral-800: #2e231a;
+    --color-neutral-700: #4a3a2b;
+    --color-neutral-600: #6b5440;
+    --color-neutral-500: #8c7660;
+    --color-neutral-400: #b5a088;
+    --color-neutral-300: #d6c4a8;
+    --color-neutral-200: #e8dcc6;
+    --color-neutral-100: #f3ead8;
+  }
+  .frame-iron {
+    border-width: 12px;
+    border-image: var(--art-frame-iron) 6 fill / 12px round;
+  }
+  .frame-parchment {
+    border-width: 12px;
+    border-image: var(--art-frame-parchment) 6 fill / 12px round;
+    color: #3b2a1a;
+  }
+  .hud-box,
+  .hud-card {
+    border-width: 6px;
+    border-image: var(--art-frame-iron) 6 fill / 6px round;
+  }
+  .btn-pixel {
+    border-width: 6px;
+    border-image: var(--btn-up) 3 fill / 6px stretch;
+    color: #f6e7c8;
+    text-shadow: 1px 1px 0 rgb(0 0 0 / 0.6);
+  }
+  .btn-wood {
+    --btn-up: var(--art-btn-wood-up);
+    --btn-hover: var(--art-btn-wood-hover);
+    --btn-down: var(--art-btn-wood-down);
+  }
+  .btn-gold {
+    --btn-up: var(--art-btn-gold-up);
+    --btn-hover: var(--art-btn-gold-hover);
+    --btn-down: var(--art-btn-gold-down);
+  }
+  .btn-red {
+    --btn-up: var(--art-btn-red-up);
+    --btn-hover: var(--art-btn-red-hover);
+    --btn-down: var(--art-btn-red-down);
+  }
+  .btn-blue {
+    --btn-up: var(--art-btn-blue-up);
+    --btn-hover: var(--art-btn-blue-hover);
+    --btn-down: var(--art-btn-blue-down);
+  }
+  .btn-iron {
+    --btn-up: var(--art-btn-iron-up);
+    --btn-hover: var(--art-btn-iron-hover);
+    --btn-down: var(--art-btn-iron-down);
+  }
+}
+
+/* Depois dos utilitários do Tailwind: dentro das molduras, cantos retos e cartões entalhados */
+@layer utilities {
+  .btn-pixel:hover:not(:disabled) {
+    border-image-source: var(--btn-hover);
+  }
+  .btn-pixel:active:not(:disabled) {
+    border-image-source: var(--btn-down);
+  }
+  .hud-card:hover {
+    filter: brightness(1.2);
+  }
+  :is(.frame-wood, .frame-iron) :is(.rounded, .rounded-md, .rounded-lg) {
+    border-radius: 0;
+  }
+  .frame-wood .bg-neutral-800 {
+    box-shadow:
+      inset 2px 2px 0 rgb(0 0 0 / 0.35),
+      inset -2px -2px 0 rgb(255 230 190 / 0.06);
+  }
+  .frame-wood {
+    scrollbar-color: #6b5440 #1f1712;
+  }
+}
+
 /* Remove as margens padrão e impede a barra de rolagem no Canvas do jogo */
 html,
 body,

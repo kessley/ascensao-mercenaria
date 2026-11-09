@@ -19,7 +19,7 @@ export function InteriorView() {
       <div className="absolute bottom-3 right-3">
         <ResourceBar />
       </div>
-      <div className="absolute bottom-3 left-3 rounded bg-black/60 px-3 py-1 font-mono text-[11px] text-neutral-300">
+      <div className="absolute bottom-3 left-3 hud-box px-3 py-1 font-mono text-[11px] text-neutral-300">
         WASD andar · E falar/interagir · pise no tapete da porta para sair · Esc fecha
       </div>
       {dialog && !panel && (

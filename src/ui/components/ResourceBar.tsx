@@ -25,7 +25,7 @@ export function ResourceBar() {
   const fear = useGameStore((s) => s.fear);
 
   return (
-    <div className="flex gap-4 whitespace-nowrap rounded bg-black/60 px-4 py-2 text-sm font-mono text-white">
+    <div className="flex gap-4 whitespace-nowrap hud-box px-4 py-2 text-sm font-mono text-white">
       <span className="text-yellow-400">Ouro: {gold}</span>
       <span
         className="text-orange-300"

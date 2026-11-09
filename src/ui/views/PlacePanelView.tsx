@@ -298,13 +298,13 @@ export function PlacePanelView() {
       )}
 
       {prompt && !panel && !dialog && (
-        <div className="absolute bottom-40 left-1/2 -translate-x-1/2 rounded-full border border-amber-300/60 bg-black/75 px-5 py-2 font-mono text-sm text-amber-200">
+        <div className="hud-box absolute bottom-40 left-1/2 -translate-x-1/2 px-4 py-1 font-mono text-sm text-amber-200">
           {prompt}
         </div>
       )}
 
       {panel && (
-        <aside className="pointer-events-auto absolute bottom-0 right-0 top-0 flex w-full max-w-lg flex-col border-l border-neutral-700 bg-neutral-900/95 shadow-2xl">
+        <aside className="frame-wood pointer-events-auto absolute bottom-0 right-0 top-0 flex w-full max-w-lg flex-col shadow-2xl">
           <header className="flex items-center justify-between border-b border-neutral-700 px-4 py-3">
             <h2 className="text-lg font-bold">
               {PANEL_TITLE[panel.kind]}

@@ -66,8 +66,8 @@ function Command({ icon, label, hint, keyName, active, disabled, badge, fill, to
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`group relative flex h-11 w-11 items-center justify-center rounded border bg-neutral-900/80 outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600 ${
-        active ? "border-amber-400 bg-amber-800/60 text-amber-100" : tone
+      className={`btn-pixel group relative flex h-11 w-11 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50 ${
+        active ? "btn-gold text-amber-50" : `btn-iron ${tone}`
       }`}
     >
       {fill !== undefined && fill > 0 && <span className="absolute inset-x-0 bottom-0 rounded-b bg-sky-500/35" style={{ height: `${Math.round(fill * 100)}%` }} />}
@@ -119,7 +119,7 @@ function UnitCard({ b, fatigue, faltering }: { b: HudBattalion; fatigue: number;
       aria-label={`${b.name}: ${status}, ${b.alive} de ${b.max} soldados, moral ${b.morale}`}
       aria-pressed={b.selected}
       onClick={(e) => send({ type: "SELECT", ids: [b.id], additive: e.shiftKey })}
-      className={`group pointer-events-auto relative flex min-w-0 max-w-44 flex-1 flex-col gap-0.5 rounded bg-black/75 px-1.5 py-1 text-left outline-none hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-50 ${ring}`}
+      className={`group pointer-events-auto relative flex min-w-0 max-w-44 flex-1 flex-col gap-0.5 hud-card px-1.5 py-0.5 text-left outline-none hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-50 ${ring}`}
     >
       <span className="flex items-center gap-1 text-xs">
         <span className={`shrink-0 ${panic ? "text-red-400" : "text-sky-300"}`}>
@@ -250,7 +250,7 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
         </div>
       )}
       {!hidden && !hud.inCamp && (
-        <div className="pointer-events-auto flex flex-wrap items-end justify-center gap-x-3 gap-y-1 rounded-lg bg-black/75 px-2 py-1">
+        <div className="pointer-events-auto flex flex-wrap items-end justify-center gap-x-3 gap-y-1 hud-box px-2 py-1">
           <Group title={`Formação · ${who}`}>
             {FORMATION_LIST.map((f) => {
               const able = targets.filter((b) => TROOPS[b.troopType].formations.includes(f));

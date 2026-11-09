@@ -63,6 +63,50 @@ export async function ui({ page, ev }, { check }) {
   });
   console.log("   painel:", JSON.stringify(panel));
   check("os rótulos de seção dos painéis são em pixel", /Mercenaria Pixel/.test(panel?.family ?? "") && panel?.size === "12px", JSON.stringify(panel));
+
+  // --- Parte 2: as molduras e os botões ---
+  const frames = await ev(() => {
+    const art = (el) => (el ? getComputedStyle(el).borderImageSource : "");
+    const aside = document.querySelector("aside.frame-wood");
+    const hud = document.querySelector(".hud-box");
+    const btn = document.querySelector(".btn-pixel");
+    const card = aside?.querySelector(".bg-neutral-800");
+    return {
+      root: getComputedStyle(document.documentElement).getPropertyValue("--art-frame-wood").slice(0, 30),
+      aside: art(aside).slice(0, 30),
+      hud: art(hud).slice(0, 30),
+      button: art(btn).slice(0, 30),
+      // Dentro da madeira, o cinza vira madeira
+      card: card ? getComputedStyle(card).backgroundColor : null,
+    };
+  });
+  console.log("   molduras:", JSON.stringify(frames));
+  const png = (s) => s.includes("data:image/png");
+  check("as molduras de madeira, ferro e os botões são imagens feitas pelo jogo", png(frames.root) && png(frames.aside) && png(frames.hud) && png(frames.button), JSON.stringify(frames));
+  check("dentro da moldura de madeira, os cartões ficam cor de madeira", frames.card === "rgb(46, 35, 26)", frames.card);
   await page.screenshot({ path: "tests/battle/.shots-g5-painel.png" });
+  // O diário, em pergaminho
+  await ev(() => window.__store.getState().setCampPanel({ kind: "TENT" }));
+  await page.waitForTimeout(500);
+  const journal = await ev(() => {
+    const ol = document.querySelector("ol.frame-parchment");
+    return ol ? getComputedStyle(ol).borderImageSource.slice(0, 30) : null;
+  });
+  check("o diário é um pergaminho", !!journal && journal.includes("data:image/png"), journal);
+  await page.screenshot({ path: "tests/battle/.shots-g5-tenda.png" });
+  await ev(() => document.querySelector("ol.frame-parchment")?.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "tests/battle/.shots-g5-diario.png" });
   await ev(() => window.__store.getState().setCampPanel(null));
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "tests/battle/.shots-g5-hud.png" });
+  // Fora do acampamento: a barra de comando, com os botões de ferro
+  await ev(() => {
+    const w = window.__world;
+    const p = w.campArea.palisade;
+    w.commander.x = p.cx;
+    w.commander.y = p.cy + p.half + 260;
+  });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: "tests/battle/.shots-g5-comando.png" });
 }
