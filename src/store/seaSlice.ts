@@ -11,6 +11,7 @@ import { SEA, setWorldSize, type Season, type ShipType } from "../utils/constant
 import { newId } from "../utils/id";
 import { seasonOf } from "../utils/season";
 import type { BattalionData, GameState, LogTone, WagonData } from "./useGameStore";
+import { arrivalNotice, type ArrivalNotice } from "../game/sim/arrival";
 
 /**
  * Mares e continentes (Marco 17). Cada continente é um mundo inteiro: o bando viaja, e tudo o que
@@ -25,7 +26,7 @@ export const CONTINENT_KEYS = [
   "passes", "audiences", "quests", "summons", "contracts", "activeContract", "priceBook", "depot", "posts", "stakes", "loans",
   "ownCaravans", "marketTaxIncome", "stolenCargo", "townIntel", "battlefields", "burnedBridges", "siege", "forage", "campAt",
   "campPacked", "campPlan", "campForest", "campStay", "followers", "exposure", "fame", "fear", "nestsFound", "siteLife", "training", "captives", "captiveOfficers",
-  "fortress", "fieldCamp", "seatAlarm", "seatCity",
+  "fortress", "fieldCamp", "seatAlarm", "seatCity", "tavernHires",
 ] as const satisfies readonly (keyof GameState)[];
 
 export type ContinentKey = (typeof CONTINENT_KEYS)[number];
@@ -112,6 +113,8 @@ export interface SeaState {
   boarding: BoardingBackup | null;
   /** Até que dia as terras distantes já foram simuladas. */
   farDay: number;
+  /** O que muda na terra onde o bando acaba de desembarcar (Marco 23). */
+  arrival: ArrivalNotice | null;
 }
 
 export const INITIAL_SEA: SeaState = {
@@ -126,6 +129,7 @@ export const INITIAL_SEA: SeaState = {
   atlasOpen: false,
   boarding: null,
   farDay: 1,
+  arrival: null,
 };
 
 export interface EmbarkPlan {
@@ -167,6 +171,8 @@ export interface SeaActions {
   land: () => void;
   /** Uma semana nas terras onde o bando não está; chegam as notícias que estavam no mar. */
   farTick: () => void;
+  /** Fecha o aviso da chegada. */
+  dismissArrival: () => void;
 }
 
 type Setter = (partial: Partial<GameState> | ((s: GameState) => Partial<GameState>)) => void;
@@ -179,6 +185,8 @@ const seasonNow = (s: GameState): Season => seasonOf(s.day);
 export function seaSlice(set: Setter, get: () => GameState, links: { fresh: (world: NonNullable<GameState["world"]>, day: number) => Pick<GameState, ContinentKey>; note: (text: string, tone?: LogTone) => void }): SeaActions {
   return {
     setAtlasOpen: (open) => set({ atlasOpen: open }),
+
+    dismissArrival: () => set({ arrival: null }),
 
     buyChart: (id) => {
       const s = get();
@@ -404,8 +412,10 @@ export function seaSlice(set: Setter, get: () => GameState, links: { fresh: (wor
       if (!v || !s.world) return;
       const def = continentOf(s, v.to);
       if (!def) return;
+      // Os seguidores ficam no acampamento desta terra; o intérprete embarca com o Comandante (Marco 23)
+      const interpreters = s.followers.filter((f) => f.role === "INTERPRETER");
       const here: ParkedContinent = {
-        store: continentState(s),
+        store: { ...continentState(s), followers: s.followers.filter((f) => f.role !== "INTERPRETER") },
         field: v.field,
         left: v.stay,
         leftWagons: v.stayWagons,
@@ -426,6 +436,9 @@ export function seaSlice(set: Setter, get: () => GameState, links: { fresh: (wor
       const port = back?.portId ?? arrival.settlements.find((t) => t.port && t.owner !== "RUINED")?.id ?? arrival.settlements.find((t) => t.owner !== "RUINED")?.id ?? null;
       set({
         ...arrival,
+        // Save de antes: as tavernas de cada terra não tinham memória à parte
+        tavernHires: arrival.tavernHires ?? {},
+        followers: [...(arrival.followers ?? []).filter((f) => f.role !== "INTERPRETER"), ...interpreters],
         world,
         continent: v.to,
         parked: rest,
@@ -438,6 +451,22 @@ export function seaSlice(set: Setter, get: () => GameState, links: { fresh: (wor
         loadNonce: s.loadNonce + 1,
       });
       links.note(back ? `O bando desembarcou de volta em ${def.name}.` : `O bando desembarcou em ${def.name}. Aqui ninguém conhece o nome dele.`, "good");
+      // Outra terra (Marco 23): a chegada avisa de uma vez o que muda
+      const now = get();
+      const notice = arrivalNotice({
+        name: def.name,
+        land: def.culture,
+        back: !!back,
+        day: now.day,
+        leader: now.leader,
+        lieutenants: now.lieutenants,
+        captains: now.captains,
+        followers: now.followers,
+        battalions: now.battalions,
+        lieutenantOf: (id) => now.lieutenants.find((l) => l.battalionId === id) ?? null,
+      });
+      set({ arrival: notice });
+      for (const l of notice.lines) if (l.topic === "TONGUE" || l.topic === "FAITH") links.note(l.text, l.tone);
       if (!back) return;
       // Na volta, o porto conta de uma vez o que as cartas ainda não tinham trazido
       const told = s.seaNews.filter((n) => n.from === def.name);

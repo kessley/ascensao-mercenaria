@@ -16,13 +16,15 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
   - o Marco 22 inteiro (etapa 12 ✅ OK): o bivaque e a grade, a vida no acampamento, a fortaleza e a cidade que nasce sozinha em volta dela.
   - o G5 inteiro (etapa 13 ✅ OK): a fonte de pixel, as molduras e os botões, os ícones e os retratos.
-  - a parte 1 do Marco 23 (etapa 14.1): a gente de cada lugar, de onde vem cada um no bando e o povoado governado por gente de fora.
-  - a parte 2 do Marco 23 (etapa 14.2): as fés, com os preceitos que obrigam a decidir, o atrito no bando e a voz dos templos na corte.
-  - a parte 3 do Marco 23 (etapa 14.3): as línguas, com o intérprete, o aprendizado do Comandante e o que se perde sem quem fale a língua.
+  - o Marco 23 inteiro (etapa 14 ✅ OK):
+    - a gente de cada lugar;
+    - as fés, com os preceitos que obrigam a decidir;
+    - as línguas, com o intérprete;
+    - a chegada a outra terra, que avisa o que muda.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** a parte 4 do Marco 23 (etapa 14.4): outra terra.
+- **A seguir:** o G6 (etapa 15): atmosfera.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -54,7 +56,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
-| 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
+| 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
@@ -997,7 +999,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Junto:** as caixas de diálogo dos interiores e da Cidade Alta eram duas cópias, e viraram um componente só (`DialogBox`), em moldura de madeira. A suíte `lendas` estava quebrada desde o Marco 22, parte 1b, porque o bando passou a começar sem tenentes: agora ela traz um dos candidatos.
 - **Testes:** 5 de regras (`tests/unit/portraits.test.ts`: cada cultura, papel e sexo dá um busto cheio; o mesmo rosto para a mesma semente, também ao envelhecer; a idade no cabelo; cada cicatriz uma marca, e o tapa-olho na quarta; de quem é cada retrato), 6 verificações novas na suíte `interface` (21 no total) e uma na `lendas`: o herdeiro leva o rosto que tinha.
 
-## 14. Marco 23: cultura, religião e língua
+## 14. Marco 23: cultura, religião e língua ✅ OK
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.
 
 - **Cultura, por povoado e não só por continente:**
@@ -1149,6 +1151,27 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Testes:**
   - 8 de regras em `tests/unit/language.test.ts`;
   - 15 verificações novas na suíte `cultura`, que fica com 33.
+
+**Feito na parte 4, outra terra:**
+- **A chegada:** ao desembarcar, um cartão diz de uma vez o que muda. As regras ficam em `src/game/sim/arrival.ts`. O cartão traz:
+  - **a gente:** quem vive ali, o luxo da terra e de onde vão ser os recrutas;
+  - **a língua:** quem fala pelo bando e, sem ninguém, o que se perde e como resolver;
+  - **a fé:** a fé dos templos, os preceitos, quando vêm o dia santo, o jejum e a festa, e se ela briga com fés do bando;
+  - **as ordens:** os batalhões que não entendem a voz do Comandante;
+  - **o governo:** povoados tomados ali vão ter gente de fora no comando.
+- A volta à terra natal também tem o cartão. A língua e a fé também vão para o relato.
+- **Junto, dois consertos da viagem:**
+  - o intérprete embarca com o Comandante. Os outros seguidores continuam ficando no acampamento da terra;
+  - a memória da taverna ("volte em N dias") passou a ser de cada terra. Os ids dos povoados se repetem entre continentes, e uma contratação em casa travava a taverna de mesmo id do outro lado do mar.
+- **O fechamento:** a suíte `cultura` viaja a cada continente e confere os três "Pronto quando":
+  - **conversa, negocia e recruta:** a língua do povoado, que ninguém no bando fala; o luxo mais caro sem intérprete; e os recrutas de lá, com a fé de lá;
+  - **um preceito obriga a decidir:**
+    - onde a fé enterra os mortos, o combate deixa os mortos esperando, e o relatório pede "enterrar ou seguir";
+    - nas areias, o jejum do Véu dá o botão de quebrar;
+  - **a mistura pesa na moral:** o tenente da terra segura a tropa. Nas areias, o Véu e a Chama brigam no acampamento.
+- **Testes:**
+  - 5 de regras em `tests/unit/arrival.test.ts`;
+  - 14 verificações novas na suíte `cultura`, que fica com 47: 4 por continente, mais a volta para casa.
 
 ## 15. G6: atmosfera
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.

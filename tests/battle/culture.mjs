@@ -386,4 +386,228 @@ export async function culture({ page, ev }, { check }) {
   console.log("   ordem:", JSON.stringify(order));
   check("a ordem falada a um batalhão estrangeiro demora a ser entendida", !order.lost.now && order.lost.later && order.feed.length > 0, JSON.stringify(order));
   check("o tenente que fala as duas línguas leva a ordem na hora", order.relayed.now, JSON.stringify(order.relayed));
+
+  // --- 14.4: outra terra. Uma viagem a cada continente confere os três "Pronto quando" ---
+  const lands = await ev(() => {
+    const st = window.__store;
+    const s = st.getState();
+    st.setState({
+      leader: { ...s.leader, culture: "REALMS", tongues: {} },
+      followers: s.followers.filter((f) => f.role !== "INTERPRETER"),
+      charts: s.planet.continents.map((c) => c.id),
+      activeContract: null,
+      unburied: null,
+      battleReport: null,
+      fastBroken: [],
+    });
+    return s.planet.continents.filter((c) => c.id !== s.continent).map((c) => ({ id: c.id, name: c.name, culture: c.culture }));
+  });
+  console.log("   continentes:", JSON.stringify(lands));
+  // O preceito de cada fé que mais obriga a decidir: enterrar os mortos, ou o jejum
+  const PRECEPT = { FLAME: "BURY", VEIL: "FAST", TIDE: "BURY", PATH: "BURY" };
+  const FAITH_OF = { REALMS: "FLAME", SANDS: "VEIL", ISLES: "TIDE", JADE: "PATH" };
+  for (const land of lands) {
+    const tag = `${land.name} (${land.culture})`;
+    const sail = await ev((to) => {
+      const st = window.__store;
+      // Os oficiais do bando só falam a língua dos reinos (o que um oficial já fala muda a conversa)
+      const before = st.getState();
+      const only = (o) => ({ ...o, culture: "REALMS", tongues: ["REALMS"] });
+      st.setState({
+        gold: 50000,
+        rations: 3000,
+        activeContract: null,
+        battleReport: null,
+        unburied: null,
+        campEvent: null,
+        lieutenants: before.lieutenants.filter((l) => !l.id.startsWith("lt-")).map(only),
+        captains: before.captains.map(only),
+      });
+      const s = st.getState();
+      const port = s.settlements.find((t) => t.port && t.owner !== "RUINED") ?? s.settlements.find((t) => t.owner !== "RUINED");
+      // Só os primeiros batalhões embarcam (o navio não leva o bando inteiro que foi crescendo)
+      const why = s.embark({ to, portId: port.id, battalionIds: s.battalions.slice(0, 3).map((b) => b.id), wagons: 0, ship: "COCA" });
+      for (let i = 0; i < 200 && st.getState().voyage; i++) {
+        const v = st.getState();
+        if (v.voyage.pirates) v.answerPirates("PAY");
+        else v.sailDay();
+      }
+      return { why, continent: st.getState().continent };
+    }, land.id);
+    await page.waitForTimeout(400);
+    await ready(page);
+    await page.waitForTimeout(900);
+    const card = await ev(() => ({
+      land: document.querySelector("[data-arrival]")?.dataset.arrival ?? null,
+      topics: [...document.querySelectorAll("[data-arrival-topic]")].map((e) => e.dataset.arrivalTopic),
+      tongue: document.querySelector('[data-arrival-topic="TONGUE"]')?.textContent ?? "",
+    }));
+    console.log(`   chegada a ${tag}:`, JSON.stringify({ ...sail, ...card }));
+    check(`${tag}: a chegada avisa o que muda (a gente, a língua e a fé)`, sail.why === null && sail.continent === land.id && card.land === land.culture && ["FOLK", "TONGUE", "FAITH"].every((t) => card.topics.includes(t)), JSON.stringify({ ...sail, ...card }));
+    if (land === lands[0]) await page.screenshot({ path: "tests/battle/.shots-m23-outra-terra.png" });
+    await page.click("text=Pisar em terra");
+    await page.waitForTimeout(200);
+
+    // 1. Conversa, negocia e recruta de outro jeito
+    const town = await ev(() => {
+      const s = window.__store.getState();
+      const open = s.settlements.filter((t) => t.owner !== "RUINED" && t.owner !== "PLAYER" && !s.factions.some((f) => f.id === t.owner && f.atWar));
+      const t = open.find((x) => (x.econ.stock.LUXURY ?? 0) >= 1) ?? open[0];
+      return { id: t.id };
+    });
+    await ev((id) => window.__store.getState().setCampPanel({ kind: "TOWN", settlementId: id }), town.id);
+    await page.waitForSelector("[data-tongue]");
+    const talk = await ev(() => ({ tongue: document.querySelector("[data-tongue]")?.dataset.tongue, voice: document.querySelector("[data-tongue]")?.dataset.voice }));
+    await ev(() => window.__store.getState().setCampPanel(null));
+    const deal = await ev(
+      ({ id, culture }) => {
+        const st = window.__store;
+        const buy = (interpreter) => {
+          const s = st.getState();
+          const t = s.settlements.find((x) => x.id === id);
+          const keep = { econ: t.econ, freight: s.freight, followers: s.followers };
+          st.setState({ gold: 50000, followers: interpreter ? [...s.followers, { id: "int-teste", role: "INTERPRETER", name: "Teste", since: s.day, tongue: culture }] : s.followers });
+          const problem = st.getState().tradeGood(id, "LUXURY", 1);
+          const paid = 50000 - st.getState().gold;
+          st.setState({ freight: keep.freight, followers: keep.followers, settlements: st.getState().settlements.map((x) => (x.id === id ? { ...x, econ: keep.econ } : x)) });
+          return { problem, paid };
+        };
+        return { alone: buy(false), helped: buy(true) };
+      },
+      { id: town.id, culture: land.culture },
+    );
+    const recruits = await ev(() => {
+      const st = window.__store;
+      const s = st.getState();
+      // Aldeias primeiro (quase só gente da terra); o porto e a cidade têm mais estrangeiros
+      const towns = s.settlements.filter((t) => t.owner !== "RUINED").sort((a, b) => Number(!!a.port) - Number(!!b.port) || (a.kind === "VILLAGE" ? -1 : 0) - (b.kind === "VILLAGE" ? -1 : 0));
+      const out = [];
+      const why = [];
+      for (const t of towns) {
+        if (out.length >= 3) break;
+        st.setState({ gold: 50000 });
+        const problem = st.getState().hireAtTavern(t.id);
+        if (problem) why.push(`${t.kind}: ${problem}`);
+        else out.push({ culture: st.getState().battalions.at(-1).culture, faith: st.getState().battalions.at(-1).faith, id: st.getState().battalions.at(-1).id, kind: t.kind });
+      }
+      if (out.length < 3) console.log("taverna recusou:", JSON.stringify(why.slice(0, 4)));
+      return out;
+    });
+    console.log(`   ${tag}:`, JSON.stringify({ talk, deal, recruits }));
+    const foreign = land.culture !== "REALMS";
+    const local = recruits.filter((r) => r.culture === land.culture).length;
+    check(
+      `${tag}: muda como o bando conversa, negocia e recruta`,
+      talk.tongue === land.culture &&
+        (foreign ? talk.voice === "NONE" && deal.alone.paid > deal.helped.paid : talk.voice === "SELF") &&
+        !deal.alone.problem &&
+        recruits.length >= 2 &&
+        local >= recruits.length - 1,
+      JSON.stringify({ talk, deal, recruits }),
+    );
+
+    // 2. Um preceito da fé daqui obriga a decidir
+    const faith = FAITH_OF[land.culture];
+    const recruit = recruits.find((r) => r.faith === faith) ?? recruits[0];
+    if (PRECEPT[faith] === "BURY") {
+      const fight = await ev(
+        ({ id, faith }) => {
+          const st = window.__store;
+          const s = st.getState();
+          st.setState({ unburied: null, battleReport: null, battalions: s.battalions.map((b) => (b.id === id ? { ...b, faith, soldiers: 8 } : b)) });
+          const c = window.__world.commander;
+          st.getState().resolveEngagement("VICTORY", [{ id, survivors: 3 }], { deadScoutIds: [], deadMessengerIds: [], deliveries: {} }, { title: "Teste da outra terra", enemiesKilled: 3, contractDone: false, mutinyOver: false, notes: [], at: { x: c.x, y: c.y } });
+          return { unburied: st.getState().unburied };
+        },
+        { id: recruit.id, faith },
+      );
+      const button = await page
+        .waitForSelector("text=Enterrar os mortos e seguir", { timeout: 5000 })
+        .then(() => true)
+        .catch(() => false);
+      check(`${tag}: os fiéis daqui não marcham sem enterrar os mortos (enterrar ou seguir)`, !!fight.unburied?.faiths.includes(faith) && button, JSON.stringify(fight));
+      if (button) await page.click("text=Enterrar os mortos e seguir");
+      await page.waitForTimeout(300);
+    } else {
+      await ev(
+        ({ id, faith }) => {
+          const st = window.__store;
+          const s = st.getState();
+          st.setState({ day: 16, fastBroken: [], battalions: s.battalions.map((b) => (b.id === id ? { ...b, faith } : b)) });
+          st.getState().setCampPanel({ kind: "TENT" });
+        },
+        { id: recruit.id, faith },
+      );
+      const fast = await page
+        .waitForSelector(`[data-break-fast="${faith}"]`, { timeout: 5000 })
+        .then(() => true)
+        .catch(() => false);
+      check(`${tag}: o jejum dos fiéis daqui obriga a decidir (cumprir ou quebrar)`, fast, faith);
+      await ev(() => window.__store.getState().setCampPanel(null));
+    }
+
+    // 3. A mistura de culturas e de fés pesa na moral
+    const mix = await ev(
+      ({ id, culture }) => {
+        const st = window.__store;
+        const s = st.getState();
+        const cand = s.lieutenantCandidates.find((l) => l.culture === culture) ?? s.lieutenantCandidates[0];
+        const lieutenant = { ...cand, id: `lt-${culture}`, culture, tongues: [culture], battalionId: id };
+        // Metade do bando da fé daqui, metade da Chama: o atrito aparece se as duas brigam
+        const recruit = s.battalions.find((b) => b.id === id);
+        const flame = s.battalions.find((b) => b.id !== id && (b.faith ?? "FLAME") === "FLAME" && (b.culture ?? "REALMS") === "REALMS") ?? { ...recruit, id: "chama-teste", name: "Chama de Teste", culture: "REALMS", faith: "FLAME" };
+        window.__keptBand = s.battalions;
+        st.setState({
+          battalions: [{ ...recruit, soldiers: 20, maxSoldiers: Math.max(20, recruit.maxSoldiers) }, { ...flame, soldiers: 20, maxSoldiers: Math.max(20, flame.maxSoldiers) }],
+          lieutenants: [...s.lieutenants.filter((l) => l.battalionId !== id && l.id !== lieutenant.id), lieutenant],
+        });
+        st.getState().setCampPanel({ kind: "TENT" });
+        return { lieutenant: lieutenant.name };
+      },
+      { id: recruit.id, culture: land.culture },
+    );
+    await page.waitForSelector("[data-faith-panel]");
+    await page.waitForTimeout(300);
+    const morale = await ev((id) => {
+      const card = [...document.querySelectorAll("[data-origin]")].map((e) => e.textContent);
+      const out = { kin: card.some((t) => /tenente da terra/.test(t)), friction: document.querySelector("[data-friction]")?.textContent ?? null, id };
+      window.__store.setState({ battalions: window.__keptBand });
+      return out;
+    }, recruit.id);
+    const clashes = faith === "VEIL";
+    console.log(`   moral em ${tag}:`, JSON.stringify({ ...mix, ...morale }));
+    check(`${tag}: a mistura do bando pesa na moral (tenente da terra${clashes ? ", fés que brigam" : ""})`, morale.kin && (!clashes || /Véu das Estrelas/.test(morale.friction ?? "")), JSON.stringify(morale));
+    await ev(() => window.__store.getState().setCampPanel(null));
+  }
+
+  // De volta para casa: o intérprete embarca com o Comandante, e a chegada diz que a terra é dele
+  const home = await ev(() => {
+    const st = window.__store;
+    const s = st.getState();
+    const tongue = s.world.culture;
+    st.setState({ gold: 50000, rations: 3000, activeContract: null, battleReport: null, unburied: null, followers: [...s.followers, { id: "int-volta", role: "INTERPRETER", name: "Mei", since: s.day, tongue }] });
+    const port = st.getState().settlements.find((t) => t.port && t.owner !== "RUINED") ?? st.getState().settlements[0];
+    const why = st.getState().embark({ to: "C0", portId: port.id, battalionIds: st.getState().battalions.slice(0, 3).map((b) => b.id), wagons: 0, ship: "COCA" });
+    for (let i = 0; i < 200 && st.getState().voyage; i++) {
+      const v = st.getState();
+      if (v.voyage.pirates) v.answerPirates("PAY");
+      else v.sailDay();
+    }
+    const after = st.getState();
+    return {
+      why,
+      tongue,
+      continent: after.continent,
+      interpreter: after.followers.find((f) => f.id === "int-volta") ?? null,
+      leftBehind: Object.values(after.parked).some((p) => p.store.followers.some((f) => f.id === "int-volta")),
+      arrival: after.arrival ? { back: after.arrival.back, tongue: after.arrival.lines.find((l) => l.topic === "TONGUE")?.text } : null,
+    };
+  });
+  console.log("   volta:", JSON.stringify(home));
+  check("o intérprete embarca com o Comandante", home.why === null && home.continent === "C0" && !!home.interpreter && !home.leftBehind, JSON.stringify(home));
+  check("de volta à terra natal, a chegada diz que a língua é a do Comandante", !!home.arrival?.back && /que o Comandante fala/.test(home.arrival.tongue ?? ""), JSON.stringify(home.arrival));
+  await page.waitForTimeout(600);
+  await ready(page);
+  await page.waitForTimeout(600);
+  await ev(() => window.__store.getState().dismissArrival());
 }

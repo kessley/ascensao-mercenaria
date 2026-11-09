@@ -43,7 +43,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | G4 | Pixel art: resto do elenco (carroças, aríetes, navios, gente) | ✅ OK |
 | | 22 | Do bivaque à cidade: acampamento e fortaleza construídos pelo bando, e a cidade que nasce sozinha | ✅ OK |
 | | G5 | Pixel art: interface (fonte, molduras, ícones e retratos) | ✅ OK |
-| | 23 | Cultura, religião e língua | |
+| | 23 | Cultura, religião e língua | ✅ OK |
 | | G6 | Pixel art: atmosfera | |
 | | 19 | Magia do Comandante (era o Marco 8, continua por último) | |
 

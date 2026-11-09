@@ -8,6 +8,7 @@ import { ScenarioOverlay } from "../components/scenario/ScenarioOverlay";
 import { useGameStore } from "../../store/useGameStore";
 import { AtlasView, VoyageView } from "./VoyageView";
 import { EpilogueView, LegendsOverlay, SuccessionView } from "./LegendsView";
+import { ArrivalCard } from "../components/sea/ArrivalCard";
 
 /**
  * Tudo o que o React desenha sobre o mundo: HUD, painéis dos lugares e o Mapa do Continente.
@@ -28,6 +29,7 @@ export function WorldOverlayView() {
       <ScenarioOverlay />
       <AtlasView />
       <VoyageView />
+      {!inside && !city && <ArrivalCard />}
       <SuccessionView />
       <EpilogueView />
       <LegendsOverlay />

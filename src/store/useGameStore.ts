@@ -1420,6 +1420,7 @@ const TRANSIENT_KEYS = new Set<string>([
   "loadNonce",
   "worldMapOpen",
   "atlasOpen",
+  "arrival",
   "legendsOpen",
   "epilogue",
   "worldSnapshot",
