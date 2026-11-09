@@ -156,6 +156,7 @@ import {
   shortOf,
   startingPlan,
   tierOf,
+  isFortress,
   troopProblem,
   upgradeCost,
   volunteerRate,
@@ -3830,6 +3831,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const next = nextSize(s.campPlan);
     if (!next) return "A paliçada já é a grande.";
+    // A fortaleza não é só uma paliçada maior: pede a terra (Marco 22, parte 3)
+    if (next === 34) return "Para virar fortaleza, o bando finca o estandarte.";
     const step = PALISADE_STEPS[next];
     const why = campBusy(s) ?? growProblem(s.campPlan, { fame: s.fame, battalions: s.battalions.length }) ?? shortOf(step.cost, stockOf(s));
     if (why) return why;
@@ -3940,6 +3943,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   packCamp: () => {
     const s = get();
     if (s.campPacked) return "O acampamento já está levantado.";
+    if (isFortress(s.campPlan)) return "A fortaleza não sai do lugar: em campanha, o bando leva o acampamento de campo.";
     if (s.mutiny || s.pendingMutiny) return "Motim no acampamento.";
     if (s.training.length > 0) return "Há batalhões no Campo de Treino.";
     if (s.convoy) return "Espere o comboio voltar: as carroças estão na estrada.";

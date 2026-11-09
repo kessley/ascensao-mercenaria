@@ -122,7 +122,8 @@ describe("a planta do acampamento na grade", () => {
     expect(g.buildings).toEqual(ready.buildings);
     expect(valid(g)).toEqual([]);
     expect(growProblem(g, { fame: 15, battalions: 3 })).toMatch(/cozinha/);
-    expect(growProblem(legacyPlan(4, []), { fame: 99, battalions: 9 })).toMatch(/grande/);
+    // Da paliçada grande, o próximo passo é a fortaleza (parte 3): o save antigo não tem torre de vigia
+    expect(growProblem(legacyPlan(4, []), { fame: 99, battalions: 9 })).toMatch(/torre de vigia/);
   });
 
   it("as necessidades: leitos, comida, cura e segurança", () => {

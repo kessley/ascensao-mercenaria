@@ -11,8 +11,8 @@ import type { FollowerRole } from "../sim/campEvents";
  */
 
 export const CELL = 40;
-/** Lado do quadrado, em células: o bivaque e a paliçada pequena, média e grande. */
-export const CAMP_SIZES = [10, 16, 22, 28] as const;
+/** Lado do quadrado, em células: o bivaque, a paliçada pequena, média e grande, e a fortaleza (parte 3). */
+export const CAMP_SIZES = [10, 16, 22, 28, 34] as const;
 export type CampSize = (typeof CAMP_SIZES)[number];
 export type CampSide = "N" | "E" | "S" | "W";
 export const CAMP_SIDES: readonly CampSide[] = ["N", "E", "S", "W"];
@@ -61,7 +61,20 @@ export type CampKind =
   | "PEN"
   | "MAP_TENT"
   | "CALTROPS"
-  | "SENTRY";
+  | "SENTRY"
+  // Parte 3: a fortaleza
+  | "KEEP"
+  | "BARRACKS_HALL"
+  | "GREAT_HALL"
+  | "DUNGEON"
+  | "CISTERN"
+  | "STOREHOUSE"
+  | "OFFICER_SCHOOL"
+  | "TREASURY"
+  | "SIEGE_WORKSHOP"
+  | "CASTLE_FAIR"
+  | "DOVECOTE"
+  | "TEMPLE";
 
 export interface CampCost {
   gold: number;
@@ -78,8 +91,8 @@ export interface CampBuildingDef {
   upgrades?: readonly CampCost[];
   /** Carga nas carroças ao levantar o acampamento. */
   cargo: number;
-  /** Patamar mínimo: 0 já no bivaque, 1 só dentro da paliçada. */
-  tier: 0 | 1;
+  /** Patamar mínimo: 0 já no bivaque, 1 só dentro da paliçada, 2 só na fortaleza. */
+  tier: 0 | 1 | 2;
   max: number;
   need?: CampNeed;
   /** Já vem pronto: não se desmonta, mas dá para mudar de lugar. */
@@ -143,6 +156,19 @@ export const CAMP_BUILDINGS: Record<CampKind, CampBuildingDef> = {
   MAP_TENT: { label: "Tenda de mapas", size: 2, cost: { gold: 90, wood: 1 }, cargo: 1, tier: 1, max: 1, upkeep: 1, effect: "Os batedores exploram uma região 30% maior." },
   CALTROPS: { label: "Estrepes", size: 2, cost: { gold: 30, wood: 2 }, cargo: 0, tier: 1, max: 4, stays: true, need: "SECURITY", effect: "Pontas no chão: cada campo de estrepes evita mais 5% do saque." },
   SENTRY: { label: "Posto de sentinela", size: 2, cost: { gold: 40, wood: 2 }, cargo: 1, tier: 1, max: 2, need: "SECURITY", effect: "Avisa do ataque: ninguém é pego de surpresa, e evita 5% do saque." },
+  // --- Parte 3: só na fortaleza (não vão nas carroças: a fortaleza não sai do lugar) ---
+  KEEP: { label: "Torre de menagem", size: 4, cost: { gold: 300, wood: 10, iron: 10 }, cargo: 0, tier: 2, max: 1, need: "SECURITY", effect: "O último reduto: a guarnição defende a sede com 30% mais força." },
+  BARRACKS_HALL: { label: "Quartel", size: 4, cost: { gold: 200, wood: 12 }, cargo: 0, tier: 2, max: 2, need: "BEDS", effect: "Leitos de pedra para 3 batalhões." },
+  GREAT_HALL: { label: "Salão do Comandante", size: 4, cost: { gold: 260, wood: 10 }, cargo: 0, tier: 2, max: 1, need: "MORALE", mood: 3, upkeep: 2, effect: "Banquetes e audiências: moral, e 0,1 de fama por dia." },
+  DUNGEON: { label: "Masmorra", size: 3, cost: { gold: 120, iron: 6 }, cargo: 0, tier: 2, max: 1, effect: "Ninguém foge: os prisioneiros ficam até o resgate." },
+  CISTERN: { label: "Cisterna", size: 3, cost: { gold: 140, wood: 4 }, cargo: 0, tier: 2, max: 1, stays: true, need: "SALUBRITY", effect: "Água para um cerco: 60 soldados a mais antes de lotar, e a sede aguenta 15% mais." },
+  STOREHOUSE: { label: "Armazém fortificado", size: 3, cost: { gold: 160, wood: 8 }, cargo: 0, tier: 2, max: 1, need: "SECURITY", effect: "Comida guardada atrás de pedra: evita 10% do saque, e a sede aguenta 10% mais um cerco." },
+  OFFICER_SCHOOL: { label: "Escola de oficiais", size: 3, cost: { gold: 220, wood: 6 }, cargo: 0, tier: 2, max: 1, upkeep: 2, effect: "Mais 1 vaga de tenente, acima das da tenda." },
+  TREASURY: { label: "Tesouraria", size: 2, cost: { gold: 180, iron: 8 }, cargo: 0, tier: 2, max: 1, effect: "O ouro fica num cofre: quem saqueia a sede não leva ouro." },
+  SIEGE_WORKSHOP: { label: "Oficina de cerco", size: 4, cost: { gold: 200, wood: 12, iron: 4 }, cargo: 0, tier: 2, max: 1, need: "CRAFT", post: ["FAMILY", "SMITH"], craft: true, effect: "Escadas pela metade da madeira, e até 2 aríetes de uma vez." },
+  CASTLE_FAIR: { label: "Feira do castelo", size: 4, cost: { gold: 150, wood: 6 }, cargo: 0, tier: 2, max: 1, need: "MORALE", post: ["PEDDLER"], mood: 2, effect: "Mascates de toda parte: ouro toda semana, mais com a fama." },
+  DOVECOTE: { label: "Pombal", size: 2, cost: { gold: 80, wood: 2 }, cargo: 0, tier: 2, max: 1, effect: "Os pombos avisam do cerco à sede com uma semana de antecedência." },
+  TEMPLE: { label: "Templo", size: 3, cost: { gold: 200, wood: 6 }, cargo: 0, tier: 2, max: 1, need: "MORALE", post: ["CHAPLAIN"], mood: 4, upkeep: 2, effect: "Fé de pedra (Marco 23): muita moral." },
 };
 
 /** O que se pode construir, na ordem do painel (a tenda e a fogueira já vêm prontas). */
@@ -153,6 +179,7 @@ export const BUILD_ORDER: readonly CampKind[] = [
   "CAMP_TAVERN", "TROPHY", "CEMETERY", "STORY_FIRE", "ALTAR",
   "CARPENTRY", "SADDLERY", "TAILOR", "LUMBER", "GARDEN",
   "RIDING", "ARSENAL", "PEN", "MAP_TENT", "CALTROPS", "SENTRY",
+  "KEEP", "BARRACKS_HALL", "GREAT_HALL", "DUNGEON", "CISTERN", "STOREHOUSE", "OFFICER_SCHOOL", "TREASURY", "SIEGE_WORKSHOP", "CASTLE_FAIR", "DOVECOTE", "TEMPLE",
 ];
 
 /** As seções do catálogo no painel. */
@@ -161,6 +188,7 @@ export const BUILD_GROUPS: readonly { label: string; kinds: readonly CampKind[] 
   { label: "Moral", kinds: ["DICE", "STANDARD", "CAMP_TAVERN", "TROPHY", "CEMETERY", "STORY_FIRE", "ALTAR"] },
   { label: "Ofício", kinds: ["FORGE", "CARPENTRY", "SADDLERY", "TAILOR", "LUMBER", "GARDEN"] },
   { label: "Militar", kinds: ["RECRUIT_MAST", "RECRUIT_POST", "TRAINING", "ARCHERY", "STABLE", "RIDING", "ARSENAL", "PEN", "MAP_TENT", "TOWER", "CALTROPS", "SENTRY"] },
+  { label: "Fortaleza", kinds: ["KEEP", "BARRACKS_HALL", "GREAT_HALL", "DUNGEON", "CISTERN", "STOREHOUSE", "OFFICER_SCHOOL", "TREASURY", "SIEGE_WORKSHOP", "CASTLE_FAIR", "DOVECOTE", "TEMPLE"] },
 ];
 
 export interface CampBuilding {
@@ -181,6 +209,8 @@ export interface CampPlan {
   gate: CampSide;
   /** Fosso em volta da paliçada (cavado: fica para trás ao levantar). */
   ditch: boolean;
+  /** Muralha da fortaleza (parte 3): de madeira ao fincar o estandarte, de pedra depois. */
+  wall?: WallKind;
   buildings: CampBuilding[];
   /** Save de antes do Marco 22: guarda o que já tinha (todas as tropas e as vagas de tenente). */
   legacy?: boolean;
@@ -203,7 +233,17 @@ export const PALISADE: Record<CampSize, PalisadeStep> = {
   16: { label: "Paliçada pequena", cost: { gold: 160, wood: 8 }, cargo: 2, fame: 4, battalions: 2, needs: [["RECRUIT_MAST", 1], ["BARRACK", 2]], guard: 0.2 },
   22: { label: "Paliçada média", cost: { gold: 280, wood: 16 }, cargo: 3, fame: 15, battalions: 3, needs: [["KITCHEN", 1], ["OFFICERS_TENT", 1]], guard: 0.3 },
   28: { label: "Paliçada grande", cost: { gold: 420, wood: 24 }, cargo: 4, fame: 30, battalions: 4, needs: [["INFIRMARY", 1], ["FORGE", 1], ["STABLE", 1]], guard: 0.35 },
+  // A fortaleza (parte 3): fincar o estandarte. O preço da terra vem à parte (sim/fortress.ts)
+  34: { label: "Fortaleza", cost: { gold: 500, wood: 30 }, cargo: 0, fame: 45, battalions: 5, needs: [["KITCHEN", 1], ["OFFICERS_TENT", 1], ["WELL", 1], ["TOWER", 1]], guard: 0.5 },
 };
+
+/** A muralha da fortaleza: madeira ao fincar o estandarte; a de pedra segura mais. */
+export type WallKind = "WOOD" | "STONE";
+export const STONE_WALL = { cost: { gold: 450, iron: 12 } as CampCost, guard: 0.15 };
+/** Quanto do saque cada construção de guarda da fortaleza evita. */
+export const STOREHOUSE_GUARD = 0.1;
+export const BARRACKS_HALL_BEDS = 3;
+export const CISTERN_CROWD = 60;
 
 export const DITCH = { label: "Fosso", cost: { gold: 70 } as CampCost, guard: 0.25, effect: "Lama funda em volta da paliçada (só o portão fica firme). Não vai nas carroças." };
 export const TOWER_GUARD = 0.1;
@@ -232,7 +272,9 @@ export const WOOD_PER_FOREST_CELL = 0.2;
 export const RAW_FOOD = 1.25;
 
 export const halfOf = (plan: Pick<CampPlan, "size">) => plan.size / 2;
-export const tierOf = (plan: Pick<CampPlan, "size">): 0 | 1 => (plan.size > 10 ? 1 : 0);
+export const tierOf = (plan: Pick<CampPlan, "size">): 0 | 1 | 2 => (plan.size >= 34 ? 2 : plan.size > 10 ? 1 : 0);
+/** A sede do bando (parte 3): não se levanta nem anda. */
+export const isFortress = (plan: Pick<CampPlan, "size">) => plan.size >= 34;
 export const countOf = (plan: CampPlan, kind: CampKind) => plan.buildings.filter((b) => b.kind === kind).length;
 export const levelOf = (plan: CampPlan, kind: CampKind) => Math.max(0, ...plan.buildings.filter((b) => b.kind === kind).map((b) => b.level));
 export const has = (plan: CampPlan, kind: CampKind) => plan.buildings.some((b) => b.kind === kind);
@@ -402,7 +444,7 @@ export const costText = (c: CampCost) => [`${c.gold} ouro`, c.wood ? `${c.wood} 
 /** Por que essa construção não se pode erguer agora (o patamar e o máximo), sem olhar o lugar nem o preço. */
 export function buildProblem(plan: CampPlan, kind: CampKind): string | null {
   const def = CAMP_BUILDINGS[kind];
-  if (def.tier > tierOf(plan)) return "Só dentro da paliçada";
+  if (def.tier > tierOf(plan)) return def.tier === 2 ? "Só na fortaleza" : "Só dentro da paliçada";
   if (countOf(plan, kind) >= def.max) return def.max === 1 ? "Já existe" : `No máximo ${def.max}`;
   return null;
 }
@@ -431,7 +473,7 @@ export function nextSize(plan: CampPlan): CampSize | null {
 /** O que falta para a paliçada crescer (sem o preço): fama, soldados e as construções de baixo. */
 export function growProblem(plan: CampPlan, ctx: { fame: number; battalions: number }): string | null {
   const next = nextSize(plan);
-  if (!next) return "A paliçada já é a grande";
+  if (!next) return "Já é a fortaleza";
   const step = PALISADE[next];
   const miss: string[] = [];
   if (ctx.fame < step.fame) miss.push(`fama ${step.fame}`);
@@ -458,7 +500,8 @@ export type CampNeeds = Record<CampNeed, NeedState>;
 /** Saque que a defesa evita num ataque ao acampamento desguarnecido. */
 export function guardOf(plan: CampPlan): number {
   const small = readyOf(plan, "CALTROPS").length + readyOf(plan, "SENTRY").length;
-  return Math.min(MAX_GUARD, PALISADE[plan.size].guard + readyOf(plan, "TOWER").length * TOWER_GUARD + small * SMALL_GUARD + (plan.ditch ? DITCH.guard : 0));
+  const fort = (plan.wall === "STONE" ? STONE_WALL.guard : 0) + readyOf(plan, "STOREHOUSE").length * STOREHOUSE_GUARD;
+  return Math.min(MAX_GUARD, PALISADE[plan.size].guard + readyOf(plan, "TOWER").length * TOWER_GUARD + small * SMALL_GUARD + (plan.ditch ? DITCH.guard : 0) + fort);
 }
 
 /** Leitos de cada barraca, pelo nível (barraca, barracão). */
@@ -476,7 +519,8 @@ export const works = (b: CampBuilding, working: Working) => isBuilt(b) && (worki
 const workingOf = (plan: CampPlan, kind: CampKind, working: Working) => plan.buildings.filter((b) => b.kind === kind && works(b, working));
 
 /** Leitos: um batalhão por barraca (dois por barracão). */
-export const bedsOf = (plan: CampPlan) => readyOf(plan, "BARRACK").reduce((n, b) => n + (BEDS_BY_LEVEL[b.level] ?? 1), 0);
+export const bedsOf = (plan: CampPlan) =>
+  readyOf(plan, "BARRACK").reduce((n, b) => n + (BEDS_BY_LEVEL[b.level] ?? 1), 0) + readyOf(plan, "BARRACKS_HALL").length * BARRACKS_HALL_BEDS;
 /** Batalhões que a fogueira e as cozinhas dão conta. */
 export const cooksOf = (plan: CampPlan, working?: Working) =>
   (has(plan, "CAMPFIRE") ? FIRE_COOKS : 0) + workingOf(plan, "KITCHEN", working).reduce((n, b) => n + (KITCHEN_BY_LEVEL[b.level] ?? KITCHEN_COOKS), 0);
@@ -545,7 +589,8 @@ export const NEED_SHORT: Record<CampNeed, string> = {
 export const BASE_CROWD = 60;
 
 /** Quantos soldados o acampamento aguenta antes de lotar (o poço e a latrina ajudam). */
-export const crowdLimit = (plan: CampPlan, base: number) => base + readyOf(plan, "WELL").length * WELL_CROWD + readyOf(plan, "LATRINE").length * LATRINE_CROWD;
+export const crowdLimit = (plan: CampPlan, base: number) =>
+  base + readyOf(plan, "WELL").length * WELL_CROWD + readyOf(plan, "LATRINE").length * LATRINE_CROWD + readyOf(plan, "CISTERN").length * CISTERN_CROWD;
 
 // --- Tropas e tenentes liberados por construção (GDD 9.6) ---
 
@@ -575,7 +620,9 @@ export function troopProblem(plan: CampPlan, troop: TroopType): string | null {
 
 /** Vagas de tenente: uma por nível da tenda dos oficiais. */
 export function lieutenantSlots(plan: CampPlan, cap: number): number {
-  return plan.legacy ? cap : Math.min(cap, readyLevel(plan, "OFFICERS_TENT"));
+  // A escola de oficiais (fortaleza) abre uma vaga além das da tenda
+  const school = readyOf(plan, "OFFICER_SCHOOL").length;
+  return plan.legacy ? cap + school : Math.min(cap, readyLevel(plan, "OFFICERS_TENT")) + school;
 }
 
 /** Voluntários que o mastro atrai por dia e quantos esperam no máximo. */
@@ -716,6 +763,58 @@ export function fenceRuns(s: CampShape): [number, number, number, number][] {
     else out.push([x0, y0, x1, cy - g], [x0, cy + g, x1, y1]);
   }
   return out;
+}
+
+/**
+ * A muralha da fortaleza, do jeito dos fortes do mundo (townLayout): trechos grossos por fora do
+ * quadrado, torres nos cantos, ao longo dos lados e de cada lado do portão. O vão do portão é o do
+ * acampamento (as regras da grade não mudam). Retângulos no mundo.
+ */
+export interface FortWalls {
+  thickness: number;
+  walls: { x: number; y: number; w: number; h: number }[];
+  towers: { x: number; y: number; w: number; h: number }[];
+}
+export const FORT_WALL_SPEC: Record<WallKind, { thickness: number; tower: number; towerEvery: number }> = {
+  WOOD: { thickness: 26, tower: 70, towerEvery: 560 },
+  STONE: { thickness: 50, tower: 104, towerEvery: 560 },
+};
+
+export function fortWalls(s: CampShape, kind: WallKind): FortWalls {
+  const spec = FORT_WALL_SPEC[kind];
+  const t = spec.thickness;
+  const walls: FortWalls["walls"] = [];
+  const towers: FortWalls["towers"] = [];
+  // Cada trecho da cerca vira um muro de espessura t, por fora da linha (os cantos se fecham)
+  for (const [x0, y0, x1, y1] of fenceRuns(s)) {
+    if (y0 === y1) {
+      // Os muros de cima e de baixo cobrem também os cantos
+      const left = x0 <= s.cx - s.half ? x0 - t : x0;
+      const right = x1 >= s.cx + s.half ? x1 + t : x1;
+      walls.push({ x: left, y: y0 < s.cy ? y0 - t : y0, w: right - left, h: t });
+    } else {
+      const out = x0 < s.cx ? -t : 0;
+      walls.push({ x: x0 + out, y: Math.min(y0, y1), w: t, h: Math.abs(y1 - y0) });
+    }
+  }
+  const tower = (x: number, y: number) => towers.push({ x: x - spec.tower / 2, y: y - spec.tower / 2, w: spec.tower, h: spec.tower });
+  const h = s.half + t / 2;
+  for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) tower(s.cx + dx * h, s.cy + dy * h);
+  // Ao longo dos lados, longe dos cantos e do portão
+  const n = Math.max(1, Math.round((s.half * 2) / spec.towerEvery));
+  for (const side of CAMP_SIDES) {
+    for (let k = 1; k < n; k++) {
+      const along = -s.half + (k * s.half * 2) / n;
+      if (side === s.gate && Math.abs(along) < s.gateHalf + spec.tower * 1.5) continue;
+      if (side === "N" || side === "S") tower(s.cx + along, s.cy + (side === "N" ? -h : h));
+      else tower(s.cx + (side === "W" ? -h : h), s.cy + along);
+    }
+  }
+  // As duas torres do portão
+  const g = s.gateHalf + spec.tower / 2;
+  if (s.gate === "N" || s.gate === "S") for (const k of [-1, 1]) tower(s.cx + k * g, s.cy + (s.gate === "N" ? -h : h));
+  else for (const k of [-1, 1]) tower(s.cx + (s.gate === "W" ? -h : h), s.cy + k * g);
+  return { thickness: t, walls, towers };
 }
 
 // --- Começos ---
