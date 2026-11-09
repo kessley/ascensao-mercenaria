@@ -4,6 +4,7 @@ import { sfx } from "../../audio/sounds";
 import { BALANCE, COLORS, COMBAT } from "../../utils/constants";
 import { angleDiff, angleTo, nearest } from "../../utils/math";
 import { commanderLook } from "../art/looks";
+import { slashSprite } from "../world/CombatEffects";
 
 export interface CommanderKeys {
   W: Phaser.Input.Keyboard.Key;
@@ -95,7 +96,6 @@ export class Commander extends Unit {
     if (!this.isAlive || !this.canAttack(time)) return;
     this.lastAttackAt = time;
 
-    const reach = this.radius + this.range;
     const closest = nearest(
       enemies.filter((e) => this.inRange(e)),
       this,
@@ -109,22 +109,8 @@ export class Commander extends Unit {
       }
     }
 
-    this.drawSlash(reach + 6);
+    // A meia-lua da lâmina (G6): o raio da folha é o alcance dele
+    slashSprite(this.scene, this.x, this.y, this.facing);
     sfx.swing(this);
-  }
-
-  private drawSlash(radius: number): void {
-    const slash = this.scene.add.graphics({ x: this.x, y: this.y });
-    slash.lineStyle(4, COLORS.SLASH, 0.9);
-    slash.beginPath();
-    slash.arc(0, 0, radius, this.facing - BALANCE.COMMANDER_SWING_ARC, this.facing + BALANCE.COMMANDER_SWING_ARC);
-    slash.strokePath();
-    slash.setDepth(5);
-    this.scene.tweens.add({
-      targets: slash,
-      alpha: 0,
-      duration: 180,
-      onComplete: () => slash.destroy(),
-    });
   }
 }

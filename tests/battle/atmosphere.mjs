@@ -21,7 +21,7 @@ const bearers = () => {
   };
 };
 
-export async function atmosphere({ page, ev }, { check }) {
+export async function atmosphere({ page, ev, battle, labScript }, { check }) {
   await ev(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector("nav >> text=Nova campanha");
@@ -263,4 +263,159 @@ export async function atmosphere({ page, ev }, { check }) {
     w.forcedWind = null;
     w.lastWeatherAt = -Infinity;
   });
+
+  // --- Parte 3: os efeitos de combate ---
+  // (a suíte recarregou a página no começo: o laboratório volta para ela)
+  await page.evaluate(labScript);
+  // No laboratório o relógio para entre os passos: a foto desenha o quadro à mão
+  const draw = () =>
+    ev(() => {
+      const g = window.__world.sys.game;
+      g.renderer.preRender();
+      g.scene.render(g.renderer);
+      g.renderer.postRender();
+    });
+  /** Uma tropa de tiro contra uma parada; mede os projéteis no ar e o que fica no chão. */
+  const volley = async (troop, untilFlying = 0) => {
+    await battle({ army: [[troop]], force: { SOLDIER: 12 }, faction: "KINGDOM" });
+    return ev((untilFlying) => {
+      const lab = window.__lab;
+      const w = window.__world;
+      const fx = w.combatFx;
+      lab.freezeAI();
+      lab.parkCommander();
+      const b = lab.battalion();
+      lab.place(b, 3800, 3600, 0, 4);
+      const sq = lab.squad();
+      lab.placeSquad(sq, 4010, 3600, Math.PI);
+      sq.setOrder({ type: "HOLD", point: { x: 4010, y: 3600 }, facing: Math.PI });
+      for (const s of sq.soldiers) s.hostile = true;
+      w.cameras.main.stopFollow();
+      w.cameras.main.setZoom(2);
+      w.cameras.main.centerOn(3905, 3570);
+      b.orderAttack(sq.soldiers[0]);
+      const kinds = new Set();
+      const dirs = new Set();
+      let lift = 0;
+      let flying = 0;
+      let chips = 0;
+      lab.step(8, () => {
+        for (const f of fx.flights) {
+          kinds.add(f.kind);
+          const p = f.timer.getProgress();
+          lift = Math.max(lift, f.from.y + (f.to.y - f.from.y) * p - (f.bob.y + 8));
+          dirs.add(f.bob.frame.name);
+        }
+        flying = Math.max(flying, fx.stats.flying);
+        chips = Math.max(chips, fx.stats.chips);
+        // (para a foto: com a salva no meio do caminho, no alto do arco)
+        const midway = [...fx.flights].filter((f) => Math.abs(f.timer.getProgress() - 0.5) < 0.15).length;
+        return untilFlying > 0 && midway >= untilFlying && w.run.seconds > 2;
+      });
+      return { kinds: [...kinds], dirs: dirs.size, lift: Math.round(lift), flying, chips, stuck: fx.stats.stuck, hurt: Math.round(lab.hurt(sq.soldiers)) };
+    }, untilFlying);
+  };
+  const arrows = await volley("ARCHERS", 8);
+  await draw();
+  await page.screenshot({ path: "tests/battle/.shots-g6-flechas.png" });
+  const landed = await ev(() => {
+    const lab = window.__lab;
+    const fx = window.__world.combatFx;
+    let chips = 0;
+    lab.step(8, () => {
+      chips = Math.max(chips, fx.stats.chips);
+    });
+    return { stuck: fx.stats.stuck, chips, stains: fx.stats.stains, flying: fx.stats.flying };
+  });
+  const bolts = await volley("CROSSBOW");
+  const javelins = await volley("JAVELINS");
+  console.log("   projéteis:", JSON.stringify({ arrows, landed, bolts, javelins }));
+  check(
+    "as flechas voam em arco, viradas para onde vão (sobem e descem)",
+    arrows.kinds.join() === "ARROW" && arrows.flying >= 8 && arrows.lift > 25 && arrows.dirs >= 3,
+    JSON.stringify(arrows),
+  );
+  check("o virote voa quase reto; o dardo tem desenho próprio", bolts.kinds.join() === "BOLT" && bolts.lift < 15 && bolts.flying > 0 && javelins.kinds.join() === "JAVELIN", JSON.stringify({ bolts, javelins }));
+  check("a flecha que não acerta ninguém fica fincada no chão; a que acerta, respinga", landed.stuck > arrows.stuck && Math.max(arrows.chips, landed.chips) > 0 && landed.stains > 0, JSON.stringify(landed));
+
+  // A investida: poeira a galope, e a nuvem do choque, que se vê de longe
+  await battle({ army: [["CAVALRY"]], force: { SOLDIER: 10 }, faction: "KINGDOM", competence: 2 });
+  const charge = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const fx = w.combatFx;
+    lab.freezeAI();
+    lab.parkCommander();
+    const b = lab.battalion();
+    lab.place(b, 3700, 3600, 0, 4);
+    const sq = lab.squad();
+    lab.placeSquad(sq, 4300, 3600, Math.PI);
+    w.cameras.main.stopFollow();
+    w.cameras.main.setZoom(1);
+    w.cameras.main.centerOn(4150, 3600);
+    b.orderAttack(sq.soldiers[0]);
+    let gallop = 0;
+    let at = null;
+    lab.step(12, () => {
+      if (fx.stats.impacts === 0) gallop = Math.max(gallop, fx.stats.puffs);
+      else if (at === null) at = w.run.seconds;
+      return at !== null && w.run.seconds - at > 0.4;
+    });
+    const hit = fx.lastImpact;
+    if (hit) {
+      w.cameras.main.setZoom(2);
+      w.cameras.main.centerOn(hit.x - 40, hit.y);
+    }
+    return { gallop, impacts: fx.stats.impacts, puffs: fx.stats.puffs, at: at === null ? null : Math.round(at * 10) / 10 };
+  });
+  await draw();
+  await page.screenshot({ path: "tests/battle/.shots-g6-investida.png" });
+  await ev(() => {
+    const w = window.__world;
+    w.cameras.main.setZoom(0.5);
+    window.__lab.step(0.1);
+  });
+  await draw();
+  await page.screenshot({ path: "tests/battle/.shots-g6-investida-longe.png" });
+  const melee = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const fx = w.combatFx;
+    w.cameras.main.setZoom(1);
+    lab.step(8);
+    // De perto, onde a luta foi: as manchas, as poças de quem caiu e os corpos
+    const hit = fx.lastImpact;
+    if (hit) {
+      w.cameras.main.setZoom(3);
+      w.cameras.main.centerOn(hit.x, hit.y);
+      lab.step(0.05);
+    }
+    return { stains: fx.stats.stains, sparks: fx.stats.sparks, matter: lab.battalion().soldiers.find((s) => s.isAlive)?.matter };
+  });
+  await draw();
+  await page.screenshot({ path: "tests/battle/.shots-g6-sangue.png" });
+  console.log("   investida:", JSON.stringify({ charge, melee }));
+  check("a cavalaria a galope levanta poeira, e a investida, uma nuvem onde bate", charge.gallop > 0 && charge.impacts >= 1 && charge.puffs > charge.gallop, JSON.stringify(charge));
+  check("o corpo a corpo mancha o chão de sangue e o golpe aparado solta faísca", melee.stains > 0 && melee.sparks > 0 && melee.matter === "BLOOD", JSON.stringify(melee));
+
+  // Os mortos-vivos soltam osso, não sangue; e o golpe do Comandante é a meia-lua da lâmina
+  await battle({ army: [["INFANTRY"]], force: { SKELETON: 6 }, faction: "UNDEAD" });
+  const bones = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    lab.freezeAI();
+    const foes = lab.allEnemies();
+    const c = w.commander;
+    c.x = foes[0].x - 40;
+    c.y = foes[0].y;
+    c.lastAttackAt = -Infinity;
+    c.trySwing(foes, w.time.now);
+    const slashes = () => w.children.list.filter((o) => o.texture?.key === "fx:slash").length;
+    const swung = slashes();
+    lab.step(0.4);
+    return { matter: foes[0].matter, swung, after: slashes() };
+  });
+  console.log("   ossos e golpe:", JSON.stringify(bones));
+  check("os esqueletos soltam osso, não sangue", bones.matter === "BONE", JSON.stringify(bones));
+  check("o golpe do Comandante é a meia-lua da lâmina, que some logo", bones.swung === 1 && bones.after === 0, JSON.stringify(bones));
 }

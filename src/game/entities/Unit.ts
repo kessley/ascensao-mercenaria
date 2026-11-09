@@ -9,6 +9,8 @@ import { flameKey, LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../ar
 import { FLAMES } from "../art/fire";
 import { ANIM, FRAMES, type Look } from "../art/figures";
 import type { Corpses } from "../art/corpses";
+import type { Matter, MissileKind } from "../art/combatFx";
+import { combatFx } from "../world/CombatEffects";
 import { PIXEL_FONT } from "../art/font";
 
 export type Team = "ALLY" | "ENEMY";
@@ -170,6 +172,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** Figura em pixel art (null = greybox). */
   protected sprite: Phaser.GameObjects.Image | null = null;
   private skin: Skin | null = null;
+  /** O visual vestido (G6: do que a figura é feita e o que ela atira). */
+  private look: Look | null = null;
   private shownLod: Lod | null = null;
   /** Nível de detalhe só desta figura (as cenas de dentro não seguem o zoom do mundo); null = o de todos. */
   private ownLod: Lod | null = null;
@@ -238,6 +242,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.sprite?.destroy();
     this.sprite = null;
     this.skin = null;
+    this.look = look;
     if (!look) return;
     this.skin = skinOf(this.scene, look);
     this.sprite = new Phaser.GameObjects.Image(this.scene, 0, this.feetY, this.skin.full, 0);
@@ -246,6 +251,27 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.shownLod = null;
     this.setFacing(this.facing);
     this.applyLod();
+  }
+
+  /** Do que é feito quem leva o golpe (G6): sangue; osso nos mortos-vivos; lasca nos carros. */
+  get matter(): Matter {
+    const l = this.look;
+    if (l?.vehicle) return "WOOD";
+    if (l?.body === "SKELETON" && !l.beast) return "BONE";
+    return "BLOOD";
+  }
+
+  /** O desenho do que ele atira (G6): dardo, virote ou flecha. */
+  get missile(): MissileKind {
+    const w = this.look?.weapon;
+    if (w === "JAVELIN") return "JAVELIN";
+    if (w === "CROSSBOW" || this.flatShot) return "BOLT";
+    return "ARROW";
+  }
+
+  /** Onde os pés tocam o chão (a figura fica de pé um pouco abaixo do centro). */
+  get foot(): Point {
+    return { x: this.x, y: this.y + (this.sprite ? this.feetY : this.radius * 0.6) };
   }
 
   /** Veste uma figura em pixel art (false = greybox). */
@@ -666,6 +692,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     // Escudo de frente para a chuva de flechas (quem vem de lado ou por trás não tem o que parar)
     if (kind === "RANGED" && this.shieldBlock > 0 && this.approachOf(source) === "FRONT" && Math.random() < this.shieldBlock) return;
     this.hp = Math.max(0, this.hp - amount * this.incomingMultiplier(source, kind));
+    combatFx(this.scene)?.wound(this, source, amount, kind === "RANGED");
     if (friendly) Unit.onFriendlyFire?.(this, source);
     else {
       this.lastHitFrom = source;
@@ -756,6 +783,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   protected die(): void {
     sfx.death(this);
     this.unitState = "DEAD";
+    combatFx(this.scene)?.fall(this);
     this.target = null;
     const body = this.sprite ?? this.bodyGfx;
     this.scene.tweens.killTweensOf(body);

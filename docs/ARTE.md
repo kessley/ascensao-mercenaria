@@ -10,7 +10,7 @@ Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel a
 - as carroças, os aríetes, as escadas, as harpias, os navios e a gente do mapa e do acampamento (G4);
 - os interiores das construções, a Cidade Alta das capitais e a Liça dos duelos (G4, parte 5).
 
-A interface e os efeitos ainda são greybox.
+Ainda são greybox: as marcas de ordem, de destino e de seleção (de propósito: são da interface), o estandarte do batalhão e a névoa de guerra.
 
 ## Como a arte é feita
 - **Por código, em camadas** (`src/game/art/`). Nenhuma imagem é carregada: as folhas são desenhadas na primeira vez que alguém veste aquele visual e guardadas como textura.
@@ -124,8 +124,10 @@ A interface e os efeitos ainda são greybox.
 ### Efeitos
 | O quê | Onde no código | Estado |
 | --- | --- | --- |
-| Flechas, virotes e dardos | `ProjectileSystem` | greybox (traço) |
-| Golpe do Comandante | `Commander.drawSlash` | greybox (arco) |
+| Flechas, virotes e dardos | `combatFx.ts`, `CombatEffects`, `ProjectileSystem` | ✅ G6, parte 3. Pixel art em 16 direções, que voam em arco (o desenho vira para cima na subida e para baixo na descida) com a sombra no chão; o virote voa quase reto. O que não acerta ninguém fica fincado no chão, inclinado para o lado de onde veio, por um minuto |
+| Golpe do Comandante | `slashSprite` em `CombatEffects`, `Commander` | ✅ G6, parte 3. A meia-lua da lâmina em 3 quadros (o golpe, o rastro e o rastro se desfazendo), em 16 direções |
+| Sangue, poças, ossos, lascas e faíscas | `CombatEffects`, `Unit.matter` | ✅ G6, parte 3. Quem leva o golpe respinga para o lado contrário de quem bateu, e as gotas mancham o chão; quem cai deixa uma poça debaixo do corpo. Os esqueletos soltam osso, e os carros, lascas de madeira. O golpe aparado solta faísca. As marcas somem depois de um minuto e meio e só aparecem de perto, como os corpos |
+| Poeira da cavalaria e da investida | `CombatEffects` | ✅ G6, parte 3. A galope, um rastro leve atrás dos cascos (mais na investida); onde a investida bate, uma nuvem que se vê de longe. Vira lama no chão molhado e borrifo branco na neve e na água |
 | Textos que sobem ("esquiva", "flanqueados!") | `Unit.floatText` | texto |
 | Ordens, destinos, linha de batalha e seleção | `WorldScene`, `Battalion` | greybox (de propósito: são da interface) |
 | Estandarte e nome do batalhão | `Battalion.drawBanner` | greybox |
@@ -199,4 +201,5 @@ A interface e os efeitos ainda são greybox.
 6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue). Em quatro partes:
    - a parte 1, a noite e o fogo, está feita;
    - a parte 2, o clima, está feita;
-   - faltam os efeitos de combate e o que a magia mexe.
+   - a parte 3, os efeitos de combate, está feita;
+   - falta o que a magia mexe.

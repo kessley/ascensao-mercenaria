@@ -24,8 +24,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **Em andamento:** o G6 (etapa 15), atmosfera. A parte 1, a noite e o fogo, e a parte 2, o clima, estão feitas.
-- **A seguir:** a parte 3 do G6: os efeitos de combate.
+- **Em andamento:** o G6 (etapa 15), atmosfera. Estão feitas a parte 1 (a noite e o fogo), a 2 (o clima) e a 3 (os efeitos de combate).
+- **A seguir:** a parte 4 do G6: o que a magia mexe, e o fechamento.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -58,7 +58,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
-| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | partes 1 e 2 de 4 |
+| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | partes 1 a 3 de 4 |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
@@ -1238,6 +1238,33 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Testes:**
   - 11 de regras em `tests/unit/weather.test.ts` (o vento, as gotas, as poças, a neve no chão, o nevoeiro e as bandeiras);
   - a suíte `atmosfera` passou a 17 verificações: na chuva, as gotas respingam e se inclinam com o vento, as bandeiras tremulam viradas para ele, o chão molha e aparecem as poças; na neve, os flocos não respingam e a neve cobre o chão; no nevoeiro, os bancos passam e as bandeiras caem; com tempo aberto, a neve derrete e o chão seca. Fotos novas: `.shots-g6-chuva.png`, `.shots-g6-neve.png` e `.shots-g6-nevoeiro.png`.
+
+**Feito na parte 3, os efeitos de combate:**
+- **A folha dos efeitos** (`src/game/art/combatFx.ts`): células de 16 px numa folha só, para cada camada ser um `Blitter` só.
+  - Flechas, virotes e dardos em 16 direções. As penas fazem um ">" atrás do rabo, e a ponta é de aço escuro.
+  - Os mesmos projéteis fincados no chão, inclinados para a esquerda ou para a direita.
+  - A poeira em 5 quadros (cresce e se desfaz em pontilhado), em três cores: terra, lama e neve.
+  - Gotas de sangue, lascas de osso e de madeira e faíscas; manchas de sangue (4 respingos e 2 poças), de osso e de madeira.
+  - O golpe em meia-lua tem folha própria: 16 direções, 3 quadros.
+- **Os efeitos no campo** (`CombatEffects`, ligado à cena do mapa por `setCombatFx`):
+  - O projétil anda no mesmo relógio da queda que decide o dano (`TimerEvent.getProgress`): chega quando o dano chega, e pausa e câmera lenta valem para ele. Sobe em arco, e o desenho vira com a curva. A sombra fica no chão.
+  - O que não acerta ninguém fica fincado por um minuto (na água, na muralha e nos telhados, não).
+  - Quem leva o golpe respinga para o lado contrário de quem bateu (`Unit.matter`: sangue, osso nos esqueletos, lasca nos carros). As gotas caem perto e deixam pingos; quem cai deixa a poça debaixo do corpo.
+  - O golpe aparado solta faísca entre os dois.
+  - A cavalaria a galope levanta um rastro leve de poeira atrás dos cascos, mais cheio na investida. Onde a investida bate (e onde ela para nas lanças), sobe uma nuvem que fica pairando.
+  - A poeira vira lama no chão molhado e borrifo branco na neve e na água.
+  - Bobs reaproveitados e limites (400 fincados, 600 manchas, 500 nuvens, 400 gotas). Gotas e poeira só saem perto da câmera; as marcas no chão só aparecem de perto, como os corpos.
+- **O golpe do Comandante** (`slashSprite`) é a meia-lua da lâmina, em qualquer cena.
+- **Testes:**
+  - 7 de regras em `tests/unit/combatFx.test.ts` (a folha, a direção dos projéteis, as penas, os fincados, a poeira, as manchas e o golpe);
+  - a suíte `atmosfera` passou a 24 verificações:
+    - flechas em arco, virotes quase retos e dardos com desenho próprio;
+    - flechas fincadas e respingos;
+    - a poeira do galope e a nuvem da investida;
+    - manchas e faíscas no corpo a corpo;
+    - osso nos esqueletos;
+    - a meia-lua do golpe.
+  - Fotos novas: `.shots-g6-flechas.png`, `.shots-g6-investida.png`, `.shots-g6-investida-longe.png` e `.shots-g6-sangue.png`.
 
 ## 16. Marco 19: magia do Comandante
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.

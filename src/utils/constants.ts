@@ -91,9 +91,7 @@ export const COLORS = {
   PANIC_TINT: 0xff9c8c,
   ORDER_MOVE: 0xffffff,
   ORDER_ATTACK: 0xff6b6b,
-  SLASH: 0xfff3c4,
   SELECTION: 0x9dff6b,
-  ARROW: 0xf5e6c8,
 } as const;
 
 // --- Tipos de domínio compartilhados por Phaser e React ---

@@ -1,7 +1,8 @@
 import type Phaser from "phaser";
 import type { Unit } from "../entities/Unit";
 import { scatterPoint, victimAt, volleySpread } from "../sim/combatRules";
-import { COLORS, COMBAT } from "../../utils/constants";
+import { COMBAT } from "../../utils/constants";
+import { combatFx, type Flight } from "../world/CombatEffects";
 import { distance, type Point } from "../../utils/math";
 import { sfx } from "../../audio/sounds";
 
@@ -15,30 +16,28 @@ export function setArrowField(units: readonly Unit[]): void {
 /** Quem pode levar uma flecha perdida (gente em paz fica de fora: ninguém começa uma guerra por acidente). */
 const inTheWay = (u: Unit) => u.isAlive && u.strayTarget;
 
-function land(scene: Phaser.Scene, shooter: Unit, at: Point, damage: number): void {
+/** A queda: acerta quem estiver ali (true) ou finca no chão (false). */
+function land(scene: Phaser.Scene, shooter: Unit, at: Point, damage: number): boolean {
   const victim = victimAt(field.filter(inTheWay), at);
-  if (!victim) return;
+  if (!victim) return false;
   victim.takeDamage(damage, shooter, scene.time.now, "RANGED");
   sfx.arrowHit(at);
+  return true;
 }
 
 /** Uma flecha: sobe em arco (tiro reto vai direto e mais rápido) e só decide em quem acerta ao cair. */
 function launch(scene: Phaser.Scene, shooter: Unit, from: Point, to: Point, damage: number): void {
   const flat = shooter.flatShot;
   const duration = (distance(from, to) / (flat ? COMBAT.BOLT_SPEED : COMBAT.ARROW_SPEED)) * 1000;
-  const arrow = scene.add.graphics({ x: from.x, y: from.y }).setDepth(6);
-  arrow.lineStyle(2, COLORS.ARROW, 1);
-  arrow.lineBetween(-7, 0, 5, 0);
-  arrow.fillStyle(COLORS.ARROW, 1);
-  arrow.fillTriangle(8, 0, 3, -3, 3, 3);
-  arrow.rotation = Math.atan2(to.y - from.y, to.x - from.x);
-  scene.tweens.add({ targets: arrow, x: to.x, y: to.y, duration });
-  if (!flat) scene.tweens.add({ targets: arrow, scale: 1.7, duration: duration / 2, yoyo: true, ease: "Sine.easeOut" });
-  // A queda segue o relógio do jogo, não o da animação: pausa e câmera lenta valem para ela
-  scene.time.delayedCall(duration, () => {
-    arrow.destroy();
-    land(scene, shooter, to, damage);
+  // A queda segue o relógio do jogo, não o da animação: pausa e câmera lenta valem para ela.
+  // O desenho (G6) anda no mesmo relógio: a flecha chega quando o dano chega
+  const fx = combatFx(scene);
+  let flight: Flight | null = null;
+  const timer = scene.time.delayedCall(duration, () => {
+    const hit = land(scene, shooter, to, damage);
+    if (flight) fx?.land(flight, !hit);
   });
+  flight = fx?.launch(shooter.missile, from, to, flat, timer) ?? null;
 }
 
 /**
