@@ -53,7 +53,7 @@ import {
 import { Button } from "../Button";
 import { LieutenantCandidates } from "./LieutenantPanels";
 import { InfirmaryPanel } from "./LogisticsPanels";
-import { FortressPanel, StandardPanel } from "./FortressPanels";
+import { FortressPanel, SeatCityPanel, StandardPanel } from "./FortressPanels";
 
 const sectionTitle =
   "text-sm font-bold uppercase tracking-wider text-neutral-400";
@@ -313,7 +313,10 @@ export function CampPlanPanel() {
           </span>
         </h2>
         {plan.wall ? (
-          <FortressPanel />
+          <>
+            <FortressPanel />
+            <SeatCityPanel />
+          </>
         ) : next === 34 ? (
           <StandardPanel />
         ) : next && step ? (

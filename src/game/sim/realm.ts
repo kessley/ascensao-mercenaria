@@ -53,6 +53,8 @@ export interface Settlement {
   conqueredDay?: number;
   /** Cerco em andamento: o reino que acampou diante dos muros. */
   besiegedBy?: string;
+  /** A vila que nasceu em volta da fortaleza do bando (Marco 22, parte 4): a planta é a da cidade da sede. */
+  seat?: boolean;
 }
 
 /** Guerra entre dois reinos (Marco 14): embargo, armas caras e escaramuças na fronteira. */

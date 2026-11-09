@@ -25,7 +25,7 @@ export const CONTINENT_KEYS = [
   "passes", "audiences", "quests", "summons", "contracts", "activeContract", "priceBook", "depot", "posts", "stakes", "loans",
   "ownCaravans", "marketTaxIncome", "stolenCargo", "townIntel", "battlefields", "burnedBridges", "siege", "forage", "campAt",
   "campPacked", "campPlan", "campForest", "campStay", "followers", "exposure", "fame", "fear", "nestsFound", "siteLife", "training", "captives", "captiveOfficers",
-  "fortress", "fieldCamp", "seatAlarm",
+  "fortress", "fieldCamp", "seatAlarm", "seatCity",
 ] as const satisfies readonly (keyof GameState)[];
 
 export type ContinentKey = (typeof CONTINENT_KEYS)[number];

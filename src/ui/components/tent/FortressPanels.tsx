@@ -1,6 +1,22 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useGameStore } from "../../../store/useGameStore";
-import { castellanHome, garrisonOf, landCtxOf } from "../../../store/fortressSlice";
+import { castellanHome, cityDriversOf, garrisonOf, landCtxOf } from "../../../store/fortressSlice";
+import {
+  CITY_STAGES,
+  DECREE,
+  DECREES,
+  STAGE,
+  TAX,
+  VETERAN_FAMILY,
+  VETERAN_LEVEL,
+  dailyGrowth,
+  stageCap,
+  stageOf,
+  weeklyGold,
+  type CityDrivers,
+  type CityTax,
+} from "../../../game/sim/seatCity";
 import { CAMP_BUILDINGS, CARGO_PER_WAGON, PALISADE, STONE_WALL, costText, growProblem, readyOf, shortOf, type CampKind } from "../../../game/data/campGrid";
 import {
   FIELD_KIT_MAX,
@@ -163,6 +179,116 @@ export function FortressPanel() {
           </button>
         ))}
       </div>
+      {msg && <p className="text-xs text-red-300">{msg}</p>}
+    </div>
+  );
+}
+
+const DRIVER_LABEL: Record<keyof CityDrivers, string> = { security: "Segurança", food: "Comida", commerce: "Comércio", fame: "Fama" };
+
+/**
+ * A cidade que nasce em volta da sede (Marco 22, parte 4): o jogador não põe casa nenhuma. Aqui
+ * ele vê a etapa, o que faz a gente vir e governa pelos impostos e pelos decretos.
+ */
+export function SeatCityPanel() {
+  const city = useGameStore((s) => s.seatCity);
+  const plan = useGameStore((s) => s.campPlan);
+  const drivers = useGameStore(useShallow(cityDriversOf));
+  const town = useGameStore((s) => (s.seatCity?.settlementId ? s.settlements.find((t) => t.id === s.seatCity?.settlementId) : undefined));
+  const battalions = useGameStore((s) => s.battalions);
+  const setDecree = useGameStore((s) => s.setDecree);
+  const setCityTax = useGameStore((s) => s.setCityTax);
+  const retireVeterans = useGameStore((s) => s.retireVeterans);
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!city) return null;
+  const stage = stageOf(city.people);
+  const next = CITY_STAGES[CITY_STAGES.indexOf(stage) + 1];
+  const capped = next && STAGE[next].from > stageCap(plan);
+  const growth = dailyGrowth(city, drivers);
+  const gold = weeklyGold(city, drivers);
+  const veterans = city.decrees.includes("VETERANS") ? battalions.filter((b) => b.level >= VETERAN_LEVEL && b.soldiers > 1) : [];
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-200/70">
+        Cidade da sede · {STAGE[stage].label} · {Math.round(city.people)} moradores
+      </h3>
+      <p className="text-xs text-neutral-400">
+        {STAGE[stage].text}{" "}
+        {next
+          ? capped
+            ? `Sem a muralha de pedra da fortaleza, não passa de ${STAGE[stage].label.toLowerCase()}.`
+            : `${STAGE[next].label} com ${STAGE[next].from} moradores.`
+          : "A cidade inteira."}{" "}
+        {growth >= 0 ? `Chegam uns ${growth.toFixed(1).replace(".", ",")} por dia.` : "Sem segurança, a gente vai embora."}
+      </p>
+      <div className="grid grid-cols-4 gap-1 text-xs">
+        {(Object.keys(DRIVER_LABEL) as (keyof CityDrivers)[]).map((k) => (
+          <div key={k} className="flex flex-col gap-0.5">
+            <span className="text-neutral-400">{DRIVER_LABEL[k]}</span>
+            <div className="h-1.5 rounded bg-neutral-800">
+              <div className={`h-1.5 rounded ${drivers[k] < 0.25 ? "bg-red-400" : "bg-emerald-400"}`} style={{ width: `${Math.round(drivers[k] * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-neutral-400">
+        {town
+          ? `${town.name} é uma vila do bando no reino: os impostos vêm por ela (lealdade ${Math.round(town.loyalty ?? 70)}).`
+          : stage === "CAMPTOWN"
+            ? "O arraial ainda não paga imposto."
+            : "O burgo paga imposto toda semana."}{" "}
+        {gold !== 0 && `Esta semana: ${gold > 0 ? "+" : ""}${gold} de ouro${city.decrees.length > 0 ? " (com o custo dos decretos)" : ""}.`}
+      </p>
+      <label className="flex items-center justify-between gap-2 text-neutral-200">
+        Impostos
+        <select
+          aria-label="Impostos da cidade da sede"
+          value={city.tax}
+          onChange={(e) => setCityTax(Number(e.target.value) as CityTax)}
+          className="rounded bg-neutral-900 px-1 py-0.5 text-xs text-neutral-200"
+        >
+          {([0, 1, 2] as CityTax[]).map((t) => (
+            <option key={t} value={t}>
+              {TAX[t].label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex flex-col gap-1">
+        {DECREES.map((k) => {
+          const on = city.decrees.includes(k);
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setMsg(setDecree(k, !on))}
+              className={`rounded border px-2 py-1 text-left text-xs ${on ? "border-amber-400 bg-amber-900/40 text-amber-200" : "border-neutral-600 bg-neutral-800 text-neutral-300 hover:border-neutral-400"}`}
+            >
+              <b>{DECREE[k].label}</b>
+              {DECREE[k].upkeep > 0 && <span className="text-neutral-400"> · {DECREE[k].upkeep} ouro/semana</span>}
+              <span className="block text-neutral-400">{DECREE[k].text}</span>
+            </button>
+          );
+        })}
+      </div>
+      {city.decrees.includes("VETERANS") && (
+        <div className="flex flex-col gap-1 text-xs">
+          <span className="text-neutral-400">
+            Milícia: {city.militia} veteranos. Cada um traz {VETERAN_FAMILY - 1} da família.
+          </span>
+          {veterans.length === 0 && <span className="text-neutral-500">Nenhum batalhão de nível {VETERAN_LEVEL} ou mais.</span>}
+          {veterans.map((b) => (
+            <div key={b.id} className="flex items-center justify-between gap-2">
+              <span className="text-neutral-200">
+                {b.name} · Nv {b.level} · {b.soldiers} soldados
+              </span>
+              <Button className="shrink-0 px-2 py-1 text-xs" onClick={() => setMsg(retireVeterans(b.id, 1))}>
+                Aposentar 1
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
       {msg && <p className="text-xs text-red-300">{msg}</p>}
     </div>
   );

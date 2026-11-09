@@ -19,6 +19,18 @@ export function ownerColor(world: WorldDef, calamities: readonly Calamity[], own
   return world.factions.find((f) => f.id === owner)?.color ?? 0xffffff;
 }
 
+/**
+ * A cidade da sede (Marco 22, parte 4): a planta vem de fora (cresce com a gente e cerca a
+ * fortaleza do bando). Antes da vila ela é só desenho; depois, é a planta do povoado do reino.
+ */
+export interface SeatTown {
+  layout: TownLayout;
+  /** Muda quando a planta muda (etapa, casas de pé, muralha). */
+  key: string;
+  settlementId: string | null;
+}
+const SEAT_ID = "sede";
+
 /** Até onde se interage com a praça e com a porta do paço de um povoado. */
 const MARKET_RADIUS = 190;
 const HALL_RADIUS = 120;
@@ -56,6 +68,7 @@ export class SettlementLayer {
   private wild = new Map<string, Rect[]>();
   private readonly art: TownArt;
   private readonly culture: Culture;
+  private seat: SeatTown | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -128,20 +141,39 @@ export class SettlementLayer {
     return [...this.drawn.values()].flatMap((d) => d.lights);
   }
 
+  /** A cidade da sede mudou (vale no próximo `sync`). */
+  setSeat(seat: SeatTown | null): void {
+    this.seat = seat;
+  }
+
   /**
    * Atualiza o desenho a partir do store. Devolve true se alguma planta mudou (povoado novo,
    * em ruínas ou reconstruído): a colisão e a navegação precisam ser refeitas.
    */
   sync(settlements: readonly Settlement[], calamities: readonly Calamity[]): boolean {
     let changed = false;
+    // A cidade da sede antes da vila: só o desenho, sem povoado (nem praça, nem paço, nem portões)
+    const free = this.seat && !this.seat.settlementId ? this.seat : null;
+    const old = this.drawn.get(SEAT_ID);
+    if (old && old.layoutKey !== free?.key) {
+      this.art.remove(SEAT_ID);
+      this.drawn.delete(SEAT_ID);
+      changed = true;
+    }
+    if (free && !this.drawn.has(SEAT_ID)) {
+      this.art.set(SEAT_ID, free.layout, this.culture, false);
+      this.drawn.set(SEAT_ID, { layout: free.layout, layoutKey: free.key, base: [], banner: [], bannerKey: "", lights: townLights(SEAT_ID, free.layout) });
+      changed = true;
+    }
     for (const t of settlements) {
       const ruined = t.owner === "RUINED";
-      const layoutKey = `${t.kind}|${ruined}`;
+      const seat = this.seat && this.seat.settlementId === t.id ? this.seat : null;
+      const layoutKey = seat ? `sede|${seat.key}` : `${t.kind}|${ruined}`;
       let entry = this.drawn.get(t.id);
       if (!entry || entry.layoutKey !== layoutKey) {
         for (const o of entry?.base ?? []) o.destroy();
         for (const o of entry?.banner ?? []) o.destroy();
-        const layout = townLayout(t.id, t.kind, t.x, t.y, ruined);
+        const layout = seat ? seat.layout : townLayout(t.id, t.kind, t.x, t.y, ruined);
         entry = { layout, layoutKey, base: [], banner: [], bannerKey: "", lights: [] };
         this.art.set(t.id, layout, this.culture, ruined);
         entry.lights = ruined ? [] : townLights(t.id, layout);
@@ -236,7 +268,7 @@ export class SettlementLayer {
         const r = layout.inner.rect;
         const it = layout.inner.walls[0].h;
         for (const x of [r.x + r.w * 0.36, r.x + r.w * 0.64]) flag(x, r.y + r.h - it / 2 - WALL_FACE, 30, r.y + r.h);
-      } else if (layout.kind === "VILLAGE") flag(k.x + k.w / 2 + 12, k.y + k.h * 0.34 - STYLES[this.culture].facade - 6, 20, k.y + k.h);
+      } else if (layout.kind === "VILLAGE" || layout.seat) flag(k.x + k.w / 2 + 12, k.y + k.h * 0.34 - STYLES[this.culture].facade - 6, 20, k.y + k.h);
       else flag(k.x + k.w / 2, k.y + k.h * 0.3 - 80, 28, k.y + k.h);
       const stone = layout.wallKind === "STONE";
       for (const gt of layout.gates) {

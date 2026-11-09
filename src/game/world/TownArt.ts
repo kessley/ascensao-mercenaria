@@ -458,8 +458,9 @@ function townJobs(layout: TownLayout, culture: Culture, ruined: boolean, seed0: 
 
   // Paço (Casa do Conselho nas aldeias, castelo nas cidades e fortalezas) e templo
   const k = layout.keep;
-  if (!layout.inner) {
-    if (layout.kind === "VILLAGE") add(k, () => housePiece(R(k.w), R(k.h), culture, 0, R(layout.hall.x - k.x), seed(k.x, k.y), ruined, true));
+  // (na cidade da sede, o castelo é a fortaleza do bando: ali fica a Casa do Conselho, a partir da vila)
+  if (!layout.inner && k.w > 0) {
+    if (layout.kind === "VILLAGE" || layout.seat) add(k, () => housePiece(R(k.w), R(k.h), culture, 0, R(layout.hall.x - k.x), seed(k.x, k.y), ruined, true));
     else add(k, () => keepPiece(R(k.w), R(k.h), culture, R(layout.hall.x - k.x), seed(k.x, k.y), ruined));
   }
   const tp = layout.temple;

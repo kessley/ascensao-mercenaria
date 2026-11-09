@@ -251,6 +251,8 @@ export class WorldScene extends Phaser.Scene {
 
   /** Casas dos moradores do povoado onde o Comandante está (Marco 14): todas têm porta. */
   houseCache: { townId: string; spots: Interactable[] } | null = null;
+  /** A planta da cidade da sede desenhada agora (etapa, casas de pé, portão e povoado). */
+  seatKey = "";
 
   /** Dentro de um povoado, o Comandante vê os preços da praça: anota no Livro (uma vez por dia). */
   lastVisitNoteAt = -Infinity;
@@ -400,6 +402,8 @@ export class WorldScene extends Phaser.Scene {
     // Locais de contrato (barracas, choupanas, ruínas): as peças grandes são sólidas
     this.settlementLayer.addSites(this.world.sites, (x, y) => terrain.typeAt(x, y));
     terrain.setWildSolids(this.settlementLayer.wildSolids);
+    // A cidade da sede (Marco 22, parte 4): em volta da fortaleza, do tamanho da gente que mora nela
+    this.updateSeat();
     this.settlementLayer.sync(store.settlements, store.calamities);
     // Muralhas e casas viram obstáculo (antes de a navegação avaliar qualquer célula)
     terrain.setTowns(this.settlementLayer.layouts);
@@ -564,7 +568,9 @@ export class WorldScene extends Phaser.Scene {
       }
       if (s.leader !== prev.leader) this.applyLeader();
       if (s.activeContract !== prev.activeContract) this.syncContract();
-      if (s.settlements !== prev.settlements || s.calamities !== prev.calamities) {
+      // A cidade da sede cresceu (casas novas, muralha, a vila no reino): antes dos povoados, que a desenham
+      const seat = (s.seatCity !== prev.seatCity || s.fortress !== prev.fortress || s.campPacked !== prev.campPacked) && this.updateSeat();
+      if (s.settlements !== prev.settlements || s.calamities !== prev.calamities || seat) {
         if (this.settlementLayer.sync(s.settlements, s.calamities)) this.applyTowns();
         this.syncCalamities();
       }

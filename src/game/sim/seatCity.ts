@@ -131,10 +131,13 @@ export function growCity(city: SeatCity, d: CityDrivers, plan: CampPlan): SeatCi
 
 // --- A semana ---
 
-/** Impostos da semana (a partir do burgo), menos o custo dos decretos. */
+/**
+ * Impostos da semana (a partir do burgo), menos o custo dos decretos. Quando a vila já é um
+ * povoado do reino, os impostos vêm por ele (Marco 9) e aqui fica só o custo.
+ */
 export function weeklyGold(city: SeatCity, d: CityDrivers): number {
   const stage = stageOf(city.people);
-  const tax = stage === "CAMPTOWN" ? 0 : city.people * TAX[city.tax].perHead * (1 + d.commerce * 0.5);
+  const tax = stage === "CAMPTOWN" || city.settlementId ? 0 : city.people * TAX[city.tax].perHead * (1 + d.commerce * 0.5);
   const upkeep = city.decrees.reduce((n, k) => n + DECREE[k].upkeep, 0);
   return Math.round(tax - upkeep);
 }

@@ -77,7 +77,8 @@ import { personName } from "../game/worldgen/names";
 import { CONTINENT_KEYS, INITIAL_SEA, seaSlice, type ContinentKey, type SeaActions, type SeaState } from "./seaSlice";
 import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
 import { fieldCampOf } from "../game/sim/fortress";
-import { INITIAL_FORTRESS, fortressSlice, type FortressActions, type FortressState } from "./fortressSlice";
+import { INITIAL_FORTRESS, fortressSlice, ironBuyPrice, migrateSeatCity, type FortressActions, type FortressState } from "./fortressSlice";
+import { realmFigures, type SeatCity } from "../game/sim/seatCity";
 import { INITIAL_CAPTAINS, allCaptains, captainSlice, captainsWeek, desertions, freshCaptains, pruneCompanies, shiftLoyalty, type CaptainActions, type CaptainState } from "./captainSlice";
 import { captainName, type CaptainData } from "../game/data/captains";
 import type { CompanyHud, CompanyStance } from "../game/sim/companies";
@@ -1174,6 +1175,33 @@ export function migrateCampPlan(store: Record<string, unknown>, battalions?: num
   delete store.campWorks;
 }
 
+/** A vila da sede vira um povoado do bando no reino (Marco 22, parte 4): no lugar da fortaleza, com nome novo. */
+function seatSettlement(s: GameState, city: SeatCity): Settlement {
+  const world = s.world as WorldDef;
+  const at = world.camp.center;
+  const fig = realmFigures(city);
+  const name = settlementName(createRng(randomSeed()), new Set(s.settlements.map((t) => t.name)));
+  const base = {
+    id: `SEDE-${s.day}`,
+    name,
+    kind: fig.kind,
+    x: Math.round(at.x),
+    y: Math.round(at.y),
+    owner: "PLAYER",
+    prosperity: 55,
+    population: fig.population,
+    garrison: fig.garrison,
+    buildings: [],
+    taxRate: city.tax,
+    market: { rationPrice: 0.8, ironBuy: 9, ironSell: 4 },
+    description: `Nasceu em volta da fortaleza dos ${world.bandName}, fincada no dia ${city.since}.`,
+    lastRaidDay: null,
+    resources: resourcesAround(geoOf(world.geo), world.geo, at, createRng(Math.round(at.x * 31 + at.y))),
+    seat: true,
+  };
+  return { ...base, econ: initEconomy(base) };
+}
+
 /** O que o bando tem para pagar uma construção: ouro, a madeira do depósito e o ferro. */
 function stockOf(s: Pick<GameState, "gold" | "iron" | "depot">): { gold: number; wood: number; iron: number } {
   return { gold: s.gold, wood: s.depot.WOOD ?? 0, iron: s.iron };
@@ -2082,6 +2110,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
     // Save de antes do Marco 22: o acampamento fixo vira peças na grade, com tudo o que tinha
     migrateCampPlan(loaded as Record<string, unknown>);
     for (const land of Object.values(loaded.parked ?? {})) migrateCampPlan(land.store as Record<string, unknown>, loaded.battalions?.length ?? 1);
+    // Save com fortaleza de antes da cidade da sede (Marco 22, parte 4)
+    migrateSeatCity(loaded as Record<string, unknown>);
+    for (const land of Object.values(loaded.parked ?? {})) migrateSeatCity({ ...(land.store as Record<string, unknown>), followers: [], battalions: [] });
     set({
       ...campaignState(world),
       ...loaded,
@@ -2594,6 +2625,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     stock: stockOf,
     paid,
     fresh: (world, day) => freshLand(world, day),
+    seatTown: (s, city) => seatSettlement(s, city),
   }),
   ...seaSlice(set, get, {
     fresh: (world, day) => {
@@ -4552,7 +4584,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   tradeIron: (amount) => {
     const s = get();
     if (amount > 0) {
-      const cost = amount * PROGRESSION.IRON_BUY_PRICE;
+      const cost = amount * ironBuyPrice(s);
       if (s.gold < cost) return false;
       set({ gold: s.gold - cost, iron: s.iron + amount });
     } else if (amount < 0) {

@@ -2,7 +2,7 @@
 
 Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que faltava: capitães, duelos em campo, um acampamento construído pelo jogador (que vira fortaleza e, em volta dela, cidade), cultura, religião e língua e, por último, a magia do Comandante. As pendências das Fases 1 e 2 e a avaliação das mecânicas ficam no fim deste arquivo.
 
-**Onde estamos (4 de novembro de 2026):**
+**Onde estamos (9 de novembro de 2026):**
 - **Feito:**
   - a progressão dos batalhões;
   - a pixel art das figuras (G0 e G1), do chão (G2) e das construções (G3);
@@ -14,12 +14,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
   - os locais de missão sempre habitados (etapa 10 ✅ OK);
   - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
+  - do Marco 22 (etapa 12): o bivaque e a grade, a vida no acampamento e a fortaleza (partes 1 a 3 ✅ OK). Da cidade que nasce sozinha (parte 4), já estão feitas as regras (4a) e a cidade no mapa e no reino (4b).
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o Marco 22 (etapa 12, em quatro partes), pela parte 1: o bivaque e a grade.
-  - A campanha nova começa só com a tenda, a fogueira e uma barraca. O jogador monta o resto numa grade quadrada de 40 px, com as primeiras 16 construções.
-  - Depois vêm a vida no acampamento, a fortaleza e a cidade que nasce sozinha.
+- **A seguir:** a parte 4c do Marco 22, a fortaleza num mapa à parte, entrada pelo portão interno a partir do burgo. Depois, o G5 (interface).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -49,7 +48,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
-| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | partes 1 e 2 ✅ OK; a seguir, a parte 3 |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | partes 1 a 3 ✅ OK; parte 4: 4a e 4b feitas, a seguir a 4c |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
@@ -875,6 +874,41 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - a cidade do bando se parece com as do mundo;
 - entrar pelo portão interno leva à fortaleza que o jogador construiu;
 - a cidade paga impostos e é cercada como as outras.
+
+**Dividida em três:** 4a (as regras), 4b (a cidade no mapa e no reino) e 4c (a fortaleza num mapa à parte).
+
+**Feito na 4a, as regras** (`src/game/sim/seatCity.ts`, puras, com testes):
+- **A gente:** a cidade nasce no dia em que o estandarte é fincado, com parte dos seguidores.
+- **O crescimento de cada dia** vem do que a sede oferece, de 0 a 1:
+  - segurança: muralha, guarnição e milícia, torres e torre de menagem;
+  - comida: horta, armazém, cisterna e rações guardadas;
+  - comércio: feira do castelo, intendente, taverna e o decreto da feira;
+  - fama.
+- **Sem segurança** (abaixo de 0,25), a gente vai embora em vez de chegar.
+- **As etapas:** arraial (0), burgo (120), vila (300) e cidade (700 a 1200). Sem a muralha de pedra, a vila para logo antes de virar cidade.
+- **Os decretos,** no painel da fortaleza:
+  - artesãos: o ferro do intendente sai 20% mais barato, por 25 de ouro por semana;
+  - feira semanal: mais comércio, por 15;
+  - refugiados: mais gente por dia, mas a febre vem mais (25% por semana, levando 8%);
+  - terra para veteranos: soldados de batalhões de nível 3 ou mais se aposentam, viram milícia e trazem a família.
+- **Os impostos** (baixos, normais ou altos) trocam ouro por crescimento.
+- **O saque da sede** leva também um quinto da cidade.
+
+**Feito na 4b, a cidade no mapa e no reino:**
+- **O desenho** vem de `seatLayout` (em `world/townLayout.ts`): o mesmo gerador dos povoados, com a mesma muralha, as mesmas casas e as mesmas ruas, montado de uma vez em volta da fortaleza com 760 de folga.
+  - As casas aparecem do portão da fortaleza para fora e não mudam de lugar quando a cidade cresce.
+  - Água e montanha ficam sem casa.
+- **Cada etapa no mapa:**
+  - arraial: a praça com as barracas, diante do portão;
+  - burgo: casas e roças, sem muralha;
+  - vila: paliçada de fora com quatro portões e guarnição, Casa do Conselho e templo;
+  - cidade: muralha de pedra.
+- **A vila entra no reino:** vira um povoado do bando (`seat: true`), com impostos ("Renda do reino"), guarnição, lealdade e cercos como os outros. Mercado, Sala de Administração e portões funcionam com E, e a taxa do painel vale para o reino. Daí em diante, o ouro da cidade vem pelo reino, e o painel da fortaleza cobra só os decretos.
+- **O painel "Cidade da sede"** (na planta, junto da fortaleza) mostra a etapa, a gente, o crescimento e os quatro motivos dele, os impostos, os decretos e os veteranos.
+- **Saves antigos** com fortaleza ganham a cidade ao carregar.
+- **Testes:** os 412 de regras (8 novos, de `seatLayout`) e a suíte `fortaleza`, com 27 verificações. Ela leva o arraial ao burgo, à vila no reino e à cidade de pedra, e confere a renda do reino.
+
+**Falta, a 4c:** a fortaleza num mapa à parte, entrada pelo portão interno a partir do burgo. Hoje ela continua no mapa da região, no meio da cidade. Também falta limpar a floresta debaixo das casas.
 
 ## 13. G5: interface
 **Objetivo:** a interface em React ganha a mesma cara do jogo.

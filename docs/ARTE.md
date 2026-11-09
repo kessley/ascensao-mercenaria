@@ -157,6 +157,7 @@ A interface e os efeitos ainda são greybox.
 | Chão dos povoados (lavouras, ruas, praça, pátios) | `TerrainMap` | ✅ pintado no chão, com o filtro do G2 de perto |
 | Cidade Alta vista de fora | `TownArt` | ✅ pixel art (por dentro também: G4, parte 5) |
 | Acampamento do bando (paliçada, torres, pavilhão, intendência, recrutamento, estábulo, ferraria, treino, poço, tendas dos batalhões) | `CampArea` | ✅ pixel art |
+| Cidade da sede (Marco 22, parte 4): arraial, burgo, vila e cidade em volta da fortaleza | `seatLayout` em `townLayout.ts`, `TownArt`, `Settlements` | ✅ pixel art: as mesmas peças dos povoados, sem peça nova |
 | Bandeiras dos povoados (paço, portões, guarnição), na cor do dono | `Settlements`, `TownArt` | ✅ pixel art |
 | Locais de contrato: barracas de bandidos, choupanas goblins, ruínas assombradas, vau do pântano | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão pisado pintado no chão |
 | Covis das calamidades: torre negra do necromante com sepulturas; acampamento de guerra orc com barracas de couro, totens e cavalos-de-frisa | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão do covil |

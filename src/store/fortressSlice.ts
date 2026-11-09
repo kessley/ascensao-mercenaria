@@ -1,6 +1,6 @@
 import { CAMP_BUILDINGS, STONE_WALL, isFortress, readyOf, shortOf, type CampCost, type CampKind } from "../game/data/campGrid";
 import { buildScenarioWorld, seatSiegeScenario, type EnemyFactionId } from "../game/data/scenarios";
-import { REALM, setWorldSize } from "../utils/constants";
+import { PROGRESSION, REALM, setWorldSize } from "../utils/constants";
 import { distance, type Point } from "../utils/math";
 import { siteFill } from "../game/sim/siteLife";
 import {
@@ -24,6 +24,25 @@ import {
   type LandCtx,
   type LandPath,
 } from "../game/sim/fortress";
+import {
+  ARTISAN_IRON,
+  STAGE,
+  cityDrivers,
+  feverWeek,
+  growCity,
+  inRealm,
+  newSeatCity,
+  realmFigures,
+  retire,
+  retireProblem,
+  stageOf,
+  weeklyGold,
+  type CityDrivers,
+  type CityTax,
+  type Decree,
+  type SeatCity,
+} from "../game/sim/seatCity";
+import type { Settlement } from "../game/sim/realm";
 import { continentState, type BoardingBackup, type ContinentKey } from "./seaSlice";
 import type { BattalionData, GameState, LogTone } from "./useGameStore";
 
@@ -48,9 +67,11 @@ export interface FortressState {
   seatAlarm: SeatAlarm | null;
   /** A campanha guardada durante a batalha do cerco à sede. */
   seatBattle: (BoardingBackup & { alarm: SeatAlarm }) | null;
+  /** A cidade que nasce em volta da sede (Marco 22, parte 4). */
+  seatCity: SeatCity | null;
 }
 
-export const INITIAL_FORTRESS: FortressState = { fortress: null, fieldCamp: null, seatAlarm: null, seatBattle: null };
+export const INITIAL_FORTRESS: FortressState = { fortress: null, fieldCamp: null, seatAlarm: null, seatBattle: null, seatCity: null };
 
 export interface FortressActions {
   /** Finca o estandarte por um dos caminhos da terra; `fit` é o que a cena diz do terreno (null = cabe). */
@@ -64,6 +85,11 @@ export interface FortressActions {
   fortressDays: (from: number, to: number) => void;
   startSeatSiege: () => void;
   endSeatSiege: () => void;
+  /** Os decretos da cidade da sede (Marco 22, parte 4). */
+  setDecree: (decree: Decree, on: boolean) => string | null;
+  setCityTax: (tax: CityTax) => void;
+  /** Aposenta `n` veteranos de um batalhão na cidade: viram milícia. */
+  retireVeterans: (battalionId: string, n: number) => string | null;
 }
 
 type Setter = (partial: Partial<GameState> | ((s: GameState) => Partial<GameState>)) => void;
@@ -73,6 +99,8 @@ interface Links {
   stock: (s: GameState) => { gold: number; wood: number; iron: number };
   paid: (s: GameState, c: CampCost) => Pick<GameState, "gold" | "iron" | "depot">;
   fresh: (world: NonNullable<GameState["world"]>, day: number) => Pick<GameState, ContinentKey>;
+  /** O povoado do reino que a vila da sede vira (Marco 9), já com o nome dela. */
+  seatTown: (s: GameState, city: SeatCity) => Settlement;
 }
 
 const nameOf = (s: Pick<GameState, "world" | "extraFactions">, id: string) =>
@@ -119,6 +147,26 @@ function attackerOf(s: GameState): { faction: EnemyFactionId; name: string } {
   return s.fame >= 60 ? { faction: "ORCS", name: "uma horda orc" } : { faction: "BANDITS", name: "um bando de salteadores" };
 }
 
+/** Save com fortaleza de antes da cidade da sede: o arraial nasce com a gente que já andava com o bando. */
+export function migrateSeatCity(store: Record<string, unknown>): void {
+  const f = store.fortress as Fortress | null | undefined;
+  if (!f || store.seatCity !== undefined) return;
+  const followers = Array.isArray(store.followers) ? store.followers.length : 0;
+  const soldiers = Array.isArray(store.battalions) ? (store.battalions as BattalionData[]).reduce((n, b) => n + b.soldiers, 0) : 0;
+  store.seatCity = newSeatCity(f.founded, followers, soldiers);
+}
+
+/** O que a sede oferece à cidade hoje. */
+export function cityDriversOf(s: GameState): CityDrivers {
+  const garrison = garrisonOf(s).reduce((n, b) => n + b.soldiers, 0);
+  return cityDrivers({ plan: s.campPlan, garrison, militia: s.seatCity?.militia ?? 0, rations: s.rations, fame: s.fame, decrees: s.seatCity?.decrees ?? [] });
+}
+
+/** O ferro do intendente, mais barato com o decreto dos artesãos. */
+export function ironBuyPrice(s: Pick<GameState, "seatCity">): number {
+  return s.seatCity?.decrees.includes("ARTISANS") ? Math.round(PROGRESSION.IRON_BUY_PRICE * ARTISAN_IRON) : PROGRESSION.IRON_BUY_PRICE;
+}
+
 /** Ouro que a feira do castelo rende por semana. */
 export const FAIR_GOLD = (fame: number) => Math.round(20 + fame / 2);
 export const GREAT_HALL_FAME = 0.1;
@@ -153,7 +201,10 @@ export function fortressSlice(set: Setter, get: () => GameState, links: Links): 
     const depot = Object.fromEntries(Object.entries(s.depot).map(([k, v]) => [k, Math.floor((v ?? 0) * (1 - SACK.DEPOT))]));
     // O castelão que estava lá foge (com o bando em casa, ele lutou ao lado do Comandante)
     const castellan = !lost && castellanHome(s) ? null : f.castellan;
+    // A cidade em volta também sofre: um quinto da gente foge ou morre
+    const city = s.seatCity ? { ...s.seatCity, people: Math.round(s.seatCity.people * 0.8) } : null;
     set({
+      seatCity: city,
       battalions,
       gold: s.gold - gold,
       rations: Math.floor(s.rations * (1 - SACK.RATIONS)),
@@ -168,6 +219,51 @@ export function fortressSlice(set: Setter, get: () => GameState, links: Links): 
       `A SEDE CAIU! ${cap(alarm.name)} passou pela muralha${lost ? " e o bando teve de recuar" : soldiers > 0 ? " e a guarnição foi destroçada" : ", sem ninguém para defendê-la"}. Levaram ${gold > 0 ? `${gold} de ouro, ` : ""}metade das rações e do depósito${burned.length > 0 ? `, e queimaram: ${burned.join(", ")}` : ""}.${castellan === null && f.castellan ? " O castelão fugiu e não volta." : ""}`,
       "bad",
     );
+  };
+
+  /** Um dia da cidade da sede: cresce, e a cada semana paga, e às vezes adoece. */
+  const cityDay = (day: number) => {
+    const s = get();
+    const c = s.seatCity;
+    if (!c) return;
+    const d = cityDriversOf(s);
+    let city = growCity(c, d, s.campPlan);
+    const before = stageOf(c.people);
+    const after = stageOf(city.people);
+    const patch: Partial<GameState> = {};
+    if (after !== before) {
+      const up = STAGE[after].from > STAGE[before].from;
+      const a = `${after === "TOWN" || after === "CITY" ? "uma" : "um"} ${STAGE[after].label.toLowerCase()}`;
+      note(up ? `A gente em volta da sede cresceu: agora é ${a}. ${STAGE[after].text}` : `A gente vai embora da sede: ela voltou a ser ${a}.`, up ? "good" : "bad");
+    }
+    // A vila entra no reino (Marco 9): impostos, recrutas, bens, guarnição e lealdade
+    if (inRealm(after) && !city.settlementId && s.world) {
+      const town = links.seatTown(s, city);
+      city = { ...city, settlementId: town.id };
+      patch.settlements = [...s.settlements, town];
+      note(`A gente em volta da sede ergueu a paliçada de fora: ${town.name} é agora uma vila do bando, com impostos, guarnição e lealdade como as outras.`, "good");
+    } else if (city.settlementId) {
+      // O povoado do reino acompanha a cidade (a gente, o tipo e a guarnição da milícia): toda semana, e quando vira cidade
+      const fig = realmFigures(city);
+      const id = city.settlementId;
+      const own = s.settlements.find((t) => t.id === id && t.owner === "PLAYER");
+      if (own && (day % 7 === 0 || own.kind !== fig.kind)) {
+        patch.settlements = s.settlements.map((t) => (t === own ? { ...t, kind: fig.kind, population: fig.population, garrison: Math.max(t.garrison, fig.garrison) } : t));
+      }
+    }
+    if (day % 7 === 0) {
+      const gold = weeklyGold(city, d);
+      if (gold !== 0) {
+        patch.gold = Math.max(0, s.gold + gold);
+        if (gold > 0) note(`A cidade da sede pagou ${gold} de ouro esta semana (${Math.round(city.people)} moradores).`, "good");
+      }
+      const fever = feverWeek(city, Math.random());
+      if (fever.lost > 0) {
+        city = fever.city;
+        note(`Febre na cidade da sede: ${fever.lost} moradores morreram ou fugiram.`, "bad");
+      }
+    }
+    set({ ...patch, seatCity: city });
   };
 
   return {
@@ -192,7 +288,8 @@ export function fortressSlice(set: Setter, get: () => GameState, links: Links): 
         sieges: 0,
         kit: [],
       };
-      const patch: Partial<GameState> = { ...links.paid(s, cost), campPlan: fortressPlan(s.campPlan), fortress };
+      const soldiers = s.battalions.reduce((n, b) => n + b.soldiers, 0);
+      const patch: Partial<GameState> = { ...links.paid(s, cost), campPlan: fortressPlan(s.campPlan), fortress, seatCity: newSeatCity(s.day, s.followers.length, soldiers) };
       const band = s.world?.bandName ?? "mercenários";
       if (path === "CHARTER" && land.lord) {
         // Vassalo: os inimigos do suserano passam a ser os do bando
@@ -277,6 +374,7 @@ export function fortressSlice(set: Setter, get: () => GameState, links: Links): 
           note(`A feira do castelo rendeu ${gold} de ouro esta semana.`, "good");
         }
         if (Object.keys(patch).length > 0) set(patch);
+        cityDay(day);
         // O aviso do cerco: com o pombal, uma semana antes; sem ele, na véspera
         const warn = readyOf(s.campPlan, "DOVECOTE").length > 0 ? SEAT_SIEGE.WARN_DOVECOTE : 1;
         if (day === f.nextSiege - warn) {
@@ -318,6 +416,34 @@ export function fortressSlice(set: Setter, get: () => GameState, links: Links): 
         campPanel: null,
         loadNonce: s.loadNonce + 1,
       });
+    },
+
+    setDecree: (decree, on) => {
+      const s = get();
+      const c = s.seatCity;
+      if (!c) return "Só com a cidade da sede.";
+      if (on === c.decrees.includes(decree)) return null;
+      set({ seatCity: { ...c, decrees: on ? [...c.decrees, decree] : c.decrees.filter((k) => k !== decree) } });
+      return null;
+    },
+
+    setCityTax: (tax) => {
+      const s = get();
+      const c = s.seatCity;
+      if (!c) return;
+      // Na vila do reino, o imposto é o mesmo do povoado (Marco 9)
+      set({ seatCity: { ...c, tax }, settlements: c.settlementId ? s.settlements.map((t) => (t.id === c.settlementId && t.owner === "PLAYER" ? { ...t, taxRate: tax } : t)) : s.settlements });
+    },
+
+    retireVeterans: (battalionId, n) => {
+      const s = get();
+      const b = s.battalions.find((x) => x.id === battalionId);
+      if (!b) return "Batalhão não encontrado.";
+      const why = retireProblem(s.seatCity, b.level, b.soldiers, n);
+      if (why || !s.seatCity) return why;
+      set({ seatCity: retire(s.seatCity, n), battalions: s.battalions.map((x) => (x.id === b.id ? { ...x, soldiers: x.soldiers - n } : x)) });
+      note(`${n} veteranos de ${b.name} penduraram a espada e ganharam terra na cidade da sede: agora são a milícia dela.`, "good");
+      return null;
     },
 
     endSeatSiege: () => {

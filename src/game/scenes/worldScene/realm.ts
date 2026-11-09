@@ -2,7 +2,9 @@ import Phaser from "phaser";
 import { Unit } from "../../entities/Unit";
 import { seasonOf } from "../../../utils/season";
 import { bandSize, type WarbandEvent } from "../../systems/Warbands";
-import { TOWN_SIZE, insideTown, nearestGate } from "../../world/townLayout";
+import { TOWN_SIZE, insideTown, nearestGate, seatLayout } from "../../world/townLayout";
+import { FORT_WALL_SPEC, shapeOf } from "../../data/campGrid";
+import { houseShare, stageOf } from "../../sim/seatCity";
 import { nobleName } from "../../sim/nobility";
 import type { WildlifeContext } from "../../world/Wildlife";
 import type { TradeNews } from "../../world/TradeRoutes";
@@ -468,6 +470,33 @@ export const realmMethods = {
    * Plantas mudaram (aldeia fundada, povoado em ruínas ou reconstruído): colisão, navegação e
    * rotas são refeitas, e quem ficou dentro de uma parede sai para a rua mais próxima.
    */
+  /**
+   * A cidade da sede (Marco 22, parte 4): a planta é refeita quando muda a etapa, quando mais um
+   * quadragésimo das casas fica de pé ou quando a vila entra no reino. Devolve true se mudou.
+   */
+  updateSeat(this: WorldScene): boolean {
+    const s = useGameStore.getState();
+    const c = s.seatCity;
+    const on = !!c && !!s.fortress && !s.campPacked && !s.scenario;
+    const stage = c ? stageOf(c.people) : "CAMPTOWN";
+    const share = c ? Math.floor(houseShare(c.people) * 40) / 40 : 0;
+    const shape = shapeOf(s.campPlan, this.world.camp.center);
+    const key = on ? `${stage}|${share}|${shape.gate}|${c?.settlementId ?? ""}` : "";
+    if (key === this.seatKey) return false;
+    this.seatKey = key;
+    if (!on || !c) {
+      this.settlementLayer.setSeat(null);
+      return true;
+    }
+    // A fortaleza com a muralha de pedra, mesmo antes dela: as casas não mudam de lugar quando ela sobe
+    const t = FORT_WALL_SPEC.STONE.thickness;
+    const fort = { x: shape.cx - shape.half - t, y: shape.cy - shape.half - t, w: (shape.half + t) * 2, h: (shape.half + t) * 2 };
+    const geo = geoOf(this.world.geo);
+    const layout = seatLayout(`${this.world.name}`, fort, shape.gate, stage, share, (p) => geo.isOpenLand(p, 30));
+    this.settlementLayer.setSeat({ layout, key, settlementId: c.settlementId });
+    return true;
+  },
+
   applyTowns(this: WorldScene): void {
     const terrain = Unit.terrain;
     if (!terrain) return;
