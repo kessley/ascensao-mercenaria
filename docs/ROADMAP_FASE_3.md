@@ -15,10 +15,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - os locais de missão sempre habitados (etapa 10 ✅ OK);
   - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
   - o Marco 22 inteiro (etapa 12 ✅ OK): o bivaque e a grade, a vida no acampamento, a fortaleza e a cidade que nasce sozinha em volta dela.
+  - o G5 inteiro (etapa 13 ✅ OK): a fonte de pixel, as molduras e os botões, os ícones e os retratos.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o G5 (etapa 13, a interface), em quatro partes. As partes 1 a 3 (a fonte, as molduras e os botões, os ícones) estão feitas; a seguir, a parte 4, os retratos.
+- **A seguir:** o Marco 23 (etapa 14): cultura, religião e língua.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -49,7 +50,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
-| 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | partes 1 a 3 (fonte, molduras e ícones) feitas; a seguir, os retratos |
+| 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
@@ -923,7 +924,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - a floresta debaixo das casas da cidade não é limpa;
 - o equilíbrio do crescimento, dos decretos e dos impostos só se vê jogando uma campanha.
 
-## 13. G5: interface
+## 13. G5: interface ✅ OK
 **Objetivo:** a interface em React ganha a mesma cara do jogo.
 - **Fonte** em pixel art, também no nome e no estandarte dos batalhões (hoje greybox).
 - **Molduras** dos painéis, da tenda e do diário.
@@ -977,6 +978,21 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Onde entram:** a barra de comando inteira, o cartão de cada batalhão, o HUD de recursos (ouro, rações, ferro e o nome do bando viram ícone com número), o relógio e o tempo, a planta do acampamento (cada construção, cada posto, cada obra e cada necessidade), o quadro de comando, o exército da tenda, o comércio e o Livro de Preços.
 - **Junto:** as caixas pretas que sobravam no HUD de batalha (dicas dos botões, ajuda, duelo, pausa, câmera lenta, notícias, cenário) viraram ferro, e os botões do campo (tochas, descansar, fundar vila, montar acampamento, às muralhas) viraram botões de pixel. O relógio desceu para a coluna da direita: numa tela de 1280, as notícias o cobriam. Os emojis dos bens e do tempo saíram de `constants.ts`, e a fonte ganhou ♪, ♫ e ☺ para as falas do acampamento.
 - **Testes:** 5 de regras (`tests/unit/icons.test.ts`: o tamanho e as cores de cada desenho, o contorno, um ícone para cada tropa, bem e construção, os derivados e o corte do texto) e 6 verificações novas na suíte `interface` (15 no total), entre elas a de que nenhum emoji sobra no HUD, na planta, na tenda, no quadro de comando e no diário.
+
+**Feito na parte 4, os retratos:**
+- **O busto** sai de `src/game/art/portraits.ts`, em 32×32, na grade de pixel das figuras (com o mesmo contorno escuro). O rosto vem de uma semente: o mesmo personagem tem sempre a mesma pele, o mesmo cabelo e o mesmo penteado. O resto vem do que o jogo sabe dele:
+  - **o sexo:** o queixo, as sobrancelhas, os lábios, os penteados, a barba;
+  - **a idade:** o cabelo começa a branquear aos 40 e fica branco perto dos 70; aparecem rugas, e depois dos 45 o homem pode ficar calvo. Os sorteios saem todos de uma vez, então envelhecer muda o cabelo, mas não troca o rosto;
+  - **a cultura:** quatro paletas de pele e de cabelo, que se cruzam. Nas Areias há o turbante, no Jade o coque e o topete, nas Ilhas as tranças e o cabelo comprido;
+  - **as cicatrizes do Marco 18:** a primeira corta a bochecha, a segunda a sobrancelha, a terceira o lábio; a quarta põe o tapa-olho, e a quinta marca a testa;
+  - **o papel:** o Comandante de couraça, com ombreiras e a capa do bando; o capitão de cota de malha, com a faixa do bando de través; o tenente de gibão, com o lenço; o nobre na cor do reino, com gola de ouro. O rei leva coroa e manto de arminho; o consorte e o herdeiro, um diadema. O fundo é da cor do papel, ou do reino.
+- **De quem é cada retrato** (`art/portraitSpecs.ts`): o bando veio dos Reinos, então o fundador é de lá. Quem entra no bando vem de toda parte: metade da terra natal, a maior parte do resto da terra onde o bando está, e um ou outro de mais longe. O nobre sem terra e o inimigo que mudou de lado são da terra, como os nobres.
+  - Os capitães ganham idade e cicatrizes com as batalhas, e os tenentes com os abates.
+  - O tenente promovido a capitão continua com o mesmo rosto. O herdeiro que era capitão ou tenente leva o rosto para o estandarte: o Comandante ganhou o campo `face`, e os que já se foram guardam o rosto e as cicatrizes.
+  - As listas de nomes dos capitães e dos tenentes marcam os nomes de mulher.
+- **Onde entram:** o cartão do Comandante no HUD; a ficha do capitão e a do tenente; os candidatos do Posto de Recrutamento; o quadro de comando (cada companhia e cada tenente no batalhão dele); a lista de tenentes e as relações entre eles; o Livro do Bando (o Comandante, os herdeiros possíveis e, em cinza, os que vieram antes); o Livro da Nobreza, com cada nobre da corte (em cinza quem o Comandante ainda não conheceu); e a caixa de diálogo, quando quem fala é um nobre.
+- **Junto:** as caixas de diálogo dos interiores e da Cidade Alta eram duas cópias, e viraram um componente só (`DialogBox`), em moldura de madeira. A suíte `lendas` estava quebrada desde o Marco 22, parte 1b, porque o bando passou a começar sem tenentes: agora ela traz um dos candidatos.
+- **Testes:** 5 de regras (`tests/unit/portraits.test.ts`: cada cultura, papel e sexo dá um busto cheio; o mesmo rosto para a mesma semente, também ao envelhecer; a idade no cabelo; cada cicatriz uma marca, e o tapa-olho na quarta; de quem é cada retrato), 6 verificações novas na suíte `interface` (21 no total) e uma na `lendas`: o herdeiro leva o rosto que tinha.
 
 ## 14. Marco 23: cultura, religião e língua
 **Objetivo:** as 4 culturas deixam de ser só nomes, tropas e arquitetura. Cada povo tem fé e língua, e isso muda como o bando recruta, negocia, conversa e mantém a moral.

@@ -7,6 +7,7 @@ import { CAPTAINS, TROOPS } from "../../../utils/constants";
 import { LoyaltyBar } from "./LieutenantPanels";
 import { PixelIcon } from "../PixelIcon";
 import { TroopIcon } from "../battle/BattleIcons";
+import { CaptainPortrait, LieutenantPortrait } from "../Portrait";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -60,14 +61,19 @@ export function CaptainSheet({ captain: c }: { captain: CaptainData }) {
         {c.id === heirId ? "Herdeiro no testamento" : "Nomear herdeiro no testamento"}
       </button>
       <div className="flex flex-col gap-2 rounded bg-neutral-800 p-3 text-sm">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-base font-bold">{captainName(c)}</span>
-          <span className="font-mono text-xs text-neutral-400">
-            {c.wage}/sem. · {c.kills} abates · {c.battles} batalha(s)
-          </span>
+        <div className="flex items-start gap-3">
+          <CaptainPortrait captain={c} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-base font-bold">{captainName(c)}</span>
+              <span className="font-mono text-xs text-neutral-400">
+                {c.wage}/sem. · {c.kills} abates · {c.battles} batalha(s)
+              </span>
+            </div>
+            <p className="text-xs text-neutral-400">{ORIGIN_LABEL[c.origin]}</p>
+            <p className="text-xs italic text-neutral-300">{c.backstory}</p>
+          </div>
         </div>
-        <p className="text-xs text-neutral-400">{ORIGIN_LABEL[c.origin]}</p>
-        <p className="text-xs italic text-neutral-300">{c.backstory}</p>
         <CaptainTraits c={c} />
         <Stats c={c} />
         <LoyaltyBar value={c.loyalty} />
@@ -155,7 +161,10 @@ function BattalionCard({ b, guard, onDrop }: { b: BattalionData; guard: boolean;
           <TroopIcon troop={b.troopType} /> <b>{b.name}</b> <span className="text-neutral-400">{TROOPS[b.troopType].label} · {b.soldiers} · nv {b.level}</span>
         </span>
       </div>
-      <span className={lieutenant ? "text-sky-300" : "text-neutral-500"}>{lieutenant ? `tenente ${fullName(lieutenant)}` : "sem tenente (arraste um para cá)"}</span>
+      <span className={`flex items-center gap-1 ${lieutenant ? "text-sky-300" : "text-neutral-500"}`}>
+        {lieutenant && <LieutenantPortrait lieutenant={lieutenant} scale={1} />}
+        {lieutenant ? `tenente ${fullName(lieutenant)}` : "sem tenente (arraste um para cá)"}
+      </span>
       <label className="flex items-center gap-1 text-neutral-400">
         Companhia
         <select
@@ -231,8 +240,11 @@ export function CommandBoard() {
           const company = c.battalionIds.map((id) => battalions.find((b) => b.id === id)).filter((b): b is BattalionData => !!b);
           return (
             <div key={c.id} {...column(c.id)} data-company={c.id} className="flex flex-col gap-1 rounded border border-dashed border-amber-700/70 p-2">
-              <button type="button" onClick={() => setCampPanel({ kind: "CAPTAIN", captainId: c.id })} className="text-left text-xs font-semibold text-amber-200 hover:underline">
-                <PixelIcon id="BANNER" /> Capitão {captainName(c)} <span className="font-normal text-neutral-400">· {company.length}/{companyLimit(c)}</span>
+              <button type="button" onClick={() => setCampPanel({ kind: "CAPTAIN", captainId: c.id })} className="flex items-center gap-2 text-left text-xs font-semibold text-amber-200 hover:underline">
+                <CaptainPortrait captain={c} scale={1} />
+                <span>
+                  <PixelIcon id="BANNER" /> Capitão {captainName(c)} <span className="font-normal text-neutral-400">· {company.length}/{companyLimit(c)}</span>
+                </span>
               </button>
               {company.length === 0 && <p className="text-[11px] text-neutral-500">Arraste batalhões para cá.</p>}
               {company.map((b, i) => (
@@ -272,14 +284,19 @@ export function CaptainCandidates() {
       {candidates.length === 0 && <p className="text-sm text-neutral-500">Ninguém por agora. A notícia de um contrato cumprido traz gente nova.</p>}
       {candidates.map((c) => (
         <div key={c.id} className="flex flex-col gap-2 rounded border border-amber-800/70 bg-neutral-800 p-3 text-sm">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-semibold">{captainName(c)}</span>
-            <span className="font-mono text-xs text-yellow-400">
-              {c.hireCost} ouro · {c.wage}/sem.
-            </span>
+          <div className="flex items-start gap-3">
+            <CaptainPortrait captain={c} />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold">{captainName(c)}</span>
+                <span className="font-mono text-xs text-yellow-400">
+                  {c.hireCost} ouro · {c.wage}/sem.
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400">{ORIGIN_LABEL[c.origin]}</p>
+              <p className="text-xs italic text-neutral-300">{c.backstory}</p>
+            </div>
           </div>
-          <p className="text-xs text-neutral-400">{ORIGIN_LABEL[c.origin]}</p>
-          <p className="text-xs italic text-neutral-300">{c.backstory}</p>
           <CaptainTraits c={c} />
           <Stats c={c} />
           <button

@@ -137,7 +137,7 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
       const s = get();
       const old = s.leader;
       const age = leaderAge(old, s.day);
-      const former: FormerLeader = { name: old.name, generation: old.generation, from: old.since, to: s.day, age, cause, origin: old.origin };
+      const former: FormerLeader = { name: old.name, generation: old.generation, from: old.since, to: s.day, age, cause, origin: old.origin, face: old.face, wounds: old.wounds };
       // Capitães (Marco 20) entram na sucessão como os tenentes: sem testamento, herda o mais leal
       const heir = chooseHeir<{ id: string; loyalty: number; name: string; traits: Leader["traits"] }>([...s.captains, ...s.lieutenants], s.heirId);
       const captain = heir ? s.captains.find((c) => c.id === heir.id) : undefined;
@@ -153,6 +153,7 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
         traits: heir ? heir.traits : [],
         wounds: 0,
         origin,
+        face: heir?.id,
       };
       set({
         leader,

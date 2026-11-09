@@ -58,6 +58,8 @@ export const TEMPER_LABEL: Record<Temper, string> = {
 };
 
 const NAMES = ["Aurelio", "Brunhild", "Casimir", "Dorotea", "Edmund", "Frida", "Gaspard", "Hilde", "Isidro", "Jorunn", "Konrad", "Lucrécia", "Matthias", "Nerea", "Osric", "Petra"];
+/** Os nomes de mulher da lista (o retrato precisa saber). */
+export const CAPTAIN_WOMEN: ReadonlySet<string> = new Set(["Brunhild", "Dorotea", "Frida", "Hilde", "Jorunn", "Lucrécia", "Nerea", "Petra"]);
 const EPITHETS = ["o Velho", "Duas-Espadas", "Mão-Firme", "o Calado", "Barba-Ruiva", "Cem-Batalhas", "o Lento", "Olho-Vivo", "Ferro-Frio", "Coração-de-Pedra", "a Serpente", "Quebra-Escudos"];
 const NOBLE_PAST = [
   "Filho mais novo de uma casa sem terras, aprendeu a guerra nas campanhas do pai",

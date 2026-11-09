@@ -4,6 +4,7 @@ import { courtName, nobleWhere, traitLine } from "../../../game/data/courtTalk";
 import { PLAN_LABEL } from "../../../game/sim/kingdoms";
 import { STANDING_LABEL, standingIn } from "../../../game/sim/reputation";
 import { COURT } from "../../../utils/constants";
+import { NoblePortrait } from "../Portrait";
 import { ReputationBar } from "./ReputationBar";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
@@ -116,15 +117,19 @@ export function NobilityBook() {
                     </div>
                   ))}
                   {nobles.map((n) => (
-                    <div key={n.id} className="flex flex-col rounded bg-neutral-900/60 px-2 py-1">
-                      <div className="flex justify-between gap-2">
-                        <span className="font-semibold">{n.met ? courtName(state, n) : `${courtName(state, n)} (ainda não conhece)`}</span>
-                        {n.met && <span className={opinionTone(n.opinion)}>opinião {n.opinion}</span>}
+                    <div key={n.id} className="flex items-start gap-2 rounded bg-neutral-900/60 px-2 py-1">
+                      {/* Quem o Comandante ainda não viu aparece apagado: o rosto é só o dos retratos da corte */}
+                      <NoblePortrait noble={n} scale={1} className={n.met ? "" : "opacity-75 grayscale"} />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <div className="flex justify-between gap-2">
+                          <span className="font-semibold">{n.met ? courtName(state, n) : `${courtName(state, n)} (ainda não conhece)`}</span>
+                          {n.met && <span className={opinionTone(n.opinion)}>opinião {n.opinion}</span>}
+                        </div>
+                        <div className="text-neutral-400">
+                          {n.age} anos · {n.met ? `${traitLine(n)} · ${nobleWhere(n, state)}` : "traços e paradeiro desconhecidos"}
+                        </div>
+                        {n.met && n.memory.length > 0 && <div className="text-neutral-500">Lembra: {n.memory[n.memory.length - 1].text} (dia {n.memory[n.memory.length - 1].day})</div>}
                       </div>
-                      <div className="text-neutral-400">
-                        {n.age} anos · {n.met ? `${traitLine(n)} · ${nobleWhere(n, state)}` : "traços e paradeiro desconhecidos"}
-                      </div>
-                      {n.met && n.memory.length > 0 && <div className="text-neutral-500">Lembra: {n.memory[n.memory.length - 1].text} (dia {n.memory[n.memory.length - 1].day})</div>}
                     </div>
                   ))}
                   {nobles.length === 0 && <p className="text-neutral-500">Ninguém da corte sobreviveu.</p>}

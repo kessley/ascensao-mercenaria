@@ -1,5 +1,5 @@
 import { useGameStore } from "../../store/useGameStore";
-import { chooseDialog } from "../../game/interiorBridge";
+import { DialogBox } from "../components/DialogBox";
 import { ResourceBar } from "../components/ResourceBar";
 
 /**
@@ -22,25 +22,7 @@ export function InteriorView() {
       <div className="absolute bottom-3 left-3 hud-box px-3 py-1 font-mono text-[11px] text-neutral-300">
         WASD andar · E falar/interagir · pise no tapete da porta para sair · Esc fecha
       </div>
-      {dialog && !panel && (
-        <div className="pointer-events-auto absolute bottom-16 left-1/2 w-[40rem] max-w-[92vw] -translate-x-1/2 rounded-lg border-2 border-amber-200/60 bg-neutral-950/95 p-4 shadow-2xl">
-          <div className="mb-1 text-sm font-bold text-amber-300">{dialog.speaker}</div>
-          <p className="text-sm leading-relaxed text-neutral-100">{dialog.text}</p>
-          <div className="mt-3 flex max-h-72 flex-col gap-1 overflow-y-auto">
-            {dialog.options.map((o, i) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => chooseDialog(o.id)}
-                className="rounded border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-left text-sm hover:border-amber-300 hover:bg-neutral-700"
-              >
-                <span className="mr-2 font-mono text-amber-300">{i + 1}.</span>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {dialog && !panel && <DialogBox dialog={dialog} />}
     </div>
   );
 }

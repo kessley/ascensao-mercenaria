@@ -51,6 +51,8 @@ export const PASSIVES: Record<PassiveId, PassiveDef> = {
 };
 
 const NAMES = ["Bran", "Ysolde", "Tomas", "Mirela", "Garrick", "Oda", "Rurik", "Selene", "Aldo", "Hedda", "Corvin", "Liesel", "Ivo", "Maren", "Dagny", "Erwan"];
+/** Os nomes de mulher da lista (o retrato precisa saber). */
+export const LIEUTENANT_WOMEN: ReadonlySet<string> = new Set(["Ysolde", "Mirela", "Oda", "Selene", "Hedda", "Liesel", "Maren", "Dagny"]);
 const EPITHETS = ["Mão-de-Ferro", "Meia-Orelha", "Corvo", "Cicatriz", "Sem-Medo", "Pé-Leve", "Sete-Vidas", "Lâmina-Torta", "Cinza", "Lobo", "Faísca", "Pedra"];
 const ORIGINS = [
   "Serviu como sargento na guarda de Pedralva",

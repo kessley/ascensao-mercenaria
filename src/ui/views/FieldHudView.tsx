@@ -4,6 +4,7 @@ import type { HarpyState } from "../../game/entities/Harpy";
 import { REALM, SEASONS, SIEGE, WEATHER } from "../../utils/constants";
 import { WEATHER_ICON } from "../../game/art/icons";
 import { IconText, PixelIcon } from "../components/PixelIcon";
+import { CommanderPortrait } from "../components/Portrait";
 import { titleFor } from "../../game/sim/realm";
 import { isFemaleName } from "../../game/worldgen/names";
 import { NOBLE_TRAITS } from "../../game/sim/nobility";
@@ -306,10 +307,15 @@ export function FieldHudView() {
               {hud.engaged && <b className="ml-2 text-red-400">· em combate</b>}
             </span>
           )}
-          <span className="text-sm font-bold">
-            {scenario ? "Comandante" : `Comandante ${leaderName}`} {!scenario && <span className="font-normal text-blue-300">· {title}</span>}
-          </span>
-          {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
+          <div className="flex items-center gap-3">
+            {!scenario && <CommanderPortrait />}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <span className="text-sm font-bold">
+                {scenario ? "Comandante" : `Comandante ${leaderName}`} {!scenario && <span className="font-normal text-blue-300">· {title}</span>}
+              </span>
+              {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
+            </div>
+          </div>
           {hud && !hud.inCamp && !scenario && (
             <button
               type="button"

@@ -146,4 +146,67 @@ export async function ui({ page, ev }, { check }) {
   check("nenhum emoji sobra na tenda, no quadro de comando e no diário", tentLeft.length === 0, tentLeft.join(" "));
   await page.screenshot({ path: "tests/battle/.shots-g5-icones-tenda.png" });
   await ev(() => window.__store.getState().setCampPanel(null));
+
+  // --- Parte 4: os retratos ---
+  const commander = await ev(() => {
+    const img = document.querySelector('img.portrait[data-portrait="COMMANDER"]');
+    return img ? { src: img.src.slice(0, 22), w: img.naturalWidth, h: img.naturalHeight, render: getComputedStyle(img).imageRendering } : null;
+  });
+  console.log("   comandante:", JSON.stringify(commander));
+  check("o HUD mostra o retrato do Comandante, em pixel", !!commander && commander.src.startsWith("data:image/png") && commander.w === 32 && commander.h === 32 && commander.render === "pixelated", JSON.stringify(commander));
+  // Um tenente veterano e um capitão no bando
+  await ev(() => {
+    const st = window.__store;
+    const s = st.getState();
+    st.setState({
+      lieutenants: [{ ...s.lieutenantCandidates[0], battalionId: s.battalions[0].id, kills: 70 }],
+      captains: [{ ...s.captainCandidates[0], battles: 14 }],
+    });
+    st.getState().setCampPanel({ kind: "TENT" });
+  });
+  await page.waitForTimeout(500);
+  const tent = await ev(() => [...document.querySelectorAll("aside img.portrait")].map((i) => i.dataset.portrait));
+  check("a tenda mostra o rosto dos tenentes e dos capitães", tent.includes("LIEUTENANT") && tent.includes("CAPTAIN"), JSON.stringify(tent));
+  await ev(() => document.querySelector('aside img.portrait[data-portrait="CAPTAIN"]')?.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "tests/battle/.shots-g5-retratos-tenda.png" });
+  // A ficha do capitão abre com o retrato grande
+  await ev(() => {
+    const s = window.__store.getState();
+    s.setCampPanel({ kind: "CAPTAIN", captainId: s.captains[0].id });
+  });
+  await page.waitForTimeout(400);
+  const sheet = await ev(() => document.querySelector('aside img.portrait[data-portrait="CAPTAIN"]')?.width ?? 0);
+  check("a ficha do capitão abre com o retrato em 64 px", sheet === 64, String(sheet));
+  await page.screenshot({ path: "tests/battle/.shots-g5-retratos-capitao.png" });
+  // O Livro da Nobreza: cada nobre da corte aberta com o seu rosto
+  await ev(() => window.__store.getState().setCampPanel({ kind: "NOBILITY" }));
+  await page.waitForTimeout(400);
+  await ev(() => [...document.querySelectorAll("aside section button")].find((b) => b.querySelector("span.inline-block"))?.click());
+  await page.waitForTimeout(400);
+  const nobles = await ev(() => document.querySelectorAll('aside img.portrait[data-portrait="NOBLE"]').length);
+  check("o Livro da Nobreza mostra o retrato de cada nobre", nobles >= 3, String(nobles));
+  await ev(() => document.querySelector('aside img.portrait[data-portrait="NOBLE"]')?.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "tests/battle/.shots-g5-retratos-nobreza.png" });
+  // O Livro do Bando: o Comandante e quem pode herdar o estandarte
+  await ev(() => window.__store.getState().setCampPanel({ kind: "SAGA" }));
+  await page.waitForTimeout(400);
+  const saga = await ev(() => [...document.querySelectorAll("aside img.portrait")].map((i) => i.dataset.portrait));
+  check("o Livro do Bando mostra o Comandante e quem pode herdar", ["COMMANDER", "CAPTAIN", "LIEUTENANT"].every((r) => saga.includes(r)), JSON.stringify(saga));
+  await page.screenshot({ path: "tests/battle/.shots-g5-retratos-saga.png" });
+  await ev(() => window.__store.getState().setCampPanel(null));
+  // Quem fala na caixa de diálogo, quando é um nobre, aparece com o rosto
+  const talk = await ev(async () => {
+    const s = window.__store.getState();
+    const n = s.nobles.find((x) => x.alive && !x.armyId && !x.captiveOf && s.settlements.some((t) => t.id === x.at));
+    if (!n) return null;
+    window.__world.scene.launch("InteriorScene", { key: `town:${n.at}:hall`, title: "Paço" });
+    await new Promise((r) => setTimeout(r, 1500));
+    window.__world.scene.get("InteriorScene").say(n.name, { text: "Fale depressa, mercenário.", options: [{ id: "bye", label: "Até logo" }] }, n.id);
+    await new Promise((r) => setTimeout(r, 400));
+    return { portrait: document.querySelector("[data-dialog] img.portrait")?.dataset.portrait ?? null, wood: getComputedStyle(document.querySelector("[data-dialog]")).borderImageSource.slice(0, 22) };
+  });
+  check("a caixa de diálogo de um nobre mostra o retrato dele, em madeira", talk?.portrait === "NOBLE" && talk.wood.includes("data:image/png"), JSON.stringify(talk));
+  await page.screenshot({ path: "tests/battle/.shots-g5-retratos-dialogo.png" });
 }

@@ -180,7 +180,7 @@ A interface e os efeitos ainda são greybox.
 | Fonte com acentos do português | ✅ pixel art (G5, parte 1): `art/font.ts`, desenhada por código e montada em TrueType no jogo; títulos, números, rótulos, botões e os nomes do mapa |
 | Molduras, botões e painéis (React) | ✅ pixel art (G5, parte 2): `art/frames.ts`; madeira nos painéis e no menu, ferro no HUD, pergaminho no diário, botões em cinco tons |
 | Ícones (tropas, bens, construções, ordens, formações, tempo e sinais do texto) | ✅ pixel art (G5, parte 3): `art/iconArt.ts` e `art/icons.ts`; 12 px na linha do texto, 24 px nos botões e nas listas |
-| Retratos do Comandante e dos tenentes | não existem |
+| Retratos do Comandante, dos capitães, dos tenentes e dos nobres | ✅ pixel art (G5, parte 4): `art/portraits.ts` e `art/portraitSpecs.ts`; busto de 32×32 com a cultura, a idade, as cicatrizes e o papel; 32 px nas listas, 64 px nas fichas e no HUD |
 | Mapa do Continente e Mapa Múndi | greybox |
 
 ## O que falta, por etapa
@@ -194,5 +194,5 @@ A interface e os efeitos ainda são greybox.
 4. **G4, resto do elenco ✅ OK,** em seis partes: carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores e a Cidade Alta; e o acabamento do G1 (o cavalo de frente e de costas).
    - As carroças vieram primeiro: com as rações refeitas, elas saem num comboio pelo mapa, e o Marco 22 carrega as construções nelas.
    - A ordem entre as etapas de arte e os marcos está na [fila da Fase 3](ROADMAP_FASE_3.md#a-fila).
-5. **G5, interface,** em quatro partes: a fonte (✅ feita), as molduras e os botões (✅ feitos), os ícones (✅ feitos) e os retratos.
+5. **G5, interface ✅ OK,** em quatro partes: a fonte, as molduras e os botões, os ícones e os retratos.
 6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue).

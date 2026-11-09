@@ -7,6 +7,7 @@ import { CAPTAINS, LIEUTENANTS } from "../../../utils/constants";
 import { promotionBlock } from "../../../game/data/captains";
 import { allCaptains } from "../../../store/captainSlice";
 import { PixelIcon } from "../PixelIcon";
+import { LieutenantPortrait } from "../Portrait";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -52,8 +53,11 @@ function Relations({ l }: { l: LieutenantData }) {
         const v = bondOf(bonds, l.id, o.id);
         const r = relationLabel(v);
         return (
-          <div key={o.id} className="flex justify-between text-xs">
-            <span>{fullName(o)}</span>
+          <div key={o.id} className="flex items-center justify-between gap-2 text-xs">
+            <span className="flex items-center gap-2">
+              <LieutenantPortrait lieutenant={o} scale={1} />
+              {fullName(o)}
+            </span>
             <span className={r.tone}>
               {r.text} ({v > 0 ? "+" : ""}
               {v})
@@ -85,13 +89,18 @@ export function LieutenantSheet({ lieutenant: l }: { lieutenant: LieutenantData 
         {l.id === heirId ? "Herdeiro no testamento" : "Nomear herdeiro no testamento"}
       </button>
       <div className="flex flex-col gap-2 rounded bg-neutral-800 p-3 text-sm">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-base font-bold">{fullName(l)}</span>
-          <span className="font-mono text-xs text-neutral-400">
-            {l.wage}/sem. · {l.kills} abates
-          </span>
+        <div className="flex items-start gap-3">
+          <LieutenantPortrait lieutenant={l} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-base font-bold">{fullName(l)}</span>
+              <span className="font-mono text-xs text-neutral-400">
+                {l.wage}/sem. · {l.kills} abates
+              </span>
+            </div>
+            <p className="text-xs italic text-neutral-300">{l.backstory}</p>
+          </div>
         </div>
-        <p className="text-xs italic text-neutral-300">{l.backstory}</p>
         <Traits l={l} />
         <p className="text-xs text-neutral-400">{PASSIVES[l.passive].description}</p>
         <LoyaltyBar value={l.loyalty} />
@@ -191,15 +200,18 @@ export function LieutenantRoster() {
           key={l.id}
           type="button"
           onClick={() => setCampPanel({ kind: "LIEUTENANT", lieutenantId: l.id })}
-          className="flex flex-col gap-1 rounded bg-neutral-800 px-3 py-2 text-left text-sm hover:bg-neutral-700"
+          className="flex items-center gap-3 rounded bg-neutral-800 px-3 py-2 text-left text-sm hover:bg-neutral-700"
         >
-          <div className="flex justify-between gap-2">
-            <span className="font-semibold">{fullName(l)}</span>
-            <span className="text-xs text-neutral-400">
-              {battalions.find((b) => b.id === l.battalionId)?.name ?? "sem comando"}
-            </span>
+          <LieutenantPortrait lieutenant={l} scale={1} />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex justify-between gap-2">
+              <span className="font-semibold">{fullName(l)}</span>
+              <span className="text-xs text-neutral-400">
+                {battalions.find((b) => b.id === l.battalionId)?.name ?? "sem comando"}
+              </span>
+            </div>
+            <LoyaltyBar value={l.loyalty} />
           </div>
-          <LoyaltyBar value={l.loyalty} />
         </button>
       ))}
     </section>
@@ -227,13 +239,18 @@ export function LieutenantCandidates() {
       )}
       {candidates.map((c) => (
         <div key={c.id} className="flex flex-col gap-2 rounded border border-neutral-700 bg-neutral-800 p-3 text-sm">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-semibold">{fullName(c)}</span>
-            <span className="font-mono text-xs text-yellow-400">
-              {c.hireCost} ouro · {c.wage}/sem.
-            </span>
+          <div className="flex items-start gap-3">
+            <LieutenantPortrait lieutenant={c} />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-semibold">{fullName(c)}</span>
+                <span className="font-mono text-xs text-yellow-400">
+                  {c.hireCost} ouro · {c.wage}/sem.
+                </span>
+              </div>
+              <p className="text-xs italic text-neutral-300">{c.backstory}</p>
+            </div>
           </div>
-          <p className="text-xs italic text-neutral-300">{c.backstory}</p>
           <Traits l={c} />
           <button
             type="button"

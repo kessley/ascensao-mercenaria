@@ -385,14 +385,19 @@ export class InteriorScene extends Phaser.Scene {
     if (n.kind === "NPC") {
       // Nobres falam conforme o momento (Marco 15): a fala é montada na hora
       const noble = n.v.npc.nobleId ? s.nobles.find((x) => x.id === n.v.npc.nobleId) : undefined;
-      this.say(n.v.npc.name, noble ? nobleTalk(noble, s) : n.v.npc.talk);
+      this.say(n.v.npc.name, noble ? nobleTalk(noble, s) : n.v.npc.talk, noble?.id);
       return;
     }
     this.say(n.spot.label, n.spot.talk);
   }
 
-  private say(speaker: string, talk: Talk): void {
-    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }] });
+  /** O último nobre que falou: as respostas dele seguem com o retrato (G5). */
+  private lastNoble: { speaker: string; id: string } | null = null;
+
+  private say(speaker: string, talk: Talk, nobleId?: string): void {
+    if (nobleId) this.lastNoble = { speaker, id: nobleId };
+    const face = nobleId ?? (this.lastNoble?.speaker === speaker ? this.lastNoble.id : undefined);
+    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face });
   }
 
   /** Resposta escolhida na caixa de diálogo. */

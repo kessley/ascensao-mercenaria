@@ -454,6 +454,8 @@ export interface Dialog {
   speaker: string;
   text: string;
   options: { id: string; label: string }[];
+  /** Quando quem fala é um nobre: a caixa mostra o retrato dele (G5). */
+  nobleId?: string;
 }
 
 /** Prédio onde o Comandante entrou (Marco 14). */

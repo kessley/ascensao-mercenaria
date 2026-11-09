@@ -131,6 +131,17 @@
   .pixel-icon-big {
     vertical-align: middle;
   }
+  /* Os retratos (G5, parte 4): moldura de bronze com luz em cima e sombra embaixo, e o contorno escuro */
+  .portrait {
+    display: inline-block;
+    flex-shrink: 0;
+    box-sizing: content-box;
+    image-rendering: pixelated;
+    border: 2px solid;
+    border-color: #c8a060 #6a4a2a #6a4a2a #c8a060;
+    outline: 2px solid #1a1522;
+    margin: 2px;
+  }
 }
 
 /* Depois dos utilitários do Tailwind: dentro das molduras, cantos retos e cartões entalhados */

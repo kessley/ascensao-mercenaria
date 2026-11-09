@@ -20,6 +20,8 @@ export interface Leader {
   wounds: number;
   /** De onde veio ("fundou o bando", "tenente de Lanças Cinzentas"...). */
   origin: string;
+  /** A semente do retrato: o herdeiro que era capitão ou tenente leva o rosto que já tinha (G5). */
+  face?: string;
 }
 
 export interface FormerLeader {
@@ -30,6 +32,8 @@ export interface FormerLeader {
   age: number;
   cause: string;
   origin: string;
+  face?: string;
+  wounds?: number;
 }
 
 const DAYS_PER_YEAR = SEASONS.DAYS * 4;

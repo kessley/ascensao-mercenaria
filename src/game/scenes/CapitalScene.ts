@@ -815,8 +815,13 @@ export class CapitalScene extends Phaser.Scene {
     if (s.campPrompt !== prompt) s.setCampPrompt(prompt);
   }
 
-  private say(speaker: string, talk: Talk): void {
-    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }] });
+  /** O último nobre que falou: as respostas dele seguem com o retrato (G5). */
+  private lastNoble: { speaker: string; id: string } | null = null;
+
+  private say(speaker: string, talk: Talk, nobleId?: string): void {
+    if (nobleId) this.lastNoble = { speaker, id: nobleId };
+    const face = nobleId ?? (this.lastNoble?.speaker === speaker ? this.lastNoble.id : undefined);
+    useGameStore.getState().setDialog({ speaker, text: talk.text, options: talk.options ?? [{ id: "bye", label: "Continuar" }], nobleId: face });
   }
 
   private interact(): void {
@@ -834,7 +839,7 @@ export class CapitalScene extends Phaser.Scene {
     if (!n) return;
     if (n.kind === "NOBLE") {
       const noble = s.nobles.find((x) => x.id === n.v.id);
-      if (noble) this.say(n.v.name, nobleTalk(noble, s));
+      if (noble) this.say(n.v.name, nobleTalk(noble, s), noble.id);
       return;
     }
     if (n.kind === "GATE") {
