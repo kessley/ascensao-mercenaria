@@ -319,6 +319,13 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     return this.plan.buildings.find((b) => SITE_OF[b.kind] === kind && isBuilt(b));
   }
 
+  /**
+   * A fortaleza selada (Marco 22, parte 4): a partir do burgo ela é um mapa à parte, e o
+   * Comandante só entra e sai pelo portão com E. As tropas, as carroças e os mensageiros
+   * continuam passando a pé.
+   */
+  sealed = false;
+
   /** Avisado quando barracas e estruturas mudam (a colisão e a navegação são refeitas). */
   onSolidsChanged: (() => void) | null = null;
   /** Tochas fincadas ao longo dos caminhos (acesas à noite). */
@@ -475,10 +482,10 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
       c.x = this.campfire.x + ((c.x - this.campfire.x) / df) * fireR;
       c.y = this.campfire.y + ((c.y - this.campfire.y) / df) * fireR;
     }
-    // Cerca: cruzá-la fora do portão desfaz o passo
+    // Cerca: cruzá-la fora do portão desfaz o passo. Com a fortaleza selada, nem pelo portão
     const wasIn = insideShape(s, prev);
     const isIn = insideShape(s, c);
-    if (wasIn !== isIn && !onGate(s, c) && !onGate(s, prev)) {
+    if (wasIn !== isIn && (this.sealed || (!onGate(s, c) && !onGate(s, prev)))) {
       c.x = prev.x;
       c.y = prev.y;
     }

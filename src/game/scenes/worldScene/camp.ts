@@ -197,7 +197,7 @@ export const campMethods = {
   },
 
   spots(this: WorldScene): Interactable[] {
-    return [...this.campArea.interactables, ...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()];
+    return [...this.campArea.interactables, ...this.seatGateSpots(), ...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()];
   },
 
   /** Exércitos à vista, em paz com o bando: dá para ir à tenda do lorde (Marco 15). */
@@ -239,9 +239,11 @@ export const campMethods = {
   },
 
   updatePrompt(this: WorldScene): void {
-    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()]);
+    this.nearestSpot = this.campArea.nearestInteractable(this.commander, [...this.seatGateSpots(), ...this.townSpots(), ...this.bridgeSpots, ...this.followerSpots(), ...this.houseSpots(), ...this.armySpots(), ...this.spoilSpots()]);
     const store = useGameStore.getState();
-    store.setCampPrompt(this.nearestSpot && !store.campPanel ? `E — ${this.nearestSpot.enter ? "Entrar: " : ""}${this.nearestSpot.label}` : null);
+    const spot = this.nearestSpot;
+    const verb = spot?.enter && spot.enter !== "seat:out" ? "Entrar: " : "";
+    store.setCampPrompt(spot && !store.campPanel ? `E — ${verb}${spot.label}` : null);
   },
 
   houseSpots(this: WorldScene): Interactable[] {
@@ -299,6 +301,8 @@ export const campMethods = {
       this.pushFeed(store.lootBattlefield(Number(x), Number(y)));
       return;
     }
+    // A fortaleza selada (Marco 22, parte 4): o portão leva de um lado ao outro, mesmo com inimigos
+    if (spot.enter.startsWith("seat:")) return this.crossSeatGate(spot.enter === "seat:in");
     if (this.engagement || this.enemies.some((e) => e.isAlive && e.hostile && distance(e, this.commander) < 900)) {
       this.pushFeed("Inimigos por perto: não é hora de entrar em lugar nenhum.");
       return;

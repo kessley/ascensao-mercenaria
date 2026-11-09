@@ -583,7 +583,8 @@ São cerca de 50 construções, a maioria com 2 ou 3 níveis.
 - **A fortaleza vira um mapa à parte.** Quando o arraial vira burgo, a fortaleza passa a ser entrada como a Cidade Alta das capitais (seção 8.9).
   - No mapa da região, ela aparece no meio do burgo como a muralha interna, com o portão.
   - Atravessar o portão leva ao mapa da fortaleza, com tudo o que o bando construiu lá dentro.
-  - Assim a cidade cresce em volta sem esbarrar no que o jogador construiu, e a fortaleza pode ser maior por dentro do que parece no mapa.
+  - Assim a cidade cresce em volta sem esbarrar no que o jogador construiu.
+  - Como ficou no jogo: a fortaleza continua no mesmo lugar do mundo, selada. O Comandante só passa pelo portão com E, e lá dentro a câmera fica nela e a cidade em volta escurece. As tropas passam pelo portão a pé.
 - **Decretos, em vez de pôr casas,** na Sala de Administração da fortaleza:
   - incentivar artesãos: o ferro fica mais barato;
   - feira semanal: mais comércio;

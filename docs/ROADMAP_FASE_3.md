@@ -14,11 +14,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - fora da fila, pedido em 4 de novembro: entrar em casas e prédios só com E ou com um clique. Andar de encontro à porta entrava sem querer;
   - os locais de missão sempre habitados (etapa 10 ✅ OK);
   - o G4 inteiro (etapa 11 ✅ OK): carroças, aríetes e escadas; a coluna das expedições e do comboio; harpias, navios e convés; a gente do mapa e do acampamento; os interiores, a Cidade Alta e a Liça; e o cavalo de frente e de costas.
-  - do Marco 22 (etapa 12): o bivaque e a grade, a vida no acampamento e a fortaleza (partes 1 a 3 ✅ OK). Da cidade que nasce sozinha (parte 4), já estão feitas as regras (4a) e a cidade no mapa e no reino (4b).
+  - o Marco 22 inteiro (etapa 12 ✅ OK): o bivaque e a grade, a vida no acampamento, a fortaleza e a cidade que nasce sozinha em volta dela.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** a parte 4c do Marco 22, a fortaleza num mapa à parte, entrada pelo portão interno a partir do burgo. Depois, o G5 (interface).
+- **A seguir:** o G5 (etapa 13, a interface): fonte, molduras, ícones e retratos em pixel art.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -48,7 +48,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
-| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | partes 1 a 3 ✅ OK; parte 4: 4a e 4b feitas, a seguir a 4c |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
@@ -691,7 +691,7 @@ As carroças vieram primeiro: o comboio (etapa 4) e as obras do Marco 22 depende
   - 4 testes de regras novos: o cavalo é mais largo que o cavaleiro, a lista e a testeira, a cabeça no alto sem cavaleiro, e o rabo, que balança no passo;
   - conferido na tela, numa batalha com cavalaria, cavaleiros e arqueiros montados, a 200% e a 400%.
 
-## 12. Marco 22: do bivaque à cidade
+## 12. Marco 22: do bivaque à cidade ✅ OK
 **Objetivo:** o bando começa com quase nada e constrói a própria casa. A tenda vira acampamento, o acampamento vira fortaleza e, em volta da fortaleza, uma cidade nasce sozinha. O design inteiro, com o catálogo e os números, está na [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22).
 
 **O que mudou no plano** (combinado em 4 de novembro, depois de um brainstorm):
@@ -858,7 +858,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - o acampamento de campo dá abrigo, enfermaria e cozinha, mas não os outros efeitos das construções;
   - o equilíbrio dos números (custos, cadência e tamanho dos cercos) só se vê jogando.
 
-### 12.4. Marco 22, parte 4: a cidade que nasce sozinha
+### 12.4. Marco 22, parte 4: a cidade que nasce sozinha ✅ OK
 **A fazer** (GDD 9.8):
 - **A população cresce** com seguidores, famílias, refugiados e mercadores, e com segurança, comida, comércio e fama.
 - **As etapas:** arraial, burgo, vila e cidade.
@@ -908,7 +908,20 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Saves antigos** com fortaleza ganham a cidade ao carregar.
 - **Testes:** os 412 de regras (8 novos, de `seatLayout`) e a suíte `fortaleza`, com 27 verificações. Ela leva o arraial ao burgo, à vila no reino e à cidade de pedra, e confere a renda do reino.
 
-**Falta, a 4c:** a fortaleza num mapa à parte, entrada pelo portão interno a partir do burgo. Hoje ela continua no mapa da região, no meio da cidade. Também falta limpar a floresta debaixo das casas.
+**Feito na 4c, a fortaleza num mapa à parte:**
+- **Do burgo em diante, a fortaleza fica selada:** o Comandante só entra e sai pelo portão, com E ou com um clique, como nas casas. A pé, a muralha não deixa passar nem pelo vão do portão.
+  - De fora, o aviso é "E — Entrar: Fortaleza do bando". De dentro, "E — Sair para" o burgo, ou para o nome da vila.
+  - A tela escurece e o Comandante aparece do outro lado.
+- **Lá dentro, a fortaleza é o mapa:** a câmera fica presa nela e a cidade em volta escurece. Fora, a câmera volta a correr o mundo.
+- **O mesmo lugar do mundo:** a fortaleza continua onde sempre esteve, no meio da cidade, e não numa cena à parte como a Cidade Alta.
+  - Assim os alojamentos, as obras, a gente do acampamento, o modo construção e os cercos continuam funcionando sem mudança.
+  - As tropas, as carroças e os mensageiros passam pelo portão a pé: entrando, vão para os alojamentos; saindo, vêm atrás do Comandante.
+- **Testes:** a suíte `fortaleza` com 34 verificações. Ela confere que a pé não se entra, o aviso do portão, a câmera presa e o escuro em volta, a saída e as tropas passando pelo portão.
+
+**Falta:**
+- a fortaleza não é maior por dentro do que parece no mapa (ela é o mesmo lugar);
+- a floresta debaixo das casas da cidade não é limpa;
+- o equilíbrio do crescimento, dos decretos e dos impostos só se vê jogando uma campanha.
 
 ## 13. G5: interface
 **Objetivo:** a interface em React ganha a mesma cara do jogo.

@@ -253,6 +253,14 @@ export class WorldScene extends Phaser.Scene {
   houseCache: { townId: string; spots: Interactable[] } | null = null;
   /** A planta da cidade da sede desenhada agora (etapa, casas de pé, portão e povoado). */
   seatKey = "";
+  /** Do burgo em diante, a fortaleza é um mapa à parte: só se entra e sai pelo portão, com E. */
+  seatSealed = false;
+  seatSpots: { key: string; spots: Interactable[] } | null = null;
+  seatCrossing = false;
+  /** A câmera presa à fortaleza (zoom e tamanho), ou "" do lado de fora. */
+  seatViewKey = "";
+  /** O escuro em volta da fortaleza, visto de dentro. */
+  seatVeil: Phaser.GameObjects.Graphics | null = null;
 
   /** Dentro de um povoado, o Comandante vê os preços da praça: anota no Livro (uma vez por dia). */
   lastVisitNoteAt = -Infinity;
@@ -358,6 +366,13 @@ export class WorldScene extends Phaser.Scene {
     this.fatiguePos = new Map();
     this.interiorReturn = null;
     this.houseCache = null;
+    // A cena é a mesma ao recomeçar: a cidade da sede é redesenhada na camada nova
+    this.seatKey = "";
+    this.seatSealed = false;
+    this.seatSpots = null;
+    this.seatCrossing = false;
+    this.seatViewKey = "";
+    this.seatVeil = null;
 
     const store = useGameStore.getState();
     if (!store.world) throw new Error("Mundo não gerado");
@@ -410,6 +425,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateGateRules();
     // O acampamento desenhado pela planta na grade (Marco 22)
     this.campArea = new CampArea(this, this.world.camp, store.campPacked, store.campPlan, this.world.culture ?? "REALMS");
+    this.campArea.sealed = this.seatSealed;
     terrain.campGround = this.campArea.ground;
     // Barracas, fogueira e paliçada bloqueiam todo mundo (não só o Comandante)
     this.campArea.onSolidsChanged = () => this.applyCampSolids();
@@ -647,6 +663,7 @@ export class WorldScene extends Phaser.Scene {
     this.terrainStreamer.update(this.cameras.main);
     this.settlementLayer.updateArt(this.cameras.main);
     this.campArea.updateArt(this.cameras.main);
+    this.updateSeatView();
     this.updateCampBuild();
     this.forestArt.update(this.cameras.main);
     this.updateNight(store.dayProgress);

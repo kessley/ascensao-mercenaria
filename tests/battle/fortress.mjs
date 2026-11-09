@@ -208,6 +208,75 @@ export async function fortress({ page, ev }, { check }) {
   await page.waitForTimeout(1800);
   await page.screenshot({ path: "tests/battle/.shots-burgo.png" });
 
+  // A fortaleza vira um mapa à parte (parte 4c): do burgo em diante, só se passa pelo portão com E
+  const sealed = await ev(() => {
+    const w = window.__world;
+    const s = w.campArea.palisade;
+    const dir = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] }[s.gate];
+    const out = { x: s.cx + dir[0] * (s.half + 12), y: s.cy + dir[1] * (s.half + 12) };
+    const keep = { x: w.commander.x, y: w.commander.y };
+    // Um passo pelo vão do portão, de fora para dentro
+    w.commander.x = s.cx + dir[0] * (s.half - 12);
+    w.commander.y = s.cy + dir[1] * (s.half - 12);
+    w.campArea.collide(w.commander, out);
+    const bounced = Math.abs(w.commander.x - out.x) < 1 && Math.abs(w.commander.y - out.y) < 1;
+    w.commander.x = keep.x;
+    w.commander.y = keep.y;
+    return { sealed: w.seatSealed && w.campArea.sealed, bounced, spots: w.seatGateSpots().map((p) => [p.label, p.enter]) };
+  });
+  console.log("   portão:", JSON.stringify(sealed));
+  check("do burgo em diante, a pé não se entra na fortaleza", sealed.sealed && sealed.bounced, JSON.stringify(sealed));
+  await ev(() => {
+    const w = window.__world;
+    const spot = w.seatGateSpots().find((p) => p.enter === "seat:in");
+    w.commander.x = spot.door.x;
+    w.commander.y = spot.door.y;
+  });
+  await page.waitForTimeout(600);
+  const prompt = await ev(() => window.__store.getState().campPrompt);
+  check("o portão da fortaleza pede E", prompt === "E — Entrar: Fortaleza do bando", prompt);
+  const view = () => {
+    const w = window.__world;
+    const b = w.cameras.main.getBounds();
+    return { inFort: w.inSeatFort(), inCamp: w.inCamp, bounds: Math.round(b.width), veil: !!w.seatVeil?.visible, quartered: w.quartered.size, x: Math.round(w.commander.x), y: Math.round(w.commander.y) };
+  };
+  await page.keyboard.press("e");
+  await page.waitForTimeout(2500);
+  const inside = await ev((fn) => new Function(`return (${fn})()`)(), view.toString());
+  console.log("   dentro:", JSON.stringify(inside));
+  check("com E, o portão leva para dentro da fortaleza", inside.inFort && inside.inCamp, JSON.stringify(inside));
+  check("lá dentro, a câmera fica na fortaleza e a cidade escurece", inside.bounds < 3000 && inside.veil, JSON.stringify(inside));
+  await page.screenshot({ path: "tests/battle/.shots-fortaleza-dentro.png" });
+  // De dentro: E — Sair para o burgo
+  await ev(() => {
+    const w = window.__world;
+    const spot = w.seatGateSpots().find((p) => p.enter === "seat:out");
+    w.commander.x = spot.door.x;
+    w.commander.y = spot.door.y;
+  });
+  await page.waitForTimeout(600);
+  const out = await ev(() => window.__store.getState().campPrompt);
+  check("de dentro, o portão leva de volta ao burgo", out === "E — Sair para o burgo", out);
+  await page.keyboard.press("e");
+  await page.waitForTimeout(2500);
+  const outside = await ev((fn) => new Function(`return (${fn})()`)(), view.toString());
+  console.log("   fora:", JSON.stringify(outside));
+  check("fora, a câmera corre o mundo de novo e o bando sai atrás", !outside.inFort && !outside.inCamp && !outside.veil && outside.bounds > inside.bounds * 3 && outside.quartered === 0, JSON.stringify(outside));
+  // O Comandante anda para a praça, e quem o segue vem atrás
+  await ev(() => {
+    const w = window.__world;
+    const s = w.campArea.palisade;
+    const dir = { N: [0, -1], S: [0, 1], W: [-1, 0], E: [1, 0] }[s.gate];
+    w.commander.x += dir[0] * 450;
+    w.commander.y += dir[1] * 450;
+  });
+  await page.waitForTimeout(5000);
+  const marched = await ev(() => {
+    const w = window.__world;
+    return w.battalions.filter((b) => !b.isDestroyed).map((b) => !w.inSeatFort(b.center));
+  });
+  check("as tropas passam pelo portão a pé", marched.length > 0 && marched.some((x) => x), JSON.stringify(marched));
+
   // A vila: paliçada de fora, templo, e um povoado do bando no reino
   const town = await ev((fn) => {
     const S = window.__store;
