@@ -158,6 +158,27 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
   - **Na cena:** a cena inteira é reordenada por profundidade a cada quadro em que alguém anda (0,3 ms no mapa); chão e construções podiam ir para camadas próprias.
   - **Na batalha,** o que sobra no perfil com 1280 soldados: a IA dos esquadrões (16% do tempo), o empurra-empurra (8%), a animação (8%) e o desenho dos contêineres do Phaser (3,8 ms por quadro).
 
+### Desempenho, segunda rodada: a busca de alvo e o acampamento do Marco 22 ✅ OK
+**Objetivo:** medir de novo depois da 12.2, que pôs no acampamento gente trabalhando, obras com placa e 22 construções novas. As rodadas ficaram num script: `node tests/battle/perf.mjs [batalhas|acampamento|mapa] [--perfil]`, com `npm run dev` rodando.
+- **Medido** (o mesmo método da rodada anterior: Edge com janela, passos de 1/30 s, mediana / 1% pior):
+  | Caso | Simulação antes | Simulação agora | Desenho |
+  | --- | --- | --- | --- |
+  | Batalha, 640 soldados | 4,0 ms | 2,9 ms / 5,7 ms | 2,4 ms |
+  | Batalha, 1280 soldados | 9,0 ms | 5,5 ms / 15,1 ms | 3,4 ms |
+  | Batalha, 1600 soldados | 12,2 ms | 5,0 ms / 14,4 ms | 4,2 ms |
+  | Batalha, 1600, zoom 25% | — | 4,6 ms / 15,8 ms | 3,7 ms |
+  | Bivaque do começo | — | 0,9 ms / 1,9 ms | 1,7 ms |
+  | Paliçada com 37 construções | — | 1,1 ms / 2,0 ms | 1,6 ms |
+  | Mapa, longe do acampamento | — | 1,4 ms / 4,0 ms | 1,8 ms |
+  - A batalha tinha voltado a pesar (12 ms com 1600) desde a rodada anterior. Agora cabe com folga em 60 fps.
+  - O acampamento cheio não pesa mais que o mapa.
+- **O que mudou** (nenhuma regra):
+  - **Busca de alvo:** cada soldado sem alvo filtrava a lista inteira de inimigos e depois procurava o mais perto. Agora uma grade montada uma vez por quadro dá só os vizinhos (`src/game/systems/nearIndex.ts`). O resultado é o mesmo, inclusive no empate, e há teste contra a conta da lista inteira.
+  - **Um dia de obra:** antes, cada dia redesenhava o acampamento inteiro. Agora só troca o texto das placas de obra (`CampArea.updateProgress`). Caiu de uns 9 ms na hora, mais uns 16 quadros de 12 ms, para 1,3 ms na hora e 29 ms espalhados. Uma construção posta ainda redesenha tudo: 8 ms na hora e 128 ms espalhados.
+- **Uma pista falsa:** o perfilador do Edge põe 10 a 13% do tempo no `setFrame` do Phaser, chamado pela animação das figuras. Medido direto, a animação inteira de 1600 figuras gasta 0,34 ms por passo e o `setFrame` roda umas 2 vezes por passo: é erro de atribuição do perfilador, e não há o que ganhar ali.
+- **Testes:** os 372 de regras passam. As suítes de batalha passam. Na rodada inteira só a `mar` falhava, por causa do começo humilde da 12.1: com um batalhão só, não havia quem deixar no cais. Agora ela dá um segundo batalhão ao bando, e passa (45 de 45).
+- **Ficou de fora:** o que sobra na batalha é o empurra-empurra (5%) e o desenho dos contêineres do Phaser.
+
 ---
 
 ## Banco de ideias (ainda sem marco)

@@ -570,7 +570,8 @@ export class WorldScene extends Phaser.Scene {
       // Caravana própria dispensada: sai da estrada
       if (s.ownCaravans !== prev.ownCaravans) this.trade.dropOwn(new Set(s.ownCaravans.filter((c) => !c.lost).map((c) => c.id)));
       // A planta mudou: o acampamento é redesenhado no lugar (construções, portão, paliçada, fosso)
-      if (s.campPlan !== prev.campPlan && !s.campPacked && !prev.campPacked) this.applyCampPlan();
+      // (só o andamento das obras: troca o texto dos rótulos, sem remontar a arte)
+      if (s.campPlan !== prev.campPlan && !s.campPacked && !prev.campPacked && !this.campArea.updateProgress(s.campPlan)) this.applyCampPlan();
       if (s.worldMapOpen && !prev.worldMapOpen) this.lastSnapshotAt = -Infinity;
     });
     activeScene = this;

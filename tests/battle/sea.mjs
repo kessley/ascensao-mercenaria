@@ -54,7 +54,9 @@ export async function sea({ page, ev, labScript }, { check }) {
   const home = await ev(() => {
     const st = window.__store;
     const s = st.getState();
-    st.setState({ gold: 20000, rations: 900, nextEventDay: 99999, nextCalamityDay: 99999 });
+    // O começo é humilde (um batalhão só): o teste precisa de dois, para um ficar no cais
+    const extra = { ...s.battalions[0], id: s.battalions[0].id + "-b", name: "Segunda Lança" };
+    st.setState({ gold: 20000, rations: 900, nextEventDay: 99999, nextCalamityDay: 99999, battalions: [...s.battalions, extra] });
     const port = s.settlements.find((t) => t.port && t.owner !== "RUINED");
     return {
       continents: s.planet.continents.map((c) => ({ id: c.id, name: c.name, culture: c.culture })),
@@ -62,7 +64,7 @@ export async function sea({ page, ev, labScript }, { check }) {
       portName: port?.name,
       name: s.world.name,
       towns: s.settlements.map((t) => t.name),
-      ids: s.battalions.map((b) => b.id),
+      ids: st.getState().battalions.map((b) => b.id),
       wagons: s.wagons.length,
       first: s.settlements[0].name,
     };

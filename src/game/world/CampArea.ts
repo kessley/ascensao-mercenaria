@@ -109,6 +109,15 @@ export const worldLabel = (scene: Phaser.Scene, x: number, y: number, text: stri
     .setOrigin(0.5)
     .setDepth(20);
 
+/** As duas plantas são iguais, a não ser pelo andamento das obras (nenhuma ficou pronta)? */
+function sameButProgress(a: CampPlan, b: CampPlan): boolean {
+  if (a.size !== b.size || a.gate !== b.gate || a.ditch !== b.ditch || a.buildings.length !== b.buildings.length) return false;
+  return a.buildings.every((x, i) => {
+    const y = b.buildings[i];
+    return x.id === y.id && x.kind === y.kind && x.x === y.x && x.y === y.y && x.level === y.level && x.off === y.off && isBuilt(x) === isBuilt(y);
+  });
+}
+
 /**
  * O rótulo de uma construção, logo acima das células dela: quebra em linhas na largura da peça (as
  * pequenas, de 2×2, ficam lado a lado sem um rótulo cobrir o outro) e cresce para cima.
@@ -165,6 +174,8 @@ export class CampArea {
   private quarterJobs: ArtJob[] = [];
   /** Rótulos, chamas e brasas da planta (refeitos quando ela muda). */
   private planObjects: Phaser.GameObjects.GameObject[] = [];
+  /** O rótulo de cada obra em andamento (o trabalho de cada dia só troca o texto). */
+  private workLabels = new Map<string, Phaser.GameObjects.Text>();
   private ghost: Phaser.GameObjects.Graphics | null = null;
   private ghostText: Phaser.GameObjects.Text | null = null;
 
@@ -186,12 +197,28 @@ export class CampArea {
   }
 
   /** A planta mudou (construção nova, mudada, desmontada, portão, paliçada): tudo é redesenhado. */
+  /**
+   * A planta só mudou no andamento das obras (o trabalho de um dia, sem nenhuma ficar pronta)? Então
+   * basta trocar o texto dos rótulos, sem redesenhar o acampamento (que remonta a arte inteira).
+   */
+  updateProgress(plan: CampPlan): boolean {
+    if (this.packed || !sameButProgress(this.plan, plan)) return false;
+    this.plan = plan;
+    for (const b of plan.buildings) {
+      const label = this.workLabels.get(b.id);
+      if (label) label.setText(`${CAMP_BUILDINGS[b.kind].label}
+obra ${b.built ?? 0}/${workOf(b.kind)}`);
+    }
+    return true;
+  }
+
   setPlan(plan: CampPlan, state: Pick<GameState, "battalions" | "pendingMutiny" | "lieutenants">, away: ReadonlySet<string>): void {
     if (this.packed) return;
     this.plan = plan;
     this.shape = shapeOf(plan, this.center);
     for (const o of this.planObjects) o.destroy();
     this.planObjects = [];
+    this.workLabels.clear();
     this.obstacles = [];
     this.quarterRects = [];
     this.torches.length = 0;
@@ -591,8 +618,10 @@ export class CampArea {
       this.foot(jobs, r.center.x - 20, r.center.y - 6, 20, () => campPropPiece("WOODPILE", c, seed, 40, 20));
       this.anchor(jobs, r.center.x + 16, r.center.y + 18, () => propPiece("CRATE", c, seed));
       this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 22, r.center.y - 8, 44, 24));
-      this.planObjects.push(planLabel(this.scene, r, `${def.label}
-obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a"));
+      const label = planLabel(this.scene, r, `${def.label}
+obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
+      this.workLabels.set(b.id, label);
+      this.planObjects.push(label);
       this.interactables.push({
         label: `${def.label} (em obra)`,
         door: this.doors.get(b.id) ?? r.center,

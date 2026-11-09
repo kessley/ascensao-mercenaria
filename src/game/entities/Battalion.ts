@@ -10,6 +10,7 @@ import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
 import { battalionMods, soldierStats, type BattalionMods } from "../../utils/progression";
 import { formationOffset, formationSize, frontOf } from "../systems/formation";
 import { cycleStep, type CycleState } from "../sim/combatRules";
+import { nearestWithin } from "../systems/nearIndex";
 
 export type BattalionOrder =
   | { type: "HOLD"; point: Point }
@@ -580,16 +581,17 @@ export class Battalion {
     // Quem está colado num inimigo não larga a briga para correr atrás do alvo da ordem
     const fighting = !!s.target?.isAlive && s.inRange(s.target);
     if (s.target && s.target.isAlive && s.target.revealed && (fighting || distance(s.target, anchor) <= radius * 1.2)) return;
+    // Os inimigos não andam enquanto os batalhões escolhem alvo: uma grade só os de perto (nearIndex.ts)
+    const frame = this.scene.time.now;
     if (this.order.type === "ATTACK" && !s.ranged) {
-      const close = nearest(enemies, s, COMBAT.HOLD_LEASH);
+      const close = nearestWithin(enemies, frame, s, COMBAT.HOLD_LEASH, s);
       if (close) {
         s.target = close;
         return;
       }
     }
 
-    const candidates = enemies.filter((e) => distance(e, anchor) <= radius);
-    s.target = nearest(candidates, s);
+    s.target = nearestWithin(enemies, frame, anchor, radius, s);
 
     // Alvo da ordem morreu ou sumiu de vista e não há mais ninguém por perto → segura a posição
     if (!s.target && this.order.type === "ATTACK" && (!this.order.target.isAlive || (!this.order.target.revealed && distance(s, anchorPoint) < BALANCE.ENGAGE_RADIUS / 2))) {
