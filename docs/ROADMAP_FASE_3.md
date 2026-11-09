@@ -812,7 +812,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - a cor do uniforme (alfaiataria) fica para o G5;
   - o equilíbrio dos números só se vê jogando uma campanha.
 
-### 12.3. Marco 22, parte 3: a fortaleza
+### 12.3. Marco 22, parte 3: a fortaleza ✅ OK
 **A fazer** (GDD 9.7):
 - **Fincar o estandarte,** com os requisitos de fama, soldados e construções.
 - **A terra por um de três caminhos:** carta de terra de um reino (vassalagem), ruínas reerguidas (antes, limpá-las) ou terra de ninguém (temor).
@@ -825,6 +825,39 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - entre os dias 60 e 90 de uma campanha dá para fincar o estandarte por qualquer um dos três caminhos;
 - o bando sai em campanha com o acampamento de campo enquanto a fortaleza fica com o castelão;
 - a fortaleza aguenta (ou não) um cerco sem o bando.
+
+**Feito:**
+- **As regras** ficam em `src/game/sim/fortress.ts` (puras, com 20 testes). O estado e as ações ficam em `src/store/fortressSlice.ts`.
+- **Fincar o estandarte:** é o passo de 28 para 34 na planta. Pede fama 45, 5 batalhões, cozinha, tenda dos oficiais, poço e torre de vigia, e que a muralha caiba em volta, sem água, rocha nem povoado. A fortaleza não se levanta mais.
+- **Os três caminhos da terra,** no painel da planta:
+  - carta de terra: +120 de ouro e um reino com relação 25 a até 3200 de distância. O bando vira vassalo, e os inimigos do suserano passam a ser os dele;
+  - ruínas reerguidas: um local a até 1600, com no máximo 25% dos moradores. Fica 200 de ouro e 15 de madeira mais barato, e os moradores não voltam;
+  - terra de ninguém: +10 de temor, e o cerco vem mais cedo.
+- **A muralha:** de madeira, e depois de pedra (450 de ouro e 12 de ferro). É desenhada com as mesmas peças dos fortes do mundo (`wallJobs`), com torres nos cantos, no meio dos lados e no portão.
+- **As 12 construções da fortaleza:**
+  - torre de menagem, cisterna, armazém e castelão: somam na defesa;
+  - quartel: leitos;
+  - salão do Comandante: fama por dia;
+  - masmorra: ninguém foge;
+  - escola de oficiais: mais tenentes;
+  - tesouraria: o saque não leva ouro;
+  - oficina de cerco: escadas pela metade da madeira e dois aríetes;
+  - feira do castelo: ouro por semana;
+  - pombal: o aviso do cerco chega uma semana antes;
+  - templo.
+- **O castelão e a guarnição:** o castelão é um tenente escolhido no painel. A guarnição são os batalhões que ficam na saída. O painel mostra a força da defesa contra o tamanho do próximo cerco.
+- **O acampamento de campo:** um kit de até 6 construções que andam nas carroças.
+  - É montado pelo botão do HUD, longe da sede e com as carroças junto, e leva meio dia.
+  - As barracas abrigam do frio e do pântano, e quem está ferido e tem leito sara no ritmo do acampamento.
+  - Entrar na sede recolhe o acampamento.
+- **O cerco da sede:** a cada 45 dias, mais cedo com fama e em terra de ninguém. Vem um reino em guerra com o bando, os orcs (com fama 60) ou salteadores, e o cerco cresce a cada vez.
+  - Com o bando longe, o cerco se resolve sozinho. Se a sede cair, ela é saqueada: ouro, metade das rações e do depósito, e um terço das construções volta a ser obra.
+  - Com o bando em casa, toca o alarme ("Às muralhas!"). A batalha é "Você defende os muros" (a sede como forte de pedra ou vila de madeira), e o bando volta à fortaleza depois dela.
+- **Testes:** os 392 de regras e a suíte `fortaleza` (18 verificações) passam, junto com as de cercos e do mar.
+- **Falta:**
+  - a batalha nas muralhas usa o mapa genérico de cerco, não a planta da fortaleza;
+  - o acampamento de campo dá abrigo, enfermaria e cozinha, mas não os outros efeitos das construções;
+  - o equilíbrio dos números (custos, cadência e tamanho dos cercos) só se vê jogando.
 
 ### 12.4. Marco 22, parte 4: a cidade que nasce sozinha
 **A fazer** (GDD 9.8):

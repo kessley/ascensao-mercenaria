@@ -24,6 +24,8 @@ import { HostManager, type HostWorld } from "../systems/WarHost";
 import { TerrainMap, TerrainStreamer } from "../world/TerrainMap";
 import { ForestArt } from "../world/ForestArt";
 import { NightLayer } from "../world/NightLayer";
+import { FieldCampArt } from "../world/FieldCampArt";
+import { FIELD_RADIUS, fieldCampOf } from "../sim/fortress";
 import { CampArea, type Interactable } from "../world/CampArea";
 import { StaticCuller } from "../world/StaticCuller";
 import { SettlementLayer } from "../world/Settlements";
@@ -85,6 +87,8 @@ export class WorldScene extends Phaser.Scene {
   lastFogAt = -Infinity;
 
   campArea!: CampArea;
+  /** O acampamento de campo montado, longe da fortaleza (Marco 22, parte 3). */
+  fieldCampArt!: FieldCampArt;
   /** Rotina dos soldados e seguidores no acampamento (Marco 12). */
   campLife!: CampLife;
   /** Gente e bichos perto da câmera, e os sinais do mapa (fumaça, corvos, rastros). */
@@ -409,6 +413,8 @@ export class WorldScene extends Phaser.Scene {
     terrain.setDitch(!store.campPacked && store.campPlan.ditch ? this.campArea.palisade : null);
     this.applyCampSolids();
     this.campLife = new CampLife(this, this.campArea);
+    this.fieldCampArt = new FieldCampArt(this, this.world.culture ?? "REALMS");
+    this.fieldCampArt.show(store.fieldCamp, store.fortress?.kit ?? []);
     this.mapLife = new MapLife(this);
     this.campLife.setFollowers(store.campPacked ? [] : store.followers);
     // A floresta em volta (o lenhador tira madeira dela)
@@ -573,6 +579,7 @@ export class WorldScene extends Phaser.Scene {
       // (só o andamento das obras: troca o texto dos rótulos, sem remontar a arte)
       if (s.campPlan !== prev.campPlan && !s.campPacked && !prev.campPacked && !this.campArea.updateProgress(s.campPlan)) this.applyCampPlan();
       if (s.worldMapOpen && !prev.worldMapOpen) this.lastSnapshotAt = -Infinity;
+      if (s.fieldCamp !== prev.fieldCamp || s.fortress?.kit !== prev.fortress?.kit) this.fieldCampArt.show(s.fieldCamp, s.fortress?.kit ?? []);
     });
     activeScene = this;
     const cleanup = () => {
@@ -963,11 +970,15 @@ export class WorldScene extends Phaser.Scene {
     const c = this.commander;
     const geo = geoOf(this.world.geo);
     const away = !this.inCamp;
-    const sheltered = this.settlementLayer.layouts.some((l) => insideTown(l, c, 600));
+    // O acampamento de campo montado (Marco 22, parte 3): com barracas, ninguém dorme ao relento
+    const field = away && !!s.fortress && !!s.fieldCamp && distance(c, s.fieldCamp) < FIELD_RADIUS;
+    const tents = field && fieldCampOf(s.fortress?.kit ?? []).shelter;
+    const sheltered = tents || this.settlementLayer.layouts.some((l) => insideTown(l, c, 600));
     s.setExposure({
       away,
+      field,
       // Acampamento de cerco que dura: a mesma doença do pântano
-      swamp: away && (c.terrainType === "SWAMP" || geo.biomeAt(c.x, c.y) === "MARSH" || (!!s.siege?.walled && s.day - (s.siege.startDay ?? s.day) >= SIEGE.CAMP_SICK_DAY)),
+      swamp: away && ((!tents && (c.terrainType === "SWAMP" || geo.biomeAt(c.x, c.y) === "MARSH")) || (!!s.siege?.walled && s.day - (s.siege.startDay ?? s.day) >= SIEGE.CAMP_SICK_DAY)),
       // Cobertores do mascate protegem do frio
       cold: away && !sheltered && s.day >= s.blanketsUntil && this.season === "WINTER" && geo.temperatureAt(c.x, c.y) < SEASONS.SNOW_BELOW,
       sickTown: s.settlements.some((t) => isSick(t, s.day) && distance(t, c) < 2500),

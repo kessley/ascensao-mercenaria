@@ -100,6 +100,8 @@ export const hudMethods = {
       fatigue: Object.fromEntries(this.battalions.map((b) => [b.id, Math.round(b.fatigue)])),
       wagonsAlive: this.wagons.filter((w) => w.isAlive).length,
       pitchBlocked: this.pitchBlocked(),
+      standardBlocked: this.standardBlocked(),
+      fieldBlocked: this.fieldBlocked(),
       // Carroças perto do Comandante: no acampamento elas estão no pátio; em campo, a até um tanto dele
       wagonsNear: this.inCamp || (useGameStore.getState().train !== "ROAD" && this.wagons.some((w) => w.isAlive && distance(w, this.commander) < TRADE.WAGON_REACH)),
     });

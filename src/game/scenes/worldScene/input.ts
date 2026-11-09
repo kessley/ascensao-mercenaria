@@ -698,6 +698,9 @@ export const inputMethods = {
         case "PITCH_CAMP":
           this.pitchCamp();
           break;
+        case "FIELD_CAMP":
+          this.toggleFieldCamp();
+          break;
         case "FERRY":
           this.crossFerry(cmd.ferryId);
           break;

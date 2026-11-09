@@ -76,6 +76,8 @@ import { rememberSaga, type SagaRecord } from "../game/data/sagas";
 import { personName } from "../game/worldgen/names";
 import { CONTINENT_KEYS, INITIAL_SEA, seaSlice, type ContinentKey, type SeaActions, type SeaState } from "./seaSlice";
 import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
+import { fieldCampOf } from "../game/sim/fortress";
+import { INITIAL_FORTRESS, fortressSlice, type FortressActions, type FortressState } from "./fortressSlice";
 import { INITIAL_CAPTAINS, allCaptains, captainSlice, captainsWeek, desertions, freshCaptains, pruneCompanies, shiftLoyalty, type CaptainActions, type CaptainState } from "./captainSlice";
 import { captainName, type CaptainData } from "../game/data/captains";
 import type { CompanyHud, CompanyStance } from "../game/sim/companies";
@@ -166,7 +168,7 @@ import {
   type CampSide,
 } from "../game/data/campGrid";
 import {
-  CARPENTRY,
+  carpentryCost,
   DICE_BRAWL,
   advanceWorks,
   bedded,
@@ -438,6 +440,10 @@ export interface BattleHud {
   wagonsAlive: number;
   /** Pode montar o acampamento aqui (com ele levantado)? null = sim. */
   pitchBlocked: string | null;
+  /** A muralha da fortaleza cabe em volta do acampamento? null = sim (Marco 22, parte 3). */
+  standardBlocked: string | null;
+  /** Pode montar o acampamento de campo aqui? null = sim. */
+  fieldBlocked: string | null;
   /** Carroças perto do Comandante (Marco 14): dá para comprar e vender carga pesada. */
   wagonsNear: boolean;
 }
@@ -680,7 +686,7 @@ export type BattleCommand =
   /** Ordens do cerco de um povoado (Marco 16). */
   | { type: "SIEGE"; ids: string[]; action: SiegeAction }
   /** Marcha forçada liga/desliga; forragear aqui; levantar e montar o acampamento (Marco 13). */
-  | { type: "FORCED_MARCH" | "FORAGE" | "PACK_CAMP" | "PITCH_CAMP"; ids: string[] };
+  | { type: "FORCED_MARCH" | "FORAGE" | "PACK_CAMP" | "PITCH_CAMP" | "FIELD_CAMP"; ids: string[] };
 
 /** Toques de trombeta combinados de antemão (só ordens básicas viajam pelo som). */
 export type TrumpetCall = "ADVANCE" | "HALT" | "CHARGE" | "RETREAT" | "RALLY";
@@ -695,7 +701,7 @@ export interface BattalionContextMenu {
   y: number;
 }
 
-export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions, CaptainState, CaptainActions {
+export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions, CaptainState, CaptainActions, FortressState, FortressActions {
   /** Mesma semente, séculos depois de uma saga terminada. */
   revisitSaga: (saga: SagaRecord) => void;
   /** Tela de criação do mundo ou campanha em andamento. */
@@ -1236,7 +1242,16 @@ const TRANSIENT_KEYS = new Set<string>([
   "scenarioPaused",
   "scenarioResult",
   "menuTarget",
+  "seatBattle",
 ]);
+
+/** Uma terra nova: reinos, nobres e mercado dela; o bando chega sem nome e sem acampamento. */
+function freshLand(world: WorldDef, day: number): Pick<GameState, ContinentKey> {
+  const fresh = campaignState(world);
+  const out = {} as Pick<GameState, ContinentKey>;
+  for (const k of CONTINENT_KEYS) Object.assign(out, { [k]: fresh[k] });
+  return { ...out, fame: 0, fear: 0, campPacked: true, nextCalamityDay: day + out.nextCalamityDay };
+}
 function entry(day: number, text: string, tone: LogTone = "info"): LogEntry {
   return { id: ++logSeq, day, text, tone };
 }
@@ -1294,6 +1309,7 @@ type DayState = Pick<
   | "fame"
   | "shifts"
   | "campForest"
+  | "fortress"
 >;
 
 const addHistory = (history: string[], line: string) => [...history, line].slice(-LIEUTENANTS.HISTORY_SIZE);
@@ -1403,6 +1419,8 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
       clean: staffing && readyOf(s.campPlan, "LATRINE").length > 0 ? LATRINE_CLEAN : 0,
       herbs: !!staffing && running(s.campPlan, "HERBALIST", staffing.working),
       unbedded,
+      // O acampamento de campo (parte 3): a enfermaria do kit cuida dos feridos em campo
+      fieldBeds: s.exposure.field && s.fortress ? fieldCampOf(s.fortress.kit).sickBeds : 0,
     });
     // O mastro de recrutamento atrai voluntários enquanto o acampamento está montado
     if (!s.campPacked) {
@@ -1610,6 +1628,7 @@ function dayState(s: GameState): DayState {
     fame: s.fame,
     shifts: s.shifts,
     campForest: s.campForest,
+    fortress: s.fortress,
   };
 }
 
@@ -1903,6 +1922,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     ...INITIAL_SEA,
     ...INITIAL_LEGACY,
     ...INITIAL_CAPTAINS,
+    ...INITIAL_FORTRESS,
     captainCandidates: freshCaptains(1),
     leader: { ...FOUNDER, name: personName(r), age: r.int(LEGACY.START_AGE[0], LEGACY.START_AGE[1]) },
     planet: world ? generatePlanet(world) : null,
@@ -2014,7 +2034,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   finishScenario: (result) => {
     const s = get();
     if (!s.scenario || s.scenarioResult) return;
-    if (!s.scenario.boarding) noteResult(s.scenario.id, result);
+    if (!s.scenario.boarding && !s.scenario.seat) noteResult(s.scenario.id, result);
     set({ scenarioResult: result, scenarioPaused: false, contextMenu: null });
   },
 
@@ -2551,6 +2571,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     get().returnExpeditions();
     get().farTick();
     get().legacyDay(whole);
+    get().fortressDays(s.day, get().day);
   },
 
   ...courtSlice((partial) => set(partial), get),
@@ -2568,6 +2589,12 @@ export const useGameStore = create<GameState>()((set, get) => ({
     rememberSaga(world, saga.echo);
     set({ ...campaignState(world), echo: saga.echo, loadNonce: get().loadNonce + 1 });
   },
+  ...fortressSlice(set, get, {
+    note: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),
+    stock: stockOf,
+    paid,
+    fresh: (world, day) => freshLand(world, day),
+  }),
   ...seaSlice(set, get, {
     fresh: (world, day) => {
       // Uma terra nova: reinos, nobres e mercado dela; o bando chega sem nome e sem acampamento
@@ -2617,7 +2644,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     // De surpresa (há gente, mas ninguém de guarda), o bando leva só metade do que levaria
     const kept = 1 - (1 - guardOf(s.campPlan)) * (surprise ? 0.5 : 1);
     const rations = Math.floor(s.rations * WORLD.WARBAND.CAMP_RAID_RATIONS * (1 - kept));
-    const gold = Math.floor(s.gold * WORLD.WARBAND.CAMP_RAID_GOLD * (1 - kept));
+    // A tesouraria da fortaleza guarda o ouro num cofre
+    const gold = ready(s.campPlan, "TREASURY") ? 0 : Math.floor(s.gold * WORLD.WARBAND.CAMP_RAID_GOLD * (1 - kept));
     // As mercadorias do depósito também vão (Marco 14)
     const depot: Partial<Record<Good, number>> = {};
     let goods = 0;
@@ -3712,7 +3740,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   setExposure: (e) => {
     const x = get().exposure;
-    if (x.away !== e.away || x.swamp !== e.swamp || x.cold !== e.cold || x.sickTown !== e.sickTown) set({ exposure: e });
+    if (x.away !== e.away || x.swamp !== e.swamp || x.cold !== e.cold || x.sickTown !== e.sickTown || x.field !== e.field) set({ exposure: e });
   },
 
   forageAt: (region, biome, owner) => {
@@ -3863,8 +3891,9 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   carpentry: (item) => {
     const s = get();
-    const def = CARPENTRY[item];
-    const why = campBusy(s) ?? carpentryProblem(s.campPlan, campStaffing(s).working, item, s.siegeKit, s.wagons.length) ?? shortOf(def.cost, stockOf(s));
+    const working = campStaffing(s).working;
+    const def = { cost: carpentryCost(s.campPlan, working, item) };
+    const why = campBusy(s) ?? carpentryProblem(s.campPlan, working, item, s.siegeKit, s.wagons.length) ?? shortOf(def.cost, stockOf(s));
     if (why) return why;
     const kit = { ...s.siegeKit };
     if (item === "LADDER") kit.ladders++;

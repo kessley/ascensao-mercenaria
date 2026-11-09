@@ -7,6 +7,7 @@ import type { Light } from "../../world/NightLayer";
 import type { Interactable } from "../../world/CampArea";
 import { insideTown, specialHouses } from "../../world/townLayout";
 import { nobleName } from "../../sim/nobility";
+import { FIELD_MIN_DISTANCE, FIELD_RADIUS } from "../../sim/fortress";
 import type { CampState } from "../../world/CampLife";
 import { FRIEND_AT, bondOf } from "../../sim/campEvents";
 import { geoOf } from "../../worldgen/geoMap";
@@ -65,6 +66,8 @@ export const campMethods = {
       this.autosave();
       // Às vezes o acampamento tem algo para o Comandante resolver
       store.campTick("ENTER");
+      // Em casa, o acampamento de campo volta para as carroças (Marco 22, parte 3)
+      if (store.fieldCamp) store.strikeFieldCamp();
     } else {
       const training = new Set(store.training.map((t) => t.battalionId));
       // Marco 14: quem o Comandante escolheu deixar fica de guarda no acampamento
@@ -481,6 +484,68 @@ export const campMethods = {
       }
     }
     return Math.round((forest / n) * 100) / 100;
+  },
+
+  /**
+   * O quadrado da fortaleza (34×34, com a muralha) cabe em volta do acampamento? Só a faixa de
+   * fora da paliçada grande é conferida: dentro, já é do bando (Marco 22, parte 3).
+   */
+  standardBlocked(this: WorldScene): string | null {
+    const s = useGameStore.getState();
+    if (this.run) return "Só na campanha";
+    if (s.campPacked || s.campPlan.size !== 28 || s.fortress) return null;
+    const geo = geoOf(this.world.geo);
+    const c = this.world.camp.center;
+    const inner = 14 * CELL + 20;
+    const outer = 17 * CELL + 60;
+    for (let j = 0; j <= 12; j++) {
+      for (let i = 0; i <= 12; i++) {
+        const p = { x: c.x - outer + (2 * outer * i) / 12, y: c.y - outer + (2 * outer * j) / 12 };
+        if (Math.abs(p.x - c.x) < inner && Math.abs(p.y - c.y) < inner) continue;
+        if (!geo.isOpenLand(p, 30)) return "A muralha da fortaleza não cabe aqui: água, rio ou rocha em volta da paliçada";
+        if (this.settlementLayer.layouts.some((l) => insideTown(l, p, -40))) return "A muralha da fortaleza encostaria num povoado";
+      }
+    }
+    return null;
+  },
+
+  /** Onde nasce o acampamento de campo: logo a leste do Comandante. */
+  fieldSite(this: WorldScene): Point {
+    return { x: Math.round(this.commander.x + 220), y: Math.round(this.commander.y) };
+  },
+
+  fieldBlocked(this: WorldScene): string | null {
+    const s = useGameStore.getState();
+    if (this.run || !s.fortress) return "Só com a fortaleza";
+    if (s.fieldCamp) return null;
+    if (this.inCamp) return "Na fortaleza, o bando dorme nela";
+    if (this.engagement) return "Em combate";
+    if (this.visibleEnemies().some((e) => distance(e, this.commander) < WORLD.TRAVEL_BLOCK_RADIUS)) return "Inimigos à vista";
+    if (s.train !== "ARMY") return "O kit vai nas carroças: elas precisam estar com o exército";
+    const site = this.fieldSite();
+    if (distance(site, this.world.camp.center) < FIELD_MIN_DISTANCE) return "Perto demais da fortaleza";
+    const geo = geoOf(this.world.geo);
+    for (const [dx, dy] of [[0, 0], [-160, 0], [160, 0], [0, -140], [0, 140]]) {
+      const p = { x: site.x + dx, y: site.y + dy };
+      if (!geo.isOpenLand(p, 30) || Unit.terrain?.isBlocked(p.x, p.y)) return "Não há chão livre aqui";
+    }
+    return null;
+  },
+
+  /** Monta o acampamento de campo (meio dia de trabalho) ou o recolhe, se já estiver montado. */
+  toggleFieldCamp(this: WorldScene): void {
+    const s = useGameStore.getState();
+    if (s.fieldCamp) {
+      if (distance(this.commander, s.fieldCamp) > FIELD_RADIUS * 2) return this.pushFeed("O acampamento de campo só se recolhe de perto.");
+      this.passTime(0.25);
+      s.strikeFieldCamp();
+      return;
+    }
+    const why = this.fieldBlocked();
+    if (why) return this.pushFeed(`Não dá para montar o acampamento de campo: ${why.toLowerCase()}.`);
+    this.passTime(0.5);
+    const out = useGameStore.getState().pitchFieldCamp(this.fieldSite());
+    if (out) this.pushFeed(out);
   },
 
   pitchBlocked(this: WorldScene): string | null {

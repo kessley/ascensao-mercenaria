@@ -81,6 +81,7 @@ export function ScenarioOverlay() {
   const startScenario = useGameStore((s) => s.startScenario);
   const leave = useGameStore((s) => s.leaveScenario);
   const endBoarding = useGameStore((s) => s.endBoarding);
+  const endSeatSiege = useGameStore((s) => s.endSeatSiege);
   if (!scenario || (!paused && !result)) return null;
 
   if (result) {
@@ -137,6 +138,10 @@ export function ScenarioOverlay() {
           <Button variant="gold" onClick={endBoarding}>
             Seguir viagem
           </Button>
+        ) : scenario.seat ? (
+          <Button variant="gold" onClick={endSeatSiege}>
+            {won ? "Voltar à fortaleza" : "Ver o que sobrou da sede"}
+          </Button>
         ) : (
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="quiet" onClick={() => leave(null)}>
@@ -162,7 +167,7 @@ export function ScenarioOverlay() {
         <Button variant="gold" onClick={() => setPaused(false)}>
           Continuar
         </Button>
-        {!scenario.boarding && (
+        {!scenario.boarding && !scenario.seat && (
           <>
             <Button variant="quiet" onClick={() => startScenario(scenario)}>
               Recomeçar

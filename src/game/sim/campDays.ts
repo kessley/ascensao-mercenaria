@@ -205,11 +205,20 @@ export const CARPENTRY: Record<CarpentryItem, { label: string; cost: CampCost; e
   RAM: { label: "Aríete", cost: { gold: 10, wood: SIEGE.RAM_WOOD }, effect: "Pronto para o próximo cerco (um por vez)." },
 };
 
-/** Por que a carpintaria não faz isso agora (null = faz). */
+/** Por que a carpintaria não faz isso agora (null = faz). A oficina de cerco da fortaleza faz escadas e aríetes. */
 export function carpentryProblem(plan: CampPlan, working: ReadonlySet<string>, item: CarpentryItem, kit: SiegeKit, wagons: number): string | null {
-  if (!running(plan, "CARPENTRY", working)) return readyOf(plan, "CARPENTRY").length > 0 ? "A carpintaria está sem ninguém" : "Precisa da carpintaria";
+  const shop = item !== "WAGON" && running(plan, "SIEGE_WORKSHOP", working);
+  if (!shop && !running(plan, "CARPENTRY", working)) return readyOf(plan, "CARPENTRY").length > 0 ? "A carpintaria está sem ninguém" : "Precisa da carpintaria";
   if (item === "WAGON" && wagons >= SUPPLY.MAX_WAGONS) return "O bando já tem carroças de sobra";
   if (item === "LADDER" && kit.ladders >= SIEGE.MAX_LADDERS) return "Escadas de sobra";
-  if (item === "RAM" && kit.rams >= 1) return "O aríete já está pronto";
+  const rams = shop ? 2 : 1;
+  if (item === "RAM" && kit.rams >= rams) return rams > 1 ? "Os dois aríetes já estão prontos" : "O aríete já está pronto";
   return null;
+}
+
+/** O preço na carpintaria: com a oficina de cerco, a escada sai pela metade da madeira. */
+export function carpentryCost(plan: CampPlan, working: ReadonlySet<string>, item: CarpentryItem): CampCost {
+  const cost = CARPENTRY[item].cost;
+  if (item !== "LADDER" || !running(plan, "SIEGE_WORKSHOP", working)) return cost;
+  return { ...cost, wood: Math.ceil((cost.wood ?? 0) / 2) };
 }

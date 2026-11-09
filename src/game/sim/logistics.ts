@@ -20,6 +20,8 @@ export interface Exposure {
   cold: boolean;
   /** Perto de um povoado com febre. */
   sickTown: boolean;
+  /** No acampamento de campo montado (Marco 22, parte 3). */
+  field?: boolean;
 }
 
 export const NO_EXPOSURE: Exposure = { away: false, swamp: false, cold: false, sickTown: false };
@@ -252,6 +254,8 @@ export interface CampHealth {
   herbs?: boolean;
   /** Batalhões no acampamento sem barraca: adoecem mais. */
   unbedded?: ReadonlySet<string>;
+  /** Leitos da enfermaria do acampamento de campo: feridos em campo saram no ritmo do acampamento. */
+  fieldBeds?: number;
 }
 
 /** Herbário: a mais na chance de o doente sarar no acampamento; quem dorme no chão, a mais na de surto. */
@@ -276,6 +280,7 @@ export function healthDay(
   const campSoldiers = out.filter((b) => !exposure.away || training.has(b.id)).reduce((n, b) => n + b.soldiers, 0);
   const crowded = campSoldiers > camp.crowd;
   let beds = camp.beds;
+  let fieldBeds = camp.fieldBeds ?? 0;
   const anySick = (where: "CAMP" | "FIELD") => out.some((b) => (b.sick ?? 0) > 0 && placeOf(b) === where);
   const placeOf = (b: BattalionData): "CAMP" | "FIELD" => (!exposure.away || training.has(b.id) ? "CAMP" : "FIELD");
   const sickBefore = { CAMP: anySick("CAMP"), FIELD: anySick("FIELD") };
@@ -287,9 +292,10 @@ export function healthDay(
     if (wounded > 0) {
       let w = 0;
       for (let i = 0; i < wounded; i++) {
-        // No acampamento, só quem tem leito na enfermaria sara no ritmo dela
-        const bed = where === "CAMP" && beds > 0;
-        if (bed) beds--;
+        // No acampamento, só quem tem leito na enfermaria sara no ritmo dela (em campo, a do kit)
+        const bed = where === "CAMP" ? beds > 0 : fieldBeds > 0;
+        if (bed && where === "CAMP") beds--;
+        else if (bed) fieldBeds--;
         const at = bed ? "CAMP" : "FIELD";
         const recover = H.RECOVER[at] + (healer ? H.HEALER_RECOVER : 0);
         const die = H.DIE[at] * (healer ? H.HEALER_DIE : 1);

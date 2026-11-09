@@ -266,6 +266,10 @@ export function FieldHudView() {
   const settlements = useGameStore((s) => s.settlements);
   const campPacked = useGameStore((s) => s.campPacked);
   const scenario = useGameStore((s) => s.scenario !== null);
+  const hasFortress = useGameStore((s) => s.fortress !== null);
+  const fieldCamp = useGameStore((s) => s.fieldCamp !== null);
+  const seatAlarm = useGameStore((s) => s.seatAlarm);
+  const startSeatSiege = useGameStore((s) => s.startSeatSiege);
   const setScenarioPaused = useGameStore((s) => s.setScenarioPaused);
   const seats = settlements.filter((t) => t.owner === "PLAYER");
   const leaderName = useGameStore((s) => s.leader.name);
@@ -310,6 +314,28 @@ export function FieldHudView() {
             >
               ⛺ Montar acampamento aqui (acampamento levantado)
               {hud.pitchBlocked && <span className="block text-[10px]">{hud.pitchBlocked}</span>}
+            </button>
+          )}
+          {hud && seatAlarm && !scenario && (
+            <button
+              type="button"
+              onClick={startSeatSiege}
+              title="O inimigo está ao pé da muralha: a batalha começa com o exército que estiver em casa"
+              className="pointer-events-auto animate-pulse rounded border border-red-500 bg-red-900/60 px-2 py-1 text-left text-xs font-bold text-red-100 hover:bg-red-800/70"
+            >
+              ⚔ Às muralhas! {seatAlarm.attackers} inimigos cercam a sede
+            </button>
+          )}
+          {hud && hasFortress && !hud.inCamp && !scenario && (
+            <button
+              type="button"
+              disabled={!fieldCamp && !!hud.fieldBlocked}
+              onClick={() => sendBattleCommand({ type: "FIELD_CAMP", ids: [] })}
+              title={fieldCamp ? "Recolhe o acampamento de campo para as carroças" : (hud.fieldBlocked ?? "Meio dia de trabalho: o kit do acampamento de campo é montado logo a leste")}
+              className="pointer-events-auto rounded border border-amber-600 bg-amber-900/40 px-2 py-1 text-left text-xs text-amber-100 hover:bg-amber-800/60 disabled:cursor-not-allowed disabled:border-neutral-700 disabled:bg-transparent disabled:text-neutral-500"
+            >
+              {fieldCamp ? "⛺ Recolher o acampamento de campo" : "⛺ Montar o acampamento de campo"}
+              {!fieldCamp && hud.fieldBlocked && <span className="block text-[10px]">{hud.fieldBlocked}</span>}
             </button>
           )}
           {hud && hud.messengers.length > 0 && (

@@ -444,6 +444,7 @@ export const realmMethods = {
 
   /** Nome do lugar para o HUD e os relatórios: povoado, acampamento, local de contrato ou região. */
   placeName(this: WorldScene, p: Point): string {
+    if (useGameStore.getState().scenario?.seat) return "a sede";
     if (this.campArea.contains(p, -200)) return "o acampamento";
     const town = useGameStore.getState().settlements.find((t) => {
       const layout = this.settlementLayer.layoutOf(t.id);

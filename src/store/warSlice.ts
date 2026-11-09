@@ -267,7 +267,8 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
         .map((g) => {
           let n = g.count;
           // O cercado de cativos (Marco 22) faz fugirem pela metade
-          const escape = PRISONERS.ESCAPE_PER_DAY * (ready(s.campPlan, "PEN") && !s.campPacked ? 0.5 : 1);
+          // A masmorra da fortaleza segura todos; o cercado, metade
+          const escape = s.campPacked ? PRISONERS.ESCAPE_PER_DAY : ready(s.campPlan, "DUNGEON") ? 0 : PRISONERS.ESCAPE_PER_DAY * (ready(s.campPlan, "PEN") ? 0.5 : 1);
           for (let i = 0; i < g.count; i++) if (Math.random() < escape) n--;
           return { ...g, count: n };
         })

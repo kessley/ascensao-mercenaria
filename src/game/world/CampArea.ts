@@ -15,6 +15,7 @@ import {
   costText,
   doorCells,
   fenceRuns,
+  fortWalls,
   gateLane,
   gatePoints,
   halfOf,
@@ -35,10 +36,15 @@ import { COLORS } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
 import type { Rect } from "./townLayout";
 import type { CampGround } from "./TerrainMap";
-import { TownArt, type ArtJob } from "./TownArt";
+import { TownArt, wallJobs, type ArtJob } from "./TownArt";
 import {
   bannerPiece,
   bonfirePiece,
+  gateLeafPiece,
+  gatePiece,
+  housePiece,
+  keepPiece,
+  templePiece,
   campPropPiece,
   fencePiece,
   forgeGlow,
@@ -111,7 +117,7 @@ export const worldLabel = (scene: Phaser.Scene, x: number, y: number, text: stri
 
 /** As duas plantas são iguais, a não ser pelo andamento das obras (nenhuma ficou pronta)? */
 function sameButProgress(a: CampPlan, b: CampPlan): boolean {
-  if (a.size !== b.size || a.gate !== b.gate || a.ditch !== b.ditch || a.buildings.length !== b.buildings.length) return false;
+  if (a.size !== b.size || a.gate !== b.gate || a.ditch !== b.ditch || a.wall !== b.wall || a.buildings.length !== b.buildings.length) return false;
   return a.buildings.every((x, i) => {
     const y = b.buildings[i];
     return x.id === y.id && x.kind === y.kind && x.x === y.x && x.y === y.y && x.level === y.level && x.off === y.off && isBuilt(x) === isBuilt(y);
@@ -147,7 +153,7 @@ const SITE_OF: Partial<Record<CampKind, CampSiteKind>> = {
 };
 
 /** Construções a céu aberto: dá para andar por dentro (não são sólidas). */
-const OPEN_YARD: ReadonlySet<CampKind> = new Set(["TRAINING", "ARCHERY", "CAMPFIRE", "RIDING", "GARDEN", "CEMETERY", "CALTROPS", "STORY_FIRE"]);
+const OPEN_YARD: ReadonlySet<CampKind> = new Set(["TRAINING", "ARCHERY", "CAMPFIRE", "RIDING", "GARDEN", "CEMETERY", "CALTROPS", "STORY_FIRE", "CASTLE_FAIR"]);
 
 /**
  * O acampamento do bando, desenhado no próprio mundo a partir da planta na grade (Marco 22):
@@ -327,6 +333,12 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     const out: { rect: Rect; type: "WALL" | "BUILDING" }[] = this.obstacles.map((r) => ({ rect: { x: r.x, y: r.y, w: r.width, h: r.height }, type: "BUILDING" as const }));
     const f = FIRE_RADIUS * 0.8;
     out.push({ rect: { x: this.campfire.x - f, y: this.campfire.y - f, w: f * 2, h: f * 2 }, type: "BUILDING" });
+    // A fortaleza (parte 3): a muralha e as torres; o acampamento: a cerca
+    if (this.plan.wall) {
+      const fort = fortWalls(this.shape, this.plan.wall);
+      for (const r of [...fort.walls, ...fort.towers]) out.push({ rect: { ...r }, type: "WALL" });
+      return out;
+    }
     for (const [x0, y0, x1, y1] of fenceRuns(this.shape)) {
       const t = 17;
       out.push({ rect: { x: Math.min(x0, x1) - t, y: Math.min(y0, y1) - t, w: Math.abs(x1 - x0) + t * 2, h: Math.abs(y1 - y0) + t * 2 }, type: "WALL" });
@@ -555,6 +567,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
    * grande), com as torres do portão; no bivaque, estacas espaçadas com corda.
    */
   private drawFence(): void {
+    if (this.plan.wall) return this.drawWalls(this.plan.wall);
     const palisade = tierOf(this.plan) >= 1;
     const reinforced = this.plan.size >= 22;
     const step = palisade ? STAKE : BIVOUAC_STAKE;
@@ -596,6 +609,29 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     const top = { x: this.shape.cx, y: this.shape.cy - this.shape.half - 46 };
     const label = palisade ? "ACAMPAMENTO" : "BIVAQUE";
     this.planObjects.push(worldLabel(this.scene, top.x, top.y, label, "#ffe9b0"));
+  }
+
+  /** A muralha da fortaleza (Marco 22, parte 3): o desenho dos fortes do mundo, com o portão no vão da grade. */
+  private drawWalls(kind: "WOOD" | "STONE"): void {
+    const stone = kind === "STONE";
+    const fort = fortWalls(this.shape, kind);
+    wallJobs(this.artJobs, fort.walls, fort.towers, { x: this.shape.cx, y: this.shape.cy }, stone, this.culture, false, 0x5eed);
+    const t = fort.thickness;
+    const g = this.shape.gateHalf;
+    const { cx, cy, half } = this.shape;
+    const R = Math.round;
+    if (this.shape.gate === "N" || this.shape.gate === "S") {
+      const y = this.shape.gate === "N" ? cy - half - t : cy + half;
+      this.foot(this.artJobs, cx - g, y, t, () => gatePiece(g * 2, R(t), this.shape.gate as "N" | "S", stone, this.culture, R(cx + y), false));
+    } else {
+      const x = this.shape.gate === "W" ? cx - half - t : cx + half;
+      for (const y of [cy - g, cy + g - 18]) this.foot(this.artJobs, x - 6, y, 18, () => gateLeafPiece(R(t), this.culture));
+    }
+    const out = gatePoints(this.shape, t + 30).outer;
+    const across = this.shape.gate === "W" || this.shape.gate === "E" ? { x: 0, y: 1 } : { x: 1, y: 0 };
+    for (const side of [-1, 1]) this.anchor(this.artJobs, out.x + across.x * (g + 50) * side, out.y + across.y * (g + 50) * side, () => bannerPiece(COLORS.ALLY, true));
+    const top = { x: cx, y: cy - half - t - 60 };
+    this.planObjects.push(worldLabel(this.scene, top.x, top.y, "FORTALEZA", "#ffe9b0"));
   }
 
   private drawBuilding(b: CampBuilding): void {
@@ -836,6 +872,64 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         this.torches.push({ x: r.center.x - 14, y: r.center.y - 6 });
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 10, r.center.y + 2, 20, 14));
         break;
+      // --- Parte 3: a fortaleza (pedra, do jeito das cidades) ---
+      case "KEEP": {
+        const kw = Math.round(box.w);
+        const kh = Math.round(box.h * 0.8);
+        footed(kw, kh, () => keepPiece(kw, kh, c, Math.round(kw / 2), seed, false));
+        this.anchor(jobs, box.x + box.w - 6, box.y + box.h - kh + 6, () => bannerPiece(COLORS.ALLY, true, 60));
+        this.torches.push(r.center);
+        solid();
+        break;
+      }
+      case "BARRACKS_HALL":
+      case "GREAT_HALL":
+      case "OFFICER_SCHOOL":
+      case "TREASURY":
+      case "STOREHOUSE":
+      case "DUNGEON":
+      case "DOVECOTE": {
+        // Casas de pedra; o telhado diz o que é cada uma
+        const ROOF: Partial<Record<CampKind, number>> = { BARRACKS_HALL: 1, GREAT_HALL: 3, OFFICER_SCHOOL: 2, TREASURY: 4, STOREHOUSE: 0, DUNGEON: 5, DOVECOTE: 2 };
+        const hw = Math.round(box.w * (b.kind === "DOVECOTE" ? 0.6 : 0.95));
+        const hh = Math.round(box.h * (b.kind === "DOVECOTE" ? 0.7 : 0.66));
+        const door = Math.round(hw / 2);
+        footed(hw, hh, () => housePiece(hw, hh, c, ROOF[b.kind] ?? 0, door, seed, false, b.kind === "GREAT_HALL" || b.kind === "DOVECOTE"));
+        if (b.kind === "GREAT_HALL") this.anchor(jobs, box.x + 6, box.y + box.h - 4, () => bannerPiece(COLORS.ALLY, true, 64));
+        if (b.kind === "STOREHOUSE") for (const k of [0, 1]) this.anchor(jobs, box.x + box.w - 10 - k * 16, box.y + box.h + 2, () => propPiece("BARREL", c, seed + k));
+        if (b.kind === "DUNGEON") this.anchor(jobs, box.x + 8, box.y + box.h + 2, () => campPropPiece("TORCH", c, seed));
+        solid();
+        break;
+      }
+      case "CISTERN":
+        this.foot(jobs, r.center.x - 30, r.center.y - 30, 60, () => wellPiece(30, c, seed, false));
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 32, r.center.y - 32, 64, 64));
+        break;
+      case "SIEGE_WORKSHOP":
+        footed(box.w * 0.85, box.h * 0.5, () => stallPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.5), 0x6b5a3a, c, seed));
+        this.foot(jobs, box.x, box.y, 22, () => campPropPiece("WOODPILE", c, seed, Math.round(box.w * 0.7), 22));
+        footed(box.w * 0.6, box.h * 0.3, () => wagonPiece(Math.round(box.w * 0.6), Math.round(box.h * 0.3), c, seed + 2));
+        solid();
+        break;
+      case "CASTLE_FAIR":
+        // Barracas de feira coloridas em volta de um pátio aberto
+        for (let k = 0; k < 4; k++) {
+          const sx = box.x + (k % 2) * (box.w / 2) + 6;
+          const sy = box.y + Math.floor(k / 2) * (box.h / 2) + 10;
+          const sw = Math.round(box.w / 2 - 12);
+          const sh = Math.round(box.h / 2 - 22);
+          const color = [0xb04a3a, 0x3a6ab0, 0xd0a040, 0x4a8a4a][k];
+          this.foot(jobs, sx, sy, sh, () => stallPiece(sw, sh, color, c, seed + k));
+        }
+        break;
+      case "TEMPLE": {
+        const tw = Math.round(box.w * 0.9);
+        const th = Math.round(box.h * 0.8);
+        footed(tw, th, () => templePiece(tw, th, c, seed, false));
+        this.torches.push(r.center);
+        solid();
+        break;
+      }
     }
 
     // Tochas nas portas das construções grandes
