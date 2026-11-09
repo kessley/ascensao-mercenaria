@@ -400,14 +400,15 @@ export class WorldScene extends Phaser.Scene {
     // Muralhas e casas viram obstáculo (antes de a navegação avaliar qualquer célula)
     terrain.setTowns(this.settlementLayer.layouts);
     this.updateGateRules();
-    this.campArea = new CampArea(this, this.world.camp, store.campPacked, store.campWorks, this.world.culture ?? "REALMS");
-    terrain.campGround = store.campPacked ? null : { origin: this.world.camp.origin, reinforced: store.campWorks.includes("PALISADE") };
+    // O acampamento desenhado pela planta na grade (Marco 22)
+    this.campArea = new CampArea(this, this.world.camp, store.campPacked, store.campPlan, this.world.culture ?? "REALMS");
+    terrain.campGround = this.campArea.ground;
     // Barracas, fogueira e paliçada bloqueiam todo mundo (não só o Comandante)
     this.campArea.onSolidsChanged = () => this.applyCampSolids();
-    // Fosso (obra do acampamento): lama funda em volta da paliçada
-    terrain.setDitch(!store.campPacked && store.campWorks.includes("DITCH") ? this.campArea.palisade : null);
+    // Fosso: lama funda em volta da paliçada
+    terrain.setDitch(!store.campPacked && store.campPlan.ditch ? this.campArea.palisade : null);
     this.applyCampSolids();
-    this.campLife = new CampLife(this, this.campArea, this.world.camp.origin);
+    this.campLife = new CampLife(this, this.campArea);
     this.mapLife = new MapLife(this);
     this.campLife.setFollowers(store.campPacked ? [] : store.followers);
     // Chão da estação: lama na primavera e na chuva fora das estradas, neve no frio do inverno
@@ -416,7 +417,8 @@ export class WorldScene extends Phaser.Scene {
     this.applySeason();
     this.lastCampStateAt = -Infinity;
 
-    this.commander = new Commander(this, this.world.camp.spawn.x, this.world.camp.spawn.y);
+    const spawn = store.campPacked ? this.world.camp.spawn : this.campArea.spawnPoint;
+    this.commander = new Commander(this, spawn.x, spawn.y);
     this.applyLeader();
     this.commander.setFacing(-Math.PI / 2);
     this.lastCommanderPos = { x: this.commander.x, y: this.commander.y };
@@ -565,8 +567,8 @@ export class WorldScene extends Phaser.Scene {
       if (s.wagons.length !== prev.wagons.length) this.syncWagons();
       // Caravana própria dispensada: sai da estrada
       if (s.ownCaravans !== prev.ownCaravans) this.trade.dropOwn(new Set(s.ownCaravans.filter((c) => !c.lost).map((c) => c.id)));
-      // Obra nova: o acampamento é redesenhado com ela (paliçada, torres, fosso)
-      if (s.campWorks.length > prev.campWorks.length) this.reloadWorld();
+      // A planta mudou: o acampamento é redesenhado no lugar (construções, portão, paliçada, fosso)
+      if (s.campPlan !== prev.campPlan && !s.campPacked && !prev.campPacked) this.applyCampPlan();
       if (s.worldMapOpen && !prev.worldMapOpen) this.lastSnapshotAt = -Infinity;
     });
     activeScene = this;
@@ -629,6 +631,7 @@ export class WorldScene extends Phaser.Scene {
     this.terrainStreamer.update(this.cameras.main);
     this.settlementLayer.updateArt(this.cameras.main);
     this.campArea.updateArt(this.cameras.main);
+    this.updateCampBuild();
     this.forestArt.update(this.cameras.main);
     this.updateNight(store.dayProgress);
     this.updateWeather(time);

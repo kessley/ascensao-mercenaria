@@ -178,6 +178,12 @@ export const inputMethods = {
         return;
       }
       useGameStore.getState().setContextMenu(null);
+      // Modo construção (Marco 22): o clique põe a peça; o botão direito desiste
+      if (useGameStore.getState().campBuild && !pointer.middleButtonDown()) {
+        if (pointer.rightButtonDown()) useGameStore.getState().setCampBuild(null);
+        else if (pointer.leftButtonDown()) this.placeCampBuild(pointer, isShiftHeld(pointer));
+        return;
+      }
 
       if (pointer.middleButtonDown()) {
         // Arrastar a visão solta a câmera
@@ -281,6 +287,7 @@ export const inputMethods = {
       // Soltar a linha de batalha sem dar a ordem
       if (this.lineDrag) return this.cancelLine();
       const store = useGameStore.getState();
+      if (store.campBuild) return store.setCampBuild(null);
       // Batalha personalizada: com nada selecionado, Esc abre (ou fecha) a pausa
       if (this.run && !store.scenarioResult && (store.scenarioPaused || !this.battalions.some((b) => b.selected))) {
         store.setScenarioPaused(!store.scenarioPaused);

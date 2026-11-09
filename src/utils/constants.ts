@@ -942,7 +942,8 @@ export const SUPPORT = {
     MAX: 4,
   },
   START_SCOUTS: 1,
-  START_MESSENGERS: 2,
+  // O começo humilde (Marco 22, GDD 9.9): 1 batedor e 1 mensageiro
+  START_MESSENGERS: 1,
 } as const;
 
 /** Tenentes (Marco 5). */
@@ -1082,8 +1083,8 @@ export const FIELD_DUEL = {
 
 /** Economia do acampamento (Marco 3). */
 export const ECONOMY = {
-  START_GOLD: 120,
-  START_RATIONS: 30,
+  START_GOLD: 80,
+  START_RATIONS: 20,
   /** Rações por dia: 1 para cada N soldados (arredondado para cima), mais 1 do Comandante. */
   SOLDIERS_PER_RATION: 3,
   RATION_PACK_SIZE: 10,
@@ -1576,8 +1577,9 @@ export const WORLD = {
     EVERY_DAYS: 2,
     MAX: 6,
     BASE_SIZE: 5,
-    /** Bandos crescem com o tempo: +N goblins por semana de campanha. */
-    GROWTH_PER_WEEK: 2,
+    /** A ameaça cresce com a fama do bando, não com o dia (Marco 22): +GROWTH goblins a cada FAME_STEP de fama. */
+    GROWTH: 2,
+    FAME_STEP: 3,
     ARCHER_SHARE: 0.3,
     /** Velocidade de marcha do bando no mapa (px/s) e por dia de viagem rápida (≈ 1/3 do exército). */
     SPEED: 45,
@@ -1842,7 +1844,7 @@ export const SUPPLY = {
   /** A bolsa do Comandante e do estado-maior (o que marcha fora das mochilas, sem carroças). */
   PACK_CAPACITY: 8,
   WAGON_CAPACITY: 60,
-  START_WAGONS: 2,
+  START_WAGONS: 1,
   MAX_WAGONS: 6,
   WAGON_COST: 60,
   /** Ao sair do acampamento as carroças carregam, mas deixam rações para tantos dias de quem fica. */
@@ -1913,16 +1915,6 @@ export const CAMP_MOVE = {
   /** Acampamento levantado: as carroças levam tudo, mas a coluna é mais lenta. */
   PACKED_SPEED: 0.85,
 } as const;
-
-export type CampWork = "PALISADE" | "TOWERS" | "DITCH";
-/** Melhorias de um acampamento fixo (perdidas ao levantar o acampamento). */
-export const CAMP_WORKS: Record<CampWork, { label: string; gold: number; iron: number; effect: string }> = {
-  PALISADE: { label: "Paliçada reforçada", gold: 120, iron: 6, effect: "Um ataque ao acampamento desguarnecido leva 35% menos." },
-  TOWERS: { label: "Torres de vigia", gold: 90, iron: 4, effect: "Vigias enxergam longe em volta do acampamento; ataques levam 25% menos." },
-  DITCH: { label: "Fosso", gold: 70, iron: 0, effect: "Lama funda em volta da paliçada (só o portão é firme); ataques levam 25% menos." },
-};
-/** Quanto cada obra reduz o saque ao acampamento desguarnecido. */
-export const CAMP_WORK_RAID: Record<CampWork, number> = { PALISADE: 0.35, TOWERS: 0.25, DITCH: 0.25 };
 
 /** Reino do jogador, reinos rivais e calamidades (Marco 9). */
 export const REALM = {

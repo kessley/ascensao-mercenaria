@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Battalion } from "../entities/Battalion";
 import type { Soldier } from "../entities/Soldier";
-import { CAMP_SITES, CAMPFIRE, PALISADE, type CampSiteKind } from "../data/campLayout";
+import type { CampSiteKind } from "../data/campLayout";
 import type { CampArea } from "./CampArea";
 import type { Follower, FollowerRole } from "../sim/campEvents";
 import { TROOPS } from "../../utils/constants";
@@ -131,41 +131,30 @@ export class CampLife {
   private state: CampState = { hour: 12, hungry: false, lowMorale: false, arrears: false, rebelId: null, party: false, friends: [], training: [], wounded: false, payday: false, iron: false };
   /** Carga nas costas de quem leva ferro (e do ajudante de ferreiro): uma imagem por carga. */
   private readonly loads: Phaser.GameObjects.Image[] = [];
-  private readonly stations: Record<FollowerRole, Point>;
+  private stations!: Record<FollowerRole, Point>;
   /** Texto sobre o Campo de Treino enquanto alguém treina. */
   private readonly trainingLabel: Phaser.GameObjects.Text;
   private lastGroupAt = -Infinity;
   /** Ordem dos batalhões no acampamento (alojamento de cada um) e o tenente de cada um. */
   private quarterOf = new Map<string, number>();
   private lieutenantOf = new Map<string, string>();
-  readonly sites: Record<CampSiteKind, Point>;
-  private readonly fire: Point;
-  private readonly gate: Point;
-  private readonly center: Point;
+  /** A porta de cada local de antes (a fogueira, se ele ainda não foi construído). */
+  sites!: Record<CampSiteKind, Point>;
+  /** O meio do campo de treino (onde se treina). */
+  private yard!: Point;
+  private fire!: Point;
+  private gate!: Point;
+  private center!: Point;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly camp: CampArea,
-    origin: Point,
   ) {
-    const at = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
-    this.sites = Object.fromEntries(CAMP_SITES.map((s) => [s.kind, at(s.door)])) as Record<CampSiteKind, Point>;
-    this.fire = at(CAMPFIRE);
-    this.gate = at({ x: PALISADE.x - PALISADE.rx + 70, y: PALISADE.y });
-    this.center = at(PALISADE);
-    const f = this.fire;
-    this.stations = {
-      COOK: { x: f.x + 80, y: f.y + 70 },
-      PEDDLER: { x: this.sites.QUARTERMASTER.x - 30, y: this.sites.QUARTERMASTER.y + 90 },
-      HEALER: { x: this.sites.TENT.x - 190, y: this.sites.TENT.y + 50 },
-      CHAPLAIN: { x: f.x + 150, y: f.y - 95 },
-      FAMILY: { x: f.x - 170, y: f.y + 230 },
-      SMITH: { x: this.sites.FORGE.x + 10, y: this.sites.FORGE.y + 62 },
-    };
     this.trainingLabel = scene.add
-      .text(this.sites.TRAINING.x - 125, this.sites.TRAINING.y - 110, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 })
+      .text(0, 0, "", { fontFamily: "monospace", fontSize: "13px", color: "#ffe9b0", stroke: "#000000", strokeThickness: 3 })
       .setOrigin(0.5)
       .setDepth(20);
+    this.relayout();
     for (let i = 0; i < MAX_BUBBLES; i++) {
       this.bubbles.push(
         scene.add
@@ -175,6 +164,38 @@ export class CampLife {
           .setVisible(false),
       );
     }
+  }
+
+  /** Os lugares saem da planta (Marco 22): refeitos quando ela muda. */
+  relayout(): void {
+    const camp = this.camp;
+    const kinds: CampSiteKind[] = ["TENT", "QUARTERMASTER", "RECRUIT", "TRAINING", "FORGE", "STABLE"];
+    this.sites = Object.fromEntries(kinds.map((k) => [k, camp.siteDoor(k)])) as Record<CampSiteKind, Point>;
+    this.yard = camp.siteCenter("TRAINING");
+    this.fire = camp.campfire;
+    this.gate = camp.gateInside;
+    this.center = camp.center;
+    // Cada seguidor num canto livre perto de onde trabalha (sem dois no mesmo lugar)
+    const taken = new Set<string>();
+    const spot = (near: Point, skip = 1) => {
+      const p = camp.openNear(near, skip, taken);
+      const k = `${Math.floor((p.x - this.center.x) / 40)},${Math.floor((p.y - this.center.y) / 40)}`;
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const [x, y] = k.split(",").map(Number);
+        taken.add(`${x + dx},${y + dy}`);
+      }
+      return p;
+    };
+    const f = this.fire;
+    this.stations = {
+      COOK: spot({ x: f.x + 60, y: f.y + 50 }),
+      PEDDLER: spot(this.sites.QUARTERMASTER, 2),
+      HEALER: spot(this.sites.TENT, 3),
+      CHAPLAIN: spot({ x: f.x + 100, y: f.y - 80 }),
+      FAMILY: spot({ x: f.x - 140, y: f.y + 140 }),
+      SMITH: spot(this.sites.FORGE),
+    };
+    this.trainingLabel.setPosition(this.yard.x, this.yard.y - 110);
   }
 
   setState(state: CampState): void {
@@ -396,10 +417,10 @@ export class CampLife {
     if (this.has("PEDDLER") && r < 0.12) return make("BROWSE", jitter({ x: this.stations.PEDDLER.x, y: this.stations.PEDDLER.y + 34 }, 50), "STAND", 8);
     if (TROOPS[s.troopType].family === "CAVALRY" && r < 0.35) return make("STABLE", jitter(this.sites.STABLE, 60), "STAND", 12);
     const roll = Math.random();
-    if (roll < 0.3) return make("TRAIN", jitter({ x: this.sites.TRAINING.x - 120, y: this.sites.TRAINING.y }, 140), "STAND", 12);
+    if (roll < 0.3 && this.camp.hasSite("TRAINING")) return make("TRAIN", jitter(this.yard, 90), "STAND", 12);
     if (roll < 0.5) return make("DICE", quarter, "SIT", 12, true);
     // Leva ferro do depósito para a Ferraria (se houver ferro)
-    if (roll < 0.58 && st.iron) {
+    if (roll < 0.58 && st.iron && this.camp.hasSite("FORGE") && this.camp.hasSite("QUARTERMASTER")) {
       const via = this.sites.QUARTERMASTER;
       const forge = this.sites.FORGE;
       const task = make("HAUL", forge, "STAND", 25);
@@ -415,20 +436,20 @@ export class CampLife {
 
   private randomInside(): Point {
     for (let k = 0; k < 20; k++) {
-      const p = { x: this.center.x + (Math.random() - 0.5) * PALISADE.rx * 1.6, y: this.center.y + (Math.random() - 0.5) * PALISADE.ry * 1.6 };
-      if (this.camp.contains(p, 40) && !Unit.terrain?.isBlocked(p.x, p.y)) return p;
+      const p = this.camp.randomInside();
+      if (this.camp.contains(p, 20) && !Unit.terrain?.isBlocked(p.x, p.y)) return p;
     }
     return this.fire;
   }
 
   /** Lugar de cada soldado em treino: fileiras diante dos bonecos e, no fundo, pares de duelo. */
   private drillSpot(battalionIndex: number, i: number): Point {
-    const t = this.sites.TRAINING;
-    const yard = { x: t.x - 125, y: t.y };
+    // O pátio tem 4×4 células: fileiras de 5, com 26 px entre um e outro
+    const yard = this.yard;
     const k = battalionIndex * 16 + i;
-    const col = k % 7;
-    const row = Math.floor(k / 7) % 5;
-    return { x: yard.x - 95 + col * 32, y: yard.y - 70 + row * 34 };
+    const col = k % 5;
+    const row = Math.floor(k / 5) % 5;
+    return { x: yard.x - 52 + col * 26, y: yard.y - 52 + row * 26 };
   }
 
   /** Esteira na enfermaria da curandeira. */
@@ -529,7 +550,7 @@ export class CampLife {
       case "COOK":
         if (meal) return { to: near(home, 24), wait: 700 };
         // Fora das refeições: vai à lenha da Intendência e volta ao caldeirão
-        return distance({ x: fig.fig.x, y: fig.fig.y }, home) < 30 ? { to: { x: this.sites.QUARTERMASTER.x - 150, y: this.sites.QUARTERMASTER.y - 60 }, wait: 1500 } : { to: near(home, 10), wait: 4000 };
+        return distance({ x: fig.fig.x, y: fig.fig.y }, home) < 30 ? { to: near(this.sites.QUARTERMASTER, 30), wait: 1500 } : { to: near(home, 10), wait: 4000 };
       case "PEDDLER":
         return { to: near(home, 30), wait: 2500 + Math.random() * 3000 };
       case "HEALER":

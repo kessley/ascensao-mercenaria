@@ -1,4 +1,4 @@
-import { horseDeal, useGameStore, type BattalionData } from "../../../store/useGameStore";
+import { horseDeal, recruitProblem, useGameStore, type BattalionData } from "../../../store/useGameStore";
 import { troopFacts } from "../../../game/data/troopFacts";
 import { BALANCE, FORMATIONS, PROGRESSION, TRADE, TROOPS, type TroopType } from "../../../utils/constants";
 import { battalionWage, reinforceCostPerSoldier } from "../../../utils/economy";
@@ -89,6 +89,8 @@ export function RecruitPanel() {
   const world = useGameStore((s) => s.world);
   const horses = horseDeal({ depot, settlements, factions, world }, BALANCE.BATTALION_SIZE * TRADE.HORSES_PER_RIDER);
   const stable = depot.HORSES ?? 0;
+  // Cada tropa pede a sua construção (Marco 22)
+  const campPlan = useGameStore((s) => s.campPlan);
 
   return (
     <section className="flex flex-col gap-2">
@@ -97,15 +99,19 @@ export function RecruitPanel() {
         {(Object.keys(TROOPS) as TroopType[]).map((type) => {
           const cavalry = TROOPS[type].family === "CAVALRY";
           const cost = TROOPS[type].cost + (cavalry ? horses.cost : 0);
+          const locked = recruitProblem({ campPlan }, type);
           return (
             <button
               key={type}
               type="button"
-              disabled={gold < cost || (cavalry && !horses.ok)}
+              disabled={gold < cost || (cavalry && !horses.ok) || !!locked}
               onClick={() => recruitBattalion(type)}
               className="flex flex-col gap-1 rounded border border-neutral-700 bg-neutral-800 p-3 text-left hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-700"
             >
-              <span className="font-semibold">{TROOPS[type].label}</span>
+              <span className="font-semibold">
+                {TROOPS[type].label}
+                {locked && <span className="ml-2 text-xs font-normal text-red-300">🔒 {locked}</span>}
+              </span>
               <span className="font-mono text-xs text-yellow-400">
                 {cost} ouro · +{Math.ceil(TROOPS[type].wagePerSoldier * 8)}/sem.
               </span>

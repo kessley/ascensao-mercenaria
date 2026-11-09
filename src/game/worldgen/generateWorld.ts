@@ -752,4 +752,4 @@ function finishHistory(rng: Rng, world: WorldDef, simulated: HistoryEntry[]): Hi
 }
 
 // Acesso para depuração/testes automatizados (somente em dev)
-if (import.meta.env.DEV) (window as unknown as { __worldgen?: typeof generateWorld }).__worldgen = generateWorld;
+if (import.meta.env.DEV && typeof window !== "undefined") (window as unknown as { __worldgen?: typeof generateWorld }).__worldgen = generateWorld;

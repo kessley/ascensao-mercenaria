@@ -66,16 +66,16 @@ export const CAMP_BUILDINGS: Record<CampKind, CampBuildingDef> = {
   BARRACK: { label: "Barraca de soldados", size: 3, cost: { gold: 40 }, cargo: 1, tier: 0, max: 12, need: "BEDS", effect: "Leitos para mais 1 batalhão." },
   RECRUIT_MAST: { label: "Mastro de recrutamento", size: 2, cost: { gold: 50 }, cargo: 1, tier: 0, max: 1, effect: "Atrai 1 voluntário por dia, até 8 esperando. Com 8, forma-se um batalhão." },
   QUARTERMASTER: { label: "Intendência", size: 3, cost: { gold: 60, wood: 2 }, cargo: 2, tier: 0, max: 1, effect: "O mercado de rações, o depósito e as carroças." },
-  TRAINING: { label: "Campo de Treino", size: 4, cost: { gold: 80, wood: 6 }, cargo: 2, tier: 0, max: 1, effect: "Treina os batalhões. Libera os lanceiros." },
+  TRAINING: { label: "Campo de Treino", size: 4, cost: { gold: 80, wood: 4 }, cargo: 2, tier: 0, max: 1, effect: "Treina os batalhões. Libera os lanceiros." },
   ARCHERY: { label: "Estande de tiro", size: 4, cost: { gold: 70, wood: 3 }, upgrades: [{ gold: 90, wood: 4 }], cargo: 2, tier: 0, max: 1, effect: "Libera os arqueiros (no nível 2, os dardeiros) e treina quem atira." },
   RECRUIT_POST: { label: "Posto de Recrutamento", size: 2, cost: { gold: 120, wood: 4 }, cargo: 1, tier: 1, max: 1, effect: "Recruta batalhões inteiros na hora e dobra os voluntários." },
-  STABLE: { label: "Estábulo", size: 3, cost: { gold: 140, wood: 8 }, cargo: 3, tier: 1, max: 1, effect: "Libera a cavalaria. Contrata batedores e mensageiros." },
+  STABLE: { label: "Estábulo", size: 3, cost: { gold: 140, wood: 6 }, cargo: 3, tier: 1, max: 1, effect: "Libera a cavalaria. Contrata batedores e mensageiros." },
   FORGE: { label: "Ferraria", size: 3, cost: { gold: 150, wood: 6, iron: 8 }, cargo: 4, tier: 1, max: 1, effect: "Conserto e armas. Libera a guarda pesada e os besteiros." },
   OFFICERS_TENT: { label: "Tenda dos oficiais", size: 3, cost: { gold: 120, wood: 2 }, upgrades: [{ gold: 150 }, { gold: 200 }], cargo: 2, tier: 1, max: 1, effect: "Abre vaga para 1 tenente por nível, até 3." },
   KITCHEN: { label: "Cozinha", size: 3, cost: { gold: 70, wood: 4 }, cargo: 2, tier: 1, max: 2, need: "FOOD", effect: "Cozinha para mais 3 batalhões." },
   INFIRMARY: { label: "Enfermaria", size: 3, cost: { gold: 90, wood: 4 }, cargo: 2, tier: 1, max: 2, need: "CURE", effect: "8 leitos: quem está nela sara no ritmo do acampamento." },
   WELL: { label: "Poço", size: 2, cost: { gold: 50, wood: 2 }, cargo: 0, tier: 1, max: 2, stays: true, effect: "Água limpa: o acampamento aguenta 30 soldados a mais antes de lotar." },
-  TOWER: { label: "Torre de vigia", size: 2, cost: { gold: 80, wood: 6 }, cargo: 2, tier: 1, max: 4, need: "SECURITY", effect: "Vigia longe. Cada torre evita 10% do saque." },
+  TOWER: { label: "Torre de vigia", size: 2, cost: { gold: 80, wood: 4 }, cargo: 2, tier: 1, max: 4, need: "SECURITY", effect: "Vigia longe. Cada torre evita 10% do saque." },
 };
 
 /** O que se pode construir, na ordem do painel (a tenda e a fogueira já vêm prontas). */
@@ -114,9 +114,9 @@ export interface PalisadeStep {
 
 export const PALISADE: Record<CampSize, PalisadeStep> = {
   10: { label: "Bivaque", cost: { gold: 0 }, cargo: 0, fame: 0, battalions: 0, needs: [], guard: 0 },
-  16: { label: "Paliçada pequena", cost: { gold: 160, wood: 12 }, cargo: 2, fame: 4, battalions: 2, needs: [["RECRUIT_MAST", 1], ["BARRACK", 2]], guard: 0.2 },
-  22: { label: "Paliçada média", cost: { gold: 280, wood: 24 }, cargo: 3, fame: 15, battalions: 3, needs: [["KITCHEN", 1], ["OFFICERS_TENT", 1]], guard: 0.3 },
-  28: { label: "Paliçada grande", cost: { gold: 420, wood: 36 }, cargo: 4, fame: 30, battalions: 4, needs: [["INFIRMARY", 1], ["FORGE", 1], ["STABLE", 1]], guard: 0.35 },
+  16: { label: "Paliçada pequena", cost: { gold: 160, wood: 8 }, cargo: 2, fame: 4, battalions: 2, needs: [["RECRUIT_MAST", 1], ["BARRACK", 2]], guard: 0.2 },
+  22: { label: "Paliçada média", cost: { gold: 280, wood: 16 }, cargo: 3, fame: 15, battalions: 3, needs: [["KITCHEN", 1], ["OFFICERS_TENT", 1]], guard: 0.3 },
+  28: { label: "Paliçada grande", cost: { gold: 420, wood: 24 }, cargo: 4, fame: 30, battalions: 4, needs: [["INFIRMARY", 1], ["FORGE", 1], ["STABLE", 1]], guard: 0.35 },
 };
 
 export const DITCH = { label: "Fosso", cost: { gold: 70 } as CampCost, guard: 0.25, effect: "Lama funda em volta da paliçada (só o portão fica firme). Não vai nas carroças." };
@@ -138,6 +138,8 @@ export const FIRE_COOKS = 2;
 export const KITCHEN_COOKS = 3;
 export const INFIRMARY_BEDS = 8;
 export const WELL_CROWD = 30;
+/** Montar sobre floresta: cada célula de árvores cortada vira esta madeira. */
+export const WOOD_PER_FOREST_CELL = 0.2;
 /** Quem come cru gasta isto a mais de rações. */
 export const RAW_FOOD = 1.25;
 
@@ -477,6 +479,82 @@ export function packPlan(plan: CampPlan, wagons: number): { plan: CampPlan; left
     if (spot) out.buildings.push({ ...b, ...spot });
   }
   return { plan: out, left };
+}
+
+// --- Em pixels: a cena, o chão e o fosso usam a mesma conta ---
+
+/** O quadrado do acampamento no mundo: centro, meio lado em pixels e o portão. */
+export interface CampShape {
+  cx: number;
+  cy: number;
+  half: number;
+  gate: CampSide;
+  /** Meia largura do vão do portão, em pixels. */
+  gateHalf: number;
+}
+
+export function shapeOf(plan: Pick<CampPlan, "size" | "gate">, center: { x: number; y: number }): CampShape {
+  return { cx: center.x, cy: center.y, half: halfOf(plan) * CELL, gate: plan.gate, gateHalf: CELL };
+}
+
+/** Retângulo, no mundo, de `k`×`k` células a partir da célula (x, y). */
+export function cellRect(center: { x: number; y: number }, x: number, y: number, k = 1): { x: number; y: number; w: number; h: number } {
+  return { x: center.x + x * CELL, y: center.y + y * CELL, w: k * CELL, h: k * CELL };
+}
+
+/** Centro, no mundo, da célula (x, y). */
+export const cellCenter = (center: { x: number; y: number }, x: number, y: number) => ({ x: center.x + (x + 0.5) * CELL, y: center.y + (y + 0.5) * CELL });
+
+/** Célula onde cai um ponto do mundo. */
+export const cellAt = (center: { x: number; y: number }, p: { x: number; y: number }): [number, number] => [Math.floor((p.x - center.x) / CELL), Math.floor((p.y - center.y) / CELL)];
+
+/** Dentro do quadrado (`pad` > 0 = mais para dentro)? */
+export function insideShape(s: CampShape, p: { x: number; y: number }, pad = 0): boolean {
+  const h = s.half - pad;
+  return Math.abs(p.x - s.cx) <= h && Math.abs(p.y - s.cy) <= h;
+}
+
+/** O ponto está no vão do portão (na faixa da cerca, de dentro a fora)? */
+export function onGate(s: CampShape, p: { x: number; y: number }, depth = 60): boolean {
+  const dx = p.x - s.cx;
+  const dy = p.y - s.cy;
+  const near = (v: number) => Math.abs(v - s.half) <= depth;
+  if (s.gate === "W") return near(-dx) && Math.abs(dy) <= s.gateHalf;
+  if (s.gate === "E") return near(dx) && Math.abs(dy) <= s.gateHalf;
+  if (s.gate === "N") return near(-dy) && Math.abs(dx) <= s.gateHalf;
+  return near(dy) && Math.abs(dx) <= s.gateHalf;
+}
+
+/** Os pontos do meio do portão: por dentro e por fora (`out` px para fora da cerca). */
+export function gatePoints(s: CampShape, out = 60): { inner: { x: number; y: number }; outer: { x: number; y: number }; angle: number } {
+  const dir = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] }[s.gate];
+  const at = (d: number) => ({ x: s.cx + dir[0] * d, y: s.cy + dir[1] * d });
+  return { inner: at(s.half - out), outer: at(s.half + out), angle: Math.atan2(dir[1], dir[0]) };
+}
+
+/**
+ * Os trechos da cerca: os quatro lados, com o vão do portão. Cada trecho é [x0, y0, x1, y1]
+ * no mundo (horizontal ou vertical).
+ */
+export function fenceRuns(s: CampShape): [number, number, number, number][] {
+  const { cx, cy, half: h, gateHalf: g } = s;
+  const sides: Record<CampSide, [number, number, number, number]> = {
+    N: [cx - h, cy - h, cx + h, cy - h],
+    S: [cx - h, cy + h, cx + h, cy + h],
+    W: [cx - h, cy - h, cx - h, cy + h],
+    E: [cx + h, cy - h, cx + h, cy + h],
+  };
+  const out: [number, number, number, number][] = [];
+  for (const side of CAMP_SIDES) {
+    const [x0, y0, x1, y1] = sides[side];
+    if (side !== s.gate) {
+      out.push([x0, y0, x1, y1]);
+      continue;
+    }
+    if (y0 === y1) out.push([x0, y0, cx - g, y1], [cx + g, y0, x1, y1]);
+    else out.push([x0, y0, x1, cy - g], [x0, cy + g, x1, y1]);
+  }
+  return out;
 }
 
 // --- Começos ---

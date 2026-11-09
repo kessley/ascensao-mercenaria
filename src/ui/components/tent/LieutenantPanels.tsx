@@ -1,4 +1,5 @@
 import { useGameStore } from "../../../store/useGameStore";
+import { lieutenantSlots } from "../../../game/data/campGrid";
 import { bondOf, relationLabel } from "../../../game/sim/campEvents";
 import { fullName, opinionOn, PASSIVES, TRAITS, type LieutenantData } from "../../../game/data/lieutenants";
 import type { Contract } from "../../../game/data/contracts";
@@ -210,13 +211,16 @@ export function LieutenantCandidates() {
   const hired = useGameStore((s) => s.lieutenants.length);
   const gold = useGameStore((s) => s.gold);
   const hireLieutenant = useGameStore((s) => s.hireLieutenant);
-  const full = hired >= LIEUTENANTS.MAX_HIRED;
+  // As vagas vêm da tenda dos oficiais: uma por nível (Marco 22)
+  const slots = useGameStore((s) => lieutenantSlots(s.campPlan, LIEUTENANTS.MAX_HIRED));
+  const full = hired >= slots;
 
   return (
     <section className="flex flex-col gap-2">
       <h2 className={sectionTitle}>
-        Candidatos a tenente <span className="font-normal normal-case text-neutral-500">· {hired}/{LIEUTENANTS.MAX_HIRED}</span>
+        Candidatos a tenente <span className="font-normal normal-case text-neutral-500">· {hired}/{slots} vaga(s)</span>
       </h2>
+      {slots === 0 && <p className="text-xs text-amber-200">Sem tenda dos oficiais, não há vaga de tenente. Cada nível dela abre uma.</p>}
       {candidates.length === 0 && (
         <p className="text-sm text-neutral-500">Ninguém procurando trabalho. Novos candidatos chegam após cada contrato.</p>
       )}

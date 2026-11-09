@@ -4,7 +4,7 @@ import { expeditionStage } from "../../game/sim/expeditions";
 import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { fieldFood } from "../components/SupplyPanel";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
-import { PALISADE } from "../../game/data/campLayout";
+import { CELL } from "../../game/data/campGrid";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
 import { SEASONS, SUPPORT, WEATHER, WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
 import type { ScoutOrder } from "../../game/entities/Scout";
@@ -97,6 +97,8 @@ export interface MapLayers {
   day?: number;
   /** Acampamento levantado (não aparece no mapa). */
   campPacked?: boolean;
+  /** Lado do quadrado do acampamento, em células (Marco 22); sem ele, o de um bivaque. */
+  campSize?: number;
   /** Tropas em expedição: onde estão e para onde vão. */
   expeditions?: readonly { at: Point; heading: Point }[];
 }
@@ -231,10 +233,10 @@ export function drawWorldMap(ctx: CanvasRenderingContext2D, layers: MapLayers): 
   if (!layers.campPacked) {
     ctx.strokeStyle = "#e0b040";
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(world.camp.center.x * s, world.camp.center.y * s, PALISADE.rx * s, PALISADE.ry * s, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    label("Acampamento", world.camp.center, -PALISADE.ry * s - 6, "#ffe9b0");
+    // O quadrado da planta (com um mínimo para se ver no mapa)
+    const half = Math.max(6, ((layers.campSize ?? 10) / 2) * CELL * s);
+    ctx.strokeRect(world.camp.center.x * s - half, world.camp.center.y * s - half, half * 2, half * 2);
+    label("Acampamento", world.camp.center, -half - 6, "#ffe9b0");
   }
   for (const t of settlements) {
     const size = t.kind === "CAPITAL" ? 24 : t.kind === "CITY" ? 18 : t.kind === "FORT" ? 15 : 11;
@@ -425,6 +427,7 @@ export function WorldMapView() {
   const followers = useGameStore((s) => s.followers);
   const day = useGameStore((s) => s.day);
   const campPacked = useGameStore((s) => s.campPacked);
+  const campSize = useGameStore((s) => s.campPlan.size);
   const away = useGameStore((s) => s.expeditions);
   const clock = useGameStore((s) => s.day + s.dayProgress);
   // Em campo, o exército só come o que leva (mochilas, bolsa e carroças junto)
@@ -450,8 +453,8 @@ export function WorldMapView() {
   useEffect(() => {
     const ctx = canvasRef.current?.getContext("2d");
     const expeditions = snap ? away.map((e) => expeditionStage(e, clock, snap.commander)) : [];
-    if (ctx && world) drawWorldMap(ctx, { expeditions, world, settlements, calamities, snap, contractSiteId, contractTownIds, contractRoute: world && activeContract ? missionPlan(activeContract.contract, { world, settlements }).route : undefined, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked });
-  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked, away, clock]);
+    if (ctx && world) drawWorldMap(ctx, { expeditions, world, settlements, calamities, snap, contractSiteId, contractTownIds, contractRoute: world && activeContract ? missionPlan(activeContract.contract, { world, settlements }).route : undefined, contractCrossing: activeContract?.contract.crossingId, dest, burnedBridges, day, campPacked, campSize });
+  }, [world, settlements, calamities, snap, contractSiteId, contractTownIds, activeContract, dest, open, burnedBridges, day, campPacked, campSize, away, clock]);
 
   const plan = useMemo(() => {
     if (!dest || !snap) return null;

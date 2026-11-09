@@ -1,5 +1,5 @@
 import { PEDDLER_ITEMS, useGameStore, type PeddlerItem } from "../../../store/useGameStore";
-import { CAMP_MOVE, CAMP_WORKS, SUPPLY, type CampWork } from "../../../utils/constants";
+import { SUPPLY } from "../../../utils/constants";
 import { cargoCapacity, dailyRations } from "../../../utils/economy";
 import { SICKNESS_LABEL } from "../../../game/sim/logistics";
 import { Button } from "../Button";
@@ -93,45 +93,3 @@ export function InfirmaryPanel() {
   );
 }
 
-/** Tenda: obras do acampamento fixo e levantar acampamento (Marco 13). */
-export function CampWorksPanel() {
-  const gold = useGameStore((s) => s.gold);
-  const iron = useGameStore((s) => s.iron);
-  const works = useGameStore((s) => s.campWorks);
-  const training = useGameStore((s) => s.training.length);
-  const build = useGameStore((s) => s.buildCampWork);
-  const send = useGameStore((s) => s.sendBattleCommand);
-  return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-400">Acampamento</h2>
-      <div className="flex flex-col gap-1">
-        {(Object.keys(CAMP_WORKS) as CampWork[]).map((w) => {
-          const c = CAMP_WORKS[w];
-          const done = works.includes(w);
-          return (
-            <div key={w} className="flex items-center justify-between gap-2 text-sm">
-              <span className={done ? "text-emerald-300" : "text-neutral-200"}>
-                {done ? "✓ " : ""}
-                {c.label} <span className="text-xs text-neutral-400">— {c.effect}</span>
-              </span>
-              {!done && (
-                <Button disabled={gold < c.gold || iron < c.iron} onClick={() => build(w)}>
-                  {c.gold} ouro{c.iron > 0 ? ` · ${c.iron} ferro` : ""}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex items-center justify-between gap-2 border-t border-neutral-700 pt-2 text-xs text-neutral-400">
-        <span>
-          Levantar o acampamento: {CAMP_MOVE.PACK_DAYS} dia(s) de trabalho; tudo vai nas carroças (a coluna fica mais lenta) e as obras se perdem. Monte-o de novo
-          em qualquer terra firme longe de povoados ({CAMP_MOVE.PITCH_DAYS} dia).
-        </span>
-        <Button variant="danger" disabled={training > 0} onClick={() => send({ type: "PACK_CAMP", ids: [] })}>
-          Levantar acampamento
-        </Button>
-      </div>
-    </section>
-  );
-}

@@ -10,7 +10,7 @@ import { stillWater, type WaterSpot } from "../art/ground";
 import { GroundFilter } from "./GroundFilter";
 import { WaterGlints } from "./WaterGlints";
 import { blit, crossingReach, paintCrossing, peakBitmap, peakSpots, type CrossingArt, type PeakSpot } from "../art/terrainArt";
-import { CAMPFIRE, CAMP_SITES, PALISADE } from "../data/campLayout";
+import { fenceRuns, gatePoints, type CampShape } from "../data/campGrid";
 
 /** Zona de terreno de superfície (elíptica). Zonas posteriores na lista têm prioridade. */
 export interface TerrainZone {
@@ -55,9 +55,13 @@ export interface SeasonState extends GeoSeason {
 }
 
 /** Chão do acampamento do bando montado (o canto do layout no mundo; a paliçada reforçada tem aterro). */
+/** Chão do acampamento do bando (Marco 22): o quadrado, a fogueira e as portas das construções. */
 export interface CampGround {
-  origin: Point;
-  reinforced: boolean;
+  shape: CampShape;
+  fire: Point;
+  doors: readonly Point[];
+  /** Paliçada de verdade (não o bivaque): o aterro em volta. */
+  palisade: boolean;
 }
 
 /** Chão de um covil de calamidade (pintado enquanto o líder vive). */
@@ -68,14 +72,11 @@ export interface LairGround {
 }
 
 /** Fosso elíptico em volta da paliçada, com a passagem do portão. */
-export interface Ditch {
-  cx: number;
-  cy: number;
-  rx: number;
-  ry: number;
-  gateAngle: number;
-  gateHalf: number;
-}
+/** Fosso: um anel quadrado de lama por fora da paliçada (o portão fica firme). */
+export type Ditch = CampShape;
+/** O fosso começa a esta distância da cerca e tem esta largura. */
+const DITCH_GAP = 14;
+const DITCH_WIDTH = 46;
 
 /** Grade do índice espacial das zonas: cada célula guarda as zonas que a tocam. */
 const BUCKET = 800;
@@ -210,13 +211,14 @@ export class TerrainMap {
   inDitch(x: number, y: number): boolean {
     const d = this.ditch;
     if (!d) return false;
-    const nx = (x - d.cx) / d.rx;
-    const ny = (y - d.cy) / d.ry;
-    const r = Math.hypot(nx, ny);
-    if (r < 1.04 || r > 1.16) return false;
-    const a = Math.atan2(ny, nx);
-    const off = Math.abs(Math.atan2(Math.sin(a - d.gateAngle), Math.cos(a - d.gateAngle)));
-    return off > d.gateHalf + 0.06;
+    const dx = x - d.cx;
+    const dy = y - d.cy;
+    const r = Math.max(Math.abs(dx), Math.abs(dy));
+    if (r < d.half + DITCH_GAP || r > d.half + DITCH_GAP + DITCH_WIDTH) return false;
+    // O vão do portão (com a folga do aterro) fica firme
+    const across = d.gate === "W" || d.gate === "E" ? dy : dx;
+    const outward = d.gate === "W" ? -dx : d.gate === "E" ? dx : d.gate === "N" ? -dy : dy;
+    return !(outward > d.half && Math.abs(across) <= d.gateHalf + 10);
   }
 
   typeAt(x: number, y: number): TerrainType {
@@ -761,14 +763,20 @@ function paintGround(
 
   // 3c. Fosso do acampamento
   const ditch = terrain.ditchShape;
-  if (ditch && inChunk(ditch.cx - ditch.rx * 1.2, ditch.cy - ditch.ry * 1.2, ditch.cx + ditch.rx * 1.2, ditch.cy + ditch.ry * 1.2, 0)) {
-    ctx.strokeStyle = "rgba(74,52,28,0.9)";
-    ctx.lineWidth = Math.min(ditch.rx, ditch.ry) * 0.1;
+  const far = ditch ? ditch.half + DITCH_GAP + DITCH_WIDTH : 0;
+  if (ditch && inChunk(ditch.cx - far, ditch.cy - far, ditch.cx + far, ditch.cy + far, 0)) {
+    const ring: CampShape = { ...ditch, half: ditch.half + DITCH_GAP + DITCH_WIDTH / 2, gateHalf: ditch.gateHalf + 10 };
+    ctx.lineCap = "butt";
     ctx.beginPath();
-    ctx.ellipse(ditch.cx, ditch.cy, ditch.rx * 1.1, ditch.ry * 1.1, 0, ditch.gateAngle + ditch.gateHalf + 0.1, ditch.gateAngle - ditch.gateHalf - 0.1 + Math.PI * 2);
+    for (const [ax, ay, bx, by] of fenceRuns(ring)) {
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+    }
+    ctx.strokeStyle = "rgba(74,52,28,0.9)";
+    ctx.lineWidth = DITCH_WIDTH;
     ctx.stroke();
     ctx.strokeStyle = "rgba(40,70,80,0.5)";
-    ctx.lineWidth = Math.min(ditch.rx, ditch.ry) * 0.03;
+    ctx.lineWidth = DITCH_WIDTH * 0.3;
     ctx.stroke();
   }
 
@@ -805,7 +813,7 @@ function paintGround(
 
   // 5c. Acampamento do bando: terra batida, trilhas da fogueira até cada local e o aterro da paliçada
   const camp = terrain.campGround;
-  if (camp && inChunk(camp.origin.x, camp.origin.y, camp.origin.x + PALISADE.x * 2, camp.origin.y + PALISADE.y * 2, 60)) paintCamp(ctx, camp);
+  if (camp && inChunk(camp.shape.cx - camp.shape.half, camp.shape.cy - camp.shape.half, camp.shape.cx + camp.shape.half, camp.shape.cy + camp.shape.half, 80)) paintCamp(ctx, camp);
 
   // 5d. Locais de contrato e covis: terra pisada, o piso velho das ruínas, o chão morto do necromante
   for (const site of world.sites) {
@@ -1073,31 +1081,31 @@ function paintWild(ctx: CanvasRenderingContext2D, kind: SiteTheme | CalamityKind
   }
 }
 
-/** Terra batida do acampamento do bando, as trilhas da fogueira até cada local e o aterro da paliçada reforçada. */
+/** Terra batida do acampamento do bando, as trilhas da fogueira até cada porta e ao portão, e o aterro da paliçada. */
 function paintCamp(ctx: CanvasRenderingContext2D, camp: CampGround): void {
-  const o = camp.origin;
-  const c = { x: o.x + PALISADE.x, y: o.y + PALISADE.y };
-  const gate0 = PALISADE.gateAngle + PALISADE.gateHalfWidth;
-  const gate1 = PALISADE.gateAngle - PALISADE.gateHalfWidth + Math.PI * 2;
-  if (camp.reinforced) {
+  const sh = camp.shape;
+  if (camp.palisade) {
+    ctx.lineCap = "butt";
     ctx.strokeStyle = "#6a5232";
     ctx.lineWidth = 22;
     ctx.beginPath();
-    ctx.ellipse(c.x, c.y, PALISADE.rx + 12, PALISADE.ry + 12, 0, gate0, gate1);
+    for (const [ax, ay, bx, by] of fenceRuns({ ...sh, half: sh.half + 10 })) {
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+    }
     ctx.stroke();
   }
   ctx.fillStyle = "#7a6a45";
-  ctx.beginPath();
-  ctx.ellipse(c.x, c.y, PALISADE.rx - 20, PALISADE.ry - 20, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const h = sh.half - 6;
+  ctx.fillRect(sh.cx - h, sh.cy - h, h * 2, h * 2);
   ctx.lineCap = "round";
   ctx.strokeStyle = "#86754d";
   ctx.lineWidth = 26;
-  const fire = { x: o.x + CAMPFIRE.x, y: o.y + CAMPFIRE.y };
-  for (const to of [...CAMP_SITES.map((s) => s.door), { x: PALISADE.x - PALISADE.rx, y: PALISADE.y }]) {
+  const gate = gatePoints(sh, 0).inner;
+  for (const to of [...camp.doors, gate]) {
     ctx.beginPath();
-    ctx.moveTo(fire.x, fire.y);
-    ctx.lineTo(o.x + to.x, o.y + to.y);
+    ctx.moveTo(camp.fire.x, camp.fire.y);
+    ctx.lineTo(to.x, to.y);
     ctx.stroke();
   }
 }

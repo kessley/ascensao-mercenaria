@@ -141,7 +141,7 @@ export function NewWorldView({ onBack }: { onBack: () => void }) {
             style={{ aspectRatio: `${MAP_W} / ${mapHeight(world)}` }}
           />
           <p className="text-xs text-neutral-500">
-            Quadrados = povoados na cor do reino dono (claro = livres) · ⚓ = porto · círculos = locais de contrato · elipse dourada = o seu
+            Quadrados = povoados na cor do reino dono (claro = livres) · ⚓ = porto · círculos = locais de contrato · quadrado dourado = o seu
             acampamento · azul = rios · marrom = pontes · pontos claros = vaus.
           </p>
           <p className="text-xs text-neutral-300">

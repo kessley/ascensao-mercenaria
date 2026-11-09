@@ -261,7 +261,7 @@ export const realmMethods = {
     // Covis perto de um local limpo ficam quietos até ele se encher de novo (Fase 3, etapa 10)
     const lives = useGameStore.getState().siteLife;
     const lairs = activeLairs(this.world.lairs, this.world.sites, (id) => siteFill(lives[id], after));
-    const band = this.warbands.maybeSpawnGoblins(after, lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1);
+    const band = this.warbands.maybeSpawnGoblins(after, lairs, (p) => this.fog.canSee(p), this.season === "WINTER" ? SEASONS.WINTER_GOBLIN_EVERY : 1, useGameStore.getState().fame);
     if (band) useGameStore.getState().chronicle(`Rumores: um bando goblin deixou seu covil nos ermos.`, "bad");
     this.spawnArmies(after);
     this.spawnAgents();

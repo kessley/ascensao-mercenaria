@@ -237,7 +237,8 @@ function binomial(n: number, p: number): number {
 /**
  * Um dia de enfermaria e doença: feridos voltam (ou morrem), doentes saram (ou morrem) e
  * passam a doença; o pântano, a fome, o frio, um povoado com febre e o acampamento lotado
- * causam surtos.
+ * causam surtos. `camp` (Marco 22): os leitos da enfermaria (quem não cabe sara no ritmo do campo)
+ * e quantos soldados o acampamento aguenta antes de lotar.
  */
 export function healthDay(
   battalions: readonly BattalionData[],
@@ -245,6 +246,7 @@ export function healthDay(
   exposure: Exposure,
   healer: boolean,
   hungry: boolean,
+  camp: { beds: number; crowd: number } = { beds: Infinity, crowd: HEALTH.CAMP_CROWD },
 ): { battalions: BattalionData[]; log: Line[] } {
   const H = HEALTH;
   const log: Line[] = [];
@@ -254,7 +256,8 @@ export function healthDay(
   let cured = 0;
   let sickDead = 0;
   const campSoldiers = out.filter((b) => !exposure.away || training.has(b.id)).reduce((n, b) => n + b.soldiers, 0);
-  const crowded = campSoldiers > H.CAMP_CROWD;
+  const crowded = campSoldiers > camp.crowd;
+  let beds = camp.beds;
   const anySick = (where: "CAMP" | "FIELD") => out.some((b) => (b.sick ?? 0) > 0 && placeOf(b) === where);
   const placeOf = (b: BattalionData): "CAMP" | "FIELD" => (!exposure.away || training.has(b.id) ? "CAMP" : "FIELD");
   const sickBefore = { CAMP: anySick("CAMP"), FIELD: anySick("FIELD") };
@@ -264,10 +267,14 @@ export function healthDay(
     // Feridos: a enfermaria (e a curandeira) faz a diferença
     const wounded = b.wounded ?? 0;
     if (wounded > 0) {
-      const recover = H.RECOVER[where] + (healer ? H.HEALER_RECOVER : 0);
-      const die = H.DIE[where] * (healer ? H.HEALER_DIE : 1);
       let w = 0;
       for (let i = 0; i < wounded; i++) {
+        // No acampamento, só quem tem leito na enfermaria sara no ritmo dela
+        const bed = where === "CAMP" && beds > 0;
+        if (bed) beds--;
+        const at = bed ? "CAMP" : "FIELD";
+        const recover = H.RECOVER[at] + (healer ? H.HEALER_RECOVER : 0);
+        const die = H.DIE[at] * (healer ? H.HEALER_DIE : 1);
         const r = Math.random();
         if (r < recover) {
           b.soldiers++;

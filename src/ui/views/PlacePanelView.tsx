@@ -22,7 +22,10 @@ import { DiplomacyPanel, WorldChronicle } from "../components/tent/RealmPanels";
 import { FollowersPanel } from "../components/tent/FollowersPanel";
 import { GamePanel } from "../components/SavePanel";
 import { BridgePanel } from "../components/BridgePanel";
-import { CampWorksPanel, InfirmaryPanel, PeddlerPanel, WagonPanel } from "../components/tent/LogisticsPanels";
+import { InfirmaryPanel, PeddlerPanel, WagonPanel } from "../components/tent/LogisticsPanels";
+import { CampBuildingContent, CampBuildingFooter, CampNeedsPanel, CampPlanPanel, TavernHire } from "../components/tent/CampPlanPanels";
+import { CAMP_BUILDINGS, has } from "../../game/data/campGrid";
+import { Button } from "../components/Button";
 import { PriceBook } from "../components/trade/PriceBook";
 import { GuildPanel } from "../components/trade/GuildPanel";
 import { DepotPanel } from "../components/trade/DepotPanel";
@@ -54,6 +57,8 @@ const PANEL_TITLE: Record<CampPanel["kind"], string> = {
   MISSIONS: "Diário de missões",
   DOCK: "Cais do porto",
   SAGA: "Livro do Bando",
+  CAMP_BUILDING: "Construção",
+  CAMP_PLAN: "Planta do acampamento",
 };
 
 /** Painéis fora do acampamento (ou sobre um assunto só): sem o resumo do acampamento em cima. */
@@ -115,7 +120,40 @@ function PanelContent({ panel }: { panel: CampPanel }) {
     panel.kind === "LIEUTENANT" ? s.lieutenants.find((l) => l.id === panel.lieutenantId) : undefined,
   );
   const captain = useGameStore((s) => (panel.kind === "CAPTAIN" ? s.captains.find((c) => c.id === panel.captainId) : undefined));
+  // Os locais de antes agora são construções da planta: o rodapé de nível, mudar e desmontar
+  const content = <PanelBody panel={panel} battalion={battalion} lieutenant={lieutenant} captain={captain} />;
+  const buildingId = "buildingId" in panel && panel.kind !== "CAMP_BUILDING" ? panel.buildingId : undefined;
+  return (
+    <>
+      {content}
+      {buildingId && <CampBuildingFooter buildingId={buildingId} />}
+    </>
+  );
+}
 
+/** O botão da tenda que abre a planta do acampamento. */
+function PlanButton() {
+  const setCampPanel = useGameStore((s) => s.setCampPanel);
+  return (
+    <Button variant="gold" onClick={() => setCampPanel({ kind: "CAMP_PLAN" })}>
+      Planta do acampamento: construir
+    </Button>
+  );
+}
+
+function PanelBody({
+  panel,
+  battalion,
+  lieutenant,
+  captain,
+}: {
+  panel: CampPanel;
+  battalion: ReturnType<typeof useGameStore.getState>["battalions"][number] | undefined;
+  lieutenant: ReturnType<typeof useGameStore.getState>["lieutenants"][number] | undefined;
+  captain: ReturnType<typeof useGameStore.getState>["captains"][number] | undefined;
+}) {
+  // Sem intendência (o começo humilde), o vivandeiro atende na tenda
+  const noQuartermaster = useGameStore((s) => !has(s.campPlan, "QUARTERMASTER"));
   switch (panel.kind) {
     case "MISSIONS":
       return <MissionJournal />;
@@ -123,6 +161,8 @@ function PanelContent({ panel }: { panel: CampPanel }) {
       return (
         <>
           <ContractBoard />
+          <PlanButton />
+          <CampNeedsPanel />
           <BookButton />
           <PrisonersPanel />
           <DiplomacyPanel />
@@ -131,7 +171,12 @@ function PanelContent({ panel }: { panel: CampPanel }) {
           <FollowersPanel />
           <InfirmaryPanel />
           <BattalionList />
-          <CampWorksPanel />
+          {noQuartermaster && (
+            <>
+              <MarketPanel />
+              <WagonPanel />
+            </>
+          )}
           <CampLog />
           <WorldChronicle />
         </>
@@ -189,9 +234,19 @@ function PanelContent({ panel }: { panel: CampPanel }) {
     case "PEDDLER":
       return <PeddlerPanel />;
     case "GUILD":
-    case "TAVERN":
     case "TEMPLE":
       return <GuildPanel settlementId={panel.settlementId} />;
+    case "TAVERN":
+      return (
+        <>
+          <TavernHire settlementId={panel.settlementId} />
+          <GuildPanel settlementId={panel.settlementId} />
+        </>
+      );
+    case "CAMP_BUILDING":
+      return <CampBuildingContent buildingId={panel.buildingId} />;
+    case "CAMP_PLAN":
+      return <CampPlanPanel />;
     case "PRICE_BOOK":
       return <PriceBook />;
     case "DEPARTURE":
@@ -223,6 +278,10 @@ export function PlacePanelView() {
     if (panel?.kind === "CAPTAIN") {
       const c = s.captains.find((x) => x.id === panel.captainId);
       return c ? captainName(c) : undefined;
+    }
+    if (panel?.kind === "CAMP_BUILDING") {
+      const b = s.campPlan.buildings.find((x) => x.id === panel.buildingId);
+      return b ? CAMP_BUILDINGS[b.kind].label : undefined;
     }
     if (panel?.kind === "TOWN" || panel?.kind === "DOCK" || panel?.kind === "GUILD" || panel?.kind === "TAVERN" || panel?.kind === "TEMPLE") return s.settlements.find((t) => t.id === panel.settlementId)?.name;
     return undefined;

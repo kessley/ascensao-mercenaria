@@ -49,7 +49,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
-| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | parte 1 ✅ OK; a seguir, a parte 2 |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
@@ -708,7 +708,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 
 **Arte:** as peças do G3 (casas, tendas, cercas, ferraria, poço, torres) e as carroças do G4 servem a muitas construções. Cada construção nova precisa da sua peça, feita junto com a parte que a usa. Os ícones das construções ficam para o G5.
 
-### 12.1. Marco 22, parte 1: o bivaque e a grade
+### 12.1. Marco 22, parte 1: o bivaque e a grade ✅ OK
 **A fazer:**
 - **O começo novo** (GDD 9.9): o Comandante, 1 batalhão de infantaria, 1 batedor, 1 mensageiro, 1 carroça, cerca de 80 de ouro e 20 rações. Só a tenda, a fogueira e uma barraca, e nenhum tenente.
 - **A grade quadrada** (GDD 9.2):
@@ -736,6 +736,30 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - o 2º batalhão chega por volta do dia 10, e a paliçada pequena entre os dias 15 e 20;
 - levantar e montar em outro lugar mantém a planta e o que coube nas carroças;
 - um save antigo abre com o acampamento dele.
+
+**Feito** (8 de novembro):
+- **As regras puras** estão em `src/game/data/campGrid.ts`: a grade, os patamares, o catálogo, as necessidades, a carga nas carroças, a conversão dos saves antigos e a geometria em pixels (o quadrado, o portão e a cerca). Testes em `campGrid.test.ts`, `campStore.test.ts` e `campPace.test.ts`.
+- **A planta no store** (`campPlan`):
+  - construir, mover, desmontar (devolve metade), melhorar, trocar o portão, crescer a paliçada e cavar o fosso;
+  - os voluntários do mastro e a taverna, que aluga um batalhão por semana em cada povoado;
+  - as obras antigas (`CAMP_WORKS`) saíram.
+- **No acampamento,** o `CampArea` foi reescrito sobre a grade: a cerca de estacas do bivaque, a paliçada com torres no portão e uma peça para cada construção. Ainda no acampamento:
+  - a peça fantasma verde ou vermelha segue o mouse, com o custo ou o motivo. Shift continua pondo, e o botão direito ou ESC cancela;
+  - cada batalhão dorme na porta da sua barraca; quem sobra fica ao relento perto da fogueira.
+- **Necessidades com efeito:**
+  - Comida: quem passa da fogueira e da cozinha come cru, e custa mais ração;
+  - Cura: só os leitos da enfermaria saram no ritmo do acampamento; o resto sara no do campo;
+  - Salubridade: o poço sobe o limite de lotação;
+  - Segurança: entra nos ataques ao acampamento.
+  - Os Leitos só aparecem no painel por enquanto; o efeito vem na parte 2.
+- **Os números:**
+  - a madeira ficou mais barata do que a GDD sugeria, porque uma carroça leva só 4 de madeira: a paliçada custa 8, 16 e 24, o campo de treino 4, o estábulo 6 e a torre 4;
+  - ao montar, cada célula de floresta dentro do quadrado rende 0,2 de madeira;
+  - o bando goblin cresce 2 a cada 3 de fama (`goblinBandSize`), e não com o dia.
+- **A simulação dos 30 dias:** o mastro sai no dia 1, a primeira escolha vem no dia 3, o 2º batalhão no dia 9 e a paliçada pequena no dia 15.
+- **Falta:**
+  - as estradas ainda chegam pelo oeste, mesmo com o portão em outro lado;
+  - o desempenho com a planta cheia não foi medido: espera o sinal do usuário.
 
 ### 12.2. Marco 22, parte 2: a vida no acampamento
 **A fazer:**
