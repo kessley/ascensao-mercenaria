@@ -12,6 +12,7 @@ import { Wagon } from "../entities/Wagon";
 import { WeatherLayer } from "../world/WeatherLayer";
 import { GroundWeather } from "../world/GroundWeather";
 import { CombatEffects, setCombatFx } from "../world/CombatEffects";
+import { PlaceEffects } from "../world/PlaceEffects";
 import { FlagSprite } from "../world/FlagSprite";
 import { isFlood, seasonOf, weatherAt, windAt, type Wind } from "../../utils/season";
 import { resolveAttacks } from "../systems/CombatSystem";
@@ -236,6 +237,8 @@ export class WorldScene extends Phaser.Scene {
   groundWeather!: GroundWeather;
   /** Flechas no ar e fincadas, sangue, poeira da investida e faíscas (G6, parte 3). */
   combatFx!: CombatEffects;
+  /** O que a magia mexe num lugar (G6, parte 4): nevoeiro, fogo apagado, água congelada e fogo. */
+  places!: PlaceEffects;
   /** Tempo onde o Comandante está (vale para a ação perto dele). */
   weather: Weather = "CLEAR";
   /** O vento de hoje onde o Comandante está (G6): entorta a chuva e mexe as bandeiras. */
@@ -567,6 +570,7 @@ export class WorldScene extends Phaser.Scene {
     this.groundWeather = new GroundWeather(this, (x, y) => Unit.terrain?.typeAt(x, y) ?? "GRASS");
     this.combatFx = new CombatEffects(this, () => this.groundWeather, (x, y) => Unit.terrain?.typeAt(x, y) ?? "GRASS");
     setCombatFx(this.combatFx);
+    this.places = new PlaceEffects(this, (x, y) => terrain.unfrozenTypeAt(x, y), (areas, changed) => this.onFrozen(areas, changed));
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -622,6 +626,9 @@ export class WorldScene extends Phaser.Scene {
     activeScene = this;
     const cleanup = () => {
       setCombatFx(null);
+      this.places.destroy();
+      if (Unit.doused === this.places.isDoused) Unit.doused = null;
+      if (Enemy.places === this.places) Enemy.places = null;
       unsubscribe();
       unregisterFieldCapture(capture);
       this.terrainStreamer.destroy();
@@ -683,9 +690,13 @@ export class WorldScene extends Phaser.Scene {
     this.updateSeatView();
     this.updateCampBuild();
     this.forestArt.update(this.cameras.main);
+    const weatherDt = this.ended ? 0 : Math.min(delta, 50) / 1000;
+    // O que a magia mexe vem antes da noite: as tochas apagadas e o fogo chamado entram nas luzes
+    this.places.update(weatherDt, Unit.darkness);
+    Unit.doused = this.places.hasDouse ? this.places.isDoused : null;
+    Enemy.places = this.places.active ? this.places : null;
     this.updateNight(store.dayProgress);
     this.updateWeather(time);
-    const weatherDt = this.ended ? 0 : Math.min(delta, 50) / 1000;
     this.weatherLayer.update(this.cameras.main, this.weather, weatherDt, this.wind);
     this.groundWeather.update(this.cameras.main, this.weather, weatherDt, Unit.groundStamp);
     AudioEngine.setListener(view.centerX, view.centerY, view.width);
@@ -971,6 +982,29 @@ export class WorldScene extends Phaser.Scene {
     } else if (!flood) {
       this.pushFeed("A cheia baixou: os vaus voltam a dar passagem.");
     }
+  }
+
+  /**
+   * A magia congelou (ou o gelo derreteu) a água de um lugar (G6, parte 4): o terreno muda ali, as
+   * rotas em volta são refeitas, e quem ficou dentro d'água no degelo sai para a margem.
+   */
+  onFrozen(areas: readonly { x: number; y: number; r: number }[], changed: { x: number; y: number; r: number }): void {
+    const terrain = Unit.terrain;
+    if (!terrain) return;
+    terrain.setFrozen(areas);
+    Unit.groundStamp++;
+    const reach = changed.r + GEO.NAV_CELL * 2;
+    this.nav.invalidate(changed, reach);
+    this.armyNav.invalidate(changed, reach);
+    for (const u of [...this.allAllies(), ...this.enemies]) {
+      if (!u.isAlive || distance(u, changed) > reach || !terrain.isBlocked(u.x, u.y)) continue;
+      const safe = this.nav.nearestOpen(u, 800);
+      if (safe) {
+        u.x = safe.x;
+        u.y = safe.y;
+      }
+    }
+    this.warbands.repathAll();
   }
 
   /** Tempo do dia onde o Comandante está (muda de região para região e a cada dia). */

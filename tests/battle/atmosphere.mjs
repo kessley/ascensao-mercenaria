@@ -418,4 +418,213 @@ export async function atmosphere({ page, ev, battle, labScript }, { check }) {
   console.log("   ossos e golpe:", JSON.stringify(bones));
   check("os esqueletos soltam osso, não sangue", bones.matter === "BONE", JSON.stringify(bones));
   check("o golpe do Comandante é a meia-lua da lâmina, que some logo", bones.swung === 1 && bones.after === 0, JSON.stringify(bones));
+
+  // --- Parte 4: o que a magia mexe, e o fechamento ---
+  // No vau, à noite e na chuva: nevoeiro, fogo apagado, rio congelado e fogo, ligados e desligados num lugar
+  /** No laboratório a câmera só acerta a área ao desenhar: desenha, anda um quadro (a noite se refaz ali) e desenha de novo. */
+  const drawFresh = async () => {
+    await draw();
+    await ev(() => window.__lab.step(1 / 30));
+    await draw();
+  };
+  await battle({ army: [["INFANTRY"], ["CAVALRY"]], force: { SOLDIER: 10 }, faction: "KINGDOM", setup: 's.map = "FORD"; s.hour = "NIGHT"; s.weather = "RAIN";' });
+  const mist = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const P = w.places;
+    lab.freezeAI();
+    lab.parkCommander();
+    const b = lab.battalion();
+    const c = b.center;
+    w.cameras.main.stopFollow();
+    w.cameras.main.setZoom(1);
+    w.cameras.main.centerOn(c.x + 120, c.y);
+    const s0 = b.soldiers.find((s) => s.hasTorch) ?? b.soldiers[0];
+    const foe = lab.allEnemies()[0];
+    foe.x = c.x + 260;
+    foe.y = c.y;
+    // (as medidas ficam guardadas na página para as próximas partes)
+    const m = {
+      bearers: () => b.soldiers.filter((s) => s.hasTorch).length,
+      sight: () => Math.round(foe.perceptionOf(s0)),
+      vision: () => Math.round(w.visionSources().find((v) => Math.abs(v.x - b.center.x) < 1 && Math.abs(v.y - b.center.y) < 1)?.radius ?? 0),
+      lights: () => w.nightLights().length,
+      smoked: () => w.combatFx.stats.smoked,
+    };
+    window.__magic = m;
+    const base = { bearers: m.bearers(), sight: m.sight(), vision: m.vision(), lights: m.lights() };
+    window.__fogId = P.add({ kind: "FOG", x: c.x, y: c.y, r: 220 });
+    lab.step(2);
+    return { base, vision: m.vision(), sight: m.sight(), banks: P.stats().banks, at: Math.round(P.visionAt(c) * 100) / 100 };
+  });
+  await drawFresh();
+  await page.screenshot({ path: "tests/battle/.shots-g6-magia-nevoeiro.png" });
+  const douse = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const P = w.places;
+    const m = window.__magic;
+    const c = lab.battalion().center;
+    P.remove(window.__fogId);
+    lab.step(3);
+    const fogOff = { vision: m.vision(), banks: P.stats().banks, places: P.stats().places };
+    const smoked = m.smoked();
+    const id = P.add({ kind: "DOUSE", x: c.x, y: c.y, r: 180 });
+    lab.step(0.5);
+    const on = { bearers: m.bearers(), lights: m.lights(), sight: m.sight(), vision: m.vision(), smoke: m.smoked() - smoked, hasDouse: P.hasDouse };
+    P.remove(id);
+    lab.step(0.5);
+    return { fogOff, on, off: { bearers: m.bearers(), lights: m.lights(), sight: m.sight() } };
+  });
+  const fire = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const P = w.places;
+    const m = window.__magic;
+    const c = lab.battalion().center;
+    const at = { x: c.x + 240, y: c.y - 30 };
+    w.cameras.main.setZoom(1.5);
+    w.cameras.main.centerOn(at.x - 60, at.y);
+    const lights = m.lights();
+    const smoked = m.smoked();
+    window.__fireAt = at;
+    P.add({ kind: "FIRE", x: at.x, y: at.y, r: 110 });
+    lab.step(3);
+    return { flames: P.stats().flames, lights: m.lights() - lights, burning: P.burningAt(at), smoke: m.smoked() - smoked, halos: w.night.halos };
+  });
+  await drawFresh();
+  await page.screenshot({ path: "tests/battle/.shots-g6-magia-fogo.png" });
+  const fireOut = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const P = w.places;
+    const at = window.__fireAt;
+    // A magia que apaga o fogo, por cima do fogo: ele se apaga e deixa o chão queimado
+    const id = P.add({ kind: "DOUSE", x: at.x, y: at.y, r: 150 });
+    lab.step(3.5);
+    const out = { fires: P.stats().byKind.FIRE, flames: P.stats().flames, scorches: P.stats().scorches, burning: P.burningAt(at) };
+    P.remove(id);
+    // O fogo de tempo marcado apaga sozinho
+    P.add({ kind: "FIRE", x: at.x, y: at.y + 200, r: 60, seconds: 1 });
+    lab.step(1);
+    const timed = P.stats().byKind.FIRE;
+    lab.step(3.5);
+    return { ...out, timed, timedAfter: P.stats().byKind.FIRE };
+  });
+  const freeze = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const P = w.places;
+    const T = w.commander.constructor.terrain;
+    const c = lab.battalion().center;
+    const river = w.world.geo.rivers[0].points;
+    const near = river.reduce((p, q) => (Math.abs(q.y - c.y) < Math.abs(p.y - c.y) ? q : p));
+    window.__river = near;
+    const before = { type: T.typeAt(near.x, near.y), open: w.nav.isOpen(near) };
+    window.__iceId = P.add({ kind: "FREEZE", x: near.x, y: near.y, r: 200 });
+    lab.step(2);
+    w.cameras.main.setZoom(1.5);
+    w.cameras.main.centerOn(near.x, near.y);
+    return { before, type: T.typeAt(near.x, near.y), open: w.nav.isOpen(near), armyOpen: w.armyNav.isOpen(near), frozen: P.frozenAt(near), shown: P.stats().iced, bank: T.typeAt(near.x + 400, near.y) };
+  });
+  await drawFresh();
+  await page.screenshot({ path: "tests/battle/.shots-g6-magia-gelo.png" });
+  const thaw = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const P = w.places;
+    const T = w.commander.constructor.terrain;
+    const near = window.__river;
+    // Um soldado fica em cima do gelo; no degelo, ninguém fica dentro d'água
+    const s1 = lab.battalion().soldiers.at(-1);
+    s1.x = near.x;
+    s1.y = near.y;
+    P.remove(window.__iceId);
+    lab.step(3.5);
+    const wet = [...w.allAllies(), ...w.enemies].filter((u) => u.isAlive && T.isBlocked(u.x, u.y)).length;
+    return { type: T.typeAt(near.x, near.y), open: w.nav.isOpen(near), shown: P.stats().iced, wet, places: P.stats().places };
+  });
+  console.log("   magia:", JSON.stringify({ mist, douse, fire, fireOut, freeze, thaw }));
+  check(
+    "o nevoeiro de um lugar: bancos de névoa presos ao chão, e quem está nele enxerga e é visto como no nevoeiro",
+    mist.banks >= 3 && mist.at <= 0.55 && mist.vision < mist.base.vision * 0.6 && mist.sight < mist.base.sight * 0.6,
+    JSON.stringify(mist),
+  );
+  check("desligado, o nevoeiro passa, e a visão volta", douse.fogOff.banks === 0 && douse.fogOff.places === 0 && douse.fogOff.vision === mist.base.vision, JSON.stringify(douse.fogOff));
+  check(
+    "o fogo apagado num lugar: as tochas saem da mão (com fumaça), a luz some, e quem está ali conta como no escuro",
+    mist.base.bearers >= 1 && douse.on.bearers === 0 && douse.on.lights < mist.base.lights && douse.on.smoke > 0 && douse.on.sight < mist.base.sight && douse.on.vision < mist.base.vision,
+    JSON.stringify({ base: mist.base, on: douse.on }),
+  );
+  check("desligado, as tochas voltam a acender", douse.off.bearers === mist.base.bearers && douse.off.lights === mist.base.lights && douse.off.sight === mist.base.sight, JSON.stringify(douse.off));
+  check("o fogo num lugar: chamas no chão, que acendem a noite e soltam fumaça", fire.flames >= 5 && fire.lights === 1 && fire.burning && fire.smoke > 0, JSON.stringify(fire));
+  check(
+    "apagado por cima, o fogo some e deixa o chão queimado; o de tempo marcado apaga sozinho",
+    fireOut.fires === 0 && fireOut.flames === 0 && fireOut.scorches >= 1 && !fireOut.burning && fireOut.timed === 1 && fireOut.timedAfter === 0,
+    JSON.stringify(fireOut),
+  );
+  check(
+    "o rio congelado: a água vira gelo, que se atravessa a pé, e só ali",
+    freeze.before.type === "WATER" && !freeze.before.open && freeze.type === "ICE" && freeze.open && freeze.armyOpen && freeze.frozen && freeze.shown === 1 && freeze.bank !== "ICE",
+    JSON.stringify(freeze),
+  );
+  check("no degelo, a água volta, e ninguém fica dentro dela", thaw.type === "WATER" && !thaw.open && thaw.shown === 0 && thaw.wet === 0 && thaw.places === 0, JSON.stringify(thaw));
+
+  // O "Pronto quando" do G6: uma batalha à noite, na chuva, se lê pela luz das tochas, e dá para ver de longe onde a investida bateu
+  await battle({ army: [["CAVALRY"], ["INFANTRY"]], force: { SOLDIER: 10 }, faction: "KINGDOM", competence: 2, setup: 's.hour = "NIGHT"; s.weather = "RAIN";' });
+  const closing = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    const fx = w.combatFx;
+    lab.freezeAI();
+    lab.parkCommander();
+    const cav = lab.battalion(0);
+    const inf = lab.battalion(1);
+    lab.place(cav, 3700, 3600, 0, 4);
+    lab.place(inf, 3560, 3760, 0, 4);
+    const sq = lab.squad();
+    lab.placeSquad(sq, 4300, 3600, Math.PI);
+    w.cameras.main.stopFollow();
+    w.cameras.main.setZoom(1);
+    w.cameras.main.centerOn(4100, 3620);
+    cav.orderAttack(sq.soldiers[0]);
+    let at = null;
+    lab.step(12, () => {
+      if (fx.stats.impacts > 0 && at === null) at = w.run.seconds;
+      return at !== null && w.run.seconds - at > 0.5;
+    });
+    const hit = fx.lastImpact;
+    // A investida bateu na luz das tochas de alguém?
+    const lit = !!hit && w.nightLights().some((l) => Math.hypot(l.x - hit.x, l.y - hit.y) < l.radius);
+    w.cameras.main.setZoom(0.5);
+    w.cameras.main.centerOn(hit?.x ?? 4100, hit?.y ?? 3620);
+    lab.step(0.1);
+    return {
+      darkness: Math.round(w.commander.constructor.darkness * 100) / 100,
+      weather: w.weather,
+      drops: w.weatherLayer.stats.drops,
+      halos: w.night.halos,
+      bearers: [cav, inf].map((b) => b.soldiers.filter((s) => s.hasTorch).length),
+      impacts: fx.stats.impacts,
+      puffs: fx.stats.puffs,
+      lit,
+    };
+  });
+  await drawFresh();
+  await page.screenshot({ path: "tests/battle/.shots-g6-pronto.png" });
+  await ev(() => {
+    const w = window.__world;
+    const hit = w.combatFx.lastImpact;
+    w.cameras.main.setZoom(2);
+    if (hit) w.cameras.main.centerOn(hit.x - 30, hit.y);
+  });
+  await drawFresh();
+  await page.screenshot({ path: "tests/battle/.shots-g6-pronto-perto.png" });
+  console.log("   pronto:", JSON.stringify(closing));
+  check(
+    "pronto: à noite e na chuva, a batalha se lê pela luz das tochas",
+    closing.darkness > 0.6 && closing.weather === "RAIN" && closing.drops > 0 && closing.halos >= 2 && closing.bearers.every((n) => n >= 1),
+    JSON.stringify(closing),
+  );
+  check("pronto: de longe se vê onde a investida bateu (a nuvem, na luz das tochas)", closing.impacts >= 1 && closing.puffs > 0 && closing.lit, JSON.stringify(closing));
 }

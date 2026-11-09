@@ -2,13 +2,15 @@
 
 Inventário de tudo o que aparece na tela, com o estado de cada coisa: **pixel art** (já convertido) ou **greybox** (formas de código, como era). Por que pixel art, perspectiva e etapas: [PLANO_GRAFICO.md](PLANO_GRAFICO.md). Etapas no roadmap: [Fase 3](ROADMAP_FASE_3.md).
 
-**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão), G3 (construções) e G4 (resto do elenco) ✅ OK. Já são pixel art:
+**Resumo:** etapas G0 (prova), G1 (figuras em campo), G2 (chão), G3 (construções), G4 (resto do elenco), G5 (interface) e G6 (atmosfera) ✅ OK. Já são pixel art:
 - todo soldado, inimigo e bicho que luta;
 - o chão, em todos os degraus do zoom, com água que se mexe, pontes, vaus, balsas e picos;
 - as matas: árvores, moitas e pedras;
 - as construções: povoados, muralhas e acampamento do bando nas 4 culturas, os locais de contrato e os covis das calamidades;
 - as carroças, os aríetes, as escadas, as harpias, os navios e a gente do mapa e do acampamento (G4);
-- os interiores das construções, a Cidade Alta das capitais e a Liça dos duelos (G4, parte 5).
+- os interiores das construções, a Cidade Alta das capitais e a Liça dos duelos (G4, parte 5);
+- a fonte, as molduras, os ícones e os retratos (G5);
+- o fogo, a noite, o clima, os efeitos de combate e o que a magia mexe (G6).
 
 Ainda são greybox: as marcas de ordem, de destino e de seleção (de propósito: são da interface), o estandarte do batalhão e a névoa de guerra.
 
@@ -128,6 +130,8 @@ Ainda são greybox: as marcas de ordem, de destino e de seleção (de propósito
 | Golpe do Comandante | `slashSprite` em `CombatEffects`, `Commander` | ✅ G6, parte 3. A meia-lua da lâmina em 3 quadros (o golpe, o rastro e o rastro se desfazendo), em 16 direções |
 | Sangue, poças, ossos, lascas e faíscas | `CombatEffects`, `Unit.matter` | ✅ G6, parte 3. Quem leva o golpe respinga para o lado contrário de quem bateu, e as gotas mancham o chão; quem cai deixa uma poça debaixo do corpo. Os esqueletos soltam osso, e os carros, lascas de madeira. O golpe aparado solta faísca. As marcas somem depois de um minuto e meio e só aparecem de perto, como os corpos |
 | Poeira da cavalaria e da investida | `CombatEffects` | ✅ G6, parte 3. A galope, um rastro leve atrás dos cascos (mais na investida); onde a investida bate, uma nuvem que se vê de longe. Vira lama no chão molhado e borrifo branco na neve e na água |
+| O que a magia mexe num lugar: nevoeiro, fogo apagado, gelo e fogo | `PlaceEffects`, `placeArt.ts` | ✅ G6, parte 4. O nevoeiro são bancos de névoa presos ao chão, que escurecem com a noite. Onde o fogo é apagado, as tochas saem da mão e as fogueiras e os postes se apagam, soltando fumaça. O gelo cobre só a água: geada na margem, manchas claras e rachaduras, e a borda pontilhada. O fogo são labaredas no meio e chamas pequenas e brasas na borda, com fumaça; o chão fica queimado por dois minutos depois dele |
+| Fumaça | `CombatEffects.smoke` | ✅ G6, parte 4. Rolos cinza que sobem e se desfazem (a chama que apagou, o fogo de um lugar) |
 | Textos que sobem ("esquiva", "flanqueados!") | `Unit.floatText` | texto |
 | Ordens, destinos, linha de batalha e seleção | `WorldScene`, `Battalion` | greybox (de propósito: são da interface) |
 | Estandarte e nome do batalhão | `Battalion.drawBanner` | greybox |
@@ -202,4 +206,4 @@ Ainda são greybox: as marcas de ordem, de destino e de seleção (de propósito
    - a parte 1, a noite e o fogo, está feita;
    - a parte 2, o clima, está feita;
    - a parte 3, os efeitos de combate, está feita;
-   - falta o que a magia mexe.
+   - a parte 4, o que a magia mexe, está feita: nevoeiro, fogo apagado, gelo e fogo ligam e desligam num lugar ✅ OK.

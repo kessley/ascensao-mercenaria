@@ -126,7 +126,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
  */
 export class CombatEffects {
   /** O que está na tela agora (os testes conferem). */
-  stats = { flying: 0, stuck: 0, stains: 0, puffs: 0, chips: 0, impacts: 0, sparks: 0 };
+  stats = { flying: 0, stuck: 0, stains: 0, puffs: 0, chips: 0, impacts: 0, sparks: 0, smoked: 0 };
   /** Onde a última investida bateu. */
   lastImpact: Point | null = null;
 
@@ -261,6 +261,14 @@ export class CombatEffects {
     }
   }
 
+  /** Um fio de fumaça que sobe (a chama que apagou, o fogo de um lugar). `strength` 1 = dois rolos. */
+  smoke(x: number, y: number, strength = 1): void {
+    if (!this.near({ x, y })) return;
+    this.stats.smoked++;
+    const n = Math.max(1, Math.round(strength * 2));
+    for (let i = 0; i < n; i++) this.puff(x + rand(-3, 3), y + rand(-2, 1), rand(-5, 5), -rand(16, 26), rand(1500, 2300), "SMOKE", -i * rand(90, 170), 0.5);
+  }
+
   // --- A cada quadro ---
 
   update(time: number, dt: number, units: readonly Unit[], lod: Lod): void {
@@ -336,8 +344,8 @@ export class CombatEffects {
       }
       this.puffs[w++] = p;
       if (p.age < 0) continue;
-      // Sai depressa e para: a poeira fica pairando onde a investida bateu
-      const slow = Math.max(0, 1 - p.age / (p.life * 0.6));
+      // Sai depressa e para: a poeira fica pairando onde a investida bateu (a fumaça segue subindo)
+      const slow = p.dust === "SMOKE" ? 1 - (p.age / p.life) * 0.5 : Math.max(0, 1 - p.age / (p.life * 0.6));
       p.x += p.vx * dt * slow;
       p.y += p.vy * dt * slow;
       const k = p.age / p.life;

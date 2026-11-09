@@ -7,6 +7,7 @@ import { enemyLook } from "../art/looks";
 import { duelBannerKey } from "../art/atlas";
 import { BOSS_HEROES, seeksDuel, type HeroData } from "../data/heroes";
 import { PIXEL_FONT } from "../art/font";
+import type { PlaceRules } from "../world/PlaceEffects";
 
 /**
  * Goblin: quadrado vermelho. IA simples de aggro → perseguição → ataque, com coleira.
@@ -22,6 +23,8 @@ export class Enemy extends Unit {
   static darkPerception = 1;
   /** O tempo (nevoeiro, neve, chuva) encurta de quão longe todos percebem o bando. */
   static weatherSight = 1;
+  /** O que a magia mexe num lugar (G6, parte 4): nevoeiro e fogo apagado. Sem nada ligado, null. */
+  static places: PlaceRules | null = null;
   /** Alguém avistou um batedor: a cena decide quem vai atrás dele (o bando inteiro, não). */
   static onSpot: ((e: Enemy, scout: Unit) => void) | null = null;
 
@@ -302,7 +305,10 @@ export class Enemy extends Unit {
 
   /** De quão longe este inimigo percebe `ally` (o batedor usa a mesma conta para ficar fora dela). */
   perceptionOf(ally: Unit): number {
-    const sight = this.sightIn(ally.unlit ? Enemy.darkPerception : Enemy.perception);
+    // Onde o fogo foi apagado, ninguém leva tocha; no nevoeiro de um lugar, ninguém enxerga longe
+    const places = Enemy.places;
+    const dark = ally.unlit || (places !== null && places.doused(ally));
+    const sight = this.sightIn(dark ? Enemy.darkPerception : Enemy.perception) * (places !== null ? places.sight(this, ally) : 1);
     return (ally.isInForest ? Math.min(sight, BALANCE.FOREST_DETECT_RANGE) : sight) * ally.stealth;
   }
 

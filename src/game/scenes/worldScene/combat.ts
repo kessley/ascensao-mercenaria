@@ -13,7 +13,7 @@ import { fullName } from "../../data/lieutenants";
 import type { HeroData } from "../../data/heroes";
 import { localTroop } from "../../data/planet";
 import { useGameStore, type BattalionSurvivors, type BattleResult } from "../../../store/useGameStore";
-import { BALANCE, COLORS, SUPPORT, REALM, WORLD, WEATHER, PRISONERS, WAR_AI, type EnemyKind, type TroopType } from "../../../utils/constants";
+import { BALANCE, COLORS, SUPPORT, REALM, TIME, WORLD, WEATHER, PRISONERS, WAR_AI, type EnemyKind, type TroopType } from "../../../utils/constants";
 import { sfx } from "../../../audio/sounds";
 import { distance, type Point } from "../../../utils/math";
 import { inPlace, type Engagement } from "./shared";
@@ -516,9 +516,11 @@ export const combatMethods = {
   /** Raio de visão de uma fonte conforme o terreno onde está (colina amplia, floresta reduz). */
   visionAt(this: WorldScene, p: Point, base: number): number {
     const t = Unit.terrain?.typeAt(p.x, p.y) ?? "GRASS";
-    if (t === "HILL") return base * SUPPORT.VISION_HILL_BONUS;
-    if (t === "FOREST") return base * SUPPORT.VISION_FOREST_PENALTY;
-    return base;
+    // O nevoeiro chamado num lugar (G6, parte 4) encurta a visão de quem está nele
+    const fog = this.places.visionAt(p);
+    if (t === "HILL") return base * SUPPORT.VISION_HILL_BONUS * fog;
+    if (t === "FOREST") return base * SUPPORT.VISION_FOREST_PENALTY * fog;
+    return base * fog;
   },
 
   visionSources(this: WorldScene): VisionSource[] {
@@ -526,7 +528,10 @@ export const combatMethods = {
     const sources: VisionSource[] = [];
     // Noite e tempo (nevoeiro, neve, chuva) encurtam a visão
     const night = this.nightVision() * WEATHER.VISION[this.weather];
-    const add = (p: Point, base: number) => sources.push({ x: p.x, y: p.y, radius: this.visionAt(p, base) * night });
+    // Onde a magia apagou o fogo, enxerga-se como sem tocha
+    const unlit = (1 - Unit.darkness * (1 - TIME.NIGHT_VISION)) * WEATHER.VISION[this.weather];
+    const places = this.places.hasDouse;
+    const add = (p: Point, base: number) => sources.push({ x: p.x, y: p.y, radius: this.visionAt(p, base) * (places && this.places.doused(p) ? Math.min(night, unlit) : night) });
     if (this.commander.isAlive) add(this.commander, V.COMMANDER);
     // Quem atira precisa enxergar além do próprio alcance
     for (const b of this.battalions) if (!b.isDestroyed) add(b.center, b.ammoLeft !== null ? V.ARCHERS : V.BATTALION);

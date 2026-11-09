@@ -21,11 +21,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
     - as fés, com os preceitos que obrigam a decidir;
     - as línguas, com o intérprete;
     - a chegada a outra terra, que avisa o que muda.
+  - o G6 inteiro (etapa 15 ✅ OK): a noite e o fogo, o clima, os efeitos de combate e o que a magia mexe.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **Em andamento:** o G6 (etapa 15), atmosfera. Estão feitas a parte 1 (a noite e o fogo), a 2 (o clima) e a 3 (os efeitos de combate).
-- **A seguir:** a parte 4 do G6: o que a magia mexe, e o fechamento.
+- **A seguir:** o Marco 19 (etapa 16), a magia do Comandante. Os efeitos que ela mexe já estão prontos (G6, parte 4).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -58,7 +58,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
-| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | partes 1 a 3 de 4 |
+| 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
@@ -1174,7 +1174,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - 5 de regras em `tests/unit/arrival.test.ts`;
   - 14 verificações novas na suíte `cultura`, que fica com 47: 4 por continente, mais a volta para casa.
 
-## 15. G6: atmosfera
+## 15. G6: atmosfera ✅ OK
 **Objetivo:** o clima e a hora do dia ficam visíveis no próprio desenho, e não só num filtro de cor.
 - **Noite e tochas:** luz em volta das tochas, das fogueiras e da forja (a chama que ficou do G3).
 - **Clima:** chuva, neve, nevoeiro e vento, com o chão molhado e as poças do G2.
@@ -1265,6 +1265,34 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
     - osso nos esqueletos;
     - a meia-lua do golpe.
   - Fotos novas: `.shots-g6-flechas.png`, `.shots-g6-investida.png`, `.shots-g6-investida-longe.png` e `.shots-g6-sangue.png`.
+
+**Feito na parte 4, o que a magia mexe, e o fechamento:**
+- **Os efeitos num lugar** (`src/game/world/PlaceEffects.ts`, em `WorldScene.places`): `add({ kind, x, y, r, seconds })` liga um efeito num círculo e devolve o número dele; `remove(id)` desliga. Sem `seconds`, fica até ser desligado.
+  - Cada efeito entra em 1,5 s e sai em 2,5 s (`PLACES`). O relógio para na pausa, como o tempo.
+  - **Nevoeiro (`FOG`):**
+    - bancos de névoa presos ao chão, que rodam devagar e escurecem com a noite;
+    - quem está dentro enxerga como no nevoeiro (metade), e é visto assim pelos inimigos. Vale o nevoeiro de qualquer um dos dois.
+  - **Fogo apagado (`DOUSE`):**
+    - as tochas saem da mão (`Unit.doused`), soltando fumaça;
+    - as fogueiras, os postes e a forja se apagam, e as luzes de dentro somem da noite;
+    - quem está dentro conta como sem tocha, para enxergar e para ser visto (`Enemy.places`);
+    - desligado, tudo acende de novo. Por cima de um fogo, apaga o fogo.
+  - **Gelo (`FREEZE`):**
+    - a água e o raso dentro do círculo viram gelo (`TerrainMap.setFrozen`), que se atravessa a pé, e as rotas em volta são refeitas;
+    - o gelo é pixel art só por cima da água (`placeArt.ts`): geada na margem, manchas claras, riscos de brilho, rachaduras e a borda pontilhada;
+    - no degelo, a água volta, e quem ficou em cima sai para a margem.
+  - **Fogo (`FIRE`):**
+    - labaredas no meio e chamas pequenas e brasas na borda, que acendem uma a uma e apagam na ordem contrária, soltando fumaça;
+    - o fogo acende a noite em volta;
+    - o chão vai queimando, e a mancha queimada fica dois minutos depois do fogo;
+    - `burningAt` diz onde arde. O que o fogo faz com quem está dentro fica para o Marco 19.
+- **A fumaça** (`CombatEffects.smoke`): a quarta cor da poeira, cinza, que sobe e não para no ar.
+- **Testes:**
+  - 3 de regras em `tests/unit/placeArt.test.ts` (o gelo só na água, a borda pontilhada e o chão queimado);
+  - a suíte `atmosfera` passou a 34 verificações:
+    - no vau, à noite e na chuva, cada efeito ligado e desligado: o nevoeiro, o fogo apagado, o fogo (e o fogo apagado por cima dele, e o de tempo marcado) e o rio congelado, com o degelo;
+    - o fechamento, que confere o "Pronto quando": uma investida à noite, na chuva. A batalha se lê pela luz das tochas, e a nuvem da investida bate na luz delas e se vê de longe.
+  - Fotos novas: `.shots-g6-magia-nevoeiro.png`, `.shots-g6-magia-fogo.png`, `.shots-g6-magia-gelo.png`, `.shots-g6-pronto.png` (de longe) e `.shots-g6-pronto-perto.png`.
 
 ## 16. Marco 19: magia do Comandante
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.

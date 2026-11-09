@@ -1928,6 +1928,32 @@ export const WEATHER = {
   GROUND: { WET_IN: 40, STORM_WET_IN: 18, DRY_OUT: 90, SNOW_IN: 60, MELT: 150, RAIN_MELT: 50 },
 } as const;
 
+/**
+ * O que a magia mexe num lugar (G6, parte 4): nevoeiro, tochas apagadas, água congelada e fogo.
+ * Os tempos são em segundos de tela (param na pausa).
+ */
+export const PLACES = {
+  /** Quanto o efeito leva para chegar ao máximo e para sumir. */
+  FADE_IN: 1.5,
+  FADE_OUT: 2.5,
+  /** O maior raio de um lugar. */
+  MAX_RADIUS: 400,
+  /** O nevoeiro: um banco a cada tanto de raio, entre o mínimo e o máximo. */
+  FOG_BANK_EVERY: 55,
+  FOG_BANKS: [3, 14] as const,
+  /** O fogo: uma chama a cada tanto de área (px²), entre o mínimo e o máximo; a luz vai além delas. */
+  FIRE_AREA: 2200,
+  FIRE_FLAMES: [3, 22] as const,
+  FIRE_LIGHT: 140,
+  /** A cada quanto sobe um fio de fumaça do fogo (com 6 chamas; mais chamas, mais fumaça). */
+  SMOKE_EVERY: 0.26,
+  /** Quanto tempo o chão fica queimado depois do fogo, e quanto leva sumindo. */
+  SCORCH_LINGER: 120,
+  SCORCH_FADE: 10,
+  /** A cada quanto procura as chamas fixas (fogueira, postes, forja) dentro de onde o fogo apagou. */
+  DOUSE_SCAN: 0.25,
+} as const;
+
 /** Fadiga por batalhão (Marco 13): 0 descansado, 100 exausto. */
 export const FATIGUE = {
   /** Um dia inteiro de marcha (DAY_DISTANCE) cansa isto. */

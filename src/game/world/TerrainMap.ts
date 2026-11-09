@@ -221,7 +221,22 @@ export class TerrainMap {
     return !(outward > d.half && Math.abs(across) <= d.gateHalf + 10);
   }
 
+  /** Água congelada por magia (G6, parte 4): dentro destes círculos, a água e o raso viram gelo. */
+  private frozen: readonly { x: number; y: number; r: number }[] = [];
+
+  setFrozen(areas: readonly { x: number; y: number; r: number }[]): void {
+    this.frozen = areas;
+  }
+
   typeAt(x: number, y: number): TerrainType {
+    const t = this.unfrozenTypeAt(x, y);
+    if (this.frozen.length === 0 || (t !== "WATER" && t !== "SHALLOW")) return t;
+    for (const f of this.frozen) if ((x - f.x) ** 2 + (y - f.y) ** 2 <= f.r * f.r) return "ICE";
+    return t;
+  }
+
+  /** O terreno sem o gelo da magia (o desenho do gelo pergunta onde está a água). */
+  unfrozenTypeAt(x: number, y: number): TerrainType {
     const solids = this.townBuckets.get(Math.floor(y / TOWN_BUCKET) * 100000 + Math.floor(x / TOWN_BUCKET));
     if (solids) {
       for (const { rect: r, type } of solids) {

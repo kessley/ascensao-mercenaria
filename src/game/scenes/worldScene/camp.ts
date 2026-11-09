@@ -735,7 +735,10 @@ export const campMethods = {
     for (const p of this.mapLife.lanterns()) out.push({ x: p.x, y: p.y, radius: 140, ...F.LANTERN });
     for (const p of this.garrisons.lights()) out.push({ x: p.x, y: p.y, radius: L.TORCH, ...F.TORCH });
     for (const c of store.calamities) if (!c.defeated) out.push({ ...c.lair, radius: L.LAIR, ...F.LAIR });
-    return out;
+    // O que a magia mexe (G6, parte 4): onde o fogo foi apagado, nenhuma luz; o fogo chamado acende a noite
+    const lit = this.places.hasDouse ? out.filter((l) => !this.places.doused(l)) : out;
+    lit.push(...this.places.lights());
+    return lit;
   },
 
   setForced(this: WorldScene, on: boolean): void {

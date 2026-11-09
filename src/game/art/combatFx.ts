@@ -18,8 +18,9 @@ export const MISSILE_DIRS = 16;
 /** Projéteis fincados: inclinado para a esquerda (2) e para a direita (2). */
 export const STUCK_VARIANTS = 4;
 
-export type DustKind = "DRY" | "MUD" | "SNOW";
-export const DUSTS: readonly DustKind[] = ["DRY", "MUD", "SNOW"];
+/** Poeira de terra, de lama, borrifo de neve e (G6, parte 4) fumaça: da chama apagada e do fogo. */
+export type DustKind = "DRY" | "MUD" | "SNOW" | "SMOKE";
+export const DUSTS: readonly DustKind[] = ["DRY", "MUD", "SNOW", "SMOKE"];
 export const PUFF_FRAMES = 5;
 
 export type Matter = "BLOOD" | "BONE" | "WOOD" | "SPARK";
@@ -28,8 +29,8 @@ export const MATTERS: readonly Matter[] = ["BLOOD", "BONE", "WOOD", "SPARK"];
 export const STAINS: Record<Matter, number> = { BLOOD: 6, BONE: 2, WOOD: 2, SPARK: 0 };
 const STAIN_AT: Record<Matter, number> = { BLOOD: 0, BONE: 6, WOOD: 8, SPARK: 10 };
 
-const ROW = { MISSILE: 0, PUFF: 3, CHIP: 6, STAIN: 7 } as const;
-export const FX_ROWS = 8;
+const ROW = { MISSILE: 0, PUFF: 3, CHIP: 7, STAIN: 8 } as const;
+export const FX_ROWS = 9;
 
 export function missileFrame(kind: MissileKind, dir: number): number {
   const d = ((Math.round(dir) % MISSILE_DIRS) + MISSILE_DIRS) % MISSILE_DIRS;
@@ -168,6 +169,7 @@ const DUST_COLORS: Record<DustKind, readonly [number, number, number]> = {
   DRY: [0xd8c69c, 0xb39e76, 0x8c7856],
   MUD: [0x8f7a5c, 0x6f5c44, 0x53442f],
   SNOW: [0xffffff, 0xe6edf5, 0xc5d3e1],
+  SMOKE: [0x9a9894, 0x74716d, 0x524f4c],
 };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 

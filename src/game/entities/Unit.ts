@@ -49,6 +49,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   static ground: ((x: number, y: number, t: TerrainType) => number) | null = null;
   /** Muda quando a estação ou o tempo mudam (o chão guardado de cada unidade é refeito). */
   static groundStamp = 0;
+  /** O fogo foi apagado aqui (G6, parte 4: a magia que apaga as tochas)? Sem lugar apagado, null. */
+  static doused: ((p: Point) => boolean) | null = null;
   /** Marcha forçada (a cena liga): o Comandante e os soldados fora de combate andam mais depressa. */
   static pace = 1;
   /** Flecha caiu sobre gente do próprio lado (a cena conta e avisa). */
@@ -281,9 +283,12 @@ export abstract class Unit extends Phaser.GameObjects.Container {
 
   /** Acende ou apaga a tocha na mão (só em quem tem figura). Chamar a cada quadro não custa nada. */
   setTorch(on: boolean): void {
-    const want = on && this.sprite !== null;
+    // Onde a magia apagou o fogo, a tocha não acende (e a que estava acesa solta fumaça)
+    const doused = on && Unit.doused !== null && Unit.doused(this);
+    const want = on && !doused && this.sprite !== null;
     if (want === (this.torch !== null)) return;
     if (!want) {
+      if (doused && this.torch?.visible) combatFx(this.scene)?.smoke(this.x, this.y - 14, 0.5);
       this.torch?.destroy();
       this.torch = null;
       return;
