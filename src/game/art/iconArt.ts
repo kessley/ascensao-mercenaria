@@ -677,6 +677,32 @@ export const ICON_ART = {
     "nn...nn...",
     "..........",
   ],
+  /** A bola de fogo, caindo com o rastro (Marco 19) */
+  FIREBALL: [
+    "x.........",
+    ".x..x.....",
+    "..xx.x....",
+    "...xxRRR..",
+    "....RxxxR.",
+    "...RxyyyxR",
+    "...RxywyxR",
+    "...RxyyyxR",
+    "....RxxxR.",
+    ".....RRR..",
+  ],
+  /** A cruz de luz da cura, com faíscas */
+  MEND: [
+    "....eE....",
+    "....eE..y.",
+    "....eE....",
+    ".eeeeeeEE.",
+    ".EEEeeEEE.",
+    "....eE....",
+    "y...eE....",
+    "....eE....",
+    "....EE..y.",
+    "..........",
+  ],
   CRY: [
     "..........",
     ".......g.n",

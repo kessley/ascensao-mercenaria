@@ -126,7 +126,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
  */
 export class CombatEffects {
   /** O que está na tela agora (os testes conferem). */
-  stats = { flying: 0, stuck: 0, stains: 0, puffs: 0, chips: 0, impacts: 0, sparks: 0, smoked: 0 };
+  stats = { flying: 0, stuck: 0, stains: 0, puffs: 0, chips: 0, impacts: 0, sparks: 0, smoked: 0, blasts: 0 };
   /** Onde a última investida bateu. */
   lastImpact: Point | null = null;
 
@@ -209,7 +209,7 @@ export class CombatEffects {
   // --- Golpes ---
 
   /** Quem levou o golpe respinga, do lado contrário de quem bateu. */
-  wound(unit: Unit, source: Unit, amount: number, ranged: boolean): void {
+  wound(unit: Unit, source: Point, amount: number, ranged: boolean): void {
     const m = unit.matter;
     const foot = unit.foot;
     if (!this.near(foot)) return;
@@ -259,6 +259,22 @@ export class CombatEffects {
       const out = rand(14, 40);
       this.puff(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.6, Math.cos(a) * out, Math.sin(a) * out * 0.5 - 4, rand(1100, 1900), dust, -rand(0, 180), 0.85);
     }
+  }
+
+  /** A explosão da bola de fogo (Marco 19): um anel de fumaça e poeira que se abre, e faíscas voando. */
+  blast(x: number, y: number, radius: number): void {
+    this.stats.blasts++;
+    if (!this.near({ x, y }, 600)) return;
+    const dust = this.dustAt(x, y);
+    const n = 18;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rand(-0.15, 0.15);
+      const r = rand(0.2, 0.55) * radius;
+      const out = rand(30, 60);
+      const kind: DustKind = i % 3 === 0 ? dust : "SMOKE";
+      this.puff(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.6, Math.cos(a) * out, Math.sin(a) * out * 0.5 - 6, rand(1200, 2000), kind, -rand(0, 120), 0.8);
+    }
+    for (let i = 0; i < 10; i++) this.chip("SPARK", x, y, 6, Math.random() * Math.PI * 2, rand(60, 140), rand(60, 140), i % 2 === 0 ? 1 : 0, 0.5);
   }
 
   /** Um fio de fumaça que sobe (a chama que apagou, o fogo de um lugar). `strength` 1 = dois rolos. */

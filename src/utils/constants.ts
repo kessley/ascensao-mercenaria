@@ -1932,6 +1932,58 @@ export const WEATHER = {
  * O que a magia mexe num lugar (G6, parte 4): nevoeiro, tochas apagadas, água congelada e fogo.
  * Os tempos são em segundos de tela (param na pausa).
  */
+/**
+ * A magia do Comandante (Marco 19). O arcano enche com os dias, e não durante a luta: numa batalha
+ * cabem duas ou três magias. Os tempos de recarga são em segundos de batalha.
+ */
+export const MAGIC = {
+  ARCANE_MAX: 100,
+  /** Quanto o arcano volta por dia (cheio em dois dias e meio). */
+  ARCANE_PER_DAY: 40,
+  SPELLS: {
+    FIREBALL: {
+      name: "Bola de fogo",
+      hint: "Explode onde cai: fere todos em volta (os do bando também), assusta quem pega e deixa o chão em chamas",
+      kind: "AREA",
+      cost: 40,
+      range: 460,
+      radius: 90,
+      cooldown: 6,
+    },
+    MEND: {
+      name: "Cura",
+      hint: "Fecha as feridas de um batalhão perto do ponto e devolve o ânimo dele",
+      kind: "SUPPORT",
+      cost: 30,
+      range: 380,
+      radius: 160,
+      cooldown: 10,
+    },
+  },
+  FIREBALL: {
+    /** Dano no meio da explosão; na borda, `EDGE` dele. */
+    DAMAGE: 45,
+    EDGE: 0.35,
+    /** Quanto a bola leva no ar (ms) e quão alto o arco sobe (px). */
+    FLIGHT_MS: 480,
+    ARC: 70,
+    /** Moral que cada tropa pega perde (uma vez por tropa). */
+    SHOCK: 30,
+    /** Quanto dura o clarão da explosão (ms). */
+    BLAST_MS: 420,
+    /** O fogo que fica no chão: quanto dura e quanto queima por segundo quem está dentro. */
+    FIRE_SECONDS: 7,
+    BURN_PER_SEC: 4,
+  },
+  MEND: {
+    /** Cada ferido recupera até esta fração da vida. */
+    SHARE: 0.6,
+    MORALE: 25,
+    /** A tropa em pânico que a cura deixa com esta moral se reagrupa (menos que o reagrupar comum). */
+    RALLY_ABOVE: 40,
+  },
+} as const;
+
 export const PLACES = {
   /** Quanto o efeito leva para chegar ao máximo e para sumir. */
   FADE_IN: 1.5,

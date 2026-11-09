@@ -11,7 +11,7 @@ import { Corpses } from "../art/corpses";
 import { Wagon } from "../entities/Wagon";
 import { WeatherLayer } from "../world/WeatherLayer";
 import { GroundWeather } from "../world/GroundWeather";
-import { CombatEffects, setCombatFx } from "../world/CombatEffects";
+import { CombatEffects, combatFx, setCombatFx } from "../world/CombatEffects";
 import { PlaceEffects } from "../world/PlaceEffects";
 import { FlagSprite } from "../world/FlagSprite";
 import { isFlood, seasonOf, weatherAt, windAt, type Wind } from "../../utils/season";
@@ -71,6 +71,8 @@ import { inputMethods, type InputMethods } from "./worldScene/input";
 import { scoutsMethods, type ScoutsMethods } from "./worldScene/scouts";
 import { hudMethods, type HudMethods } from "./worldScene/hud";
 import { duelMethods, type DuelMethods, type FieldDuel } from "./worldScene/duel";
+import { magicMethods, type MagicAnim, type MagicFlash, type MagicMethods } from "./worldScene/magic";
+import type { SpellId } from "../sim/magic";
 import type { DuelInput } from "../sim/duel";
 
 /** A cena do mundo mais recente (ao carregar um jogo, a antiga ainda vive por um quadro). */
@@ -227,6 +229,19 @@ export class WorldScene extends Phaser.Scene {
   lastBannerFx = -Infinity;
   warCryAt = -Infinity;
 
+  // --- Magia do Comandante (Marco 19) ---
+  /** A magia com a mira armada (o próximo clique lança). */
+  aiming: SpellId | null = null;
+  /** Quando cada magia pode ser lançada de novo (tempo da cena, ms). */
+  spellReadyAt: Partial<Record<SpellId, number>> = {};
+  aimGfx!: Phaser.GameObjects.Graphics;
+  magicFlashes: MagicFlash[] = [];
+  magicAnims: MagicAnim[] = [];
+  burnClock = 0;
+  /** A última explosão e a última cura (os testes conferem). */
+  lastBlast: { at: { x: number; y: number }; wounded: number; ours: number; groups: number } | null = null;
+  lastMend: { battalion: string; healed: number } | null = null;
+
   // --- Estações, clima e logística (Marco 13) ---
   /** Carroças do trem de suprimentos em campo. */
   wagons: Wagon[] = [];
@@ -346,6 +361,13 @@ export class WorldScene extends Phaser.Scene {
     this.lastTrumpetFx = -Infinity;
     this.lastBannerFx = -Infinity;
     this.warCryAt = -Infinity;
+    this.aiming = null;
+    this.spellReadyAt = {};
+    this.magicFlashes = [];
+    this.magicAnims = [];
+    this.burnClock = 0;
+    this.lastBlast = null;
+    this.lastMend = null;
     this.walkPath = null;
     this.inCamp = !useGameStore.getState().scenario;
     this.quartered = new Set();
@@ -578,6 +600,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateVision(0);
 
     this.setupInput();
+    this.setupMagic();
     startCampfireAmbience();
     this.syncContract();
     this.syncCalamities();
@@ -625,7 +648,8 @@ export class WorldScene extends Phaser.Scene {
     });
     activeScene = this;
     const cleanup = () => {
-      setCombatFx(null);
+      // Só larga os efeitos se ainda forem os desta cena (a nova pode ter nascido antes de a velha morrer)
+      if (combatFx(this)) setCombatFx(null);
       this.places.destroy();
       if (Unit.doused === this.places.isDoused) Unit.doused = null;
       if (Enemy.places === this.places) Enemy.places = null;
@@ -803,6 +827,7 @@ export class WorldScene extends Phaser.Scene {
     setArrowField(everyone);
     resolveAttacks(this, everyone, time);
     this.combatFx.update(time, dt, everyone, Unit.lod);
+    this.updateMagic(time, dt, everyone);
     this.hosts.afterCombat(hostWorld);
     const faltering = this.commander.hp / this.commander.maxHp < SUPPORT.BANNER_FALTER_HP;
     // Dia santo e jejum de cada fé (Marco 23)
@@ -1081,5 +1106,5 @@ export class WorldScene extends Phaser.Scene {
  * A cena passava de 6000 linhas: as partes moram em `./worldScene/`, cada uma um objeto de métodos
  * com `this: WorldScene`, e entram aqui no protótipo. A interface diz ao TypeScript que são da cena.
  */
-export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods {}
-Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods);
+export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods, MagicMethods {}
+Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods, magicMethods);

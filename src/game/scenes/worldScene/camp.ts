@@ -737,7 +737,7 @@ export const campMethods = {
     for (const c of store.calamities) if (!c.defeated) out.push({ ...c.lair, radius: L.LAIR, ...F.LAIR });
     // O que a magia mexe (G6, parte 4): onde o fogo foi apagado, nenhuma luz; o fogo chamado acende a noite
     const lit = this.places.hasDouse ? out.filter((l) => !this.places.doused(l)) : out;
-    lit.push(...this.places.lights());
+    lit.push(...this.places.lights(), ...this.magicLights());
     return lit;
   },
 

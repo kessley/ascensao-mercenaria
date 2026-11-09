@@ -256,6 +256,10 @@ export function ScenarioEditor({ scenario, onChange }: { scenario: BattleScenari
             <input type="checkbox" checked={scenario.directOrders} onChange={(e) => set({ directOrders: e.target.checked })} className="accent-amber-500" />
             Ordens diretas
           </label>
+          <label className="flex items-end gap-2 pb-2 text-sm text-neutral-200" title="O Comandante sabe todas as magias e começa com o arcano cheio">
+            <input type="checkbox" checked={!!scenario.magic} onChange={(e) => set({ magic: e.target.checked })} className="accent-amber-500" />
+            Comandante mago
+          </label>
         </div>
         <p className="text-xs text-neutral-400">
           {SCENARIO_OBJECTIVES[scenario.objective].description} {WAR_AI.DIFFICULTY[scenario.difficulty].description}

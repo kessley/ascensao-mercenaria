@@ -715,6 +715,34 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     }
   }
 
+  /**
+   * O fogo da magia (Marco 19): a explosão (`from` = o miolo dela) e o chão em chamas (`from` =
+   * null). Sem esquiva, escudo nem revide: ninguém bateu de perto. O fogo do chão doura a figura em
+   * vez de piscar branco. Quem cai dá a baixa a `credit`, se for do outro lado.
+   */
+  scorch(amount: number, from: { x: number; y: number } | null, credit: Unit | null = null): void {
+    if (!this.isAlive) return;
+    this.hp = Math.max(0, this.hp - amount);
+    if (from) {
+      combatFx(this.scene)?.wound(this, from, amount, false);
+      this.flashHit();
+    } else this.flashEmber();
+    if (this.hp <= 0) {
+      if (credit && credit.team !== this.team) credit.onKill();
+      this.die();
+    }
+  }
+
+  /** A figura fica cor de brasa por um instante (queimando no chão). */
+  flashEmber(): void {
+    const img = this.sprite;
+    if (!img) return;
+    img.setTint(0xff9a50).setTintMode(Phaser.TintModes.MULTIPLY);
+    this.scene.time.delayedCall(140, () => {
+      if (img.active) this.restoreTint();
+    });
+  }
+
   /** Postura (só visual): sentado fica menor; dormindo, quase apagado e sem a barra de vida. */
   setPose(pose: "STAND" | "SIT" | "SLEEP"): void {
     if (this.pose === pose) return;

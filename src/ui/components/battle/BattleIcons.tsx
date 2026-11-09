@@ -3,7 +3,7 @@ import type { Formation, TroopType } from "../../../utils/constants";
 import { PixelIcon } from "../PixelIcon";
 
 /** Os ícones do combate (G5, parte 3): pixel art feita por código, em `game/art/iconArt.ts`. */
-export type CommandIconId = "ADVANCE" | "HALT" | "CHARGE" | "RETREAT" | "RALLY" | "RUN" | "CRY" | "PAUSE" | "SLOW" | "FORCED" | "FORAGE" | "HELP" | "CYCLE" | "HOLD_FIRE" | "KITE" | "WAGON";
+export type CommandIconId = "ADVANCE" | "HALT" | "CHARGE" | "RETREAT" | "RALLY" | "RUN" | "CRY" | "PAUSE" | "SLOW" | "FORCED" | "FORAGE" | "HELP" | "CYCLE" | "HOLD_FIRE" | "KITE" | "WAGON" | "FIREBALL" | "MEND";
 
 export function CommandIcon({ id }: { id: CommandIconId }) {
   return <PixelIcon id={id} scale={2} />;

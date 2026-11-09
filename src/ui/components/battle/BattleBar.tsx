@@ -295,6 +295,24 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
               onClick={() => send({ type: "WAR_CRY", ids: [] })}
             />
           </Group>
+          {hud.magic && (
+            <Group title="Magia">
+              {hud.magic.spells.map((sp) => (
+                <Command
+                  key={sp.id}
+                  icon={<CommandIcon id={sp.id} />}
+                  label={sp.name}
+                  hint={`${sp.hint}. Custa ${sp.cost} de arcano (tem ${hud.magic?.arcane ?? 0}). Clique no campo para lançar; botão direito desiste.`}
+                  keyName={sp.key}
+                  active={hud.magic?.aiming === sp.id}
+                  disabled={sp.readyIn > 0 || (hud.magic?.arcane ?? 0) < sp.cost}
+                  badge={sp.readyIn > 0 ? String(sp.readyIn) : undefined}
+                  tone="border-violet-700 text-violet-200 hover:border-violet-400"
+                  onClick={() => send({ type: "SPELL", ids: [], spell: sp.id })}
+                />
+              ))}
+            </Group>
+          )}
           {(shooters.length > 0 || riders.length > 0) && (
             <Group title="Postura">
               {riders.length > 0 && (

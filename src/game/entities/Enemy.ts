@@ -294,6 +294,11 @@ export class Enemy extends Unit {
     super.takeDamage(amount, source, time, kind);
   }
 
+  override scorch(amount: number, from: { x: number; y: number } | null, credit: Unit | null = null): void {
+    if (credit?.team === "ALLY" && !this.hostile && !this.friendly) this.provoked = true;
+    super.scorch(amount, from, credit);
+  }
+
   /** Gente que não luta (refugiados, mensageiros, mercadores): foge de quem chegar perto. */
   private get timid(): boolean {
     return this.kind === "CIVILIAN" || this.kind === "COURIER" || this.kind === "MERCHANT";

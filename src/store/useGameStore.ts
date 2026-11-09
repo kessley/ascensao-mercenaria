@@ -80,6 +80,16 @@ import { CONTINENT_KEYS, INITIAL_SEA, seaSlice, type ContinentKey, type SeaActio
 import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlice";
 import { fieldCampOf } from "../game/sim/fortress";
 import { INITIAL_FORTRESS, fortressSlice, ironBuyPrice, migrateSeatCity, type FortressActions, type FortressState } from "./fortressSlice";
+import { INITIAL_MAGIC, magicSlice, type MagicActions, type MagicState } from "./magicSlice";
+import { SPELL_IDS, type SpellId } from "../game/sim/magic";
+
+/** A magia no HUD da batalha (Marco 19). */
+export interface MagicHud {
+  arcane: number;
+  max: number;
+  aiming: SpellId | null;
+  spells: { id: SpellId; name: string; hint: string; cost: number; readyIn: number; key: string }[];
+}
 import { realmFigures, type SeatCity } from "../game/sim/seatCity";
 import { INITIAL_CAPTAINS, allCaptains, captainSlice, captainsWeek, desertions, freshCaptains, pruneCompanies, shiftLoyalty, type CaptainActions, type CaptainState } from "./captainSlice";
 import { captainName, type CaptainData } from "../game/data/captains";
@@ -110,7 +120,7 @@ import { continentWorld, generateWorld } from "../game/worldgen/generateWorld";
 import { generatePlanet, type CultureId } from "../game/data/planet";
 import { BAND_HOME, CULTURE_IDS, cultureOf, folkOf, mainCulture, nearestFolk, officerCulture, pickCulture } from "../game/sim/culture";
 import { FAITHS, addFavor, decayFavor, factionFaith, faithMix, faithOf, faithToday, fastEnds, fastKey, friction, isFasting, isHolyDay, keeps, pickFaith, preacherShare, townFaith, type FaithFavor, type FaithId } from "../game/sim/faith";
-import { LANGUAGE, LEGACY } from "../utils/constants";
+import { LANGUAGE, LEGACY, MAGIC } from "../utils/constants";
 import { captureField, readSave, writeSave, type FieldSave } from "../game/save/saveGame";
 import {
   FOLLOWERS,
@@ -422,6 +432,8 @@ export interface BattleHud {
   camera: { locked: boolean; zoom: number };
   /** Segundos até o próximo grito de guerra (0 = pronto). */
   warCryIn: number;
+  /** A magia do Comandante (Marco 19); null = ele não sabe nenhuma. */
+  magic: MagicHud | null;
   /** O mundo está parado, esperando ordens. */
   tacticalPause: boolean;
   /** Onde o Comandante está. */
@@ -694,6 +706,8 @@ export type BattleCommand =
   /** Toque de trombeta pré-combinado para os batalhões `ids` (vazio = todo o exército). */
   | { type: "TRUMPET"; ids: string[]; call: TrumpetCall }
   | { type: "WAR_CRY"; ids: string[] }
+  /** Arma (ou desarma) a mira de uma magia do Comandante (Marco 19). */
+  | { type: "SPELL"; ids: string[]; spell: SpellId }
   /** Pausa tática liga/desliga; selecionados correm ou voltam ao passo. */
   | { type: "TACTICAL_PAUSE" | "RUN" | "SLOW_MOTION" | "HOLD_FIRE" | "CYCLE" | "KITE"; ids: string[] }
   /** Viagem rápida pelo Mapa do Continente até o ponto (x, y) do mundo. */
@@ -728,7 +742,7 @@ export interface BattalionContextMenu {
   y: number;
 }
 
-export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions, CaptainState, CaptainActions, FortressState, FortressActions {
+export interface GameState extends CourtState, CourtActions, WarState, WarActions, SeaState, SeaActions, LegacyState, LegacyActions, CaptainState, CaptainActions, FortressState, FortressActions, MagicState, MagicActions {
   /** Mesma semente, séculos depois de uma saga terminada. */
   revisitSaga: (saga: SagaRecord) => void;
   /** Tela de criação do mundo ou campanha em andamento. */
@@ -2138,6 +2152,7 @@ function campaignState(world: WorldDef | null): CampaignState {
     ...INITIAL_LEGACY,
     ...INITIAL_CAPTAINS,
     ...INITIAL_FORTRESS,
+    ...INITIAL_MAGIC,
     captainCandidates: freshCaptains(1, world?.culture),
     leader: { ...FOUNDER, name: personName(r), age: r.int(LEGACY.START_AGE[0], LEGACY.START_AGE[1]) },
     planet: world ? generatePlanet(world) : null,
@@ -2199,6 +2214,8 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     nextCalamityDay: Infinity,
     warDifficulty: scenario.difficulty,
     scenario,
+    // O Comandante mago (Marco 19): sabe todas as magias e começa com o arcano cheio
+    ...(scenario.magic ? { spells: [...SPELL_IDS], arcane: MAGIC.ARCANE_MAX } : {}),
     // Escadas e aríete vêm prontos: o relógio parado não deixa ninguém cortar madeira
     siege: scenario.siege && { settlementId: SCENARIO_TOWN, walled: true, startDay: 0, food: 0, wood: 0, ladders: scenario.siege.role === "ATTACK" ? scenario.siege.ladders : 0, ram: scenario.siege.role === "ATTACK" ? scenario.siege.rams : 0 },
   };
@@ -2552,6 +2569,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   advanceTime: (days) => {
     if (days <= 0) return;
+    // O arcano volta com os dias (Marco 19)
+    get().restoreArcane(days);
     const s = get();
     if (!s.world) return;
     const total = s.dayProgress + days;
@@ -2827,6 +2846,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
   },
 
   ...courtSlice((partial) => set(partial), get),
+  ...magicSlice((partial) => set(partial), get),
   ...warSlice(set, get),
   ...captainSlice(set, get, {
     note: (text, tone = "info") => set((s) => ({ log: appendLog(s.log, [entry(s.day, text, tone)]) })),

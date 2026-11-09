@@ -20,6 +20,8 @@ function labInPage() {
         clock += 1000 / 30;
         scene.time.now = clock;
         scene.sys.step(clock, 1000 / 30);
+        // O fim do passo do jogo esvazia a fila de teclas (sem isso, cada tecla nova repassa as velhas)
+        scene.input.keyboard?.manager?.postUpdate();
         if (each?.(scene) === true) break;
         if (store().getState().scenarioResult) break;
       }
@@ -111,6 +113,9 @@ export async function openLab() {
   await page.evaluate(labInPage);
   /** Monta o cenário e entrega o campo pronto, em passos manuais. */
   const battle = async ({ army = [["INFANTRY"]], force = { GOBLIN: 10 }, faction = "GOBLINS", forces, setup, distance = 2400, competence = 3, trait = "BRAVE", stance = "HOLD" }) => {
+    await page.evaluate(() => {
+      window.__labOldGame = window.__world?.sys?.game ?? null;
+    });
     await page.evaluate(
       ({ army, force, faction, forces, setup, distance, competence, trait, stance }) => {
         const mod = window.__scenarios;
@@ -138,6 +143,15 @@ export async function openLab() {
     await page.waitForFunction(() => window.__world?.run && window.__world.run.def === window.__store.getState().scenario && window.__store.getState().battleHud && !window.__world.scene.isPaused(), null, { timeout: 20000 });
     await page.waitForTimeout(350);
     await page.evaluate(() => {
+      // O Phaser só desfaz um jogo no passo seguinte do laço, que o laboratório parou: sem isso, o
+      // jogo da batalha anterior fica vivo, com as teclas presas a ele
+      const old = window.__labOldGame;
+      // (e o canvas novo, que nasceu embaixo do velho, precisa remedir onde está para o clique)
+      if (old && old !== window.__world.sys.game && old.pendingDestroy) {
+        old.runDestroy();
+        window.__world.sys.game.scale.updateBounds();
+      }
+      window.__labOldGame = null;
       window.__lab.begin();
       window.__world.updateVision(window.__world.time.now);
     });

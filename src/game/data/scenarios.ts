@@ -97,6 +97,8 @@ export interface BattleScenario {
   boarding?: boolean;
   /** Cerco à sede do bando (Marco 22, parte 3): a batalha volta à campanha no fim. */
   seat?: boolean;
+  /** O Comandante sabe magia (Marco 19): todas as magias, com o arcano cheio. */
+  magic?: boolean;
 }
 
 export interface ScenarioBattalionResult {

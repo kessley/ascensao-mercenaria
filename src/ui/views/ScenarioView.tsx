@@ -70,6 +70,7 @@ function ScenarioSheet({ s }: { s: BattleScenario }) {
         <Fact label="Inimigo" value={`${scenarioEnemyTotal(s)} combatentes`} />
         <Fact label="Névoa de guerra" value={s.fog ? "Ligada" : "Desligada"} />
         <Fact label="Ordens" value={s.directOrders ? "Diretas" : "Voz e mensageiros"} />
+        {s.magic && <Fact label="Comandante" value="Mago" />}
         <Fact label="Recorde" value={record ? `${record.wins}/${record.plays} vitórias${record.best !== null ? ` · ${clock(record.best)}` : ""}` : "Ainda não jogado"} />
       </dl>
       <ul className="flex flex-col gap-1 text-sm text-neutral-300">

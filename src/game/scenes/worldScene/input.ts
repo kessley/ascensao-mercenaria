@@ -179,6 +179,17 @@ export const inputMethods = {
         return;
       }
       useGameStore.getState().setContextMenu(null);
+      // A mira de uma magia (Marco 19): o clique lança; o botão direito desiste
+      if (this.aiming && !pointer.middleButtonDown()) {
+        if (pointer.rightButtonDown()) this.aimSpell(null);
+        else if (pointer.leftButtonDown()) {
+          // O ponto do mundo sob o clique agora (o `worldX` do ponteiro é o do último quadro)
+          const at = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+          const problem = this.castAt(this.aiming, { x: at.x, y: at.y });
+          if (problem) this.pushFeed(problem);
+        }
+        return;
+      }
       // Modo construção (Marco 22): o clique põe a peça; o botão direito desiste
       if (useGameStore.getState().campBuild && !pointer.middleButtonDown()) {
         if (pointer.rightButtonDown()) useGameStore.getState().setCampBuild(null);
@@ -287,6 +298,7 @@ export const inputMethods = {
     this.keys.ESC.on("down", () => {
       // Soltar a linha de batalha sem dar a ordem
       if (this.lineDrag) return this.cancelLine();
+      if (this.aiming) return this.aimSpell(null);
       const store = useGameStore.getState();
       if (store.campBuild) return store.setCampBuild(null);
       // Batalha personalizada: com nada selecionado, Esc abre (ou fecha) a pausa
@@ -653,6 +665,9 @@ export const inputMethods = {
         }
         case "WAR_CRY":
           this.warCry();
+          break;
+        case "SPELL":
+          this.aimSpell(this.aiming === cmd.spell ? null : cmd.spell);
           break;
         case "TRAVEL":
           this.fastTravel({ x: cmd.x, y: cmd.y });

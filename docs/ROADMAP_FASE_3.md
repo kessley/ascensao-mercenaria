@@ -25,7 +25,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o Marco 19 (etapa 16), a magia do Comandante. Os efeitos que ela mexe já estão prontos (G6, parte 4).
+- **Em andamento:** o Marco 19 (etapa 16), a magia do Comandante. Está feita a parte 1 (o arcano e as primeiras magias).
+- **A seguir:** a parte 2 do Marco 19: as magias que mexem no mundo.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -59,7 +60,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
-| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
+| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | parte 1 de 4 |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
@@ -1304,6 +1305,58 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 
 **Pronto quando:** uma magia bem usada vira uma batalha difícil, mas usá-la tem um preço político e pessoal.
 
+**Em quatro partes,** cada uma com o seu commit:
+1. **O arcano e as primeiras magias:** o recurso arcano, a mira em campo e duas magias, uma de dano em área (a bola de fogo) e uma de suporte (a cura).
+   - **Pronta quando:** a bola de fogo no meio de uma tropa cerrada fere quase todos, assusta e deixa o chão em chamas, sem escolher lado; a cura tira um batalhão do pânico; o arcano dá para duas ou três magias por batalha.
+2. **As magias que mexem no mundo:** congelar um rio, chamar nevoeiro, apagar as tochas e quebrar a moral de um exército, usando os efeitos do G6 (parte 4).
+   - **Pronta quando:** cada uma muda o que as tropas podem fazer (atravessar, enxergar, ser vistas, aguentar firme), e não só o desenho.
+3. **Aprender pelo mundo:** grimórios e artefatos nas ruínas antigas, magos da corte capturados e mestres de outro continente. O Comandante começa sem magia nenhuma.
+   - **Pronta quando:** cada magia tem pelo menos um caminho no mundo para ser aprendida, e nenhum deles é de graça.
+4. **O preço, e as calamidades mágicas:** a reação das cortes e dos templos (−Honra, +Temor), as marcas no corpo do Comandante e as calamidades mágicas, com fraquezas e respostas mágicas. Uma batalha de teste confere o "Pronto quando".
+
+**Feito na parte 1, o arcano e as primeiras magias:**
+- **O arcano** (`src/store/magicSlice.ts`): as magias que o Comandante sabe e o arcano de agora, de 0 a 100. Os dois vão para o save.
+  - Gastar: `spendArcane(magia)` só gasta de quem sabe a magia e tem o bastante.
+  - Volta 40 por dia, pelo relógio do mundo (`advanceTime`), e só para quem sabe alguma magia.
+  - Cheio, dá para duas bolas de fogo, ou uma bola e uma cura: o Comandante escolhe a hora.
+- **As regras** (`src/game/sim/magic.ts`, sem Phaser):
+  - `castProblem` diz por que a magia não sai: não sabe, na recarga, arcano de menos ou longe demais;
+  - `blastDamage`: cheio no meio da explosão e 35% na borda;
+  - `mendAmount`: até 60% da vida de cada ferido.
+- **Em campo** (`src/game/scenes/worldScene/magic.ts`):
+  - as teclas 5 a 9 (uma por magia que o Comandante sabe) ou o botão da magia armam a mira. A mira mostra o alcance em volta do Comandante e a área no ponto; fora do alcance, fica cinza;
+  - o clique esquerdo lança; o direito ou o Esc desistem;
+  - no duelo, não há magia;
+  - cada magia tem a sua recarga, de 6 a 10 s.
+- **A bola de fogo** (40 de arcano, alcance 460, área de 90 px):
+  - sai da mão do Comandante e voa em arco por meio segundo, com rastro de fumaça e luz na noite;
+  - onde cai, explode: fere todos na área, os do bando também, sem esquiva nem escudo. O sopro empurra para fora;
+  - cada tropa pega perde 30 de moral de uma vez;
+  - o chão fica em chamas por 7 s (o fogo do G6), e quem fica dentro segue se queimando;
+  - quem é do bando conta como fogo amigo.
+- **A cura** (30 de arcano, alcance 380): o batalhão mais perto do ponto fecha as feridas (até 60% da vida de cada um) e ganha 25 de moral. Em pânico, se a moral passa de 40, ele se reagrupa. Sem batalhão no ponto, a cura não sai e o arcano fica.
+- **O fogo da magia nas figuras** (`Unit.scorch`): sem esquiva, escudo nem revide. A explosão pisca a figura e respinga; o fogo do chão a deixa cor de brasa por um instante. O inimigo neutro que leva o fogo vira inimigo.
+- **A interface:**
+  - o grupo "Magia" na barra de ordens, com um botão por magia, a tecla, a recarga e a dica do custo;
+  - a barra de Arcano, roxa, embaixo da Vida;
+  - na batalha personalizada, "Comandante mago" no editor dá as duas magias e o arcano cheio.
+- **A arte** (`src/game/art/magicArt.ts`): a bola de fogo (4 quadros), o clarão da explosão (6 quadros: o miolo de calor que vira fumaça e o anel de fogo que corre até a borda da área) e as faíscas da cura. Os ícones das duas magias estão em `iconArt.ts`.
+- **O laboratório de testes:**
+  - o Phaser só desfaz um jogo no passo seguinte do laço, que o laboratório para. Agora o laboratório desfaz o jogo da batalha anterior: antes, ele ficava vivo, segurava as teclas e deslocava o clique;
+  - a fila de teclas é esvaziada a cada passo, como faz o laço do jogo;
+  - isso mostrou um erro que valia também no jogo: quando a cena velha morria depois de a nova nascer, ela largava os efeitos de combate da nova (o sangue, a poeira e a fumaça sumiam). Agora ela só larga os seus.
+- **Testes:**
+  - 10 de regras em `tests/unit/magic.test.ts`: a recusa, a mira, o dano da explosão, a cura, o arcano e a arte;
+  - a suíte nova `magia` (`npm run test:battle -- magia`), com 20 verificações:
+    - a tecla e o clique;
+    - a recusa longe demais, no duelo e na recarga;
+    - a explosão num esquadrão cerrado, o fogo no chão e o fogo amigo;
+    - a cura de um batalhão em pânico;
+    - o arcano que acaba e volta;
+    - a noite.
+  - Fotos: `.shots-m19-bola.png`, `.shots-m19-explosao.png`, `.shots-m19-fogo.png`, `.shots-m19-cura.png`, `.shots-m19-noite-voo.png` e `.shots-m19-noite.png`.
+- **Ficou para depois:** a IA não sai do chão em chamas. Parada dentro dele, uma tropa perde muito mais do que para a explosão.
+
 ## 17. Fechamento: jogar uma campanha inteira
 **Objetivo:** fechar a fase jogando, e não só simulando.
 - Uma campanha do começo ao fim, anotando o que quebra e o que cansa.
@@ -1322,7 +1375,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 ### Combinado e não feito
 - **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
 - **Alcance dos arcos:** subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
-- **Magia do Comandante:** etapa 16.
+- **Magia do Comandante:** etapa 16, em andamento.
 
 ### Sistemas incompletos
 | De onde veio | O que falta |

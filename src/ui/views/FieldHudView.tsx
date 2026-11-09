@@ -356,6 +356,7 @@ export function FieldHudView() {
                 {scenario ? "Comandante" : `Comandante ${leaderName}`} {!scenario && <span className="font-normal text-blue-300">· {title}</span>}
               </span>
               {hud && <StatBar label="Vida" value={hud.commanderHp} max={hud.commanderMaxHp} colorClass="bg-green-500" />}
+              {hud?.magic && <StatBar label="Arcano" value={hud.magic.arcane} max={hud.magic.max} colorClass="bg-violet-500" />}
             </div>
           </div>
           {!scenario && <FaithToday />}
