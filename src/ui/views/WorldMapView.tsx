@@ -4,7 +4,7 @@ import { expeditionStage } from "../../game/sim/expeditions";
 import { useGameStore, type WorldSnapshot } from "../../store/useGameStore";
 import { fieldFood } from "../components/SupplyPanel";
 import { pointsOfInterest, regionName, travelDaysBetween, type WorldDef } from "../../game/data/world";
-import { CELL } from "../../game/data/campGrid";
+import { CELL, ready } from "../../game/data/campGrid";
 import { isCalamityOwner, type Calamity, type Settlement } from "../../game/sim/realm";
 import { SEASONS, SUPPORT, WEATHER, WORLD, WORLD_HEIGHT, WORLD_WIDTH } from "../../utils/constants";
 import type { ScoutOrder } from "../../game/entities/Scout";
@@ -428,6 +428,8 @@ export function WorldMapView() {
   const day = useGameStore((s) => s.day);
   const campPacked = useGameStore((s) => s.campPacked);
   const campSize = useGameStore((s) => s.campPlan.size);
+  // A tenda de mapas (Marco 22): os batedores exploram uma região maior
+  const mapTent = useGameStore((s) => !s.campPacked && ready(s.campPlan, "MAP_TENT"));
   const away = useGameStore((s) => s.expeditions);
   const clock = useGameStore((s) => s.day + s.dayProgress);
   // Em campo, o exército só come o que leva (mochilas, bolsa e carroças junto)
@@ -582,7 +584,7 @@ export function WorldMapView() {
                 </span>
                 {dest && (
                   <span className="flex flex-wrap gap-1">
-                    <button type="button" onClick={() => scoutOrder(sc.id, { kind: "REGION", point: dest.point, radius: SUPPORT.SCOUT.REGION_RADIUS })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
+                    <button type="button" onClick={() => scoutOrder(sc.id, { kind: "REGION", point: dest.point, radius: SUPPORT.SCOUT.REGION_RADIUS * (mapTent ? 1.3 : 1) })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">
                       Explorar região
                     </button>
                     <button type="button" onClick={() => scoutOrder(sc.id, { kind: "WATCH", point: dest.point })} className="rounded border border-neutral-600 px-1 hover:border-lime-400">

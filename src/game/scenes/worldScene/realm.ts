@@ -12,7 +12,7 @@ import type { EnemyGroupDef } from "../../data/battleMaps";
 import { ferryDocks, regionName } from "../../data/world";
 import { isRaiderKind } from "../../sim/realm";
 import { activeLairs, siteFill } from "../../sim/siteLife";
-import { useGameStore } from "../../../store/useGameStore";
+import { campWatched, useGameStore } from "../../../store/useGameStore";
 import { SUPPORT, GEO, PROGRESSION, REALM, KINGDOM, WOLF, WORLD, CAMP_MOVE, FATIGUE, SEASONS, TRADE } from "../../../utils/constants";
 import { cargoCapacity } from "../../../utils/economy";
 import { freightWeight } from "../../sim/trade";
@@ -392,6 +392,10 @@ export const realmMethods = {
         if (!defenders && !this.campArea.packed) {
           store.raidCamp(band.name);
           this.pushFeed(`${band.name} atacou o acampamento desguarnecido!`);
+        } else if (defenders && !this.campArea.packed && !campWatched(store)) {
+          // Há gente, mas ninguém de guarda nem sentinela (Marco 22): o bando pega o acampamento de surpresa
+          store.raidCamp(band.name, true);
+          this.pushFeed(`${band.name} pegou o acampamento de surpresa: ninguém estava de guarda!`);
         }
         this.warbands.retarget(band);
         continue;

@@ -49,7 +49,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 9 | [Marco 21: duelos no meio da batalha](#9-marco-21-duelos-no-meio-da-batalha--ok) | recurso e arte | Traz as poses de golpe das figuras | ✅ OK |
 | 10 | [Locais de missão sempre habitados](#10-locais-de-missão-sempre-habitados--ok) | recurso | Pedido jogando: sem contrato, o acampamento goblin estava vazio. É pequeno e entra antes de o G4 continuar | ✅ OK |
 | 11 | [G4: resto do elenco](#11-g4-resto-do-elenco--ok) | arte | Carroças de verdade para o comboio e para as obras; gente no acampamento para quem vai construir | ✅ OK |
-| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | parte 1 ✅ OK; a seguir, a parte 2 |
+| 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | partes 1 e 2 ✅ OK; a seguir, a parte 3 |
 | 13 | [G5: interface](#13-g5-interface) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua) | recurso | | |
 | 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | |
@@ -761,7 +761,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - as estradas ainda chegam pelo oeste, mesmo com o portão em outro lado;
   - o desempenho com a planta cheia não foi medido: espera o sinal do usuário.
 
-### 12.2. Marco 22, parte 2: a vida no acampamento
+### 12.2. Marco 22, parte 2: a vida no acampamento ✅ OK
 **A fazer:**
 - **As sete necessidades completas no painel:** entram Salubridade, Moral e Ofício (GDD 9.3).
 - **A falta aparece no acampamento:** soldados dormindo ao relento, fila na fogueira, doentes no chão, cavalos amarrados na paliçada.
@@ -777,6 +777,40 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - cada uma das sete necessidades em falta se vê no acampamento antes do painel;
 - pôr um batalhão na obra em vez do treino é uma decisão que pesa;
 - a carpintaria faz o aríete e as escadas de um cerco.
+
+**Feito** (8 de novembro):
+- **As regras puras** estão em `src/game/sim/campDays.ts`: turnos, postos, obras, humor, produção, manutenção e a carpintaria. O catálogo cresceu em `campGrid.ts`: são 22 construções novas e 3 níveis novos (barracão, refeitório e hospital de campanha). Os testes estão em `campDays.test.ts`.
+- **Turnos** (no painel da planta e na barraca): descanso, treino, obra e guarda.
+  - O treino dá 6 XP por dia com o pátio da tropa (campo de treino, estande ou picadeiro) e 2 sem ele.
+  - A obra dá 4 de trabalho por dia.
+  - A guarda segura 15% do saque e faz a ronda por dentro da cerca.
+  - Sem guarda e sem posto de sentinela, um bando que chega ao acampamento com gente dentro pega todos de surpresa: leva metade do que levaria.
+- **Gente nos postos:** cozinha, enfermaria, ferraria, forno, defumadouro, herbário, taverna, as oficinas, o lenhador e a horta só funcionam com alguém. Os seguidores do papel certo vão primeiro, depois qualquer seguidor e, por último, os soldados de um batalhão na obra (1 de trabalho por posto). O jogador pode fechar um posto.
+- **Obras levam dias:** construção pequena pede 3 de trabalho, média 6 e grande 10. Trabalham o estado-maior (2 por dia), os seguidores livres (1 cada) e os batalhões na obra. Só a construção pronta faz efeito e libera tropa. Melhorar de nível ainda é na hora.
+- **Manutenção:** algumas construções custam ouro por semana (torre, altar, arsenal, picadeiro, tenda de mapas e tenda do capitão), pago junto com os salários.
+- **As sete necessidades:**
+  - Salubridade: o poço e a latrina somam 30 cada ao limite de lotação, e a latrina corta 30% dos surtos;
+  - Moral: o humor do acampamento anda para a moral das construções menos os batalhões, e cai mais com quem dorme ao relento. Antes, ele sempre voltava a 0;
+  - Ofício: uma oficina a cada 3 batalhões. Para cada oficina que falta, há 30% de chance por semana de um batalhão perder um nível de equipamento.
+  - Quem dorme ao relento também adoece mais. O herbário faz os doentes sararem mais depressa.
+- **Na cena:**
+  - quem come cru faz fila na fogueira na hora da refeição;
+  - feridos sem leito ficam deitados no chão diante da barraca;
+  - sem estábulo, a cavalaria segura os cavalos amarrados na paliçada;
+  - os soldados da obra martelam nas obras, que aparecem com um andaime.
+- **Os outros efeitos:**
+  - o forno economiza 10% das rações do acampamento, e o defumadouro, 15% das gastas em campo;
+  - a horta dá 3 rações por dia, e o lenhador dá madeira se houver floresta em volta;
+  - os troféus e o bardo dão um pouco de fama por dia;
+  - a tenda do capitão dá lealdade toda semana;
+  - o cercado de cativos faz fugirem pela metade;
+  - a tenda de mapas aumenta em 30% a região que os batedores exploram;
+  - o picadeiro libera os arqueiros montados.
+- **Carpintaria:** faz carroças, escadas e o aríete com madeira. O que ela fez vai com o exército e entra no próximo cerco.
+- **Falta:**
+  - Segurança e Ofício em falta só aparecem no diário e no painel, não na cena;
+  - a cor do uniforme (alfaiataria) fica para o G5;
+  - o equilíbrio dos números só se vê jogando uma campanha.
 
 ### 12.3. Marco 22, parte 3: a fortaleza
 **A fazer** (GDD 9.7):

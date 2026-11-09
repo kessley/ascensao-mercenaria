@@ -1,4 +1,5 @@
 import type { TroopType } from "../../utils/constants";
+import type { FollowerRole } from "../sim/campEvents";
 
 /**
  * Marco 22, parte 1: a planta do acampamento numa grade quadrada (GDD, seção 9).
@@ -15,7 +16,8 @@ export const CAMP_SIZES = [10, 16, 22, 28] as const;
 export type CampSize = (typeof CAMP_SIZES)[number];
 export type CampSide = "N" | "E" | "S" | "W";
 export const CAMP_SIDES: readonly CampSide[] = ["N", "E", "S", "W"];
-export type CampNeed = "BEDS" | "FOOD" | "CURE" | "SECURITY";
+export type CampNeed = "BEDS" | "FOOD" | "SALUBRITY" | "CURE" | "MORALE" | "SECURITY" | "CRAFT";
+export const CAMP_NEEDS: readonly CampNeed[] = ["BEDS", "FOOD", "SALUBRITY", "CURE", "MORALE", "SECURITY", "CRAFT"];
 
 export type CampKind =
   | "COMMAND_TENT"
@@ -32,7 +34,34 @@ export type CampKind =
   | "KITCHEN"
   | "INFIRMARY"
   | "WELL"
-  | "TOWER";
+  | "TOWER"
+  // Parte 2: vida
+  | "OVEN"
+  | "SMOKEHOUSE"
+  | "LATRINE"
+  | "HERBALIST"
+  | "CAPTAIN_TENT"
+  // moral
+  | "CAMP_TAVERN"
+  | "DICE"
+  | "STANDARD"
+  | "TROPHY"
+  | "CEMETERY"
+  | "STORY_FIRE"
+  | "ALTAR"
+  // ofício
+  | "CARPENTRY"
+  | "SADDLERY"
+  | "TAILOR"
+  | "LUMBER"
+  | "GARDEN"
+  // militar
+  | "RIDING"
+  | "ARSENAL"
+  | "PEN"
+  | "MAP_TENT"
+  | "CALTROPS"
+  | "SENTRY";
 
 export interface CampCost {
   gold: number;
@@ -57,29 +86,82 @@ export interface CampBuildingDef {
   fixed?: boolean;
   /** Cavado no chão: não vai nas carroças. */
   stays?: boolean;
+  /**
+   * Tem um posto: só funciona com alguém nele (Marco 22, parte 2). Os seguidores destes papéis
+   * vão primeiro; qualquer outro seguidor, ou um soldado do turno de obra, também serve.
+   */
+  post?: readonly FollowerRole[];
+  /** Quanto soma à moral do acampamento. */
+  mood?: number;
+  /** Conta como oficina (a necessidade de Ofício). */
+  craft?: boolean;
+  /** Ouro por semana para manter (quem tem posto paga com o trabalhador). */
+  upkeep?: number;
   effect: string;
 }
 
 export const CAMP_BUILDINGS: Record<CampKind, CampBuildingDef> = {
   COMMAND_TENT: { label: "Tenda do Comandante", size: 3, cost: { gold: 0 }, cargo: 2, tier: 0, max: 1, fixed: true, effect: "A mesa dos contratos, o diário e a planta do acampamento." },
   CAMPFIRE: { label: "Fogueira", size: 2, cost: { gold: 0 }, cargo: 0, tier: 0, max: 1, fixed: true, need: "FOOD", effect: "Cozinha para 2 batalhões." },
-  BARRACK: { label: "Barraca de soldados", size: 3, cost: { gold: 40 }, cargo: 1, tier: 0, max: 12, need: "BEDS", effect: "Leitos para mais 1 batalhão." },
+  BARRACK: { label: "Barraca de soldados", size: 3, cost: { gold: 40 }, upgrades: [{ gold: 60, wood: 3 }], cargo: 1, tier: 0, max: 12, need: "BEDS", effect: "Leitos para mais 1 batalhão (no nível 2, o barracão, para 2)." },
   RECRUIT_MAST: { label: "Mastro de recrutamento", size: 2, cost: { gold: 50 }, cargo: 1, tier: 0, max: 1, effect: "Atrai 1 voluntário por dia, até 8 esperando. Com 8, forma-se um batalhão." },
   QUARTERMASTER: { label: "Intendência", size: 3, cost: { gold: 60, wood: 2 }, cargo: 2, tier: 0, max: 1, effect: "O mercado de rações, o depósito e as carroças." },
   TRAINING: { label: "Campo de Treino", size: 4, cost: { gold: 80, wood: 4 }, cargo: 2, tier: 0, max: 1, effect: "Treina os batalhões. Libera os lanceiros." },
   ARCHERY: { label: "Estande de tiro", size: 4, cost: { gold: 70, wood: 3 }, upgrades: [{ gold: 90, wood: 4 }], cargo: 2, tier: 0, max: 1, effect: "Libera os arqueiros (no nível 2, os dardeiros) e treina quem atira." },
   RECRUIT_POST: { label: "Posto de Recrutamento", size: 2, cost: { gold: 120, wood: 4 }, cargo: 1, tier: 1, max: 1, effect: "Recruta batalhões inteiros na hora e dobra os voluntários." },
   STABLE: { label: "Estábulo", size: 3, cost: { gold: 140, wood: 6 }, cargo: 3, tier: 1, max: 1, effect: "Libera a cavalaria. Contrata batedores e mensageiros." },
-  FORGE: { label: "Ferraria", size: 3, cost: { gold: 150, wood: 6, iron: 8 }, cargo: 4, tier: 1, max: 1, effect: "Conserto e armas. Libera a guarda pesada e os besteiros." },
+  FORGE: { label: "Ferraria", size: 3, cost: { gold: 150, wood: 6, iron: 8 }, cargo: 4, tier: 1, max: 1, post: ["SMITH"], craft: true, effect: "Conserto e armas. Libera a guarda pesada e os besteiros." },
   OFFICERS_TENT: { label: "Tenda dos oficiais", size: 3, cost: { gold: 120, wood: 2 }, upgrades: [{ gold: 150 }, { gold: 200 }], cargo: 2, tier: 1, max: 1, effect: "Abre vaga para 1 tenente por nível, até 3." },
-  KITCHEN: { label: "Cozinha", size: 3, cost: { gold: 70, wood: 4 }, cargo: 2, tier: 1, max: 2, need: "FOOD", effect: "Cozinha para mais 3 batalhões." },
-  INFIRMARY: { label: "Enfermaria", size: 3, cost: { gold: 90, wood: 4 }, cargo: 2, tier: 1, max: 2, need: "CURE", effect: "8 leitos: quem está nela sara no ritmo do acampamento." },
-  WELL: { label: "Poço", size: 2, cost: { gold: 50, wood: 2 }, cargo: 0, tier: 1, max: 2, stays: true, effect: "Água limpa: o acampamento aguenta 30 soldados a mais antes de lotar." },
-  TOWER: { label: "Torre de vigia", size: 2, cost: { gold: 80, wood: 4 }, cargo: 2, tier: 1, max: 4, need: "SECURITY", effect: "Vigia longe. Cada torre evita 10% do saque." },
+  KITCHEN: { label: "Cozinha", size: 3, cost: { gold: 70, wood: 4 }, upgrades: [{ gold: 100, wood: 4 }], cargo: 2, tier: 1, max: 2, need: "FOOD", post: ["COOK"], effect: "Cozinha para mais 3 batalhões (no nível 2, o refeitório, para 5)." },
+  INFIRMARY: { label: "Enfermaria", size: 3, cost: { gold: 90, wood: 4 }, upgrades: [{ gold: 140, wood: 6 }], cargo: 2, tier: 1, max: 2, need: "CURE", post: ["HEALER"], effect: "8 leitos: quem está nela sara no ritmo do acampamento (no nível 2, o hospital de campanha, 16)." },
+  WELL: { label: "Poço", size: 2, cost: { gold: 50, wood: 2 }, cargo: 0, tier: 1, max: 2, stays: true, need: "SALUBRITY", effect: "Água limpa: o acampamento aguenta 30 soldados a mais antes de lotar." },
+  TOWER: { label: "Torre de vigia", size: 2, cost: { gold: 80, wood: 4 }, cargo: 2, tier: 1, max: 4, need: "SECURITY", upkeep: 1, effect: "Vigia longe. Cada torre evita 10% do saque." },
+  // --- Parte 2: vida ---
+  OVEN: { label: "Forno de pão", size: 2, cost: { gold: 60, wood: 2 }, cargo: 2, tier: 1, max: 1, need: "FOOD", post: ["COOK"], effect: "O pão rende: quem come no acampamento gasta 10% menos rações." },
+  SMOKEHOUSE: { label: "Defumadouro", size: 2, cost: { gold: 70, wood: 3 }, cargo: 2, tier: 1, max: 1, need: "FOOD", post: ["COOK"], effect: "Rações de marcha: em campo, o exército gasta 15% menos." },
+  LATRINE: { label: "Latrina", size: 2, cost: { gold: 30, wood: 1 }, cargo: 0, tier: 1, max: 3, stays: true, need: "SALUBRITY", effect: "30 soldados a mais antes de lotar, e menos surtos no acampamento." },
+  HERBALIST: { label: "Herbário", size: 2, cost: { gold: 80, wood: 2 }, cargo: 1, tier: 1, max: 1, need: "CURE", post: ["HEALER"], effect: "Ervas contra a febre e a disenteria: os doentes saram mais depressa." },
+  CAPTAIN_TENT: { label: "Tenda do capitão", size: 3, cost: { gold: 100, wood: 3 }, cargo: 2, tier: 1, max: 3, upkeep: 2, effect: "A companhia acampa junta: o capitão ganha lealdade toda semana (uma tenda por capitão)." },
+  // --- Moral ---
+  CAMP_TAVERN: { label: "Taverna de campanha", size: 3, cost: { gold: 90, wood: 4 }, cargo: 2, tier: 1, max: 1, need: "MORALE", post: ["PEDDLER"], mood: 4, effect: "Cerveja e conversa: muita moral." },
+  DICE: { label: "Mesa de dados", size: 2, cost: { gold: 20 }, cargo: 0, tier: 0, max: 1, need: "MORALE", mood: 2, effect: "Moral barata, mas às vezes sai briga." },
+  STANDARD: { label: "Estandarte do bando", size: 2, cost: { gold: 40, wood: 1 }, cargo: 1, tier: 0, max: 1, need: "MORALE", mood: 2, effect: "A bandeira do bando no meio do acampamento: moral." },
+  TROPHY: { label: "Mastro de troféus", size: 2, cost: { gold: 30, wood: 1 }, cargo: 1, tier: 1, max: 1, need: "MORALE", mood: 1, effect: "Os estandartes tomados dão 0,1 de fama por dia com o acampamento montado." },
+  CEMETERY: { label: "Cemitério", size: 3, cost: { gold: 20 }, cargo: 0, tier: 1, max: 1, stays: true, need: "MORALE", mood: 2, effect: "Os mortos têm onde descansar: moral." },
+  STORY_FIRE: { label: "Fogueira das histórias", size: 2, cost: { gold: 40 }, cargo: 0, tier: 1, max: 1, need: "MORALE", mood: 2, effect: "Um bardo espalha as façanhas: moral e 0,05 de fama por dia." },
+  ALTAR: { label: "Altar", size: 2, cost: { gold: 50, wood: 1 }, cargo: 1, tier: 1, max: 1, need: "MORALE", mood: 3, upkeep: 1, effect: "Fé e cerimônias (Marco 23): moral." },
+  // --- Ofício ---
+  CARPENTRY: { label: "Carpintaria", size: 3, cost: { gold: 110, wood: 6 }, cargo: 3, tier: 1, max: 1, need: "CRAFT", post: ["FAMILY"], craft: true, effect: "Com madeira, faz carroças, escadas e aríetes, que as carroças levam ao próximo cerco." },
+  SADDLERY: { label: "Selaria e curtume", size: 3, cost: { gold: 90, wood: 3 }, cargo: 2, tier: 1, max: 1, need: "CRAFT", post: ["SMITH", "FAMILY"], craft: true, effect: "Couro e selas: conserta o que a ferraria não conserta." },
+  TAILOR: { label: "Alfaiataria", size: 2, cost: { gold: 80, wood: 2 }, cargo: 1, tier: 1, max: 1, need: "CRAFT", post: ["FAMILY"], craft: true, mood: 2, effect: "Uniforme na cor do bando: moral, e conserta as roupas." },
+  LUMBER: { label: "Posto do lenhador", size: 2, cost: { gold: 40 }, cargo: 1, tier: 1, max: 1, post: ["FAMILY"], effect: "Madeira todo dia, se o acampamento estiver perto de floresta." },
+  GARDEN: { label: "Horta e curral", size: 4, cost: { gold: 50, wood: 2 }, cargo: 0, tier: 1, max: 1, stays: true, need: "FOOD", post: ["FAMILY", "COOK"], effect: "3 rações por dia com o acampamento montado." },
+  // --- Militar ---
+  RIDING: { label: "Picadeiro", size: 4, cost: { gold: 120, wood: 6 }, cargo: 2, tier: 1, max: 1, upkeep: 1, effect: "Treina a cavalaria. Com o estábulo, libera os arqueiros montados." },
+  ARSENAL: { label: "Arsenal", size: 3, cost: { gold: 100, wood: 4, iron: 4 }, cargo: 3, tier: 1, max: 1, need: "CRAFT", craft: true, upkeep: 2, effect: "Guarda e troca o equipamento entre batalhões: conta como oficina." },
+  PEN: { label: "Cercado de cativos", size: 3, cost: { gold: 50, wood: 3 }, cargo: 1, tier: 1, max: 1, effect: "Os prisioneiros fogem pela metade." },
+  MAP_TENT: { label: "Tenda de mapas", size: 2, cost: { gold: 90, wood: 1 }, cargo: 1, tier: 1, max: 1, upkeep: 1, effect: "Os batedores exploram uma região 30% maior." },
+  CALTROPS: { label: "Estrepes", size: 2, cost: { gold: 30, wood: 2 }, cargo: 0, tier: 1, max: 4, stays: true, need: "SECURITY", effect: "Pontas no chão: cada campo de estrepes evita mais 5% do saque." },
+  SENTRY: { label: "Posto de sentinela", size: 2, cost: { gold: 40, wood: 2 }, cargo: 1, tier: 1, max: 2, need: "SECURITY", effect: "Avisa do ataque: ninguém é pego de surpresa, e evita 5% do saque." },
 };
 
 /** O que se pode construir, na ordem do painel (a tenda e a fogueira já vêm prontas). */
-export const BUILD_ORDER: readonly CampKind[] = ["BARRACK", "RECRUIT_MAST", "QUARTERMASTER", "ARCHERY", "TRAINING", "RECRUIT_POST", "OFFICERS_TENT", "KITCHEN", "INFIRMARY", "WELL", "STABLE", "FORGE", "TOWER"];
+export const BUILD_ORDER: readonly CampKind[] = [
+  "BARRACK", "RECRUIT_MAST", "QUARTERMASTER", "ARCHERY", "TRAINING", "DICE", "STANDARD",
+  "RECRUIT_POST", "OFFICERS_TENT", "KITCHEN", "INFIRMARY", "WELL", "LATRINE", "STABLE", "FORGE", "TOWER",
+  "OVEN", "SMOKEHOUSE", "HERBALIST", "CAPTAIN_TENT",
+  "CAMP_TAVERN", "TROPHY", "CEMETERY", "STORY_FIRE", "ALTAR",
+  "CARPENTRY", "SADDLERY", "TAILOR", "LUMBER", "GARDEN",
+  "RIDING", "ARSENAL", "PEN", "MAP_TENT", "CALTROPS", "SENTRY",
+];
+
+/** As seções do catálogo no painel. */
+export const BUILD_GROUPS: readonly { label: string; kinds: readonly CampKind[] }[] = [
+  { label: "Vida", kinds: ["BARRACK", "QUARTERMASTER", "OFFICERS_TENT", "KITCHEN", "OVEN", "SMOKEHOUSE", "WELL", "LATRINE", "INFIRMARY", "HERBALIST", "CAPTAIN_TENT"] },
+  { label: "Moral", kinds: ["DICE", "STANDARD", "CAMP_TAVERN", "TROPHY", "CEMETERY", "STORY_FIRE", "ALTAR"] },
+  { label: "Ofício", kinds: ["FORGE", "CARPENTRY", "SADDLERY", "TAILOR", "LUMBER", "GARDEN"] },
+  { label: "Militar", kinds: ["RECRUIT_MAST", "RECRUIT_POST", "TRAINING", "ARCHERY", "STABLE", "RIDING", "ARSENAL", "PEN", "MAP_TENT", "TOWER", "CALTROPS", "SENTRY"] },
+];
 
 export interface CampBuilding {
   id: string;
@@ -88,6 +170,10 @@ export interface CampBuilding {
   x: number;
   y: number;
   level: number;
+  /** Obra em andamento: o trabalho já feito (sem o campo, está pronta). Ver `workOf`. */
+  built?: number;
+  /** Posto fechado pelo jogador: o trabalhador fica livre e a construção para. */
+  off?: boolean;
 }
 
 export interface CampPlan {
@@ -121,6 +207,8 @@ export const PALISADE: Record<CampSize, PalisadeStep> = {
 
 export const DITCH = { label: "Fosso", cost: { gold: 70 } as CampCost, guard: 0.25, effect: "Lama funda em volta da paliçada (só o portão fica firme). Não vai nas carroças." };
 export const TOWER_GUARD = 0.1;
+/** Estrepes e posto de sentinela. */
+export const SMALL_GUARD = 0.05;
 /** O saque evitado não passa disto, por mais defesa que haja. */
 export const MAX_GUARD = 0.85;
 /** Carga de acampamento que cada carroça leva ao levantar. */
@@ -148,6 +236,16 @@ export const tierOf = (plan: Pick<CampPlan, "size">): 0 | 1 => (plan.size > 10 ?
 export const countOf = (plan: CampPlan, kind: CampKind) => plan.buildings.filter((b) => b.kind === kind).length;
 export const levelOf = (plan: CampPlan, kind: CampKind) => Math.max(0, ...plan.buildings.filter((b) => b.kind === kind).map((b) => b.level));
 export const has = (plan: CampPlan, kind: CampKind) => plan.buildings.some((b) => b.kind === kind);
+
+/** Trabalho para erguer uma construção (dias de gente: 1 seguidor faz 1 por dia; um batalhão na obra, 4). */
+export const WORK_BY_SIZE: Record<2 | 3 | 4, number> = { 2: 3, 3: 6, 4: 10 };
+export const workOf = (kind: CampKind) => (CAMP_BUILDINGS[kind].fixed ? 0 : WORK_BY_SIZE[CAMP_BUILDINGS[kind].size]);
+/** Pronta (a obra acabou)? */
+export const isBuilt = (b: CampBuilding) => b.built === undefined || b.built >= workOf(b.kind);
+/** As construções prontas de um tipo: só elas fazem efeito. */
+export const readyOf = (plan: CampPlan, kind: CampKind) => plan.buildings.filter((b) => b.kind === kind && isBuilt(b));
+export const ready = (plan: CampPlan, kind: CampKind) => readyOf(plan, kind).length > 0;
+export const readyLevel = (plan: CampPlan, kind: CampKind) => Math.max(0, ...readyOf(plan, kind).map((b) => b.level));
 
 const key = (x: number, y: number) => `${x},${y}`;
 
@@ -338,7 +436,7 @@ export function growProblem(plan: CampPlan, ctx: { fame: number; battalions: num
   const miss: string[] = [];
   if (ctx.fame < step.fame) miss.push(`fama ${step.fame}`);
   if (ctx.battalions < step.battalions) miss.push(`${step.battalions} batalhões`);
-  for (const [kind, n] of step.needs) if (countOf(plan, kind) < n) miss.push(n > 1 ? `${n} × ${CAMP_BUILDINGS[kind].label.toLowerCase()}` : CAMP_BUILDINGS[kind].label.toLowerCase());
+  for (const [kind, n] of step.needs) if (readyOf(plan, kind).length < n) miss.push(n > 1 ? `${n} × ${CAMP_BUILDINGS[kind].label.toLowerCase()}` : CAMP_BUILDINGS[kind].label.toLowerCase());
   return miss.length > 0 ? `Falta: ${miss.join(", ")}` : null;
 }
 
@@ -348,43 +446,106 @@ export function grown(plan: CampPlan): CampPlan {
   return next ? { ...plan, size: next } : plan;
 }
 
-// --- As necessidades (4 das 7 nesta parte) ---
+// --- As sete necessidades (GDD 9.3) ---
 
 export interface NeedState {
   have: number;
   need: number;
 }
 
-export interface CampNeeds {
-  /** Leitos: barracas (1 batalhão cada) contra batalhões. */
-  BEDS: NeedState;
-  /** Comida cozida: a fogueira e as cozinhas contra os batalhões no acampamento. */
-  FOOD: NeedState;
-  /** Cura: leitos da enfermaria contra feridos e doentes no acampamento. */
-  CURE: NeedState;
-  /** Segurança: o saque evitado (0 a 0,85) contra o que se espera da fama (`need`, na mesma escala). */
-  SECURITY: NeedState;
-}
+export type CampNeeds = Record<CampNeed, NeedState>;
 
 /** Saque que a defesa evita num ataque ao acampamento desguarnecido. */
 export function guardOf(plan: CampPlan): number {
-  return Math.min(MAX_GUARD, PALISADE[plan.size].guard + countOf(plan, "TOWER") * TOWER_GUARD + (plan.ditch ? DITCH.guard : 0));
+  const small = readyOf(plan, "CALTROPS").length + readyOf(plan, "SENTRY").length;
+  return Math.min(MAX_GUARD, PALISADE[plan.size].guard + readyOf(plan, "TOWER").length * TOWER_GUARD + small * SMALL_GUARD + (plan.ditch ? DITCH.guard : 0));
 }
 
-export function needsOf(plan: CampPlan, ctx: { battalions: number; inCamp: number; patients: number; fame: number }): CampNeeds {
+/** Leitos de cada barraca, pelo nível (barraca, barracão). */
+export const BEDS_BY_LEVEL = [0, 1, 2];
+export const KITCHEN_BY_LEVEL = [0, KITCHEN_COOKS, 5];
+export const INFIRMARY_BY_LEVEL = [0, INFIRMARY_BEDS, 16];
+export const LATRINE_CROWD = 30;
+
+/**
+ * As construções que funcionam: prontas e, se têm posto, com alguém nele. `working` vem de
+ * `staffPosts` (campDays.ts); sem ele, toda construção pronta conta (os testes e o painel antigo).
+ */
+export type Working = ReadonlySet<string> | undefined;
+export const works = (b: CampBuilding, working: Working) => isBuilt(b) && (working ? working.has(b.id) : !CAMP_BUILDINGS[b.kind].post || !b.off);
+const workingOf = (plan: CampPlan, kind: CampKind, working: Working) => plan.buildings.filter((b) => b.kind === kind && works(b, working));
+
+/** Leitos: um batalhão por barraca (dois por barracão). */
+export const bedsOf = (plan: CampPlan) => readyOf(plan, "BARRACK").reduce((n, b) => n + (BEDS_BY_LEVEL[b.level] ?? 1), 0);
+/** Batalhões que a fogueira e as cozinhas dão conta. */
+export const cooksOf = (plan: CampPlan, working?: Working) =>
+  (has(plan, "CAMPFIRE") ? FIRE_COOKS : 0) + workingOf(plan, "KITCHEN", working).reduce((n, b) => n + (KITCHEN_BY_LEVEL[b.level] ?? KITCHEN_COOKS), 0);
+/** Leitos da enfermaria e do hospital. */
+export const sickBedsOf = (plan: CampPlan, working?: Working) => workingOf(plan, "INFIRMARY", working).reduce((n, b) => n + (INFIRMARY_BY_LEVEL[b.level] ?? INFIRMARY_BEDS), 0);
+/** Moral que as construções dão. */
+export const moodOf = (plan: CampPlan, working?: Working) => plan.buildings.reduce((n, b) => n + (works(b, working) ? CAMP_BUILDINGS[b.kind].mood ?? 0 : 0), 0);
+/** Oficinas funcionando. */
+export const craftOf = (plan: CampPlan, working?: Working) => plan.buildings.filter((b) => CAMP_BUILDINGS[b.kind].craft && works(b, working)).length;
+/** Funciona (pronta e com gente, se tiver posto)? */
+export const running = (plan: CampPlan, kind: CampKind, working?: Working) => workingOf(plan, kind, working).length > 0;
+
+export interface NeedsCtx {
+  battalions: number;
+  /** Batalhões e soldados no acampamento. */
+  inCamp: number;
+  soldiers: number;
+  patients: number;
+  fame: number;
+  /** Batalhões no turno de guarda. */
+  guards?: number;
+  working?: Working;
+}
+
+/** Oficinas que o bando precisa: uma a cada 3 batalhões. */
+export const craftNeed = (battalions: number) => Math.ceil(battalions / 3);
+/** Cada batalhão no turno de guarda evita isto do saque. */
+export const GUARD_SHIFT = 0.15;
+
+export function needsOf(plan: CampPlan, ctx: NeedsCtx): CampNeeds {
+  const w = ctx.working;
   return {
-    BEDS: { have: countOf(plan, "BARRACK"), need: ctx.battalions },
-    FOOD: { have: (has(plan, "CAMPFIRE") ? FIRE_COOKS : 0) + countOf(plan, "KITCHEN") * KITCHEN_COOKS, need: ctx.inCamp },
-    CURE: { have: countOf(plan, "INFIRMARY") * INFIRMARY_BEDS, need: ctx.patients },
+    BEDS: { have: bedsOf(plan), need: ctx.battalions },
+    FOOD: { have: cooksOf(plan, w), need: ctx.inCamp },
+    SALUBRITY: { have: crowdLimit(plan, BASE_CROWD), need: ctx.soldiers },
+    CURE: { have: sickBedsOf(plan, w), need: ctx.patients },
+    MORALE: { have: moodOf(plan, w), need: ctx.inCamp },
     // Quem tem fama atrai ataque: a partir de 10, espera-se uma defesa à altura
-    SECURITY: { have: guardOf(plan), need: Math.min(MAX_GUARD, Math.max(0, ctx.fame - 5) / 60) },
+    SECURITY: { have: Math.min(MAX_GUARD, guardOf(plan) + (ctx.guards ?? 0) * GUARD_SHIFT), need: Math.min(MAX_GUARD, Math.max(0, ctx.fame - 5) / 60) },
+    CRAFT: { have: craftOf(plan, w), need: craftNeed(ctx.battalions) },
   };
 }
 
-export const NEED_LABEL: Record<CampNeed, string> = { BEDS: "Leitos", FOOD: "Comida", CURE: "Cura", SECURITY: "Segurança" };
+export const NEED_LABEL: Record<CampNeed, string> = {
+  BEDS: "Leitos",
+  FOOD: "Comida",
+  SALUBRITY: "Salubridade",
+  CURE: "Cura",
+  MORALE: "Moral",
+  SECURITY: "Segurança",
+  CRAFT: "Ofício",
+};
 
-/** Quantos soldados o acampamento aguenta antes de lotar (o poço ajuda). */
-export const crowdLimit = (plan: CampPlan, base: number) => base + countOf(plan, "WELL") * WELL_CROWD;
+/** O que cada falta faz (o painel mostra ao lado da necessidade). */
+export const NEED_SHORT: Record<CampNeed, string> = {
+  BEDS: "quem dorme ao relento perde humor e adoece mais",
+  FOOD: "quem come cru gasta 25% mais rações",
+  SALUBRITY: "acampamento lotado vira doença",
+  CURE: "ferido sem leito sara no ritmo do campo",
+  MORALE: "o humor do acampamento cai, e a tropa sai para a luta com menos moral",
+  SECURITY: "um ataque ao acampamento leva mais",
+  CRAFT: "o equipamento gasto não é consertado",
+};
+
+/** Soldados que o acampamento aguenta antes de lotar, sem poço nem latrina (= HEALTH.CAMP_CROWD). */
+export const BASE_CROWD = 60;
+
+/** Quantos soldados o acampamento aguenta antes de lotar (o poço e a latrina ajudam). */
+export const crowdLimit = (plan: CampPlan, base: number) => base + readyOf(plan, "WELL").length * WELL_CROWD + readyOf(plan, "LATRINE").length * LATRINE_CROWD;
 
 // --- Tropas e tenentes liberados por construção (GDD 9.6) ---
 
@@ -395,18 +556,18 @@ export function troopProblem(plan: CampPlan, troop: TroopType): string | null {
     case "INFANTRY":
       return null;
     case "SPEARMEN":
-      return has(plan, "TRAINING") ? null : "Precisa do campo de treino";
+      return ready(plan, "TRAINING") ? null : "Precisa do campo de treino";
     case "ARCHERS":
-      return has(plan, "ARCHERY") ? null : "Precisa do estande de tiro";
+      return ready(plan, "ARCHERY") ? null : "Precisa do estande de tiro";
     case "JAVELINS":
-      return levelOf(plan, "ARCHERY") >= 2 ? null : "Precisa do estande de tiro, nível 2";
+      return readyLevel(plan, "ARCHERY") >= 2 ? null : "Precisa do estande de tiro, nível 2";
     case "HEAVY":
     case "CROSSBOW":
-      return has(plan, "FORGE") ? null : "Precisa da ferraria";
+      return ready(plan, "FORGE") ? null : "Precisa da ferraria";
     case "CAVALRY":
-      return has(plan, "STABLE") ? null : "Precisa do estábulo";
+      return ready(plan, "STABLE") ? null : "Precisa do estábulo";
     case "HORSE_ARCHERS":
-      return "Precisa do estábulo e do picadeiro (Marco 22, parte 2)";
+      return ready(plan, "STABLE") && ready(plan, "RIDING") ? null : "Precisa do estábulo e do picadeiro";
     case "KNIGHTS":
       return "Precisa do estábulo, do picadeiro e da fortaleza (Marco 22, parte 3)";
   }
@@ -414,13 +575,13 @@ export function troopProblem(plan: CampPlan, troop: TroopType): string | null {
 
 /** Vagas de tenente: uma por nível da tenda dos oficiais. */
 export function lieutenantSlots(plan: CampPlan, cap: number): number {
-  return plan.legacy ? cap : Math.min(cap, levelOf(plan, "OFFICERS_TENT"));
+  return plan.legacy ? cap : Math.min(cap, readyLevel(plan, "OFFICERS_TENT"));
 }
 
 /** Voluntários que o mastro atrai por dia e quantos esperam no máximo. */
 export function volunteerRate(plan: CampPlan): { perDay: number; cap: number } {
-  if (!has(plan, "RECRUIT_MAST") && !has(plan, "RECRUIT_POST")) return { perDay: 0, cap: 0 };
-  const k = has(plan, "RECRUIT_POST") && has(plan, "RECRUIT_MAST") ? 2 : 1;
+  if (!ready(plan, "RECRUIT_MAST") && !ready(plan, "RECRUIT_POST")) return { perDay: 0, cap: 0 };
+  const k = ready(plan, "RECRUIT_POST") && ready(plan, "RECRUIT_MAST") ? 2 : 1;
   return { perDay: VOLUNTEERS.PER_DAY * k, cap: VOLUNTEERS.CAP * k };
 }
 
@@ -562,6 +723,8 @@ export function fenceRuns(s: CampShape): [number, number, number, number][] {
 let seq = 0;
 const nextId = (kind: CampKind) => `${kind.toLowerCase()}-${++seq}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 export const newBuilding = (kind: CampKind, x: number, y: number, level = 1): CampBuilding => ({ id: nextId(kind), kind, x, y, level });
+/** Uma obra nova: precisa de `workOf(kind)` de trabalho para ficar pronta. */
+export const newWork = (kind: CampKind, x: number, y: number): CampBuilding => ({ ...newBuilding(kind, x, y), built: 0 });
 
 /** O começo humilde (GDD 9.9): a tenda, a fogueira e uma barraca, num bivaque de 10×10. */
 export function startingPlan(): CampPlan {

@@ -6,6 +6,7 @@ import type { GameState } from "./useGameStore";
 import { newId } from "../utils/id";
 import { takeFieldFood } from "../game/sim/logistics";
 import { captainFromCaptive, joinChance, type HeroData } from "../game/data/heroes";
+import { ready } from "../game/data/campGrid";
 
 /**
  * Prisioneiros e o preço da vitória (Marco 16): quem se rende, oficiais capturados e o Comandante
@@ -265,7 +266,9 @@ export function warSlice(set: Setter, get: () => GameState): WarActions {
       const captives = s.captives
         .map((g) => {
           let n = g.count;
-          for (let i = 0; i < g.count; i++) if (Math.random() < PRISONERS.ESCAPE_PER_DAY) n--;
+          // O cercado de cativos (Marco 22) faz fugirem pela metade
+          const escape = PRISONERS.ESCAPE_PER_DAY * (ready(s.campPlan, "PEN") && !s.campPacked ? 0.5 : 1);
+          for (let i = 0; i < g.count; i++) if (Math.random() < escape) n--;
           return { ...g, count: n };
         })
         .filter((g) => g.count > 0);

@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { Battalion } from "../../entities/Battalion";
 import { Enemy } from "../../entities/Enemy";
 import { Unit } from "../../entities/Unit";
-import { CAMP_BUILDINGS, CELL, WOOD_PER_FOREST_CELL, buildProblem, placeProblem, shortOf } from "../../data/campGrid";
+import { CAMP_BUILDINGS, CELL, WOOD_PER_FOREST_CELL, buildProblem, cooksOf, placeProblem, ready, shortOf, sickBedsOf } from "../../data/campGrid";
 import type { Light } from "../../world/NightLayer";
 import type { Interactable } from "../../world/CampArea";
 import { insideTown, specialHouses } from "../../world/townLayout";
@@ -11,7 +11,7 @@ import type { CampState } from "../../world/CampLife";
 import { FRIEND_AT, bondOf } from "../../sim/campEvents";
 import { geoOf } from "../../worldgen/geoMap";
 import { isFactionOwner } from "../../sim/realm";
-import { mutinyLeader, useGameStore } from "../../../store/useGameStore";
+import { campStaffing, inCampOf, mutinyLeader, useGameStore, type GameState } from "../../../store/useGameStore";
 import { TIME, TROOPS, WORLD, CAMP_MOVE, ECONOMY, SUPPLY, WAR_AI } from "../../../utils/constants";
 import { campMoraleBonus, dailyRations, startingMorale } from "../../../utils/economy";
 import { darknessAt, hourOf } from "../../../utils/time";
@@ -23,6 +23,20 @@ import type { WorldScene } from "../WorldScene";
  * O acampamento, as cidades e a caminhada; forragear, o acampamento móvel, a vida no acampamento e a noite.
  * Uma parte da `WorldScene`: os métodos entram no protótipo dela (ver o fim de `WorldScene.ts`).
  */
+/** As faltas que aparecem no acampamento antes do painel (Marco 22, parte 2). */
+function campShortages(s: GameState): Pick<CampState, "raw" | "sickGround" | "noStable" | "shifts"> {
+  if (s.campPacked) return {};
+  const working = campStaffing(s).working;
+  const home = inCampOf(s);
+  const patients = home.reduce((n, b) => n + (b.wounded ?? 0) + (b.sick ?? 0), 0);
+  return {
+    raw: home.slice(cooksOf(s.campPlan, working)).map((b) => b.id),
+    sickGround: patients > sickBedsOf(s.campPlan, working),
+    noStable: !s.campPlan.legacy && !ready(s.campPlan, "STABLE"),
+    shifts: s.shifts,
+  };
+}
+
 export const campMethods = {
   // --- Acampamento, cidades e caminhada ---
 
@@ -452,6 +466,23 @@ export const campMethods = {
     return Math.round((forest / 100) * size * size * WOOD_PER_FOREST_CELL);
   },
 
+  /** Quanto da volta do acampamento (até duas vezes o lado da paliçada grande) é floresta: o lenhador tira dela. */
+  forestAround(this: WorldScene, site: Point): number {
+    const terrain = Unit.terrain;
+    if (!terrain) return 0;
+    const reach = 28 * CELL;
+    let forest = 0;
+    let n = 0;
+    for (let j = 0; j < 12; j++) {
+      for (let i = 0; i < 12; i++) {
+        const p = { x: site.x - reach + ((i + 0.5) * 2 * reach) / 12, y: site.y - reach + ((j + 0.5) * 2 * reach) / 12 };
+        n++;
+        if (terrain.typeAt(p.x, p.y) === "FOREST") forest++;
+      }
+    }
+    return Math.round((forest / n) * 100) / 100;
+  },
+
   pitchBlocked(this: WorldScene): string | null {
     const s = useGameStore.getState();
     if (this.run) return "Só na campanha";
@@ -499,7 +530,7 @@ export const campMethods = {
     this.passTime(CAMP_MOVE.PITCH_DAYS);
     const field = this.captureField();
     if (typeof field === "string") return this.pushFeed(field);
-    useGameStore.getState().pitchCamp(site, field, wood);
+    useGameStore.getState().pitchCamp(site, field, wood, this.forestAround(site));
   },
 
   /** Recria o mundo com o campo como está (acampamento redesenhado, levantado ou montado). */
@@ -556,6 +587,7 @@ export const campMethods = {
         // Dia do soldo (pago em dia): de manhã, fila diante da tenda do Comandante
         payday: s.day % ECONOMY.PAYDAY_INTERVAL === 0 && s.arrearsWeeks === 0 && hourOf(s.dayProgress) >= 8 && hourOf(s.dayProgress) < 13,
         iron: s.iron > 0,
+        ...campShortages(s),
       };
       this.campLife.setState(state);
       // Treino: o que falta, sobre o Campo de Treino; terminado, o XP entra

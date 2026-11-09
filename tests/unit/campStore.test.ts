@@ -7,6 +7,8 @@ import type { BattalionData } from "../../src/store/useGameStore";
 
 /** Marco 22, parte 1: a planta no store (começo novo, construir, saves antigos). */
 const initial = useGameStore.getState();
+/** Termina as obras da planta (como se os dias tivessem passado). */
+const finishWorks = () => useGameStore.setState((s) => ({ campPlan: { ...s.campPlan, buildings: s.campPlan.buildings.map(({ built: _b, ...b }) => b) } }));
 const reset = (extra: Partial<ReturnType<typeof useGameStore.getState>> = {}) => useGameStore.setState({ ...initial, campPlan: startingPlan(), ...extra }, true);
 
 describe("a planta do acampamento no store", () => {
@@ -24,7 +26,7 @@ describe("a planta do acampamento no store", () => {
     expect(s.campPlan.buildings.map((b) => b.kind).sort()).toEqual(["BARRACK", "CAMPFIRE", "COMMAND_TENT"]);
   });
 
-  it("construir paga, recusa o que não cabe e desmontar devolve metade", () => {
+  it("construir paga, vira obra, recusa o que não cabe; desmontar a obra devolve tudo, a pronta metade", () => {
     const st = useGameStore.getState();
     expect(st.placeBuilding("RECRUIT_MAST", -1, -4)).toMatch(/outra/);
     expect(st.placeBuilding("RECRUIT_MAST", -4, 2)).toBeNull();
@@ -32,7 +34,13 @@ describe("a planta do acampamento no store", () => {
     expect(s.gold).toBe(ECONOMY.START_GOLD - CAMP_BUILDINGS.RECRUIT_MAST.cost.gold);
     expect(s.placeBuilding("KITCHEN", -4, -4)).toMatch(/paliçada/);
     const mast = s.campPlan.buildings.find((b) => b.kind === "RECRUIT_MAST")!;
+    expect(mast.built).toBe(0);
     expect(s.dismantleBuilding(mast.id)).toBeNull();
+    expect(useGameStore.getState().gold).toBe(ECONOMY.START_GOLD);
+    useGameStore.getState().placeBuilding("RECRUIT_MAST", -4, 2);
+    finishWorks();
+    const done = useGameStore.getState().campPlan.buildings.find((b) => b.kind === "RECRUIT_MAST")!;
+    expect(useGameStore.getState().dismantleBuilding(done.id)).toBeNull();
     expect(useGameStore.getState().gold).toBe(ECONOMY.START_GOLD - CAMP_BUILDINGS.RECRUIT_MAST.cost.gold / 2);
     const tent = s.campPlan.buildings.find((b) => b.kind === "COMMAND_TENT")!;
     expect(useGameStore.getState().dismantleBuilding(tent.id)).toMatch(/não se desmonta/);
@@ -40,6 +48,7 @@ describe("a planta do acampamento no store", () => {
 
   it("o mastro junta voluntários e eles formam um batalhão", () => {
     useGameStore.getState().placeBuilding("RECRUIT_MAST", -4, 2);
+    finishWorks();
     expect(useGameStore.getState().formVolunteers()).toMatch(/Faltam/);
     useGameStore.setState({ volunteers: VOLUNTEERS.CAP, gold: 500 });
     expect(useGameStore.getState().formVolunteers()).toBeNull();

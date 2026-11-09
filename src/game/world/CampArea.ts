@@ -19,6 +19,8 @@ import {
   gatePoints,
   halfOf,
   insideShape,
+  isBuilt,
+  workOf,
   onGate,
   shapeOf,
   tierOf,
@@ -49,9 +51,13 @@ import {
   towerPiece,
   wagonPiece,
   wellPiece,
+  stallPiece,
   type Culture,
   type Piece,
 } from "../art/buildings";
+import { brazierPiece, gravePiece, hutPiece, postsPiece, spikesPiece, totemPiece } from "../art/wilds";
+import { tombPiece } from "../art/cityArt";
+import { bushPiece } from "../art/trees";
 
 /** Raio sólido da fogueira (pedras em volta). */
 const FIRE_RADIUS = 30;
@@ -103,6 +109,24 @@ export const worldLabel = (scene: Phaser.Scene, x: number, y: number, text: stri
     .setOrigin(0.5)
     .setDepth(20);
 
+/**
+ * O rótulo de uma construção, logo acima das células dela: quebra em linhas na largura da peça (as
+ * pequenas, de 2×2, ficam lado a lado sem um rótulo cobrir o outro) e cresce para cima.
+ */
+const planLabel = (scene: Phaser.Scene, r: Rect & { center: Point }, text: string, color: string) =>
+  scene.add
+    .text(r.center.x, r.y + 2, text, {
+      fontFamily: "monospace",
+      fontSize: r.w <= 2 * CELL ? "11px" : "13px",
+      color,
+      stroke: "#000000",
+      strokeThickness: 3,
+      align: "center",
+      wordWrap: { width: r.w + 4 },
+    })
+    .setOrigin(0.5, 1)
+    .setDepth(20);
+
 /** As construções que já tinham painel e interior antes do Marco 22 (a chave do interior é a mesma). */
 const SITE_OF: Partial<Record<CampKind, CampSiteKind>> = {
   COMMAND_TENT: "TENT",
@@ -114,7 +138,7 @@ const SITE_OF: Partial<Record<CampKind, CampSiteKind>> = {
 };
 
 /** Construções a céu aberto: dá para andar por dentro (não são sólidas). */
-const OPEN_YARD: ReadonlySet<CampKind> = new Set(["TRAINING", "ARCHERY", "CAMPFIRE"]);
+const OPEN_YARD: ReadonlySet<CampKind> = new Set(["TRAINING", "ARCHERY", "CAMPFIRE", "RIDING", "GARDEN", "CEMETERY", "CALTROPS", "STORY_FIRE"]);
 
 /**
  * O acampamento do bando, desenhado no próprio mundo a partir da planta na grade (Marco 22):
@@ -221,7 +245,25 @@ export class CampArea {
 
   /** As torres de vigia da planta (enxergam longe). */
   get watchtowers(): Point[] {
-    return this.plan.buildings.filter((b) => b.kind === "TOWER").map((b) => this.rectOf(b).center);
+    return this.plan.buildings.filter((b) => b.kind === "TOWER" && isBuilt(b)).map((b) => this.rectOf(b).center);
+  }
+
+  /** As obras em andamento (onde vai quem está no turno de obra). */
+  get worksites(): Point[] {
+    return this.plan.buildings.filter((b) => !isBuilt(b)).map((b) => this.doors.get(b.id) ?? this.rectOf(b).center);
+  }
+
+  /** Um ponto por dentro da cerca, dando a volta (k de 0 a 1): a ronda da guarda e os cavalos amarrados. */
+  fencePoint(k: number, inset = 34): Point {
+    const h = this.shape.half - inset;
+    const t = ((k % 1) + 1) % 1;
+    const side = Math.floor(t * 4);
+    const u = (t * 4 - side) * 2 - 1;
+    const { cx, cy } = this.shape;
+    if (side === 0) return { x: cx + u * h, y: cy - h };
+    if (side === 1) return { x: cx + h, y: cy + u * h };
+    if (side === 2) return { x: cx - u * h, y: cy + h };
+    return { x: cx - h, y: cy - u * h };
   }
 
   /** A porta de um dos locais de antes (intendência, ferraria...), ou a fogueira se ele não existe. */
@@ -241,7 +283,7 @@ export class CampArea {
   }
 
   private siteBuilding(kind: CampSiteKind): CampBuilding | undefined {
-    return this.plan.buildings.find((b) => SITE_OF[b.kind] === kind);
+    return this.plan.buildings.find((b) => SITE_OF[b.kind] === kind && isBuilt(b));
   }
 
   /** Avisado quando barracas e estruturas mudam (a colisão e a navegação são refeitas). */
@@ -541,6 +583,26 @@ export class CampArea {
     const footed = (w: number, h: number, make: () => Piece) => this.foot(jobs, r.center.x - w / 2, box.y + box.h - h, h, make);
     const seed = b.x * 31 + b.y * 7;
 
+    // Obra em andamento: estacas nos cantos, a madeira empilhada e o rótulo com o trabalho que falta
+    if (!isBuilt(b)) {
+      for (const [fx, fy] of [[box.x + 4, box.y + 10], [box.x + box.w - 4, box.y + 10], [box.x + 4, box.y + box.h - 2], [box.x + box.w - 4, box.y + box.h - 2]]) {
+        this.anchor(jobs, fx, fy, () => postsPiece(seed + fx));
+      }
+      this.foot(jobs, r.center.x - 20, r.center.y - 6, 20, () => campPropPiece("WOODPILE", c, seed, 40, 20));
+      this.anchor(jobs, r.center.x + 16, r.center.y + 18, () => propPiece("CRATE", c, seed));
+      this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 22, r.center.y - 8, 44, 24));
+      this.planObjects.push(planLabel(this.scene, r, `${def.label}
+obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a"));
+      this.interactables.push({
+        label: `${def.label} (em obra)`,
+        door: this.doors.get(b.id) ?? r.center,
+        panel: { kind: "CAMP_BUILDING", buildingId: b.id },
+        bounds: new Phaser.Geom.Rectangle(r.x, r.y, r.w, r.h),
+        radius: INTERACT_RADIUS,
+      });
+      return;
+    }
+
     switch (b.kind) {
       case "COMMAND_TENT":
         footed(box.w, box.h * 0.7, () => tentPiece(Math.round(box.w), Math.round(box.h * 0.7), CAMP_COLORS.COMMAND_TENT, 0xb8902c, 41));
@@ -630,6 +692,121 @@ export class CampArea {
         this.obstacles.push(new Phaser.Geom.Rectangle(box.x, box.y, box.w, box.h));
         this.torches.push(r.center);
         break;
+      // --- Parte 2 ---
+      case "OVEN":
+        // O forno de barro (uma cabana baixa) com a brasa na boca e os sacos de farinha
+        footed(box.w * 0.7, box.h * 0.55, () => hutPiece(Math.round(box.w * 0.7), Math.round(box.h * 0.55), seed));
+        this.anchor(jobs, box.x + box.w - 8, box.y + box.h - 4, () => propPiece("CRATE", c, seed));
+        this.torches.push({ x: r.center.x, y: r.center.y + 4 });
+        solid();
+        break;
+      case "SMOKEHOUSE":
+        footed(box.w * 0.8, box.h * 0.6, () => hutPiece(Math.round(box.w * 0.8), Math.round(box.h * 0.6), seed + 3));
+        this.anchor(jobs, box.x + 6, box.y + box.h - 4, () => propPiece("RACK", c, seed));
+        solid();
+        break;
+      case "LATRINE":
+        footed(box.w * 0.5, box.h * 0.45, () => hutPiece(Math.round(box.w * 0.5), Math.round(box.h * 0.45), seed + 5));
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - box.w * 0.25, r.center.y - 6, box.w * 0.5, box.h * 0.4));
+        break;
+      case "HERBALIST":
+        footed(box.w * 0.85, box.h * 0.55, () => stallPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.55), 0x4f7a3a, c, seed));
+        for (const k of [0, 1]) this.anchor(jobs, box.x + 8 + k * 18, box.y + box.h, () => bushPiece(seed + k, "SUMMER"));
+        solid();
+        break;
+      case "CAPTAIN_TENT":
+        footed(box.w * 0.9, box.h * 0.62, () => tentPiece(Math.round(box.w * 0.9), Math.round(box.h * 0.62), 0x6a3a7a, 0xe0b040, seed));
+        this.anchor(jobs, box.x + box.w - 4, box.y + box.h - 6, () => bannerPiece(0x6a3a7a, true, 56));
+        solid();
+        break;
+      case "CAMP_TAVERN":
+        footed(box.w * 0.9, box.h * 0.6, () => tentPiece(Math.round(box.w * 0.9), Math.round(box.h * 0.6), 0xa8742e, 0x6b4a2b, seed));
+        for (const k of [0, 1, 2]) this.anchor(jobs, box.x + 10 + k * 16, box.y + box.h + 2, () => propPiece("BARREL", c, seed + k));
+        solid();
+        break;
+      case "DICE":
+        footed(box.w * 0.7, box.h * 0.45, () => tablePiece(Math.round(box.w * 0.7), Math.round(box.h * 0.45), c));
+        this.anchor(jobs, box.x + 6, box.y + box.h - 2, () => propPiece("BARREL", c, seed));
+        solid();
+        break;
+      case "STANDARD":
+        this.anchor(jobs, r.center.x, r.center.y + 14, () => bannerPiece(COLORS.ALLY, false, 92, 30));
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 6, r.center.y + 4, 12, 12));
+        break;
+      case "TROPHY":
+        this.anchor(jobs, r.center.x, r.center.y + 14, () => totemPiece(seed, 0x8e2b22));
+        this.anchor(jobs, r.center.x + 16, r.center.y + 16, () => bannerPiece(0x5a5a5a, true, 50, 18));
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 8, r.center.y + 2, 16, 14));
+        break;
+      case "CEMETERY":
+        for (let k = 0; k < 6; k++) this.anchor(jobs, box.x + 14 + (k % 3) * ((box.w - 28) / 2), box.y + 30 + Math.floor(k / 3) * (box.h * 0.45), () => gravePiece(k % 3, seed + k));
+        this.foot(jobs, box.x, box.y + box.h, 0, () => fencePiece(box.w, true, [[box.w * 0.35, box.w * 0.65]], c));
+        break;
+      case "STORY_FIRE": {
+        const fr = 18;
+        this.foot(jobs, r.center.x - fr, r.center.y - fr, 2 * fr, () => bonfirePiece(fr, seed));
+        for (const [dx, dy] of [[-30, 12], [30, 12], [0, 30]]) this.anchor(jobs, r.center.x + dx, r.center.y + dy, () => propPiece("CRATE", c, seed + dx));
+        this.torches.push(r.center);
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - fr, r.center.y - fr / 2, 2 * fr, fr));
+        break;
+      }
+      case "ALTAR":
+        this.anchor(jobs, r.center.x, r.center.y + 10, () => tombPiece(seed));
+        for (const dx of [-24, 24]) this.anchor(jobs, r.center.x + dx, r.center.y + 14, () => brazierPiece(false));
+        this.torches.push(r.center);
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 16, r.center.y - 4, 32, 18));
+        break;
+      case "CARPENTRY":
+        footed(box.w * 0.85, box.h * 0.55, () => stallPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.55), 0x8a6a3a, c, seed));
+        this.foot(jobs, box.x, box.y, 20, () => campPropPiece("WOODPILE", c, seed, Math.round(box.w * 0.6), 20));
+        this.anchor(jobs, box.x + box.w - 10, box.y + box.h + 2, () => propPiece("CRATE", c, seed + 1));
+        solid();
+        break;
+      case "SADDLERY":
+        footed(box.w * 0.85, box.h * 0.55, () => stallPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.55), 0x7a4a2a, c, seed));
+        this.anchor(jobs, box.x + 10, box.y + box.h + 2, () => propPiece("RACK", c, seed));
+        solid();
+        break;
+      case "TAILOR":
+        footed(box.w * 0.85, box.h * 0.55, () => stallPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.55), COLORS.ALLY, c, seed));
+        solid();
+        break;
+      case "LUMBER":
+        this.foot(jobs, box.x, box.y + 6, 22, () => campPropPiece("WOODPILE", c, seed, Math.round(box.w), 22));
+        this.anchor(jobs, r.center.x, box.y + box.h, () => propPiece("RACK", c, seed));
+        this.obstacles.push(new Phaser.Geom.Rectangle(box.x, box.y + 6, box.w, 24));
+        break;
+      case "GARDEN": {
+        // Os canteiros e o curral (aberto: dá para andar entre os canteiros)
+        for (let k = 0; k < 6; k++) this.anchor(jobs, box.x + 14 + (k % 3) * ((box.w - 28) / 2), box.y + 26 + Math.floor(k / 3) * 34, () => bushPiece(seed + k, "SUMMER"));
+        this.foot(jobs, box.x, box.y + box.h, 0, () => fencePiece(box.w, true, [[box.w * 0.4, box.w * 0.6]], c));
+        this.foot(jobs, box.x + box.w - 40, box.y + box.h - 30, 18, () => campPropPiece("HAY", c, seed, 30, 18));
+        break;
+      }
+      case "RIDING":
+      case "PEN":
+        this.drawYard(b, box);
+        if (b.kind === "PEN") solid();
+        break;
+      case "ARSENAL":
+        footed(box.w * 0.85, box.h * 0.55, () => stallPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.55), 0x5a5f6a, c, seed));
+        for (const k of [0, 1]) this.anchor(jobs, box.x + 10 + k * 18, box.y + box.h + 2, () => propPiece("RACK", c, seed + k));
+        solid();
+        break;
+      case "MAP_TENT":
+        footed(box.w * 0.85, box.h * 0.6, () => tentPiece(Math.round(box.w * 0.85), Math.round(box.h * 0.6), 0x7a6a4a, 0x2e4e6a, seed));
+        solid();
+        break;
+      case "CALTROPS":
+        for (const dy of [12, 36, 60]) this.foot(jobs, box.x, box.y + dy, 8, () => spikesPiece(Math.round(box.w), seed + dy));
+        break;
+      case "SENTRY":
+        this.anchor(jobs, r.center.x, r.center.y + 16, () => postsPiece(seed));
+        this.anchor(jobs, r.center.x + 10, r.center.y + 14, () => bannerPiece(CAMP_COLORS.BANNER, true, 60, 16));
+        this.anchor(jobs, r.center.x - 14, r.center.y + 14, () => campPropPiece("TORCH", c, seed));
+        this.torches.push({ x: r.center.x - 14, y: r.center.y - 6 });
+        this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 10, r.center.y + 2, 20, 14));
+        break;
     }
 
     // Tochas nas portas das construções grandes
@@ -643,7 +820,7 @@ export class CampArea {
     // O rótulo e o ponto de conversa (as barracas são dos batalhões: ver buildQuarters)
     if (b.kind === "CAMPFIRE" || b.kind === "BARRACK") return;
     const level = def.upgrades ? ` · Nv ${b.level}` : "";
-    this.planObjects.push(worldLabel(this.scene, r.center.x, r.y - 14, `${def.label}${level}`, "#ffe9b0"));
+    this.planObjects.push(planLabel(this.scene, r, `${def.label}${level}`, "#ffe9b0"));
     const site = SITE_OF[b.kind];
     const panel: CampPanel = site ? { kind: site, buildingId: b.id } : { kind: "CAMP_BUILDING", buildingId: b.id };
     this.interactables.push({
@@ -672,6 +849,12 @@ export class CampArea {
     const cx = box.x + box.w / 2;
     if (b.kind === "TRAINING") {
       for (const [dx, dy] of [[-40, -30], [0, -30], [40, -30], [-20, 16], [20, 16]]) this.anchor(jobs, cx + dx, box.y + box.h / 2 + dy + 14, () => propPiece("DUMMY", c, dx * 3 + dy));
+    } else if (b.kind === "RIDING") {
+      // Picadeiro: as balizas da volta e o feno
+      for (const [dx, dy] of [[-44, -30], [44, -30], [-44, 30], [44, 30]]) this.anchor(jobs, cx + dx, box.y + box.h / 2 + dy + 10, () => postsPiece(dx + dy));
+      this.foot(jobs, box.x + 6, box.y + 6, 18, () => campPropPiece("HAY", c, b.x, 28, 18));
+    } else if (b.kind === "PEN") {
+      for (const dx of [-24, 24]) this.anchor(jobs, cx + dx, box.y + box.h / 2 + 10, () => postsPiece(dx));
     } else {
       // Estande de tiro: os alvos numa fila no fundo, a linha de tiro na frente
       for (const dx of [-42, -14, 14, 42]) this.anchor(jobs, cx + dx, box.y + 30, () => propPiece("DUMMY", c, dx * 5 + b.level));

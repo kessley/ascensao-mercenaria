@@ -122,6 +122,8 @@ export function eatDay(
   home: ReadonlySet<string>,
   away: boolean,
   packed: boolean,
+  /** Rações de marcha (defumadouro): o exército em campo gasta só esta fração. */
+  fieldShare = 1,
 ): Meal {
   const cook = hasFollower(followers, "COOK");
   const { camp, field } = split(battalions, home, away);
@@ -132,7 +134,7 @@ export function eatDay(
     const fieldIds = new Set(field.map((b) => b.id));
     for (const b of out) {
       if (!fieldIds.has(b.id)) continue;
-      let need = battalionRations(b, cook);
+      let need = battalionRations(b, cook) * fieldShare;
       const fromPack = Math.min(packOf(b), need);
       b.pack = packOf(b) - fromPack;
       need -= fromPack;
@@ -240,13 +242,29 @@ function binomial(n: number, p: number): number {
  * causam surtos. `camp` (Marco 22): os leitos da enfermaria (quem não cabe sara no ritmo do campo)
  * e quantos soldados o acampamento aguenta antes de lotar.
  */
+/** O que o acampamento faz pela saúde (Marco 22): leitos, lotação, latrina, herbário e quem dorme ao relento. */
+export interface CampHealth {
+  beds: number;
+  crowd: number;
+  /** Latrina: os surtos no acampamento caem por esta fração. */
+  clean?: number;
+  /** Herbário: os doentes no acampamento saram mais. */
+  herbs?: boolean;
+  /** Batalhões no acampamento sem barraca: adoecem mais. */
+  unbedded?: ReadonlySet<string>;
+}
+
+/** Herbário: a mais na chance de o doente sarar no acampamento; quem dorme no chão, a mais na de surto. */
+export const HERBS_RECOVER = 0.1;
+export const GROUND_OUTBREAK = 0.03;
+
 export function healthDay(
   battalions: readonly BattalionData[],
   training: ReadonlySet<string>,
   exposure: Exposure,
   healer: boolean,
   hungry: boolean,
-  camp: { beds: number; crowd: number } = { beds: Infinity, crowd: HEALTH.CAMP_CROWD },
+  camp: CampHealth = { beds: Infinity, crowd: HEALTH.CAMP_CROWD },
 ): { battalions: BattalionData[]; log: Line[] } {
   const H = HEALTH;
   const log: Line[] = [];
@@ -287,7 +305,7 @@ export function healthDay(
     // Doentes: saram, morrem ou passam adiante
     const sick = b.sick ?? 0;
     if (sick > 0) {
-      const recover = H.SICK_RECOVER[where] + (healer ? H.HEALER_RECOVER : 0);
+      const recover = H.SICK_RECOVER[where] + (healer ? H.HEALER_RECOVER : 0) + (where === "CAMP" && camp.herbs ? HERBS_RECOVER : 0);
       const die = H.SICK_DIE[where] * (healer ? H.HEALER_DIE : 1);
       let s = 0;
       for (let i = 0; i < sick; i++) {
@@ -316,7 +334,11 @@ export function healthDay(
         p += H.OUTBREAK.SICK_TOWN;
         cause = "FEBRE";
       }
-    } else if (crowded) p += H.OUTBREAK.CROWDED;
+    } else {
+      if (crowded) p += H.OUTBREAK.CROWDED;
+      if (camp.unbedded?.has(b.id)) p += GROUND_OUTBREAK;
+      p *= 1 - (camp.clean ?? 0);
+    }
     // Doença no mesmo lugar passa de um batalhão a outro
     if ((b.sick ?? 0) === 0 && sickBefore[where]) p += 0.2;
     if (b.soldiers > 1 && roll(p)) {

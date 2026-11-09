@@ -411,6 +411,8 @@ export class WorldScene extends Phaser.Scene {
     this.campLife = new CampLife(this, this.campArea);
     this.mapLife = new MapLife(this);
     this.campLife.setFollowers(store.campPacked ? [] : store.followers);
+    // A floresta em volta (o lenhador tira madeira dela)
+    if (!store.campPacked) store.setCampForest(this.forestAround(this.world.camp.center));
     // Chão da estação: lama na primavera e na chuva fora das estradas, neve no frio do inverno
     Unit.ground = (x, y, t) => this.groundAt(x, y, t);
     this.season = seasonOf(store.day);

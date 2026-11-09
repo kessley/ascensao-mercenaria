@@ -39,7 +39,13 @@ type Activity =
   /** Fila do pagamento diante da tenda do Comandante, no dia do soldo. */
   | "PAY"
   /** Levando ferro da Intendência para a Ferraria. */
-  | "HAUL";
+  | "HAUL"
+  /** Turno de obra (Marco 22, parte 2): martelando numa obra. */
+  | "BUILD"
+  /** Turno de guarda: a ronda por dentro da cerca. */
+  | "PATROL"
+  /** Sem estábulo: segurando o cavalo amarrado na paliçada. */
+  | "TETHER";
 export type Pose = "STAND" | "SIT" | "SLEEP";
 
 /** O que o acampamento está vivendo agora (lido do store a cada quadro). */
@@ -62,6 +68,14 @@ export interface CampState {
   payday: boolean;
   /** Há ferro no depósito (os soldados o levam para a Ferraria). */
   iron: boolean;
+  /** Batalhões que comem cru (a fogueira e as cozinhas não dão conta): fazem fila na fogueira. */
+  raw?: readonly string[];
+  /** Mais feridos e doentes que leitos: os que sobram ficam deitados no chão. */
+  sickGround?: boolean;
+  /** Sem estábulo: a cavalaria amarra os cavalos na paliçada. */
+  noStable?: boolean;
+  /** O turno de cada batalhão (Marco 22, parte 2). */
+  shifts?: Readonly<Record<string, "REST" | "TRAIN" | "WORK" | "GUARD">>;
 }
 
 interface Task {
@@ -95,6 +109,9 @@ const BUBBLE: Partial<Record<Activity, { text: string[]; color: string }>> = {
   BROWSE: { text: ["quanto?", "hmm", "isso aí!"], color: "#c9a23a" },
   PAY: { text: ["soldo!", "$", "até que enfim"], color: "#f1d36b" },
   HAUL: { text: ["ufa", "pesado!"], color: "#bcc6cf" },
+  BUILD: { text: ["toc toc", "segura aí!", "mais uma tábua"], color: "#e0c08a" },
+  PATROL: { text: ["quem vem lá?", "…", "tudo calmo"], color: "#c9d6e8" },
+  TETHER: { text: ["calma, calma", "eia!", "sem baia…"], color: "#d6b98a" },
 };
 
 const MAX_BUBBLES = 28;
@@ -213,6 +230,9 @@ export class CampLife {
       before.party !== state.party ||
       before.lowMorale !== state.lowMorale ||
       before.payday !== state.payday ||
+      before.sickGround !== state.sickGround ||
+      (before.raw ?? []).join() !== (state.raw ?? []).join() ||
+      JSON.stringify(before.shifts ?? {}) !== JSON.stringify(state.shifts ?? {}) ||
       phase(before) !== phase(state);
     if (!changed) return;
     const now = this.scene.time.now;
@@ -384,6 +404,8 @@ export class CampLife {
     if (night) return make("SLEEP", { x: tent.x + (Math.random() - 0.5) * 80, y: tent.y + 48 + Math.random() * 22 }, "SLEEP", 40);
     // Feridos de um combate recente: com curandeira, deitados na enfermaria
     if (st.wounded && r < 0.25) {
+      // Sem leito para todos (Marco 22): quem sobra fica deitado no chão, diante da barraca
+      if (st.sickGround && r < 0.15) return make("WOUNDED", jitter({ x: tent.x, y: tent.y + 70 }, 70), "SLEEP", 20);
       if (this.has("HEALER")) return make("WOUNDED", this.cot(i + (this.quarterOf.get(b.id) ?? 0) * 7), "SLEEP", 20);
       return make("SIT", jitter({ x: tent.x, y: tent.y + 70 }, 60), "SIT", 15);
     }
@@ -408,14 +430,29 @@ export class CampLife {
     // Dia do soldo: fila diante da tenda do Comandante para receber
     if (st.payday && r < 0.7) return make("PAY", this.sites.TENT, "STAND", 14, true);
     const meal = (st.hour >= 7 && st.hour < 8.5) || (st.hour >= 18 && st.hour < 19.5);
+    // Quem passa da fogueira e das cozinhas espera em fila pela comida (e come cru)
+    if (meal && st.raw?.includes(b.id) && r < 0.85) return make("QUEUE", this.fire, "STAND", 10, true);
     if (meal && r < 0.8) return make("EAT", this.fire, "SIT", 10, true);
+    // Os turnos (Marco 22, parte 2): a obra, a ronda e o treino
+    const shift = st.shifts?.[b.id];
+    if (shift === "WORK" && r < 0.8) {
+      const sites = this.camp.worksites;
+      if (sites.length > 0) return make("BUILD", jitter(sites[(i + this.quarterOf.get(b.id)!) % sites.length], 70), "STAND", 14);
+      return make("CHORE", Math.random() < 0.5 ? this.sites.FORGE : this.sites.QUARTERMASTER, "STAND", 8);
+    }
+    if (shift === "GUARD" && r < 0.8) return make("PATROL", this.camp.fencePoint((i * 0.13 + (this.quarterOf.get(b.id) ?? 0) * 0.29 + now * 0.00001) % 1), "STAND", 12);
+    if (shift === "TRAIN" && r < 0.8) return make("TRAIN", jitter(this.yard, 90), "STAND", 12);
     if (st.lowMorale && r < 0.6) return make("SIT", jitter({ x: tent.x, y: tent.y + 80 }, 110), "SIT", 12);
     // Sermão do capelão (de manhã e no fim da tarde)
     const sermon = (st.hour >= 9 && st.hour < 10) || (st.hour >= 17 && st.hour < 18);
     if (sermon && this.has("CHAPLAIN") && r < 0.5) return make("SERMON", this.stations.CHAPLAIN, "SIT", 12, true);
     // Dia comum
     if (this.has("PEDDLER") && r < 0.12) return make("BROWSE", jitter({ x: this.stations.PEDDLER.x, y: this.stations.PEDDLER.y + 34 }, 50), "STAND", 8);
-    if (TROOPS[s.troopType].family === "CAVALRY" && r < 0.35) return make("STABLE", jitter(this.sites.STABLE, 60), "STAND", 12);
+    if (TROOPS[s.troopType].family === "CAVALRY" && r < 0.35) {
+      // Sem estábulo, os cavalos ficam amarrados na paliçada
+      if (st.noStable) return make("TETHER", this.camp.fencePoint(0.05 + i * 0.012, 26), "STAND", 14);
+      return make("STABLE", jitter(this.sites.STABLE, 60), "STAND", 12);
+    }
     const roll = Math.random();
     if (roll < 0.3 && this.camp.hasSite("TRAINING")) return make("TRAIN", jitter(this.yard, 90), "STAND", 12);
     if (roll < 0.5) return make("DICE", quarter, "SIT", 12, true);
@@ -502,7 +539,9 @@ export class CampLife {
         return { x: c.x + Math.cos(a) * (70 + (k % 2) * 26), y: c.y + Math.sin(a) * (50 + (k % 2) * 20) };
       }
       case "QUEUE": {
-        const door = this.sites.QUARTERMASTER;
+        // Com fome, a fila é na Intendência; na hora da refeição, quem come cru espera na fogueira
+        const t = this.tasks.get(s);
+        const door = t && distance(t.spot, f) < 140 && !this.state.hungry ? { x: f.x + 40, y: f.y + 50 } : this.sites.QUARTERMASTER;
         return { x: door.x + 24 + (k % 9) * 24, y: door.y + 16 + Math.floor(k / 9) * 26 };
       }
       case "PAY": {

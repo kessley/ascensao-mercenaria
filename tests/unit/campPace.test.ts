@@ -10,7 +10,8 @@ import {
   freeSpot,
   growProblem,
   grown,
-  newBuilding,
+  newWork,
+  ready,
   shortOf,
   startingPlan,
   volunteerRate,
@@ -20,6 +21,7 @@ import {
 import { DIFFICULTY } from "../../src/game/data/contracts";
 import { BALANCE, ECONOMY, GOODS, REPUTE, SUPPLY, SUPPORT, TROOPS, WORLD } from "../../src/utils/constants";
 import { goblinBandSize } from "../../src/game/systems/Warbands";
+import { LABOR, advanceWorks } from "../../src/game/sim/campDays";
 
 /**
  * Marco 22, parte 1: o balanceamento dos primeiros 30 dias (GDD 9.9). Um jogador cuidadoso faz
@@ -62,8 +64,9 @@ function simulate(days = 30): Pace {
     if (!spot) return false;
     gold -= def.cost.gold;
     wood -= def.cost.wood ?? 0;
-    plan = { ...plan, buildings: [...plan.buildings, newBuilding(kind, spot.x, spot.y)] };
-    out.log.push(`dia ${day}: ${def.label} (${gold} de ouro)`);
+    // Obras levam dias (parte 2): com os batalhões em contrato, só o estado-maior trabalha
+    plan = { ...plan, buildings: [...plan.buildings, newWork(kind, spot.x, spot.y)] };
+    out.log.push(`dia ${day}: obra de ${def.label.toLowerCase()} (${gold} de ouro)`);
     return true;
   };
   const barracks = () => plan.buildings.filter((b) => b.kind === "BARRACK").length;
@@ -100,7 +103,7 @@ function simulate(days = 30): Pace {
     // A primeira escolha de verdade: dá para pagar a 2ª barraca ou o estande?
     if (out.choice === Infinity && day > out.mast && (gold >= CAMP_BUILDINGS.BARRACK.cost.gold || !shortOf(CAMP_BUILDINGS.ARCHERY.cost, { gold, wood, iron: 0 }))) out.choice = day;
     // As construções, na ordem da GDD
-    if (out.mast === Infinity && build("RECRUIT_MAST", day)) out.mast = day;
+    if (!plan.buildings.some((b) => b.kind === "RECRUIT_MAST")) build("RECRUIT_MAST", day);
     // Com dois batalhões, o ouro vai para a paliçada antes do terceiro
     const saving = battalions >= 2 && out.palisade === Infinity;
     if (!saving && volunteers >= VOLUNTEERS.CAP && gold >= TROOPS.INFANTRY.cost * VOLUNTEER_COST + 40) {
@@ -118,6 +121,11 @@ function simulate(days = 30): Pace {
       out.palisade = day;
       out.log.push(`dia ${day}: paliçada pequena (${gold} de ouro)`);
     }
+    // O trabalho do dia nas obras
+    const works = advanceWorks(plan, LABOR.BASE);
+    plan = works.plan;
+    for (const b of works.finished) out.log.push(`dia ${day}: pronta: ${CAMP_BUILDINGS[b.kind].label.toLowerCase()}`);
+    if (out.mast === Infinity && ready(plan, "RECRUIT_MAST")) out.mast = day;
     if (gold < out.minGold) out.minGold = gold;
     out.log.push(`  fim do dia ${day}: ${gold} ouro, ${wood} madeira, fama ${fame}, ${battalions} batalhão(ões), ${volunteers} voluntários`);
   }
@@ -132,7 +140,7 @@ describe("o ritmo dos primeiros 30 dias (GDD 9.9)", () => {
     expect(pace.minGold, pace.log.join("\n")).toBeGreaterThanOrEqual(0);
   });
 
-  it("o mastro de recrutamento sai nos dias 1 a 3", () => {
+  it("o mastro de recrutamento fica pronto nos dias 1 a 3", () => {
     expect(pace.mast, pace.log.join("\n")).toBeLessThanOrEqual(3);
   });
 

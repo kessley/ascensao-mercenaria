@@ -129,18 +129,26 @@ import {
   VOLUNTEERS,
   VOLUNTEER_COST,
   RAW_FOOD,
+  bedsOf,
   buildProblem,
+  cooksOf,
   costText,
   crowdLimit,
+  isBuilt,
+  moodOf,
+  newWork,
+  readyOf,
+  ready,
+  running,
+  sickBedsOf,
+  workOf,
   gateProblem,
   growProblem,
   grown,
   guardOf,
-  has,
   legacyPlan,
   lieutenantSlots,
   needsOf,
-  newBuilding,
   nextSize,
   packPlan,
   placeProblem,
@@ -156,6 +164,23 @@ import {
   type CampPlan,
   type CampSide,
 } from "../game/data/campGrid";
+import {
+  CARPENTRY,
+  DICE_BRAWL,
+  advanceWorks,
+  bedded,
+  campProduce,
+  carpentryProblem,
+  driftMood,
+  moodTarget,
+  shiftXp,
+  staffPosts,
+  upkeepOf,
+  type CarpentryItem,
+  type Shift,
+  type SiegeKit,
+  type Staffing,
+} from "../game/sim/campDays";
 import { seasonOf } from "../utils/season";
 import { canPromote, canTrain, promotionCost, trainingCost, canLearn, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
 import { SKILLS, type SkillId } from "../game/data/skills";
@@ -788,6 +813,12 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   volunteers: number;
   /** Taverna de cada povoado: o dia em que o bando contratou um batalhão lá pela última vez. */
   tavernHires: Record<string, number>;
+  /** Turno de cada batalhão no acampamento (Marco 22, parte 2); sem entrada, descanso. */
+  shifts: Record<string, Shift>;
+  /** Quanto da volta do acampamento é floresta (0 a 1): o lenhador tira madeira dela. */
+  campForest: number;
+  /** Escadas e aríetes da carpintaria, prontos para o próximo cerco (vão com o exército). */
+  siegeKit: SiegeKit;
   /** Cobertores de lã do mascate: até este dia o frio do inverno não adoece a tropa. */
   blanketsUntil: number;
 
@@ -872,7 +903,8 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   newGame: () => void;
   /** Um bando chegou a um povoado (combate abstrato) ou ao acampamento desguarnecido. */
   bandArrives: (targetId: string, band: BandArrival) => RaidOutcome;
-  raidCamp: (band: string) => void;
+  /** Ataque ao acampamento: desguarnecido, ou de surpresa (há gente, mas ninguém de guarda). */
+  raidCamp: (band: string, surprise?: boolean) => void;
   /** Mercado de um povoado (preços locais conforme a prosperidade). */
   buyRationsAt: (settlementId: string, packs: number) => boolean;
   tradeIronAt: (settlementId: string, amount: number) => boolean;
@@ -961,12 +993,19 @@ export interface GameState extends CourtState, CourtActions, WarState, WarAction
   formVolunteers: () => string | null;
   /** Taverna de um povoado: um batalhão de infantaria por semana, mais caro. */
   hireAtTavern: (settlementId: string) => string | null;
+  /** O turno de um batalhão no acampamento. */
+  setShift: (battalionId: string, shift: Shift) => void;
+  /** Fecha ou abre um posto (o trabalhador fica livre). */
+  togglePost: (buildingId: string) => void;
+  /** A carpintaria faz uma carroça, uma escada ou o aríete. */
+  carpentry: (item: CarpentryItem) => string | null;
+  setCampForest: (share: number) => void;
   /** Compra na banca do mascate. */
   buyFromPeddler: (item: PeddlerItem) => boolean;
   /** Levanta o acampamento: a planta vai nas carroças (o que não cabe fica). Devolve o motivo se não der. */
   packCamp: () => string | null;
   /** Monta o acampamento com a fogueira em `center`; o campo (posições) é recriado a partir de `field`. */
-  pitchCamp: (center: Point, field: FieldSave, wood?: number) => void;
+  pitchCamp: (center: Point, field: FieldSave, wood?: number, forest?: number) => void;
 
   // --- Economia e comércio (Marco 14) ---
   /** Compra (qty > 0) ou vende (qty < 0) um bem no mercado de um povoado. Devolve o motivo se não der. */
@@ -1209,9 +1248,15 @@ function closeGates(id: string, get: () => GameState, set: (partial: Partial<Gam
   const stored = (t.econ?.stock.GRAIN ?? 0) + (t.econ?.stock.MEAT ?? 0);
   const food = (SIEGE.FOOD_DAYS[t.kind] ?? 5) + Math.min(6, Math.floor(stored / Math.max(20, t.population / 4)));
   set({
-    siege: { settlementId: id, walled: true, startDay: s.day, food, wood: 0, ladders: 0, ram: 0 },
+    siege: { settlementId: id, walled: true, startDay: s.day, food, wood: 0, ladders: s.siegeKit.ladders, ram: Math.min(1, s.siegeKit.rams) },
+    siegeKit: { ladders: 0, rams: 0 },
     campPanel: null,
-    log: appendLog(s.log, [entry(s.day, `Os portões de ${t.name} se fecharam: é um cerco. Lá dentro há comida para uns ${food} dias.`, "info")]),
+    log: appendLog(s.log, [
+      entry(s.day, `Os portões de ${t.name} se fecharam: é um cerco. Lá dentro há comida para uns ${food} dias.`, "info"),
+      ...(s.siegeKit.ladders + s.siegeKit.rams > 0
+        ? [entry(s.day, `As carroças trouxeram o que a carpintaria fez: ${s.siegeKit.ladders} escada(s)${s.siegeKit.rams > 0 ? " e o aríete" : ""}.`, "good")]
+        : []),
+    ]),
   });
 }
 
@@ -1246,6 +1291,8 @@ type DayState = Pick<
   | "campPlan"
   | "volunteers"
   | "fame"
+  | "shifts"
+  | "campForest"
 >;
 
 const addHistory = (history: string[], line: string) => [...history, line].slice(-LIEUTENANTS.HISTORY_SIZE);
@@ -1290,8 +1337,14 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
   for (let i = 0; i < days; i++) {
     s.day++;
 
-    // Humor do acampamento volta devagar ao normal; tenentes convivendo se aproximam ou se afastam
-    s.campMood = s.campMood > 0 ? Math.max(0, s.campMood - 2) : Math.min(0, s.campMood + 2);
+    // Marco 22, parte 2: quem está no acampamento, os postos e quem dorme ao relento
+    const staffing = s.campPacked ? null : campStaffing(s);
+    const inCamp = inCampOf(s);
+    const inBed = bedded(inCamp.map((b) => b.id), bedsOf(s.campPlan));
+    const unbedded = staffing ? new Set(inCamp.filter((b) => !inBed.has(b.id)).map((b) => b.id)) : new Set<string>();
+    // O humor do acampamento anda para o que as construções dão (levantado, volta ao normal);
+    // tenentes convivendo se aproximam ou se afastam
+    s.campMood = driftMood(s.campMood, staffing ? moodTarget(moodOf(s.campPlan, staffing.working), inCamp.length, unbedded.size) : 0);
     s.bonds = driftBonds(s.bonds, s.lieutenants);
 
     // Comida (soldados, Comandante e seguidores; o cozinheiro aproveita melhor). Em campo, o
@@ -1319,13 +1372,17 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
       milled++;
     }
     if (milled > 0) log.push(entry(s.day, `As rações acabaram: ${milled} de grão e carne da carga viraram comida.`, "info"));
-    const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked);
+    // O defumadouro faz rações de marcha: em campo, o exército gasta menos
+    const smoked = staffing && running(s.campPlan, "SMOKEHOUSE", staffing.working) ? SMOKED_SHARE : 1;
+    const meal = eatDay(s.rations, s.cargo, s.battalions, s.followers, training, s.exposure.away, s.campPacked, smoked);
     // Comida cozida (Marco 22): a fogueira e as cozinhas dão conta de tantos batalhões; o resto come cru e gasta mais
     if (!s.campPacked) {
       const eating = s.exposure.away ? s.battalions.filter((b) => training.has(b.id)) : s.battalions;
-      const cooks = campNeeds(s).FOOD.have;
+      const cooks = cooksOf(s.campPlan, staffing?.working);
       const raw = eating.slice(cooks);
       if (raw.length > 0) meal.rations = Math.max(0, meal.rations - Math.ceil(dailyRations(raw, []) * (RAW_FOOD - 1)));
+      // O forno faz o pão render
+      if (staffing && running(s.campPlan, "OVEN", staffing.working)) meal.rations += Math.floor(dailyRations(eating, []) * OVEN_SAVES);
     }
     s.rations = meal.rations;
     s.cargo = meal.cargo;
@@ -1340,8 +1397,11 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     // Enfermaria e doenças
     // A enfermaria tem tantos leitos, e o poço deixa caber mais gente antes de lotar (Marco 22)
     const health = healthDay(s.battalions, training, s.exposure, hasFollower(s.followers, "HEALER"), meal.hungry, {
-      beds: s.campPacked ? 0 : campNeeds(s).CURE.have,
+      beds: staffing ? sickBedsOf(s.campPlan, staffing.working) : 0,
       crowd: crowdLimit(s.campPlan, HEALTH.CAMP_CROWD),
+      clean: staffing && readyOf(s.campPlan, "LATRINE").length > 0 ? LATRINE_CLEAN : 0,
+      herbs: !!staffing && running(s.campPlan, "HERBALIST", staffing.working),
+      unbedded,
     });
     // O mastro de recrutamento atrai voluntários enquanto o acampamento está montado
     if (!s.campPacked) {
@@ -1352,6 +1412,26 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     }
     s.battalions = health.battalions;
     for (const l of health.log) log.push(entry(s.day, l.text, l.tone));
+    if (staffing) {
+      // Turno de treino: um pouco de experiência todo dia (quem está no Campo de Treino pago já ganha lá)
+      const levels: string[] = [];
+      s.battalions = s.battalions.map((b) => {
+        if (!inCamp.some((x) => x.id === b.id) || shiftOf(s, b.id) !== "TRAIN" || s.training.some((t) => t.battalionId === b.id)) return b;
+        const r = gainXp(b, shiftXp(s.campPlan, b.troopType));
+        if (r.levelsGained > 0) levels.push(`${b.name} subiu para o nível ${r.battalion.level}`);
+        return r.battalion;
+      });
+      for (const l of levels) log.push(entry(s.day, `${l} no turno de treino!`, "good"));
+      // As obras andam com o trabalho que sobrou dos postos
+      const works = advanceWorks(s.campPlan, staffing.labor);
+      s.campPlan = works.plan;
+      for (const b of works.finished) log.push(entry(s.day, `Obra pronta no acampamento: ${CAMP_BUILDINGS[b.kind].label.toLowerCase()}.`, "good"));
+      // A horta, o lenhador, os troféus e o bardo
+      const made = campProduce(s.campPlan, staffing.working, s.campForest);
+      s.rations += made.rations;
+      if (made.wood > 0) s.depot = { ...s.depot, WOOD: Math.round(((s.depot.WOOD ?? 0) + made.wood) * 10) / 10 };
+      s.fame = Math.min(100, s.fame + made.fame);
+    }
     if (!meal.hungry) {
       if (s.hungryDays > 0) log.push(entry(s.day, "O exército voltou a comer. A fome acabou.", "good"));
       s.hungryDays = 0;
@@ -1376,6 +1456,25 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
 
     // Pagamento
     if (s.day % ECONOMY.PAYDAY_INTERVAL !== 0) continue;
+
+    if (staffing) {
+      // A mesa de dados às vezes acaba em briga
+      if (running(s.campPlan, "DICE", staffing.working) && Math.random() < DICE_BRAWL) {
+        s.campMood = Math.max(-30, s.campMood - 4);
+        log.push(entry(s.day, "Briga na mesa de dados: dois soldados no chão e o humor do acampamento azedou.", "bad"));
+      }
+      // Sem oficinas que deem conta, o equipamento gasto não é consertado
+      const craft = campNeeds(s).CRAFT;
+      for (let k = craft.have; k < craft.need; k++) {
+        if (Math.random() >= WEAR_CHANCE) continue;
+        const worn = s.battalions.filter((b) => b.equipment.weapon > 0 || b.equipment.armor > 0);
+        const b = worn[Math.floor(Math.random() * worn.length)];
+        if (!b) break;
+        const slot = b.equipment.weapon >= b.equipment.armor ? "weapon" : "armor";
+        b.equipment = { ...b.equipment, [slot]: b.equipment[slot] - 1 };
+        log.push(entry(s.day, `Ninguém consertou ${slot === "weapon" ? "as armas" : "as armaduras"} de ${b.name}: o equipamento caiu um nível. Faltam oficinas no acampamento.`, "bad"));
+      }
+    }
 
     // Ração de cerveja (Marco 14): a tropa bebe do depósito (ou do que vai nas carroças)
     if (s.aleRation) {
@@ -1415,7 +1514,9 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
     // Quem está fora em expedição também recebe
     const away = s.expeditions.flatMap((e) => e.battalions);
     const captainWages = allCaptains(s).reduce((sum, c) => sum + c.wage, 0);
-    const wages = weeklyWages([...s.battalions, ...away], s.lieutenants) + supportWages(s.scouts.length, s.messengers.length) + captainWages;
+    // A manutenção das construções entra no pagamento (Marco 22, parte 2)
+    const upkeep = s.campPacked ? 0 : upkeepOf(s.campPlan);
+    const wages = weeklyWages([...s.battalions, ...away], s.lieutenants) + supportWages(s.scouts.length, s.messengers.length) + captainWages + upkeep;
     if (wages === 0) continue;
     const due = wages + s.debt;
     const paid = s.gold >= due;
@@ -1427,6 +1528,9 @@ function passDays(start: DayState, days: number): { state: DayState; log: LogEnt
       s.lieutenants = unassignMissing(s.lieutenants, [...s.battalions, ...away]);
       for (const l of gone.log) log.push(entry(s.day, l.text, l.tone));
     } else s.captains = gone.captains;
+    // A tenda do capitão: a companhia acampa junta
+    const tents = s.campPacked ? 0 : readyOf(s.campPlan, "CAPTAIN_TENT").length;
+    if (tents > 0) s.captains = s.captains.map((c, i) => (i < tents ? shiftLoyalty(c, CAPTAIN_TENT_LOYALTY, s.day, "a companhia acampou junta") : c));
     if (paid) {
       s.gold -= due;
       log.push(
@@ -1503,6 +1607,8 @@ function dayState(s: GameState): DayState {
     campPlan: s.campPlan,
     volunteers: s.volunteers,
     fame: s.fame,
+    shifts: s.shifts,
+    campForest: s.campForest,
   };
 }
 
@@ -1560,16 +1666,57 @@ export function horseDeal(
  * estar de pé, e cada tropa pede a sua construção (Marco 22, GDD 9.6).
  */
 export function recruitProblem(s: Pick<GameState, "campPlan">, troop: TroopType): string | null {
-  if (!s.campPlan.legacy && !has(s.campPlan, "RECRUIT_POST")) return "Precisa do posto de recrutamento";
+  if (!s.campPlan.legacy && !ready(s.campPlan, "RECRUIT_POST")) return "Precisa do posto de recrutamento";
   return troopProblem(s.campPlan, troop);
 }
 
-/** As quatro necessidades do painel do acampamento (Marco 22, parte 1). */
-export function campNeeds(s: Pick<GameState, "campPlan" | "battalions" | "exposure" | "training" | "campStay" | "fame">) {
+/** Defumadouro: o exército em campo gasta esta fração; forno: o acampamento economiza isto. */
+export const SMOKED_SHARE = 0.85;
+export const OVEN_SAVES = 0.1;
+/** Latrina: os surtos no acampamento caem por esta fração. */
+export const LATRINE_CLEAN = 0.3;
+/** Por oficina que falta, chance por semana de um batalhão perder um nível de equipamento. */
+export const WEAR_CHANCE = 0.3;
+export const CAPTAIN_TENT_LOYALTY = 2;
+
+type CampView = Pick<GameState, "campPlan" | "battalions" | "exposure" | "training" | "campStay" | "fame" | "followers" | "shifts" | "campPacked">;
+
+/** Batalhões no acampamento agora: todos, com o Comandante nele; senão, quem treina e quem ficou. */
+export function inCampOf(s: Pick<GameState, "battalions" | "exposure" | "training" | "campStay">): BattalionData[] {
+  if (!s.exposure.away) return [...s.battalions];
   const home = new Set([...s.training.map((t) => t.battalionId), ...s.campStay]);
-  const inCamp = s.exposure.away ? s.battalions.filter((b) => home.has(b.id)) : s.battalions;
+  return s.battalions.filter((b) => home.has(b.id));
+}
+
+/** O turno de um batalhão (quem está no Campo de Treino pago, treina). */
+export function shiftOf(s: Pick<GameState, "shifts" | "training">, id: string): Shift {
+  return s.training.some((t) => t.battalionId === id) ? "TRAIN" : s.shifts[id] ?? "REST";
+}
+
+/** Quem está em cada posto hoje e quanto trabalho sobra para as obras. */
+export function campStaffing(s: Omit<CampView, "fame" | "campPacked">): Staffing {
+  const work = inCampOf(s).filter((b) => shiftOf(s, b.id) === "WORK").length;
+  return staffPosts(s.campPlan, s.followers, work);
+}
+
+/** Alguém vigia o acampamento: um batalhão no turno de guarda ou um posto de sentinela pronto. */
+export function campWatched(s: Pick<GameState, "battalions" | "exposure" | "training" | "campStay" | "shifts" | "campPlan">): boolean {
+  return ready(s.campPlan, "SENTRY") || inCampOf(s).some((b) => shiftOf(s, b.id) === "GUARD");
+}
+
+/** As sete necessidades do painel do acampamento (Marco 22). */
+export function campNeeds(s: CampView) {
+  const inCamp = inCampOf(s);
   const patients = inCamp.reduce((n, b) => n + (b.wounded ?? 0) + (b.sick ?? 0), 0);
-  return needsOf(s.campPlan, { battalions: s.battalions.length, inCamp: inCamp.length, patients, fame: s.fame });
+  return needsOf(s.campPlan, {
+    battalions: s.battalions.length,
+    inCamp: inCamp.length,
+    soldiers: inCamp.reduce((n, b) => n + b.soldiers, 0),
+    patients,
+    fame: s.fame,
+    guards: inCamp.filter((b) => shiftOf(s, b.id) === "GUARD").length,
+    working: s.campPacked ? new Set() : campStaffing(s).working,
+  });
 }
 
 /** Carroças que andam com o exército (todas, com o acampamento levantado; nenhuma, se ficaram ou estão na estrada). */
@@ -1731,6 +1878,9 @@ function campaignState(world: WorldDef | null): CampaignState {
     campPlan: startingPlan(),
     volunteers: 0,
     tavernHires: {},
+    shifts: {},
+    campForest: 0,
+    siegeKit: { ladders: 0, rams: 0 },
     blanketsUntil: 0,
     wars: [],
     depot: {},
@@ -2460,10 +2610,11 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return outcome;
   },
 
-  raidCamp: (band) => {
+  raidCamp: (band, surprise = false) => {
     const s = get();
-    // A paliçada, as torres e o fosso seguram parte do saque (Marco 22: a segurança da planta)
-    const kept = guardOf(s.campPlan);
+    // A paliçada, as torres e o fosso seguram parte do saque (Marco 22: a segurança da planta).
+    // De surpresa (há gente, mas ninguém de guarda), o bando leva só metade do que levaria
+    const kept = 1 - (1 - guardOf(s.campPlan)) * (surprise ? 0.5 : 1);
     const rations = Math.floor(s.rations * WORLD.WARBAND.CAMP_RAID_RATIONS * (1 - kept));
     const gold = Math.floor(s.gold * WORLD.WARBAND.CAMP_RAID_GOLD * (1 - kept));
     // As mercadorias do depósito também vão (Marco 14)
@@ -2477,7 +2628,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const lines = [
       entry(
         s.day,
-        `${band} atacou o acampamento desguarnecido: levou ${rations} rações${goods > 0 ? `, ${goods} de mercadorias do depósito` : ""} e ${gold} de ouro${kept > 0 ? " (a defesa do acampamento segurou parte do saque)" : ""}.`,
+        `${band} atacou o acampamento ${surprise ? "de surpresa (ninguém estava de guarda)" : "desguarnecido"}: levou ${rations} rações${goods > 0 ? `, ${goods} de mercadorias do depósito` : ""} e ${gold} de ouro${kept > 0 ? " (a defesa do acampamento segurou parte do saque)" : ""}.`,
         "bad",
       ),
     ];
@@ -3609,10 +3760,11 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const def = CAMP_BUILDINGS[kind];
     const why = campBusy(s) ?? buildProblem(s.campPlan, kind) ?? placeProblem(s.campPlan, kind, x, y) ?? shortOf(def.cost, stockOf(s));
     if (why) return why;
+    // Obras levam dias (Marco 22, parte 2): quem ergue são os seguidores e os batalhões no turno de obra
     set({
       ...paid(s, def.cost),
-      campPlan: { ...s.campPlan, buildings: [...s.campPlan.buildings, newBuilding(kind, x, y)] },
-      log: appendLog(s.log, [entry(s.day, `Construído no acampamento: ${def.label.toLowerCase()}.`, "good")]),
+      campPlan: { ...s.campPlan, buildings: [...s.campPlan.buildings, newWork(kind, x, y)] },
+      log: appendLog(s.log, [entry(s.day, `Obra começada no acampamento: ${def.label.toLowerCase()} (${workOf(kind)} de trabalho).`, "good")]),
     });
     return null;
   },
@@ -3636,7 +3788,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const busy = campBusy(s);
     if (busy) return busy;
     if (b.kind === "TRAINING" && s.training.length > 0) return "Há batalhões treinando.";
-    const back = refundOf(b);
+    // Obra que nem começou volta inteira; o resto, metade
+    const back = b.built === 0 ? { gold: def.cost.gold, wood: def.cost.wood ?? 0, iron: def.cost.iron ?? 0 } : refundOf(b);
     set({
       gold: s.gold + back.gold,
       iron: s.iron + (back.iron ?? 0),
@@ -3651,6 +3804,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const s = get();
     const b = s.campPlan.buildings.find((v) => v.id === id);
     if (!b) return "Essa construção não existe mais.";
+    if (!isBuilt(b)) return "Ainda está em obra.";
     const cost = upgradeCost(b);
     if (!cost) return "Já está no último nível.";
     const why = campBusy(s) ?? shortOf(cost, stockOf(s));
@@ -3694,6 +3848,30 @@ export const useGameStore = create<GameState>()((set, get) => ({
     const why = campBusy(s) ?? shortOf(DITCH.cost, stockOf(s));
     if (why) return why;
     set({ ...paid(s, DITCH.cost), campPlan: { ...s.campPlan, ditch: true }, log: appendLog(s.log, [entry(s.day, "O fosso está cavado em volta da paliçada.", "good")]) });
+    return null;
+  },
+
+  setShift: (battalionId, shift) => set((s) => ({ shifts: { ...s.shifts, [battalionId]: shift } })),
+
+  togglePost: (buildingId) =>
+    set((s) => ({ campPlan: { ...s.campPlan, buildings: s.campPlan.buildings.map((b) => (b.id === buildingId ? { ...b, off: !b.off } : b)) } })),
+
+  setCampForest: (share) => set({ campForest: Math.max(0, Math.min(1, share)) }),
+
+  carpentry: (item) => {
+    const s = get();
+    const def = CARPENTRY[item];
+    const why = campBusy(s) ?? carpentryProblem(s.campPlan, campStaffing(s).working, item, s.siegeKit, s.wagons.length) ?? shortOf(def.cost, stockOf(s));
+    if (why) return why;
+    const kit = { ...s.siegeKit };
+    if (item === "LADDER") kit.ladders++;
+    if (item === "RAM") kit.rams++;
+    set({
+      ...paid(s, def.cost),
+      siegeKit: kit,
+      wagons: item === "WAGON" ? [...s.wagons, { id: newId(), hp: SUPPLY.WAGON.hp }] : s.wagons,
+      log: appendLog(s.log, [entry(s.day, `A carpintaria fez ${item === "WAGON" ? "uma carroça" : item === "LADDER" ? "uma escada de cerco" : "um aríete"}.`, "good")]),
+    });
     return null;
   },
 
@@ -3781,7 +3959,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     return null;
   },
 
-  pitchCamp: (center, field, wood = 0) => {
+  pitchCamp: (center, field, wood = 0, forest = 0) => {
     const s = get();
     if (!s.world || !s.campPacked) return;
     const world = s.world;
@@ -3791,6 +3969,7 @@ export const useGameStore = create<GameState>()((set, get) => ({
     set({
       campAt: { x: Math.round(center.x), y: Math.round(center.y) },
       campPacked: false,
+      campForest: forest,
       depot: wood > 0 ? { ...s.depot, WOOD: (s.depot.WOOD ?? 0) + wood } : s.depot,
       pendingField: field,
       // O mundo é recriado (o acampamento novo, a colisão, as rotas)
