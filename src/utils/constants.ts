@@ -1919,6 +1919,15 @@ export const WEATHER = {
   STORM_REACH: 3600,
   /** Visão do bando (e percepção dos inimigos) conforme o tempo. */
   VISION: { CLEAR: 1, RAIN: 0.85, FOG: 0.5, SNOW: 0.75, STORM: 0.6 } as Record<Weather, number>,
+  /** Faixa da força do vento (0 a 1) em cada tempo (G6): nevoeiro é calmaria, tempestade é vento forte. */
+  WIND: { CLEAR: [0.05, 0.5], RAIN: [0.25, 0.65], FOG: [0, 0.12], SNOW: [0.15, 0.55], STORM: [0.8, 1] } as Record<Weather, readonly [number, number]>,
+  /** Abaixo dessa força, as bandeiras ficam caídas no mastro. */
+  CALM: 0.15,
+  /**
+   * O chão com o tempo (G6, em segundos de tela): quanto a chuva leva para encharcar e o chão para
+   * secar, e quanto a neve leva para cobrir e para derreter.
+   */
+  GROUND: { WET_IN: 40, STORM_WET_IN: 18, DRY_OUT: 90, SNOW_IN: 60, MELT: 150, RAIN_MELT: 50 },
 } as const;
 
 /** Fadiga por batalhão (Marco 13): 0 descansado, 100 exausto. */

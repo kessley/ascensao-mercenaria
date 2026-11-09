@@ -6,8 +6,9 @@ import type { StaticCuller } from "./StaticCuller";
 import { COLORS, TIME } from "../../utils/constants";
 import type { Point } from "../../utils/math";
 import { specialHouses, templeDoor, townLayout, type Rect, type TownLayout } from "./townLayout";
-import { TownArt, type ArtJob } from "./TownArt";
-import { bannerPiece, STYLES, WALL_FACE, type Culture } from "../art/buildings";
+import { TownArt } from "./TownArt";
+import { STYLES, WALL_FACE, type Culture } from "../art/buildings";
+import { flagSprite } from "./FlagSprite";
 import { lairDecor, siteDecor, type GroundAt } from "./wildLayout";
 
 /** Cor da bandeira de quem manda no povoado. */
@@ -259,10 +260,11 @@ export class SettlementLayer {
   private drawBanner(t: Settlement, layout: TownLayout, calamities: readonly Calamity[]): Phaser.GameObjects.GameObject[] {
     const scene = this.scene;
     const color = ownerColor(this.world, calamities, t.owner);
-    const flags: ArtJob[] = [];
-    // Cada bandeira no alto da construção dela, com a profundidade do pé (passa na frente da construção)
+    const flags: Phaser.GameObjects.GameObject[] = [];
+    // Cada bandeira no alto da construção dela, com a profundidade do pé (passa na frente da construção).
+    // G6: são bandeiras ao vento, e não peças da montagem
     const flag = (x: number, y: number, size: number, foot: number) => {
-      flags.push({ make: () => bannerPiece(color, false, Math.round(size * 2.2), Math.round(size * 1.2)), x: Math.round(x), y: Math.round(y), depth: foot + 0.1 });
+      flags.push(flagSprite(scene, { color, pennant: false, height: Math.round(size * 2.2), cloth: Math.round(size * 1.2) }, Math.round(x), Math.round(y), (foot + 0.1) * 1e-6));
     };
     if (t.owner !== "RUINED") {
       const k = layout.keep;
@@ -282,15 +284,13 @@ export class SettlementLayer {
       }
       for (const c of layout.camps) flag(c.flag.x, c.flag.y, 16, c.flag.y);
     }
-    // As bandeiras são uma "construção" à parte: trocar de dono não refaz o povoado
-    if (flags.length) this.art.setJobs(`${t.id}:bandeiras`, flags);
-    else this.art.remove(`${t.id}:bandeiras`);
+    // As bandeiras ficam à parte: trocar de dono não refaz o povoado
     const owner = ownerLabel(this.world, calamities, t.owner);
     const tone = t.owner === "PLAYER" ? "#9cc4ff" : t.owner === "RUINED" ? "#aaaaaa" : "#ffe9b0";
     const top = layout.bounds.y;
     const name = worldLabel(scene, layout.cx, top - 90, `${t.name.toUpperCase()}`, tone).setFontSize(22);
     const sub = worldLabel(scene, layout.cx, top - 62, `${SETTLEMENT_KIND_LABEL[t.kind]} · ${owner}`, "#d8d8d8").setFontSize(13);
-    return [name, sub];
+    return [name, sub, ...flags];
   }
 }
 

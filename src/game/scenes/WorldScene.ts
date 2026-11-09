@@ -10,7 +10,9 @@ import { lodOf } from "../art/atlas";
 import { Corpses } from "../art/corpses";
 import { Wagon } from "../entities/Wagon";
 import { WeatherLayer } from "../world/WeatherLayer";
-import { isFlood, seasonOf, weatherAt } from "../../utils/season";
+import { GroundWeather } from "../world/GroundWeather";
+import { FlagSprite } from "../world/FlagSprite";
+import { isFlood, seasonOf, weatherAt, windAt, type Wind } from "../../utils/season";
 import { resolveAttacks } from "../systems/CombatSystem";
 import { FogOfWar } from "../systems/FogOfWar";
 import { spreadRout, updateMorale, type MoraleGroup } from "../systems/MoraleSystem";
@@ -229,8 +231,15 @@ export class WorldScene extends Phaser.Scene {
   /** Marcha forçada: o dia rende mais caminho, a tropa cansa muito mais. */
   forced = false;
   weatherLayer!: WeatherLayer;
+  /** O chão com o tempo (G6): molhado, com poças, coberto de neve. */
+  groundWeather!: GroundWeather;
   /** Tempo onde o Comandante está (vale para a ação perto dele). */
   weather: Weather = "CLEAR";
+  /** O vento de hoje onde o Comandante está (G6): entorta a chuva e mexe as bandeiras. */
+  wind: Wind = { dir: 1, strength: 0.3 };
+  /** Tempo e vento impostos (testes; depois, a magia que chama o nevoeiro): null = o do lugar. */
+  forcedWeather: Weather | null = null;
+  forcedWind: Wind | null = null;
   season: Season = "SUMMER";
   lastWeatherAt = -Infinity;
   /** Estação aplicada no terreno (gelo, cheia, neve): muda o chão e as rotas. */
@@ -552,6 +561,7 @@ export class WorldScene extends Phaser.Scene {
     this.syncHarpies();
     this.night = new NightLayer(this);
     this.weatherLayer = new WeatherLayer(this);
+    this.groundWeather = new GroundWeather(this, (x, y) => Unit.terrain?.typeAt(x, y) ?? "GRASS");
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -669,7 +679,9 @@ export class WorldScene extends Phaser.Scene {
     this.forestArt.update(this.cameras.main);
     this.updateNight(store.dayProgress);
     this.updateWeather(time);
-    this.weatherLayer.update(this.cameras.main, this.weather, this.ended ? 0 : Math.min(delta, 50) / 1000);
+    const weatherDt = this.ended ? 0 : Math.min(delta, 50) / 1000;
+    this.weatherLayer.update(this.cameras.main, this.weather, weatherDt, this.wind);
+    this.groundWeather.update(this.cameras.main, this.weather, weatherDt, Unit.groundStamp);
     AudioEngine.setListener(view.centerX, view.centerY, view.width);
     AudioEngine.setLoopVolume("campfire", Math.max(0, 1 - distance({ x: view.centerX, y: view.centerY }, this.campArea.campfire) / 1100));
 
@@ -959,7 +971,9 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.lastWeatherAt < 1000) return;
     this.lastWeatherAt = time;
     const s = useGameStore.getState();
-    const w = s.scenario?.weather ?? weatherAt(this.world.seed, s.day, this.commander, geoOf(this.world.geo));
+    const w = this.forcedWeather ?? s.scenario?.weather ?? weatherAt(this.world.seed, s.day, this.commander, geoOf(this.world.geo));
+    this.wind = this.forcedWind ?? windAt(this.world.seed, s.day, this.commander, w);
+    FlagSprite.wind = this.wind;
     if (w === this.weather) return;
     const was = this.weather;
     this.weather = w;

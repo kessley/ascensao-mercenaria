@@ -24,8 +24,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **Em andamento:** o G6 (etapa 15), atmosfera. A parte 1, a noite e o fogo, está feita.
-- **A seguir:** a parte 2 do G6: o clima.
+- **Em andamento:** o G6 (etapa 15), atmosfera. A parte 1, a noite e o fogo, e a parte 2, o clima, estão feitas.
+- **A seguir:** a parte 3 do G6: os efeitos de combate.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -58,7 +58,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 12 | [Marco 22: do bivaque à cidade](#12-marco-22-do-bivaque-à-cidade--ok) | recurso | Usa as peças do G3 e as carroças e a gente do G4. Refeito em 4 de novembro, em quatro partes | ✅ OK; falta jogar uma campanha |
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
-| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | parte 1 de 4 |
+| 15 | [G6: atmosfera](#15-g6-atmosfera) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | partes 1 e 2 de 4 |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
@@ -1214,6 +1214,30 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 - **Testes:**
   - 5 de regras em `tests/unit/fire.test.ts`;
   - a suíte nova `atmosfera`, com 9 verificações. Ela confere que as chamas mexem, que as tochas não piscam juntas, que o halo deixa a cor mais quente perto da fogueira (o mesmo chão, com e sem halo) e que a tocha vai para a mão e sai dela com as tochas, a hora e a saída do acampamento. As fotos ficam em `tests/battle/.shots-g6-*.png`.
+
+**Feito na parte 2, o clima:**
+- **O vento** (`windAt` em `src/utils/season.ts`): cada dia, em cada célula de clima, sorteia o lado (leste ou oeste) e a força.
+  - A força cabe numa faixa por tempo (`WEATHER.WIND`): o nevoeiro é calmaria, a tempestade é vento forte.
+  - Abaixo de `WEATHER.CALM`, as bandeiras caem no mastro.
+- **O céu em pixel art** (`src/game/art/weatherArt.ts`, `WeatherLayer`):
+  - as gotas de chuva têm 7 inclinações, e as da tempestade são mais compridas;
+  - cada gota cai até um ponto da tela e ali deixa um respingo de 3 quadros;
+  - os flocos de neve são de 3 tamanhos e descem devagar, levados pelo vento;
+  - os bancos de nevoeiro são manchas de névoa em degraus, pontilhadas só de um degrau ao vizinho (sem xadrez), e passam com o vento.
+  - Por cima vai o véu de antes: o céu escuro da chuva, o clarão do relâmpago e o branco do nevoeiro.
+  - O pixel do tempo tem o tamanho do pixel da arte e nunca é menor que um pixel da tela. Tudo é um `Blitter` só, de 180 gotas.
+- **O chão com o tempo** (`GroundWeather`), abaixo de tudo o que anda:
+  - a chuva molha o chão aos poucos (`WEATHER.GROUND`): ele escurece, e as poças aparecem, primeiro na lama e no brejo, depois na grama e na mata. Na chuva, cada poça ganha de tempos em tempos o círculo de uma gota;
+  - parada a chuva, o chão seca devagar;
+  - a neve cobre o chão em 4 níveis de manchas que crescem até fechar (um ladrilho de 128 px, preso ao mundo), e cobre as poças;
+  - parada a neve, ela derrete devagar, e mais depressa na chuva.
+- **As bandeiras ao vento** (`src/game/art/flags.ts`, `FlagSprite`): o pano retangular e a flâmula de duas pontas.
+  - Na calmaria, o pano cai junto do mastro, em dobras. Com vento, tremula em 4 quadros, mais depressa quanto mais forte, virado para onde o vento sopra.
+  - Colunas vizinhas do pano nunca se afastam mais de 1 px, e o pano não se parte, nem na ponta fina da flâmula.
+  - Viraram bandeiras ao vento: as do acampamento (pavilhão, quartéis, portões e cantos), as dos povoados (paço, portões e guarnição) e a do acampamento de campo.
+- **Testes:**
+  - 11 de regras em `tests/unit/weather.test.ts` (o vento, as gotas, as poças, a neve no chão, o nevoeiro e as bandeiras);
+  - a suíte `atmosfera` passou a 17 verificações: na chuva, as gotas respingam e se inclinam com o vento, as bandeiras tremulam viradas para ele, o chão molha e aparecem as poças; na neve, os flocos não respingam e a neve cobre o chão; no nevoeiro, os bancos passam e as bandeiras caem; com tempo aberto, a neve derrete e o chão seca. Fotos novas: `.shots-g6-chuva.png`, `.shots-g6-neve.png` e `.shots-g6-nevoeiro.png`.
 
 ## 16. Marco 19: magia do Comandante
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.

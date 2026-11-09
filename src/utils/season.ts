@@ -80,6 +80,23 @@ export function weatherAt(seed: number, day: number, p: Point, geo: ClimateProbe
   return "CLEAR";
 }
 
+/** O vento (G6): para que lado sopra (1 = leste, −1 = oeste) e com que força, de 0 a 1. */
+export interface Wind {
+  dir: 1 | -1;
+  strength: number;
+}
+
+/**
+ * O vento do dia na célula de clima de `p`: o lado é sorteado, e a força cabe na faixa do tempo
+ * (nevoeiro é calmaria; tempestade é vento forte). Entorta a chuva e a neve e mexe as bandeiras.
+ */
+export function windAt(seed: number, day: number, p: Point, weather: Weather): Wind {
+  const cx = Math.floor(p.x / (WORLD.REGION_WIDTH * WEATHER.CELL_REGIONS));
+  const cy = Math.floor(p.y / (WORLD.REGION_HEIGHT * WEATHER.CELL_REGIONS));
+  const [lo, hi] = WEATHER.WIND[weather];
+  return { dir: hash(seed + 31, day, cx, cy) < 0.5 ? -1 : 1, strength: lo + (hi - lo) * hash(seed + 57, day, cx, cy) };
+}
+
 /** Neve no chão: inverno e frio (norte e montanhas). */
 export function snowyAt(day: number, temperature: number): boolean {
   return seasonOf(day) === "WINTER" && temperature < SEASONS.SNOW_BELOW;

@@ -161,4 +161,106 @@ export async function atmosphere({ page, ev }, { check }) {
   await page.waitForTimeout(500);
   const morning = await ev(bearers);
   check("de manhã, a tocha some da mão", !morning.commander && morning.battalions.every((n) => n === 0), JSON.stringify(morning));
+
+  // --- Parte 2: o clima ---
+  // O tempo e o vento ficam presos pelo teste; a câmera volta para as bandeiras do acampamento
+  const weather = (kind, wind) =>
+    ev(([kind, wind]) => {
+      const w = window.__world;
+      w.forcedWeather = kind;
+      w.forcedWind = wind;
+      w.lastWeatherAt = -Infinity;
+    }, [kind, wind]);
+  const sky = () => {
+    const w = window.__world;
+    const flags = w.campArea.planObjects.filter((o) => o.active && o.texture?.key?.startsWith("flag:"));
+    const g = w.groundWeather;
+    return {
+      weather: w.weather,
+      ...w.weatherLayer.stats,
+      wet: Math.round(g.wetness * 1000) / 1000,
+      snow: Math.round(g.snow * 1000) / 1000,
+      puddles: g.shownPuddles,
+      cover: g.cover.filter((t) => t.visible).length,
+      flags: flags.length,
+      waving: flags.filter((f) => f.waving >= 1).length,
+      west: flags.filter((f) => f.flipX).length,
+    };
+  };
+  await ev(() => {
+    const w = window.__world;
+    window.__store.setState({ dayProgress: 0.45 });
+    const c = w.campArea.campfire;
+    w.cameras.main.stopFollow();
+    w.cameras.main.setZoom(2);
+    w.cameras.main.centerOn(c.x, c.y - 40);
+  });
+  await weather("CLEAR", { dir: 1, strength: 0.05 });
+  await page.waitForTimeout(600);
+  const calm = await ev(sky);
+  await weather("RAIN", { dir: 1, strength: 0.6 });
+  await page.waitForTimeout(1500);
+  const rain = await ev(sky);
+  await page.screenshot({ path: "tests/battle/.shots-g6-chuva.png" });
+  await weather("RAIN", { dir: -1, strength: 0.6 });
+  await page.waitForTimeout(800);
+  const rainWest = await ev(sky);
+  console.log("   chuva:", JSON.stringify({ calm, rain, rainWest }));
+  check("na calmaria as bandeiras caem no mastro, e não chove", calm.flags >= 2 && calm.waving === 0 && calm.drops === 0 && calm.cover === 0, JSON.stringify(calm));
+  check(
+    "na chuva caem gotas que respingam, inclinadas para onde o vento sopra",
+    rain.weather === "RAIN" && rain.drops > 100 && rain.splashes > 0 && rain.slant > 0 && rainWest.slant < 0,
+    JSON.stringify({ rain, rainWest }),
+  );
+  check(
+    "ao vento as bandeiras tremulam, viradas para onde ele sopra",
+    rain.waving === rain.flags && rain.west === 0 && rainWest.waving === rainWest.flags && rainWest.west === rainWest.flags,
+    JSON.stringify({ rain, rainWest }),
+  );
+  // O chão encharca aos poucos; encharcado, aparecem as poças
+  await ev(() => (window.__world.groundWeather.wetness = 1));
+  await ev(() => window.__world.cameras.main.setZoom(1));
+  await page.waitForTimeout(500);
+  const soaked = await ev(sky);
+  check("a chuva molha o chão aos poucos, e o chão encharcado tem poças", rain.wet > 0 && rainWest.wet > rain.wet && soaked.puddles > 0, JSON.stringify({ rain: rain.wet, rainWest: rainWest.wet, soaked }));
+
+  // A neve cai devagar, sem respingo, e cobre o chão em manchas
+  await weather("SNOW", { dir: 1, strength: 0.3 });
+  await page.waitForTimeout(1200);
+  const snowing = await ev(sky);
+  await ev(() => {
+    const w = window.__world;
+    w.groundWeather.snow = 0.8;
+    w.cameras.main.setZoom(2);
+  });
+  await page.waitForTimeout(500);
+  const snowy = await ev(sky);
+  await page.screenshot({ path: "tests/battle/.shots-g6-neve.png" });
+  console.log("   neve:", JSON.stringify({ snowing, snowy }));
+  check(
+    "na neve caem flocos sem respingo, e a neve vai cobrindo o chão",
+    snowing.drops > 100 && snowing.splashes === 0 && snowing.slant === 0 && snowing.snow > 0 && snowy.cover >= 1,
+    JSON.stringify({ snowing, snowy }),
+  );
+
+  // O nevoeiro: calmaria e bancos de névoa que passam
+  await weather("FOG", { dir: 1, strength: 0.05 });
+  await page.waitForTimeout(800);
+  const fog = await ev(sky);
+  await page.screenshot({ path: "tests/battle/.shots-g6-nevoeiro.png" });
+  console.log("   nevoeiro:", JSON.stringify(fog));
+  check("no nevoeiro passam bancos de névoa, sem chuva e com as bandeiras caídas", fog.banks >= 5 && fog.drops === 0 && fog.waving === 0, JSON.stringify(fog));
+
+  // Com tempo aberto, a neve derrete e o chão seca
+  await weather("CLEAR", { dir: 1, strength: 0.3 });
+  await page.waitForTimeout(1200);
+  const after = await ev(sky);
+  console.log("   depois:", JSON.stringify(after));
+  check("com tempo aberto, a neve derrete e o chão seca devagar", after.snow < snowy.snow && after.wet < 1 && after.wet > 0.9 && after.banks === 0, JSON.stringify(after));
+  await ev(() => {
+    const w = window.__world;
+    w.forcedWeather = null;
+    w.forcedWind = null;
+    w.lastWeatherAt = -Infinity;
+  });
 }

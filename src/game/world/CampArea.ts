@@ -38,7 +38,6 @@ import type { Rect } from "./townLayout";
 import type { CampGround } from "./TerrainMap";
 import { TownArt, wallJobs, type ArtJob } from "./TownArt";
 import {
-  bannerPiece,
   bonfirePiece,
   gateLeafPiece,
   gatePiece,
@@ -66,6 +65,7 @@ import { tombPiece } from "../art/cityArt";
 import { bushPiece } from "../art/trees";
 import { PIXEL_FONT } from "../art/font";
 import { flameSprite } from "./flames";
+import { flagSprite } from "./FlagSprite";
 
 /** Raio sólido da fogueira (pedras em volta). */
 const FIRE_RADIUS = 30;
@@ -370,6 +370,11 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     list.push({ x: Math.round(x), y: Math.round(y), depth: Math.round(y), make });
   }
 
+  /** Bandeira ao vento (G6, parte 2) com o pé do mastro em (x, y); some com a lista dela. */
+  private flag(list: Phaser.GameObjects.GameObject[], x: number, y: number, color: number, pennant: boolean, height = 44, cloth = 22): void {
+    list.push(flagSprite(this.scene, { color, pennant, height, cloth }, Math.round(x), Math.round(y), Math.round(y) * 1e-6 + 1e-7));
+  }
+
   /** Tocha no poste (G6): o poste vai na montagem e a chama animada, por cima, acende a noite ali. */
   private torchPost(list: ArtJob[], x: number, y: number, c: Culture, seed: number): void {
     const ax = Math.round(x);
@@ -628,7 +633,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     }
     // Estandartes no portão
     const out = gatePoints(this.shape, 30).outer;
-    for (const side of [-1, 1]) this.anchor(this.artJobs, out.x + across.x * (g - 6) * side, out.y + across.y * (g - 6) * side, () => bannerPiece(COLORS.ALLY, false));
+    for (const side of [-1, 1]) this.flag(this.planObjects, out.x + across.x * (g - 6) * side, out.y + across.y * (g - 6) * side, COLORS.ALLY, false);
     const top = { x: this.shape.cx, y: this.shape.cy - this.shape.half - 46 };
     const label = palisade ? "ACAMPAMENTO" : "BIVAQUE";
     this.planObjects.push(worldLabel(this.scene, top.x, top.y, label, "#ffe9b0"));
@@ -652,7 +657,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`);
     }
     const out = gatePoints(this.shape, t + 30).outer;
     const across = this.shape.gate === "W" || this.shape.gate === "E" ? { x: 0, y: 1 } : { x: 1, y: 0 };
-    for (const side of [-1, 1]) this.anchor(this.artJobs, out.x + across.x * (g + 50) * side, out.y + across.y * (g + 50) * side, () => bannerPiece(COLORS.ALLY, true));
+    for (const side of [-1, 1]) this.flag(this.planObjects, out.x + across.x * (g + 50) * side, out.y + across.y * (g + 50) * side, COLORS.ALLY, true);
     const top = { x: cx, y: cy - half - t - 60 };
     this.planObjects.push(worldLabel(this.scene, top.x, top.y, "FORTALEZA", "#ffe9b0"));
   }
@@ -694,7 +699,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
     switch (b.kind) {
       case "COMMAND_TENT":
         footed(box.w, box.h * 0.7, () => tentPiece(Math.round(box.w), Math.round(box.h * 0.7), CAMP_COLORS.COMMAND_TENT, 0xb8902c, 41));
-        this.anchor(jobs, box.x + box.w + 2, box.y + box.h - 4, () => bannerPiece(CAMP_COLORS.BANNER, true, 74));
+        this.flag(this.planObjects, box.x + box.w + 2, box.y + box.h - 4, CAMP_COLORS.BANNER, true, 74);
         solid();
         break;
       case "CAMPFIRE": {
@@ -711,7 +716,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         break;
       case "OFFICERS_TENT":
         footed(box.w * 0.9, box.h * 0.62, () => tentPiece(Math.round(box.w * 0.9), Math.round(box.h * 0.62), CAMP_COLORS.OFFICERS, 0xdfe3ee, seed));
-        this.anchor(jobs, box.x + box.w - 4, box.y + box.h - 6, () => bannerPiece(0xdfe3ee, true, 56));
+        this.flag(this.planObjects, box.x + box.w - 4, box.y + box.h - 6, 0xdfe3ee, true, 56);
         solid();
         break;
       case "INFIRMARY":
@@ -720,7 +725,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         break;
       case "RECRUIT_MAST":
         // O mastro alto com o estandarte do bando e um banco para quem chega
-        this.anchor(jobs, r.center.x, r.center.y + 10, () => bannerPiece(COLORS.ALLY, false, 78, 26));
+        this.flag(this.planObjects, r.center.x, r.center.y + 10, COLORS.ALLY, false, 78, 26);
         this.foot(jobs, r.center.x - 18, r.center.y + 14, 10, () => propPiece("CRATE", c, seed));
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 8, r.center.y - 4, 16, 18));
         break;
@@ -732,7 +737,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         break;
       case "RECRUIT_POST":
         footed(box.w * 0.8, box.h * 0.5, () => tablePiece(Math.round(box.w * 0.8), Math.round(box.h * 0.5), c));
-        this.anchor(jobs, box.x + box.w - 2, box.y + box.h - 4, () => bannerPiece(COLORS.ALLY, false, 70));
+        this.flag(this.planObjects, box.x + box.w - 2, box.y + box.h - 4, COLORS.ALLY, false, 70);
         solid();
         break;
       case "TRAINING":
@@ -798,7 +803,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         break;
       case "CAPTAIN_TENT":
         footed(box.w * 0.9, box.h * 0.62, () => tentPiece(Math.round(box.w * 0.9), Math.round(box.h * 0.62), 0x6a3a7a, 0xe0b040, seed));
-        this.anchor(jobs, box.x + box.w - 4, box.y + box.h - 6, () => bannerPiece(0x6a3a7a, true, 56));
+        this.flag(this.planObjects, box.x + box.w - 4, box.y + box.h - 6, 0x6a3a7a, true, 56);
         solid();
         break;
       case "CAMP_TAVERN":
@@ -812,12 +817,12 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         solid();
         break;
       case "STANDARD":
-        this.anchor(jobs, r.center.x, r.center.y + 14, () => bannerPiece(COLORS.ALLY, false, 92, 30));
+        this.flag(this.planObjects, r.center.x, r.center.y + 14, COLORS.ALLY, false, 92, 30);
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 6, r.center.y + 4, 12, 12));
         break;
       case "TROPHY":
         this.anchor(jobs, r.center.x, r.center.y + 14, () => totemPiece(seed, 0x8e2b22));
-        this.anchor(jobs, r.center.x + 16, r.center.y + 16, () => bannerPiece(0x5a5a5a, true, 50, 18));
+        this.flag(this.planObjects, r.center.x + 16, r.center.y + 16, 0x5a5a5a, true, 50, 18);
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 8, r.center.y + 2, 16, 14));
         break;
       case "CEMETERY":
@@ -885,7 +890,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         break;
       case "SENTRY":
         this.anchor(jobs, r.center.x, r.center.y + 16, () => postsPiece(seed));
-        this.anchor(jobs, r.center.x + 10, r.center.y + 14, () => bannerPiece(CAMP_COLORS.BANNER, true, 60, 16));
+        this.flag(this.planObjects, r.center.x + 10, r.center.y + 14, CAMP_COLORS.BANNER, true, 60, 16);
         this.torchPost(jobs, r.center.x - 14, r.center.y + 14, c, seed);
         this.obstacles.push(new Phaser.Geom.Rectangle(r.center.x - 10, r.center.y + 2, 20, 14));
         break;
@@ -894,7 +899,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         const kw = Math.round(box.w);
         const kh = Math.round(box.h * 0.8);
         footed(kw, kh, () => keepPiece(kw, kh, c, Math.round(kw / 2), seed, false));
-        this.anchor(jobs, box.x + box.w - 6, box.y + box.h - kh + 6, () => bannerPiece(COLORS.ALLY, true, 60));
+        this.flag(this.planObjects, box.x + box.w - 6, box.y + box.h - kh + 6, COLORS.ALLY, true, 60);
         this.torches.push(r.center);
         solid();
         break;
@@ -912,7 +917,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
         const hh = Math.round(box.h * (b.kind === "DOVECOTE" ? 0.7 : 0.66));
         const door = Math.round(hw / 2);
         footed(hw, hh, () => housePiece(hw, hh, c, ROOF[b.kind] ?? 0, door, seed, false, b.kind === "GREAT_HALL" || b.kind === "DOVECOTE"));
-        if (b.kind === "GREAT_HALL") this.anchor(jobs, box.x + 6, box.y + box.h - 4, () => bannerPiece(COLORS.ALLY, true, 64));
+        if (b.kind === "GREAT_HALL") this.flag(this.planObjects, box.x + 6, box.y + box.h - 4, COLORS.ALLY, true, 64);
         if (b.kind === "STOREHOUSE") for (const k of [0, 1]) this.anchor(jobs, box.x + box.w - 10 - k * 16, box.y + box.h + 2, () => propPiece("BARREL", c, seed + k));
         if (b.kind === "DUNGEON") this.torchPost(jobs, box.x + 8, box.y + box.h + 2, c, seed);
         solid();
@@ -1082,7 +1087,7 @@ obra ${b.built ?? 0}/${workOf(b.kind)}`, "#ffd27a");
     if (!slot) return;
     const r = barrack ? this.rectOf(barrack) : null;
     const flag = r ? { x: r.x + r.w - 10, y: r.y + r.h - 10 } : { x: slot.x + 22, y: slot.y };
-    this.anchor(this.quarterJobs, flag.x, flag.y, () => bannerPiece(mutinous ? COLORS.MUTINEER : COLORS.ALLY, false, 60));
+    this.flag(this.quarterObjects, flag.x, flag.y, mutinous ? COLORS.MUTINEER : COLORS.ALLY, false, 60);
     if (mutinous && r) {
       // A barraca dos amotinados ganha o pano roxo por cima
       this.foot(this.quarterJobs, r.center.x - r.w * 0.36, r.y + r.h - 6 - r.h * 0.5, r.h * 0.5, () => tentPiece(Math.round(r.w * 0.72), Math.round(r.h * 0.45), COLORS.MUTINEER, null, i));

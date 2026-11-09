@@ -133,7 +133,8 @@ A interface e os efeitos ainda são greybox.
 | Estandarte do desafio (herói inimigo que procura duelo, Marco 21) | `duelBannerSprite` em `figures.ts`, `Enemy.makeHero` | ✅ pixel art: flâmula vermelha de duas pontas com espadas cruzadas |
 | Névoa de guerra | `FogOfWar` | greybox |
 | Noite e tochas | `NightLayer`, `worldScene/camp.ts` (`carryTorches`), `Unit.setTorch` | ✅ G6, parte 1. A escuridão tem buracos de luz que tremulam, e por cima vai o halo quente das chamas, que deixa a noite alaranjada perto do fogo. Levam a tocha na mão: o Comandante, os mensageiros, um em cada seis de quem marcha (até 5 por batalhão), a guarda do acampamento e as sentinelas dos povoados |
-| Chuva, neve e nevoeiro | `WeatherLayer` | greybox |
+| Chuva, neve e nevoeiro | `WeatherLayer`, `weatherArt.ts` | ✅ G6, parte 2. Gotas de pixel inclinadas pelo vento, que respingam onde batem; flocos que o vento leva; bancos de nevoeiro pontilhados que passam com o vento. O pixel do tempo tem o tamanho do pixel da arte em qualquer zoom |
+| Chão molhado, poças e neve no chão | `GroundWeather`, `weatherArt.ts` | ✅ G6, parte 2. A chuva escurece o chão aos poucos e abre poças (primeiro na lama e no brejo), com o círculo das gotas. A neve cobre o chão em manchas que crescem até fechar, e cobre as poças. Parado o tempo, o chão seca e a neve derrete devagar |
 
 ### Chão (G2)
 | O quê | Onde no código | Estado |
@@ -158,7 +159,7 @@ A interface e os efeitos ainda são greybox.
 | Cidade Alta vista de fora | `TownArt` | ✅ pixel art (por dentro também: G4, parte 5) |
 | Acampamento do bando (paliçada, torres, pavilhão, intendência, recrutamento, estábulo, ferraria, treino, poço, tendas dos batalhões) | `CampArea` | ✅ pixel art |
 | Cidade da sede (Marco 22, parte 4): arraial, burgo, vila e cidade em volta da fortaleza | `seatLayout` em `townLayout.ts`, `TownArt`, `Settlements` | ✅ pixel art: as mesmas peças dos povoados, sem peça nova |
-| Bandeiras dos povoados (paço, portões, guarnição), na cor do dono | `Settlements`, `TownArt` | ✅ pixel art |
+| Bandeiras dos povoados (paço, portões, guarnição), na cor do dono | `Settlements`, `flags.ts`, `FlagSprite` | ✅ pixel art ao vento (G6, parte 2): caídas no mastro na calmaria, tremulando com vento (mais depressa quanto mais forte), viradas para onde ele sopra. As do acampamento e do acampamento de campo também. Na Cidade Alta e nos locais de contrato, ainda paradas |
 | Locais de contrato: barracas de bandidos, choupanas goblins, ruínas assombradas, vau do pântano | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão pisado pintado no chão |
 | Covis das calamidades: torre negra do necromante com sepulturas; acampamento de guerra orc com barracas de couro, totens e cavalos-de-frisa | `wildLayout.ts`, `wilds.ts` | ✅ pixel art, com o chão do covil |
 | Chama da fogueira, brasa da forja e tochas dos postes | `fire.ts`, `world/flames.ts`, `CampArea`, `FieldCampArt` | ✅ pixel art animada (G6, parte 1), sem contorno escuro, porque o fogo brilha. A fogueira tem 6 quadros; a tocha, a tocha da mão e a brasa têm 4 cada. Cada chama começa num quadro, e as tochas de uma rua não piscam juntas |
@@ -197,4 +198,5 @@ A interface e os efeitos ainda são greybox.
 5. **G5, interface ✅ OK,** em quatro partes: a fonte, as molduras e os botões, os ícones e os retratos.
 6. **G6, atmosfera:** noite, tochas, clima e efeitos (flechas, golpes, poeira da investida, sangue). Em quatro partes:
    - a parte 1, a noite e o fogo, está feita;
-   - faltam o clima, os efeitos de combate e o que a magia mexe.
+   - a parte 2, o clima, está feita;
+   - faltam os efeitos de combate e o que a magia mexe.
