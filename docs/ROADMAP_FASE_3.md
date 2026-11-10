@@ -25,8 +25,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **Em andamento:** o Marco 19 (etapa 16), a magia do Comandante. Está feita a parte 1 (o arcano e as primeiras magias).
-- **A seguir:** a parte 2 do Marco 19: as magias que mexem no mundo.
+- **Em andamento:** o Marco 19 (etapa 16), a magia do Comandante. Estão feitas a parte 1 (o arcano e as primeiras magias) e a 2 (as magias que mexem no mundo).
+- **A seguir:** a parte 3 do Marco 19: aprender pelo mundo.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -60,7 +60,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
-| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | parte 1 de 4 |
+| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | partes 1 e 2 de 4 |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
@@ -1356,6 +1356,28 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
     - a noite.
   - Fotos: `.shots-m19-bola.png`, `.shots-m19-explosao.png`, `.shots-m19-fogo.png`, `.shots-m19-cura.png`, `.shots-m19-noite-voo.png` e `.shots-m19-noite.png`.
 - **Ficou para depois:** a IA não sai do chão em chamas. Parada dentro dele, uma tropa perde muito mais do que para a explosão.
+
+**Feito na parte 2, as magias que mexem no mundo:**
+- **Quatro magias novas**, nas teclas 7, 8, 9 e 0. As três primeiras ligam no ponto um efeito do G6 (parte 4), por um tempo:
+  - **Congelar** (35 de arcano, área de 200 px, 90 s): a água vira gelo, que se atravessa a pé. Sem água na área, a magia não sai e o arcano fica. No degelo, quem estava em cima sai para a margem.
+  - **Nevoeiro** (25 de arcano, área de 260 px, 75 s): quem está dentro enxerga metade e só é visto de perto, dos dois lados.
+  - **Apagar o fogo** (20 de arcano, área de 260 px, 60 s): as tochas saem da mão, as fogueiras se apagam e o chão em chamas da bola de fogo também. À noite, quem está ali conta como sem tocha: o inimigo só o vê de perto.
+- **Pavor** (45 de arcano, área de 170 px), a mais cara: uma onda de medo que não escolhe lado.
+  - Cada tropa pega perde 45 de moral de uma vez, e por 8 s nada devolve a moral dela: nem a calma, nem a bandeira, nem o Comandante (`dreadUntil`, em `MoraleSystem`).
+  - As tropas perto da borda (até o dobro do raio) perdem 15.
+  - Uma tropa descansada aguenta, mas uma que já vacilava foge.
+  - Os mortos-vivos não sentem medo.
+- **O anel da magia** (`ringSheet` em `magicArt.ts`): ao lançar, um anel na cor da magia corre do ponto até a borda da área e se desfaz. Ele é desenhado para cada raio, sem ampliar o pixel, e clareia a noite por um instante.
+- **Os ícones novos:** o floco de gelo sobre a água, o nevoeiro com a faísca, a tocha apagada soltando fumaça e a caveira roxa do pavor.
+- **Testes:**
+  - 4 de regras novos em `tests/unit/magic.test.ts`: as teclas e os custos, o pavor na moral (ele segura a moral, e depois a moral volta) e o anel;
+  - a suíte `magia` passou a 29 verificações:
+    - no vau, o batalhão cruza pelo gelo onde antes não passava, e congelar recusa onde não há água;
+    - à noite, no nevoeiro e sem as tochas, o inimigo só vê o batalhão de perto;
+    - apagar o fogo apaga o chão em chamas;
+    - o pavor derruba a moral e a segura, e a tropa abalada foge;
+    - o pavor também pega os nossos, e não pega os mortos-vivos.
+  - Fotos novas: `.shots-m19-gelo.png`, `.shots-m19-escuro.png` e `.shots-m19-pavor.png`.
 
 ## 17. Fechamento: jogar uma campanha inteira
 **Objetivo:** fechar a fase jogando, e não só simulando.

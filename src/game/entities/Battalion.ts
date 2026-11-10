@@ -60,6 +60,7 @@ export class Battalion {
   pendingDeaths = 0;
   /** Abalos desde a última leitura: investida, flechas, vizinhos fugindo. */
   pendingShock = 0;
+  dreadUntil = 0;
   /** Está apanhando pelo lado ou por trás agora. */
   flanked = false;
   flankShockAt = -Infinity;

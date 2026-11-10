@@ -28,6 +28,8 @@ export interface MoraleGroup {
   readonly steadiness?: number;
   /** Abalos desde a última leitura: investida, flechas. */
   pendingShock: number;
+  /** Pavor da magia (Marco 19): até quando a tropa não se recompõe (ms do relógio da batalha). */
+  dreadUntil?: number;
   /** Está sendo atacada pelo lado ou por trás agora. */
   flanked: boolean;
   /** Quando levou o último choque de ser pega pelo lado. */
@@ -106,17 +108,19 @@ export function updateMorale(
   // Disciplina (habilidade) e um tenente Inabalável amortecem todas as perdas
   const passive = battalion.leaderPassive;
   delta *= battalion.mods.moraleLoss * (passive?.moraleLoss ?? 1) * (battalion.rankSupport ?? 1) * (battalion.steadiness ?? 1) * (delta < 0 ? (battalion.captainAura ?? 1) * (battalion.kinship ?? 1) * (battalion.devotion ?? 1) : 1);
+  // O pavor da magia: enquanto dura, nada devolve a moral (nem a bandeira, nem a calma, nem o Comandante)
+  const dread = time < (battalion.dreadUntil ?? 0);
   // Estandarte à vista: os soldados seguem e protegem a bandeira do seu senhor
   if (banner.seen && !banner.faltering) {
     delta *= SUPPORT.BANNER_MORALE_LOSS;
-    delta += SUPPORT.BANNER_RECOVERY_PER_SEC * dt;
+    if (!dread) delta += SUPPORT.BANNER_RECOVERY_PER_SEC * dt;
   } else if (banner.seen && banner.faltering) {
     delta -= SUPPORT.BANNER_FALTER_PER_SEC * dt;
   }
 
   // Tropa exausta custa a se recompor
-  if (threats === 0) delta += M.RECOVERY_PER_SEC * (passive?.recovery ?? 1) * battalion.fatigueRecovery * dt;
-  if (commander?.isAlive && distance(commander, center) <= M.COMMANDER_AURA_RADIUS) {
+  if (threats === 0 && !dread) delta += M.RECOVERY_PER_SEC * (passive?.recovery ?? 1) * battalion.fatigueRecovery * dt;
+  if (!dread && commander?.isAlive && distance(commander, center) <= M.COMMANDER_AURA_RADIUS) {
     delta += M.COMMANDER_AURA_PER_SEC * dt;
   }
 

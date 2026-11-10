@@ -1929,10 +1929,6 @@ export const WEATHER = {
 } as const;
 
 /**
- * O que a magia mexe num lugar (G6, parte 4): nevoeiro, tochas apagadas, água congelada e fogo.
- * Os tempos são em segundos de tela (param na pausa).
- */
-/**
  * A magia do Comandante (Marco 19). O arcano enche com os dias, e não durante a luta: numa batalha
  * cabem duas ou três magias. Os tempos de recarga são em segundos de batalha.
  */
@@ -1959,7 +1955,50 @@ export const MAGIC = {
       radius: 160,
       cooldown: 10,
     },
+    FREEZE: {
+      name: "Congelar",
+      hint: "Congela a água em volta do ponto: o rio vira gelo, que se atravessa a pé, até derreter",
+      kind: "WORLD",
+      cost: 35,
+      range: 520,
+      radius: 200,
+      cooldown: 20,
+    },
+    MIST: {
+      name: "Nevoeiro",
+      hint: "Chama um nevoeiro no ponto: quem está dentro enxerga pouco e só é visto de perto",
+      kind: "WORLD",
+      cost: 25,
+      range: 600,
+      radius: 260,
+      cooldown: 20,
+    },
+    DOUSE: {
+      name: "Apagar o fogo",
+      hint: "Apaga as tochas, as fogueiras e o fogo no chão em volta do ponto: à noite, quem está ali fica no escuro",
+      kind: "WORLD",
+      cost: 20,
+      range: 600,
+      radius: 260,
+      cooldown: 15,
+    },
+    TERROR: {
+      name: "Pavor",
+      hint: "Uma onda de medo: toda tropa pega perde moral de uma vez e não se recompõe por um tempo (os do bando também; os mortos-vivos não sentem)",
+      kind: "CONTROL",
+      cost: 45,
+      range: 420,
+      radius: 170,
+      cooldown: 20,
+    },
   },
+  /** Quanto dura o que as magias do mundo mexem (s) e o anel que corre ao lançar (ms). */
+  WORLD: { FREEZE_SECONDS: 90, MIST_SECONDS: 75, DOUSE_SECONDS: 60, RING_MS: 520 },
+  /**
+   * O pavor: a moral que cada tropa pega perde (uma vez), a das tropas perto da borda (até `NEAR`
+   * vezes o raio) e por quanto tempo quem foi pego não se recompõe (ms).
+   */
+  TERROR: { SHOCK: 45, NEAR_SHOCK: 15, NEAR: 2, DREAD_MS: 8000 },
   FIREBALL: {
     /** Dano no meio da explosão; na borda, `EDGE` dele. */
     DAMAGE: 45,
@@ -1984,6 +2023,10 @@ export const MAGIC = {
   },
 } as const;
 
+/**
+ * O que a magia mexe num lugar (G6, parte 4): nevoeiro, tochas apagadas, água congelada e fogo.
+ * Os tempos são em segundos de tela (param na pausa).
+ */
 export const PLACES = {
   /** Quanto o efeito leva para chegar ao máximo e para sumir. */
   FADE_IN: 1.5,

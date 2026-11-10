@@ -57,6 +57,7 @@ export class EnemySquad implements MoraleGroup {
   facing = 0;
   pendingDeaths = 0;
   pendingShock = 0;
+  dreadUntil = 0;
   flanked = false;
   flankShockAt = -Infinity;
   /** Quando virou a frente para quem o pegou de lado (ver `faceThreat`). */

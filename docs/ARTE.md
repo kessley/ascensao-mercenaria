@@ -134,6 +134,7 @@ Ainda são greybox: as marcas de ordem, de destino e de seleção (de propósito
 | Fumaça | `CombatEffects.smoke` | ✅ G6, parte 4. Rolos cinza que sobem e se desfazem (a chama que apagou, o fogo de um lugar) |
 | Bola de fogo e explosão | `magicArt.ts`, `worldScene/magic.ts` | ✅ Marco 19, parte 1. A bola de 16 px em 4 quadros, com línguas de fogo que giram, voa em arco com rastro de fumaça. A explosão tem 6 quadros: o miolo branco de calor que vira fumaça e o anel de fogo que corre até a borda da área e se quebra. Depois, o fogo do chão (G6). Quem queima no chão fica cor de brasa por um instante |
 | Brilho da cura | `magicArt.ts` | ✅ Marco 19, parte 1. Cruzes de luz verde e dourada, 2 por soldado, que sobem, abrem as pontas e se apagam |
+| Anel das magias | `magicArt.ts` (`ringSheet`) | ✅ Marco 19, parte 2. Ao lançar congelar, nevoeiro, apagar o fogo e pavor, um anel em 4 quadros corre do ponto até a borda da área, afina e se desfaz em pontos. É branco e cinza, tingido com a cor de cada magia, e desenhado para cada raio, sem ampliar o pixel |
 | Mira das magias | `worldScene/magic.ts` | greybox (de propósito: é da interface). O alcance em volta do Comandante e a área no ponto, na cor da magia; cinza fora do alcance |
 | Textos que sobem ("esquiva", "flanqueados!") | `Unit.floatText` | texto |
 | Ordens, destinos, linha de batalha e seleção | `WorldScene`, `Battalion` | greybox (de propósito: são da interface) |

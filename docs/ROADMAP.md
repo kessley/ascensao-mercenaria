@@ -45,7 +45,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | G5 | Pixel art: interface (fonte, molduras, ícones e retratos) | ✅ OK |
 | | 23 | Cultura, religião e língua | ✅ OK |
 | | G6 | Pixel art: atmosfera | ✅ OK |
-| | 19 | Magia do Comandante (era o Marco 8, continua por último) | parte 1 de 4 |
+| | 19 | Magia do Comandante (era o Marco 8, continua por último) | partes 1 e 2 de 4 |
 
 **Regras para todos os marcos novos** (detalhes no GDD, seção 8.1):
 - toda mecânica cria uma decisão com custo e conta uma história no diário;

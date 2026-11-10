@@ -240,6 +240,9 @@ export class WorldScene extends Phaser.Scene {
   burnClock = 0;
   /** A última explosão e a última cura (os testes conferem). */
   lastBlast: { at: { x: number; y: number }; wounded: number; ours: number; groups: number } | null = null;
+  /** A última magia do mundo lançada (para os testes): o efeito ligado e onde. */
+  lastPlaceSpell: { spell: SpellId; id: number; at: { x: number; y: number } } | null = null;
+  lastTerror: { at: { x: number; y: number }; struck: number; shaken: number; fearless: number; ours: number } | null = null;
   lastMend: { battalion: string; healed: number } | null = null;
 
   // --- Estações, clima e logística (Marco 13) ---
@@ -367,6 +370,8 @@ export class WorldScene extends Phaser.Scene {
     this.magicAnims = [];
     this.burnClock = 0;
     this.lastBlast = null;
+    this.lastPlaceSpell = null;
+    this.lastTerror = null;
     this.lastMend = null;
     this.walkPath = null;
     this.inCamp = !useGameStore.getState().scenario;

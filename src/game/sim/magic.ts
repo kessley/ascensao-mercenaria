@@ -9,9 +9,9 @@ import type { Point } from "../../utils/math";
 export type SpellId = keyof typeof MAGIC.SPELLS;
 export const SPELL_IDS = Object.keys(MAGIC.SPELLS) as SpellId[];
 
-/** A tecla de cada magia em campo: 5 para a primeira que o Comandante sabe, 6 para a segunda... */
-export const SPELL_KEYS = ["FIVE", "SIX", "SEVEN", "EIGHT", "NINE"] as const;
-export const SPELL_KEY_LABEL = ["5", "6", "7", "8", "9"] as const;
+/** A tecla de cada magia em campo: 5 para a primeira que o Comandante sabe, 6 para a segunda... até o 0. */
+export const SPELL_KEYS = ["FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "ZERO"] as const;
+export const SPELL_KEY_LABEL = ["5", "6", "7", "8", "9", "0"] as const;
 
 export type SpellDef = (typeof MAGIC.SPELLS)[SpellId];
 

@@ -66,6 +66,8 @@ const DERIVED = {
   /** O cavalo com a flecha embaixo */
   HORSE_ARCHER: overlay(ICON_ART.HORSES, ["", "", "", "", "", "", "", "", "....", "rrSSs"]),
   FORAGE: ICON_ART.GRAIN,
+  /** A caveira roxa do pavor (Marco 19) */
+  TERROR: recolor(ICON_ART.SKULL, { n: "p", N: "P" }),
 } satisfies Record<string, Art>;
 
 const ICONS: Readonly<Record<ArtId | keyof typeof DERIVED, Art>> = { ...ICON_ART, ...DERIVED };

@@ -1,7 +1,7 @@
 import { Unit } from "../../entities/Unit";
 import type { Battalion } from "../../entities/Battalion";
 import { sheetKey } from "../../art/atlas";
-import { BLAST_CELL, BLAST_FRAMES, BLAST_RADIUS, blastSheet, fireballSheet, FIREBALL_CELL, FIREBALL_FRAMES, mendSheet, MEND_CELL, MEND_FRAMES } from "../../art/magicArt";
+import { BLAST_CELL, BLAST_FRAMES, BLAST_RADIUS, blastSheet, fireballSheet, FIREBALL_CELL, FIREBALL_FRAMES, mendSheet, MEND_CELL, MEND_FRAMES, RING_FRAMES, ringSheet } from "../../art/magicArt";
 import { blastDamage, castProblem, mendAmount, spellDef, SPELL_KEY_LABEL, SPELL_KEYS, type SpellId } from "../../sim/magic";
 import type { Light } from "../../world/NightLayer";
 import { sfx } from "../../../audio/sounds";
@@ -15,6 +15,26 @@ const MEND_KEY = "magic:mend";
 const BLAST_KEY = "magic:blast";
 /** A cada quanto o fogo no chão queima quem está dentro (s). */
 const BURN_TICK = 0.5;
+
+/** A cor de cada magia: a mira, o anel e o nome que sobe do Comandante. */
+const SPELL_COLOR: Record<SpellId, number> = {
+  FIREBALL: 0xf07a1a,
+  MEND: 0x9ccc5a,
+  FREEZE: 0x9fd8ff,
+  MIST: 0xc8ccd4,
+  DOUSE: 0xa89478,
+  TERROR: 0xb070e0,
+};
+const css = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+
+/** O efeito do G6 que cada magia do mundo liga, por quanto tempo, e o aviso. */
+const PLACE_SPELL = {
+  FREEZE: { kind: "FREEZE", seconds: MAGIC.WORLD.FREEZE_SECONDS, feed: "Congelar: a água vira gelo, que se atravessa a pé até derreter." },
+  MIST: { kind: "FOG", seconds: MAGIC.WORLD.MIST_SECONDS, feed: "Nevoeiro: quem está lá dentro enxerga pouco e só é visto de perto." },
+  DOUSE: { kind: "DOUSE", seconds: MAGIC.WORLD.DOUSE_SECONDS, feed: "O fogo se apaga: tochas, fogueiras e chamas. À noite, quem está ali fica no escuro." },
+} as const;
+type PlaceSpell = keyof typeof PLACE_SPELL;
+const isPlaceSpell = (s: SpellId): s is PlaceSpell => s in PLACE_SPELL;
 
 /** Um clarão passageiro na noite (a bola no ar, a explosão). */
 export interface MagicFlash {
@@ -42,9 +62,10 @@ function groupOf(u: Unit): object | null {
 }
 
 /**
- * A magia do Comandante em campo (Marco 19, parte 1): as teclas 5 a 9 armam a mira de uma magia,
- * o clique esquerdo lança, e o direito (ou o Esc) desiste. A bola de fogo voa em arco e explode
- * onde cai; a cura fecha as feridas do batalhão mais perto do ponto.
+ * A magia do Comandante em campo (Marco 19): as teclas 5 a 0 armam a mira de uma magia, o clique
+ * esquerdo lança, e o direito (ou o Esc) desiste. A bola de fogo voa em arco e explode onde cai; a
+ * cura fecha as feridas do batalhão mais perto do ponto (parte 1). Congelar, nevoeiro e apagar o
+ * fogo ligam os efeitos do G6 no ponto; o pavor quebra a moral de quem pega (parte 2).
  */
 export const magicMethods = {
   setupMagic(this: WorldScene): void {
@@ -90,14 +111,17 @@ export const magicMethods = {
     // A cura precisa de alguém para curar: sem batalhão ali, o arcano não é gasto
     const patient = spell === "MEND" ? this.mendTarget(at) : null;
     if (spell === "MEND" && !patient) return "Nenhum batalhão ali para curar.";
+    if (spell === "FREEZE" && !this.waterNear(at, spellDef(spell).radius)) return "Não há água ali para congelar.";
     if (!s.spendArcane(spell)) return "Arcano de menos.";
     const def = spellDef(spell);
     this.spellReadyAt[spell] = this.time.now + def.cooldown * 1000;
     this.aiming = null;
     this.aimGfx.clear();
     c.setFacing(angleTo(c, at));
-    c.floatText(def.name, spell === "FIREBALL" ? "#ffb070" : "#c8f59a");
+    c.floatText(def.name, css(SPELL_COLOR[spell]));
     if (spell === "FIREBALL") this.throwFireball(at);
+    else if (spell === "TERROR") this.terrorAt(at);
+    else if (isPlaceSpell(spell)) this.changePlace(spell, at);
     else if (patient) this.mendBattalion(patient);
     this.publishHud();
     return null;
@@ -252,6 +276,102 @@ export const magicMethods = {
     this.pushFeed(`Cura: ${b.name} recupera ${Math.round(healed)} de vida e o ânimo.`);
   },
 
+  // --- As magias que mexem no mundo (parte 2) ---
+
+  /** Há água (rio, lago ou raso) dentro do círculo? Procura numa grade, no chão sem o gelo da magia. */
+  waterNear(this: WorldScene, at: Point, r: number): boolean {
+    const t = Unit.terrain;
+    if (!t) return false;
+    const step = 16;
+    for (let dy = -r; dy <= r; dy += step) {
+      for (let dx = -r; dx <= r; dx += step) {
+        if (dx * dx + dy * dy > r * r) continue;
+        const k = t.unfrozenTypeAt(at.x + dx, at.y + dy);
+        if (k === "WATER" || k === "SHALLOW") return true;
+      }
+    }
+    return false;
+  },
+
+  /** Congelar, nevoeiro e apagar o fogo: o efeito do G6 ligado no ponto, por um tempo. */
+  changePlace(this: WorldScene, spell: PlaceSpell, at: Point): void {
+    const def = spellDef(spell);
+    const P = PLACE_SPELL[spell];
+    const id = this.places.add({ kind: P.kind, x: at.x, y: at.y, r: def.radius, seconds: P.seconds });
+    this.castRing(at, def.radius, SPELL_COLOR[spell]);
+    sfx.banner(at);
+    this.lastPlaceSpell = { spell, id, at: { x: at.x, y: at.y } };
+    this.pushFeed(P.feed);
+  },
+
+  /**
+   * O pavor: uma onda de medo que não escolhe lado. Cada tropa pega perde moral de uma vez e não se
+   * recompõe por um tempo; as de perto da borda se abalam. Quem não sente medo (os mortos-vivos) nem pisca.
+   */
+  terrorAt(this: WorldScene, at: Point): void {
+    const radius = MAGIC.SPELLS.TERROR.radius;
+    const T = MAGIC.TERROR;
+    const now = this.time.now;
+    // De cada tropa, o soldado mais perto do ponto
+    const nearest = new Map<object, { unit: Unit; d: number }>();
+    const units: Unit[] = [...this.allAllies().filter((u) => u !== this.commander), ...this.enemies.filter((e) => e.isAlive && !e.dormant)];
+    for (const u of units) {
+      const g = groupOf(u);
+      if (!g || !u.isAlive) continue;
+      const d = distance(u, at);
+      const cur = nearest.get(g);
+      if (!cur || d < cur.d) nearest.set(g, { unit: u, d });
+    }
+    let struck = 0;
+    let shaken = 0;
+    let fearless = 0;
+    let ours = 0;
+    for (const [g, { unit, d }] of nearest) {
+      if (d > radius * T.NEAR) continue;
+      const group = g as { dreadUntil?: number; mods?: { moraleLoss: number } };
+      if (group.mods?.moraleLoss === 0) {
+        fearless++;
+        unit.floatText("sem medo", "#b8b8b8");
+        continue;
+      }
+      if (unit.team === this.commander.team) ours++;
+      if (d <= radius) {
+        struck++;
+        unit.shock(T.SHOCK);
+        group.dreadUntil = now + T.DREAD_MS;
+        unit.floatText("pavor!", "#d8a8f0");
+      } else {
+        shaken++;
+        unit.shock(T.NEAR_SHOCK);
+      }
+    }
+    this.castRing(at, radius, SPELL_COLOR.TERROR);
+    this.castRing(at, radius * T.NEAR, SPELL_COLOR.TERROR, 0.5);
+    this.cameras.main.shake(260, 0.003);
+    sfx.thud(at);
+    this.lastTerror = { at: { x: at.x, y: at.y }, struck, shaken, fearless, ours };
+    if (struck + shaken === 0) this.pushFeed(fearless > 0 ? "Pavor! Mas quem estava ali não sente medo." : "Pavor! Mas não havia ninguém ali para sentir.");
+    else if (ours > 0) this.pushFeed(`Pavor! ${struck + shaken} tropas tomadas pelo medo, ${ours} delas do bando.`);
+    else this.pushFeed(`Pavor! ${struck + shaken} tropas tomadas pelo medo.`);
+  },
+
+  /** O anel da magia: corre do ponto até a borda da área, na cor dela, e se desfaz (com um clarão na noite). */
+  castRing(this: WorldScene, at: Point, r: number, color: number, alpha = 1): void {
+    const R = Math.round(r);
+    const key = sheetKey(this, `magic:ring:${R}`, () => ringSheet(R), R * 2, R * 2);
+    const img = this.add.image(Math.round(at.x), Math.round(at.y), key, 0).setDepth(6).setTint(color).setAlpha(alpha);
+    this.magicAnims.push({
+      start: this.time.now,
+      duration: MAGIC.WORLD.RING_MS,
+      tick: (p) => {
+        img.setFrame(Math.min(RING_FRAMES - 1, Math.floor(p * RING_FRAMES)));
+        img.setAlpha(alpha * (p < 0.7 ? 1 : Math.max(0, (1 - p) / 0.3)));
+      },
+      done: () => img.destroy(),
+    });
+    this.magicFlashes.push({ light: { x: at.x, y: at.y, radius: r * 1.2, glow: 0.5 * alpha, tint: color, flicker: 0.02 }, until: this.time.now + 700, fade: 700 });
+  },
+
   // --- A cada quadro ---
 
   /** A mira, o fogo no chão queimando quem está dentro e os clarões passageiros. */
@@ -293,7 +413,7 @@ export const magicMethods = {
     const p = this.input.activePointer;
     const at = this.cameras.main.getWorldPoint(p.x, p.y);
     const reach = distance(c, at) <= def.range;
-    const color = !reach ? 0x9a9a9a : spell === "FIREBALL" ? 0xf07a1a : 0x9ccc5a;
+    const color = !reach ? 0x9a9a9a : SPELL_COLOR[spell];
     // O alcance em volta do Comandante e a área no ponto
     g.lineStyle(1, color, 0.35).strokeCircle(c.x, c.y, def.range);
     g.fillStyle(color, reach ? 0.16 : 0.08).fillCircle(at.x, at.y, def.radius);

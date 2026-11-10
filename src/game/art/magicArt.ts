@@ -82,6 +82,31 @@ export function blastSheet(): Bitmap {
   return gridBitmap(g);
 }
 
+export const RING_FRAMES = 4;
+
+/**
+ * O anel de uma magia (branco e cinza, para tingir com a cor dela): corre do meio até a borda da
+ * área, afina e se desfaz em pontos. Feito para cada raio, sem ampliar o pixel.
+ */
+export function ringSheet(r: number): Bitmap {
+  const C = r * 2;
+  const g = new Grid(C * RING_FRAMES, C);
+  for (let f = 0; f < RING_FRAMES; f++) {
+    const t = (f + 1) / RING_FRAMES;
+    const ring = r * (0.3 + 0.68 * t);
+    const width = 3.5 - 2 * t;
+    for (let y = 0; y < C; y++) {
+      for (let x = 0; x < C; x++) {
+        const d = Math.hypot(x + 0.5 - r, y + 0.5 - r);
+        const off = Math.abs(d - ring);
+        if (d > r || off >= width || hash(x >> 1, y >> 1, f + 11) < t * 0.55) continue;
+        g.px(f * C + x, y, off < width * 0.45 ? 0xffffff : 0xc8c8c8);
+      }
+    }
+  }
+  return gridBitmap(g);
+}
+
 /** O brilho da cura: uma cruz de luz que cresce, abre as pontas e se apaga. */
 export function mendSheet(): Bitmap {
   const C = MEND_CELL;

@@ -690,6 +690,45 @@ export const ICON_ART = {
     "....RxxxR.",
     ".....RRR..",
   ],
+  /** O floco de gelo sobre a água (Marco 19) */
+  FREEZE: [
+    "....c.....",
+    ".a..c..a..",
+    "..a.c.a...",
+    "...cwc....",
+    "ccccwcccc.",
+    "...cwc....",
+    "..a.c.a...",
+    ".a..c..a..",
+    "....c.....",
+    "AAuuAAuuAA",
+  ],
+  /** O nevoeiro chamado, com a faísca da magia */
+  MIST: [
+    "........p.",
+    ".......pwp",
+    "..CCCC..p.",
+    ".cccccC...",
+    "..........",
+    "...CCCCCC.",
+    "..cccccccC",
+    "..........",
+    "CCCCCC....",
+    "cccccC....",
+  ],
+  /** A tocha apagada, soltando fumaça */
+  DOUSE: [
+    "...S..S...",
+    "....S..S..",
+    "...S..S...",
+    "....SS....",
+    "...kttk...",
+    "...kttk...",
+    "....hh....",
+    "....hh....",
+    "....hh....",
+    "....BB....",
+  ],
   /** A cruz de luz da cura, com faíscas */
   MEND: [
     "....eE....",
