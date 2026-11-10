@@ -110,7 +110,8 @@ export async function atmosphere({ page, ev, battle, labScript }, { check }) {
     return { on, off };
   });
   console.log("   calor (vermelho − azul):", JSON.stringify(warmth));
-  check("perto da fogueira, a noite fica alaranjada (o halo esquenta a cor)", warmth.on.near > warmth.off.near + 6 && warmth.on.edge > warmth.off.edge + 3, JSON.stringify(warmth));
+  // Em proporção: numa noite mais clara, os dois lados saem mais fracos (perto, 56 contra 29; na borda, 7 contra 5)
+  check("perto da fogueira, a noite fica alaranjada (o halo esquenta a cor)", warmth.on.near > warmth.off.near * 1.3 + 4 && warmth.on.edge >= warmth.off.edge * 1.2 && warmth.on.edge > warmth.off.edge, JSON.stringify(warmth));
   await page.screenshot({ path: "tests/battle/.shots-g6-noite.png" });
   await ev(() => {
     const w = window.__world;

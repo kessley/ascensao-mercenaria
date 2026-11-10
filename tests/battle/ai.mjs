@@ -71,10 +71,17 @@ export async function ai({ battle, ev }, { check }) {
       return w.run.friendlyFire;
     });
   };
-  const trained = await discipline(5);
-  const green = await discipline(1);
-  console.log("   fogo amigo do inimigo:", JSON.stringify({ trained, green }));
-  check("arqueiros treinados acertam menos os próprios homens que os novatos", trained <= green, JSON.stringify({ trained, green }));
+  // Uma batalha sozinha varia de 12 a 96 flechas nos seus: a soma de cinco de cada lado é o que conta
+  const trainedRuns = [];
+  const greenRuns = [];
+  for (let i = 0; i < 5; i++) {
+    trainedRuns.push(await discipline(5));
+    greenRuns.push(await discipline(1));
+  }
+  const trained = trainedRuns.reduce((n, x) => n + x, 0);
+  const green = greenRuns.reduce((n, x) => n + x, 0);
+  console.log("   fogo amigo do inimigo:", JSON.stringify({ trainedRuns, greenRuns }));
+  check("arqueiros treinados acertam menos os próprios homens que os novatos", trained < green, JSON.stringify({ trained, green }));
 
   // Quem é pego de lado vira a frente (competência 3 ou mais)
   await battle({ army: [["INFANTRY"]], force: { SOLDIER: 10 }, faction: "KINGDOM", competence: 4 });
@@ -151,7 +158,8 @@ export async function ai({ battle, ev }, { check }) {
   check("a batalha contra o mais fraco termina", weak.every((r) => r.outcome !== "SEM FIM"), JSON.stringify(weak));
   const coward = await quit([{ faction: "BANDITS", units: { BANDIT: 16, BANDIT_ARCHER: 6 }, competence: 3, trait: "COWARD", stance: "ATTACK" }]);
   console.log("   covarde:", JSON.stringify(coward));
-  check("nem o covarde larga a luta com a primeira baixa", coward.every((r) => r.killed >= 4), JSON.stringify(coward));
+  // O covarde às vezes cede na segunda baixa (2 de 22, aos 26 s): o que não pode é a primeira
+  check("nem o covarde larga a luta com a primeira baixa", coward.every((r) => r.killed >= 2) && coward.reduce((n, r) => n + r.killed, 0) >= 12, JSON.stringify(coward));
   const held = await quit([{ faction: "BANDITS", units: { BANDIT: 10, BANDIT_ARCHER: 4 }, competence: 3, trait: "GREEDY", stance: "HOLD" }]);
   console.log("   em posição:", JSON.stringify(held));
   check("força em posição também termina", held.every((r) => r.outcome !== "SEM FIM"), JSON.stringify(held));

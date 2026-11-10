@@ -558,6 +558,8 @@ export const WAR_AI = {
   MAX_EYES: 2,
   /** Quem atira segura o tiro com gente nossa a esta distância do alvo. */
   FIRE_CLEARANCE: 70,
+  /** Quem foge do chão em chamas para tanto além da borda dele (o esquadrão tem largura). */
+  FIRE_MARGIN: 60,
   /** Competência para virar a frente sozinho quando pego de lado e para guardar uma reserva. */
   TURN_COMPETENCE: 3,
   RESERVE_COMPETENCE: 4,
@@ -1757,6 +1759,9 @@ export const SIEGE = {
   LADDER_RAISE_S: 18,
   /** Na escada se sobe devagar, um de cada vez. */
   LADDER_CLIMB: 0.15,
+  /** Quantos sobem uma escada ao mesmo tempo (os outros esperam embaixo) e quanto apara quem sobe. */
+  LADDER_CAPACITY: 2,
+  LADDER_DEFENSE: 0.5,
   /** Atrás de quem está na muralha, a reserva (px). */
   RESERVE_DEPTH: 240,
   /** Atrás dos muros não há para onde fugir: a moral cede mais devagar. */

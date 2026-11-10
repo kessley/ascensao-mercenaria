@@ -69,6 +69,8 @@ export interface HostLinks {
   vanish: (e: Enemy) => void;
   /** O bando largou a luta: procura outro rumo. */
   retreated: (band: Warband) => void;
+  /** Fogo da magia no chão perto do ponto (até `margin` além da borda), ou null. */
+  fireAt?: (p: Point, margin: number) => { x: number; y: number; r: number } | null;
 }
 
 interface Contact {
@@ -354,6 +356,27 @@ export class WarHost implements SquadCommand {
     return this.disciplined && this.members.some((m) => m.isAlive && !m.ranged && distance(m, u) < WAR_AI.FIRE_CLEARANCE);
   }
 
+  /**
+   * Chão em chamas (a bola de fogo do Comandante): quem segura posição ou anda para um ponto
+   * dentro do fogo vai para fora dele, pelo lado em que já está. Quem está no corpo a corpo fica.
+   */
+  private leaveFire(): void {
+    const fireAt = this.links.fireAt;
+    if (!fireAt) return;
+    for (const s of this.squads) {
+      if (s.isDestroyed || s.panicking) continue;
+      const o = s.order;
+      if (o.type !== "HOLD" && o.type !== "HIDE" && o.type !== "ADVANCE" && o.type !== "MOVE") continue;
+      const fire = fireAt(o.point, WAR_AI.FIRE_MARGIN);
+      if (!fire) continue;
+      const from = distance(fire, s.center) > 1 ? angleTo(fire, s.center) : s.facing + Math.PI;
+      const reach = fire.r + WAR_AI.FIRE_MARGIN * 2;
+      const out = { x: fire.x + Math.cos(from) * reach, y: fire.y + Math.sin(from) * reach };
+      const point = this.links.isOpen(out) ? out : (this.links.nearestOpen(out, 200) ?? out);
+      s.setOrder({ ...o, point });
+    }
+  }
+
   raiseAlert(level: number): void {
     if (level <= this.alert) return;
     this.alert = level;
@@ -493,6 +516,7 @@ export class WarHost implements SquadCommand {
   }
 
   private decide(w: HostWorld, competence: number): void {
+    this.leaveFire();
     if (this.abandoned) return this.keepRetreating(w);
     const main = this.mainContacts();
     if (main.length === 0) {

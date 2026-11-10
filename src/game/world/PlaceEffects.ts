@@ -204,6 +204,15 @@ export class PlaceEffects implements PlaceRules {
     return false;
   }
 
+  /** O fogo que queima perto do ponto (até `margin` além da borda): para a IA sair de dentro dele. */
+  fireAt(p: Point, margin = 0): { x: number; y: number; r: number } | null {
+    for (const q of this.places.values()) {
+      if (q.kind !== "FIRE" || q.closing) continue;
+      if ((p.x - q.x) ** 2 + (p.y - q.y) ** 2 <= (q.r + margin) ** 2) return { x: q.x, y: q.y, r: q.r };
+    }
+    return null;
+  }
+
   /** A água daqui está congelada pela magia? */
   frozenAt(p: Point): boolean {
     for (const q of this.places.values()) if (q.kind === "FREEZE" && inside(p, q)) return isWater(this.baseTerrain(p.x, p.y));

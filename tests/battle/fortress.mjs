@@ -270,7 +270,13 @@ export async function fortress({ page, ev }, { check }) {
     w.commander.x += dir[0] * 450;
     w.commander.y += dir[1] * 450;
   });
-  await page.waitForTimeout(5000);
+  // Em tempo real: com a máquina ocupada, a coluna pode levar mais que os 5 s de antes
+  await page
+    .waitForFunction(() => {
+      const w = window.__world;
+      return w.battalions.some((b) => !b.isDestroyed && !w.inSeatFort(b.center));
+    }, null, { timeout: 20000 })
+    .catch(() => null);
   const marched = await ev(() => {
     const w = window.__world;
     return w.battalions.filter((b) => !b.isDestroyed).map((b) => !w.inSeatFort(b.center));

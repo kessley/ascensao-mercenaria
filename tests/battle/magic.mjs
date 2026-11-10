@@ -343,6 +343,35 @@ export async function magic({ page, ev, battle }, { check }) {
   });
   check("apagar o fogo apaga o chão em chamas", doused.burning && !doused.after, JSON.stringify(doused));
 
+  // A IA sai do chão em chamas (etapa 17, parte 1): o esquadrão parado no fogo vai para fora dele
+  await battle({ army: [["INFANTRY"]], force: { SOLDIER: 12 }, faction: "KINGDOM", setup: "s.magic = true;" });
+  const flee = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    for (const e of w.enemies) w.duelDone.add(e);
+    for (const sq of w.warbands.bands.flatMap((b) => b.host?.squads ?? [])) sq.passive = null;
+    lab.place(lab.battalion(), 1500, 1500, 0, 4);
+    w.commander.x = 3700;
+    w.commander.y = 3600;
+    const sq = lab.squad();
+    lab.placeSquad(sq, 4020, 3600, Math.PI);
+    const at = { ...sq.center };
+    const p = w.castAt("FIREBALL", at);
+    const inFire = () => sq.soldiers.filter((s) => s.isAlive && Math.hypot(s.x - at.x, s.y - at.y) <= 72).length;
+    lab.step(0.5);
+    const first = inFire();
+    // O Comandante some de vista: o esquadrão não tem em quem ir, só o fogo de onde sair
+    w.commander.x = 300;
+    w.commander.y = 300;
+    let i = 0;
+    lab.step(5.5, () => {
+      if (i++ % 10 === 0) w.hosts.hosts.forEach((h) => h.contacts.delete(w.commander));
+    });
+    return { p, first, later: inFire(), stillBurning: !!w.places.fireAt(at), order: sq.order.type, away: Math.round(Math.hypot(sq.center.x - at.x, sq.center.y - at.y)) };
+  });
+  console.log("   sair do fogo:", JSON.stringify(flee));
+  check("a IA tira do chão em chamas o esquadrão que estava parado ali", flee.p === null && flee.first >= 6 && flee.stillBurning && flee.later <= 2, JSON.stringify(flee));
+
   // O pavor: a moral cai de uma vez e não se recompõe; quem já vacilava foge
   await setup();
   const terror = await ev(() => {

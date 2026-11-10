@@ -29,7 +29,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 9 de novembro:**
   - o fechamento ("jogar uma campanha inteira") virou a [Fase 4](ROADMAP_FASE_4.md). O título dela será dado depois. A intenção é tornar o jogo divertido, viciante e desafiador, e quem define as etapas é o usuário, jogando;
   - antes disso, a Fase 3 termina todas as pendências das fases anteriores. Elas viraram a etapa 17, em partes, cada uma com o seu commit. Os batalhões grandes, que esperavam um sinal, entram por último.
-- **A seguir:** a etapa 17, parte 1: os testes que falham por sorte e as dívidas da IA no cerco.
+- **Feito em 10 de novembro:** a etapa 17, parte 1: os testes que falhavam por sorte e as dívidas da IA no cerco.
+- **A seguir:** a etapa 17, parte 2: os saves antigos.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Próxima fase: [Fase 4](ROADMAP_FASE_4.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -1358,7 +1359,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
     - o arcano que acaba e volta;
     - a noite.
   - Fotos: `.shots-m19-bola.png`, `.shots-m19-explosao.png`, `.shots-m19-fogo.png`, `.shots-m19-cura.png`, `.shots-m19-noite-voo.png` e `.shots-m19-noite.png`.
-- **Ficou para depois:** a IA não sai do chão em chamas. Parada dentro dele, uma tropa perde muito mais do que para a explosão.
+- **Ficou para depois:** a IA não sai do chão em chamas. Parada dentro dele, uma tropa perde muito mais do que para a explosão. (Feito na etapa 17, parte 1.)
 
 **Feito na parte 2, as magias que mexem no mundo:**
 - **Quatro magias novas**, nas teclas 7, 8, 9 e 0. As três primeiras ligam no ponto um efeito do G6 (parte 4), por um tempo:
@@ -1445,7 +1446,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - As checagens de magia tiram a passiva do tenente sorteado do esquadrão inimigo, que muda quanto ele aguenta. Com isso e com a firmeza nova, os números saem iguais a cada rodada. Antes, a checagem do pavor da parte 2 às vezes falhava.
   - Foto nova: `.shots-m19-marcas.png`.
 - **Ficou para depois:**
-  - a IA ainda não sai do chão em chamas, nem foge do necromante;
+  - a IA ainda não sai do chão em chamas (feito na etapa 17, parte 1), nem foge do necromante;
   - uma segunda calamidade mágica, com outra fraqueza, pode vir no fechamento, se a campanha pedir.
 
 ## 17. As pendências das fases anteriores
@@ -1458,7 +1459,7 @@ A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-
 - O equilíbrio jogado não entra aqui: é da Fase 4.
 
 **Em partes,** cada uma com o seu commit:
-1. **Os testes que falham por sorte e as dívidas da IA no cerco:**
+1. **Os testes que falham por sorte e as dívidas da IA no cerco** ✅ OK (ver abaixo)**:**
    - os confrontos com mais lutas por caso, ou limites mais largos;
    - as checagens instáveis da suíte `ia`;
    - a muralha que não ajuda (a IA dos defensores) e a checagem "com muralha vai melhor que em campo aberto";
@@ -1510,6 +1511,50 @@ A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-
 
 **Pronto quando:** a seção de pendências fica vazia, e a Fase 4 começa sem nada da Fase 3 para trás.
 
+**Feito na parte 1, os testes que falhavam por sorte e o cerco:**
+- **Medido antes de mexer.** Cada confronto da suíte `confrontos` lutou 20 vezes:
+  - lanças contra cavalo vencem 90%;
+  - cavaleiros contra lanceiros montados, 85%;
+  - guarda pesada contra soldados do reino, 50%;
+  - guarda pesada contra brutamontes, 60%, com 35% de lutas que não acabam nos 150 s;
+  - os outros casos ficam em 0% ou 100%.
+  - Com 6 lutas, as checagens perto do limite falhavam por azar de 2% a 5% das vezes.
+- **A escada vira gargalo** (`SIEGE.LADDER_CAPACITY` e `LADDER_DEFENSE`, contados em `TerrainMap.countLadders`):
+  - sobem 2 de cada vez, e quem chega espera embaixo, ao alcance de quem está na muralha;
+  - quem está na escada apara a metade e não atira dela: segue subindo, e não entope a passagem.
+  - Vale para os dois lados: os assaltos do jogador também sobem um de cada vez.
+- **A muralha passou a valer.** Em 10 defesas do forte com o robô de teste:
+  - atrás dos muros, sobram em média 22 do bando, e 7 defesas são vencidas;
+  - em campo aberto, a mesma força deixa 6 de pé, com 6 vitórias.
+  - Antes, as duas davam quase o mesmo (cerca de 20 pontos por luta contra 23).
+- **Quem persegue alcança quem está colado no muro** (`Unit.waypoint`):
+  - a rota termina na célula aberta mais perto do alvo, e a faixa junto do muro a navegação não abre;
+  - quem perseguia parava a um passo dali e ficava parado para sempre;
+  - agora, se dali se chega em linha reta, o último trecho é reto. Na água, a linha não passa, e a rota segue acabando na margem.
+  - Era a "defesa que demora a acabar": os últimos arqueiros na muralha, que os orcs já dentro não alcançavam.
+- **Do outro lado da muralha não é junto** (`sweepField`):
+  - num cerco, o bando do outro lado do muro já não conta como "ainda enfrentando" uma força vencida;
+  - o alvo do outro lado também não conta.
+  - Antes, o resto de uma horda ficava parado a 500 px da muralha, para sempre, porque havia gente do bando a menos de 700 px.
+  - No "Último Portão", 3 de 6 defesas não acabavam em 420 s. Agora as 8 acabaram, entre 219 e 335 s, com 7 vitórias.
+- **A IA sai do chão em chamas** (`WarHost.leaveFire`, `PlaceEffects.fireAt`):
+  - a cada decisão, o esquadrão que segura posição ou anda para um ponto dentro do fogo vai para fora dele, pelo lado em que já está;
+  - quem está no corpo a corpo fica.
+  - O comandante lerdo demora mais a decidir, então sai mais tarde.
+- **As checagens que passavam ou falhavam por sorte:**
+  - `confrontos`: os casos apertados lutam 10 vezes, e os limites ficam onde a taxa medida quase nunca falha;
+    - "a guarda pesada aguenta brutamontes" passou a contar quem não cai (vitória ou luta sem fim), com pelo menos uma vitória.
+  - `ia`:
+    - o fogo amigo soma 5 batalhas de cada lado (uma sozinha ia de 12 a 96);
+    - o covarde pode ceder na segunda baixa, mas não na primeira, e as 3 lutas somam pelo menos 12 mortos.
+  - `cercos`: "com muralha vai melhor que em campo aberto" conta quem do bando fica de pé, em 5 lutas de cada lado.
+    - Atrás dos muros, o assalto repelido cedo deixa poucos mortos do lado deles, e isso também é vitória.
+  - `fortaleza`: a coluna que sai pelo portão tem até 20 s, em tempo real, em vez de 5.
+  - `atmosfera`: o halo da fogueira é medido em proporção. Numa noite mais clara, os dois lados saem mais fracos.
+  - `magia`: checagem nova, o esquadrão parado no fogo sai dele.
+- **A abordagem sem fim não voltou:** 24 lutas no convés, com um bando fraco e com um forte, acabaram entre 54 e 104 s.
+- **Para os experimentos:** `boardingScenario` entrou no `window.__scenarios` do modo de desenvolvimento.
+
 ---
 
 ## Pendências das Fases 1 e 2
@@ -1541,14 +1586,14 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 ### Dívida
 - **Equilíbrio:** nada foi ajustado jogando. Os Marcos 14 a 18, a nova progressão e as rações foram calibrados só por simulação.
 - **Saves antigos:** não foram testados com os Marcos 16, 17 e 18, com a nova progressão nem com as mochilas e os capitães.
-- **Testes de confronto:** usam 6 lutas por caso, pouco para um resultado aleatório. Passam ou falham por sorte perto do limite ("cavaleiros vencem mais lanceiros montados" ficou em 2 a 4 de 6). Precisam de mais amostras ou de limites mais largos.
+- ~~**Testes de confronto:** usam 6 lutas por caso, pouco para um resultado aleatório. Passam ou falham por sorte perto do limite ("cavaleiros vencem mais lanceiros montados" ficou em 2 a 4 de 6). Precisam de mais amostras ou de limites mais largos.~~ ✅ Etapa 17, parte 1 (também os três itens abaixo).
   - O mesmo vale para "nem o covarde larga a luta com a primeira baixa" (suíte `ia`): 3 lutas, cada uma com pelo menos 4 baixas. Numa rodada do G2, uma luta teve 3; sozinha, a suíte passou.
   - E para "arqueiros treinados acertam menos os próprios homens que os novatos" (suíte `ia`): é uma batalha de cada lado. Repetida 6 vezes, os treinados acertam menos em todas, no código antigo e no novo (médias de 52 e 55 contra 98 e 84), mas uma batalha sozinha varia de 12 a 96. Numa rodada da etapa de desempenho deu 91 contra 84.
   - "A guarda pesada aguenta brutamontes" (suíte `confrontos`) também passa ou falha por sorte.
-- **Assalto sem fim:** em 2 de 16 assaltos à Paliçada com jogador simulado, a batalha passou de 10 minutos com poucos sobreviventes dos dois lados. Não voltou a acontecer nas repetições, e a causa não foi encontrada. Numa partida, o menu de pausa permite sair.
-- **Defesa que demora a acabar:** defendendo o forte, os 2 ou 3 últimos arqueiros às vezes ficam parados na muralha e os orcs, já dentro, levam minutos para chegar neles. Em 5 repetições a batalha acabou entre 113 e 230 s; na suíte completa, 2 vezes não acabou nos 276 s do teste. Não vem das figuras: a mesma demora aparece sem elas.
+- ~~**Assalto sem fim:** em 2 de 16 assaltos à Paliçada com jogador simulado, a batalha passou de 10 minutos com poucos sobreviventes dos dois lados. Não voltou a acontecer nas repetições, e a causa não foi encontrada. Numa partida, o menu de pausa permite sair.~~ ✅ Etapa 17, parte 1: as causas achadas foram quem persegue parar antes do alvo colado no muro e o resto de uma força parado do outro lado da muralha.
+- ~~**Defesa que demora a acabar:** defendendo o forte, os 2 ou 3 últimos arqueiros às vezes ficam parados na muralha e os orcs, já dentro, levam minutos para chegar neles. Em 5 repetições a batalha acabou entre 113 e 230 s; na suíte completa, 2 vezes não acabou nos 276 s do teste. Não vem das figuras: a mesma demora aparece sem elas.~~ ✅ Etapa 17, parte 1: em 8 defesas, todas acabaram entre 117 e 186 s.
   - Na rodada de desempenho: 8 defesas sozinhas com cada código, contando da entrada dos orcs. O antigo levou de 69 a 273 s (1 passou dos 240 s do teste), e o novo, de 59 a 176 s. Na suíte, o novo passou do limite 2 vezes em 8.
-- **Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.
+- ~~**Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.~~ ✅ Etapa 17, parte 1: a escada virou gargalo.
   - Por isso a verificação "com muralha vai melhor que em campo aberto" (suíte `cercos`, 4 lutas de cada lado) falha muitas vezes: na rodada de desempenho, falhou em 1 de 3 rodadas com o código antigo e em 6 de 8 com o novo. Medida com 12 defesas de cada código, a diferença é sorte: 16 pontos por luta no antigo e 20 no novo, e cada luta vai de 4 (cai) a 43 (repele).
 - **`WorldScene.ts`:** passava de 6000 linhas. Virou a etapa 8 ✅ OK: agora são 942 linhas e 13 partes em `src/game/scenes/worldScene/`.
 

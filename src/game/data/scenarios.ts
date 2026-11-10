@@ -871,4 +871,4 @@ export function noteResult(id: string, result: ScenarioResult): void {
 }
 
 // Acesso para depuração/testes automatizados (somente em dev)
-if (import.meta.env.DEV && typeof window !== "undefined") (window as unknown as { __scenarios?: unknown }).__scenarios = { blankScenario, newForce, newBattalionSpec, newSiege, withSiege, presets: PRESET_SCENARIOS };
+if (import.meta.env.DEV && typeof window !== "undefined") (window as unknown as { __scenarios?: unknown }).__scenarios = { blankScenario, newForce, newBattalionSpec, newSiege, withSiege, boardingScenario, presets: PRESET_SCENARIOS };

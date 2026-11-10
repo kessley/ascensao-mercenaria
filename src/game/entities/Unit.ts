@@ -463,6 +463,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   attackRange(): number {
     const range = (this.ranged && this.terrainType === "HILL" ? this.range * BALANCE.HILL_RANGE_BONUS : this.range) * (this.onWall && this.ranged ? SIEGE.WALL_RANGE : 1);
     if (!this.ranged) return range;
+    // Da escada não se atira: quem sobe segue subindo (e não entope a passagem)
+    if (Unit.terrain?.hasLadders && Unit.terrain.onLadder(this.x, this.y)) return BALANCE.OUT_OF_AMMO.range;
     return Unit.weather === "RAIN" ? range * WEATHER.RAIN_RANGE : Unit.weather === "STORM" ? range * WEATHER.STORM_RANGE : range;
   }
 
@@ -486,9 +488,10 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return this.attack;
   }
 
-  /** Defesa agora: derrubado, não apara nada. */
+  /** Defesa agora: derrubado, não apara nada; subindo a escada, apara mal. */
   defenseSkill(time: number): number {
-    return time < this.stunnedUntil ? 0 : this.defense;
+    if (time < this.stunnedUntil) return 0;
+    return Unit.terrain?.hasLadders && Unit.terrain.onLadder(this.x, this.y) ? this.defense * SIEGE.LADDER_DEFENSE : this.defense;
   }
 
   /** Lanças firmes: parado, de frente para quem carrega. */
@@ -638,7 +641,15 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     const t = Unit.terrain;
     const gate = this.townAccess !== "ANY" ? Unit.closedTown : null;
     const shut = !!gate && !gate(this.townAccess, this.x, this.y);
-    const blocked = (x: number, y: number) => !!t?.isBlocked(x, y) || (shut && !!gate?.(this.townAccess, x, y));
+    // Escada cheia é muro: sobe um de cada vez (quem já está nela segue subindo)
+    const ladders = !!t?.hasLadders;
+    const from = ladders ? t.ladderAt(this.x, this.y) : -1;
+    const queued = (x: number, y: number) => {
+      if (!ladders) return false;
+      const i = t.ladderAt(x, y);
+      return i >= 0 && i !== from && t.ladderFull(i);
+    };
+    const blocked = (x: number, y: number) => !!t?.isBlocked(x, y) || (shut && !!gate?.(this.townAccess, x, y)) || queued(x, y);
     if (!blocked(this.x + dx, this.y + dy)) {
       this.x += dx;
       this.y += dy;
@@ -646,7 +657,10 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       this.x += dx;
     } else if (dy && !blocked(this.x, this.y + dy)) {
       this.y += dy;
-    }
+    } else return;
+    if (!ladders) return;
+    const now = t.ladderAt(this.x, this.y);
+    if (now >= 0 && now !== from) t.enterLadder(now);
   }
 
   /** Foi empurrado para dentro de um povoado fechado para ele (estava fora antes)? */
@@ -664,13 +678,31 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     let r = this.route;
     if (!r || (r.goal.x - tx) ** 2 + (r.goal.y - ty) ** 2 > 120 * 120 || now - r.at > 1500) {
       const goal = { x: tx, y: ty };
+      const path = nav.lineClear(this, goal) ? null : nav.findPath(this, goal, 6000);
+      // A rota acaba na célula aberta mais perto do alvo. Colado num muro, ele está numa faixa que a
+      // navegação não abre: se dali se chega nele em linha reta, o último trecho é reto (sem isso,
+      // quem persegue para a um passo e fica ali). Na água, a linha não passa, e a rota acaba na margem
+      const end = path?.[path.length - 1];
+      if (end) {
+        const gap = (end.x - tx) ** 2 + (end.y - ty) ** 2;
+        if (gap > 16 && gap < 200 * 200 && Unit.straightClear(end, goal)) path.push(goal);
+      }
       // Atraso aleatório: o exército inteiro não recalcula no mesmo quadro
-      r = this.route = { goal, at: now + Math.random() * 300, path: nav.lineClear(this, goal) ? null : nav.findPath(this, goal, 6000) };
+      r = this.route = { goal, at: now + Math.random() * 300, path };
     }
     const path = r.path;
     if (!path || path.length === 0) return null;
     while (path.length > 1 && (path[0].x - this.x) ** 2 + (path[0].y - this.y) ** 2 < 50 * 50) path.shift();
     return { x: path[0].x, y: path[0].y, final: path.length === 1 };
+  }
+
+  /** De `a` a `b` em linha reta sem terreno que barre (muro, água funda, montanha)? */
+  private static straightClear(a: Point, b: Point): boolean {
+    const t = Unit.terrain;
+    if (!t) return true;
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 8));
+    for (let s = 1; s <= steps; s++) if (t.isBlocked(a.x + ((b.x - a.x) * s) / steps, a.y + ((b.y - a.y) * s) / steps)) return false;
+    return true;
   }
 
   /** Distância de borda a borda até outra unidade. */

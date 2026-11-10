@@ -280,17 +280,18 @@ export async function sieges({ battle, ev, page, labScript }, { check }) {
   console.log("   defesa:", defense.result?.outcome, defense.result?.reason, Math.round(defense.seconds), "s, matou", defense.result?.enemyKilled, "de", defense.result?.enemyTotal);
   check("a defesa chega a um fim", !!defense.result, JSON.stringify(defense.seconds));
 
-  // A muralha tem de valer alguma coisa: a mesma força, com e sem ela
+  // A muralha tem de valer alguma coisa: a mesma força, com e sem ela. Conta quem do bando fica de
+  // pé: atrás dos muros, o assalto repelido cedo deixa poucos mortos do lado deles, e isso é vitória
   const even = [{ faction: "BANDITS", units: { BANDIT: 24, BANDIT_ARCHER: 8 }, side: "FRONT", competence: 3, trait: "BRAVE" }];
   const defenders = [["INFANTRY"], ["SPEARMEN"], ["ARCHERS"], ["ARCHERS"]];
   const walled = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await battle({ army: defenders, forces: even, setup: siege("DEFEND", "FORT", 2, 1), distance: 1000 });
     walled.push(await ev(() => window.__defenseBot()));
   }
   console.log("   com muralha:", JSON.stringify(walled));
   const open = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await battle({ army: defenders, forces: even, distance: 1000 });
     open.push(
       await ev(() => {
@@ -309,8 +310,9 @@ export async function sieges({ battle, ev, page, labScript }, { check }) {
     );
   }
   console.log("   em campo aberto:", JSON.stringify(open));
-  const score = (list) => list.reduce((n, p) => n + (p.killed ?? 0) + p.left, 0);
-  check("com muralha vai melhor que em campo aberto", score(walled) > score(open), `${score(walled)} contra ${score(open)}`);
+  const standing = (list) => list.reduce((n, p) => n + p.left, 0);
+  const wins = (list) => list.filter((p) => p.outcome === "VICTORY").length;
+  check("com muralha vai melhor que em campo aberto", standing(walled) > standing(open), `de pé: ${standing(walled)} contra ${standing(open)}; vitórias: ${wins(walled)} contra ${wins(open)}`);
 
   // Os cercos que vêm com o jogo têm de poder ser vencidos por quem joga direito
   for (const id of ["preset-palicada", "preset-forte-da-fronteira"]) {

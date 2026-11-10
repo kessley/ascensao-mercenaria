@@ -530,6 +530,7 @@ export class WorldScene extends Phaser.Scene {
       terrainAt: (p) => Unit.terrain?.typeAt(p.x, p.y) ?? "GRASS",
       isOpen: (p) => this.nav.isOpen(p),
       nearestOpen: (p, r) => this.nav.nearestOpen(p, r),
+      fireAt: (p, margin) => this.places?.fireAt(p, margin) ?? null,
       listener: () => this.commander,
       feed: (text) => this.pushFeed(text),
       horn: (at) => sfx.trumpet("Avançar", at),
@@ -784,6 +785,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateHostility();
     this.works?.update(dt, time);
     const active = this.fieldDuel ? this.activeEnemies().filter((e) => !e.dueling) : this.activeEnemies();
+    if (this.works) Unit.terrain?.countLadders([allies, active]);
     // Só os hostis contam para alvos automáticos, moral e combate (patrulhas em paz, refugiados e mensageiros não)
     const hostiles = active.filter((e) => e.hostile);
     const visibleEnemies = hostiles.filter((e) => e.revealed);

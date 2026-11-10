@@ -186,11 +186,14 @@ export const scenarioMethods = {
    */
   sweepField(this: WorldScene, run: ScenarioRun): void {
     const ours: Point[] = [this.commander, ...this.battalions.filter((b) => !b.isDestroyed).map((b) => b.center)];
+    // No cerco, quem está do outro lado da muralha não enfrenta ninguém: perto não é junto
+    const layout = run.siege?.layout;
+    const together = (a: Point, b: Point) => !layout || insideTown(layout, a) === insideTown(layout, b);
     for (const band of run.bands) {
       const host = band.host;
       if (!host || band.walls || run.left.includes(band) || host.retreating) continue;
       const alive = band.members.filter((m) => m.isAlive && isFighter(m));
-      const busy = alive.some((m) => m.target?.isAlive) || alive.some((m) => ours.some((p) => distance(p, m) < WAR_AI.BROKEN_ALONE));
+      const busy = alive.some((m) => m.target?.isAlive && together(m, m.target)) || alive.some((m) => ours.some((p) => together(p, m) && distance(p, m) < WAR_AI.BROKEN_ALONE));
       if (busy) continue;
       if (host.beaten) {
         host.abandon();

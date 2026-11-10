@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { addCanvasTexture } from "../art/canvasTexture";
-import { GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, type TerrainType } from "../../utils/constants";
+import { GEO, SIEGE, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDTH, type TerrainType } from "../../utils/constants";
 import type { Biome, SiteTheme, WorldDef } from "../data/world";
 import type { CalamityKind } from "../sim/realm";
 import type { GeoMap, GeoSeason } from "../worldgen/geoMap";
@@ -154,15 +154,60 @@ export class TerrainMap {
   /** Cerco (Marco 16): portões fechados (sólidos) e escadas (passagens na muralha). */
   private siegeSolids: readonly { rect: Rect; type: "WALL" | "BUILDING" }[] = [];
   private breaches: readonly Rect[] = [];
+  /** Quantos estão em cada escada neste quadro (a cena conta; quem sobe soma na hora). */
+  private ladderLoad: number[] = [];
+
+  /** Há escada de pé em algum muro? */
+  get hasLadders(): boolean {
+    return this.breaches.length > 0;
+  }
+
+  /** Em que escada está o ponto (−1: em nenhuma). */
+  ladderAt(x: number, y: number): number {
+    const list = this.breaches;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return i;
+    }
+    return -1;
+  }
 
   /** Está numa escada apoiada na muralha? */
   onLadder(x: number, y: number): boolean {
-    return this.breaches.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    return this.ladderAt(x, y) >= 0;
+  }
+
+  /** Conta quem está em cada escada: uma vez por quadro, antes de todos andarem. */
+  countLadders(groups: readonly (readonly { x: number; y: number; isAlive: boolean }[])[]): void {
+    if (this.breaches.length === 0) {
+      this.ladderLoad = [];
+      return;
+    }
+    const load = this.breaches.map(() => 0);
+    for (const list of groups) {
+      for (const u of list) {
+        if (!u.isAlive) continue;
+        const i = this.ladderAt(u.x, u.y);
+        if (i >= 0) load[i]++;
+      }
+    }
+    this.ladderLoad = load;
+  }
+
+  /** A escada já tem gente demais: quem chega espera embaixo, ao alcance de quem está na muralha. */
+  ladderFull(i: number): boolean {
+    return (this.ladderLoad[i] ?? 0) >= SIEGE.LADDER_CAPACITY;
+  }
+
+  /** Alguém pôs o pé na escada `i`. */
+  enterLadder(i: number): void {
+    this.ladderLoad[i] = (this.ladderLoad[i] ?? 0) + 1;
   }
 
   setSiegeWorks(solids: readonly Rect[], breaches: readonly Rect[]): void {
     this.siegeSolids = solids.map((rect) => ({ rect, type: "WALL" as const }));
     this.breaches = breaches;
+    this.ladderLoad = [];
     this.indexSolids();
   }
 
