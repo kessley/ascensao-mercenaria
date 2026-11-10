@@ -26,9 +26,12 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **A seguir:** o fechamento (etapa 17): jogar uma campanha inteira.
+- **Combinado em 9 de novembro:**
+  - o fechamento ("jogar uma campanha inteira") virou a [Fase 4](ROADMAP_FASE_4.md). O título dela será dado depois. A intenção é tornar o jogo divertido, viciante e desafiador, e quem define as etapas é o usuário, jogando;
+  - antes disso, a Fase 3 termina todas as pendências das fases anteriores. Elas viraram a etapa 17, em partes, cada uma com o seu commit. Os batalhões grandes, que esperavam um sinal, entram por último.
+- **A seguir:** a etapa 17, parte 1: os testes que falham por sorte e as dívidas da IA no cerco.
 
-Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
+Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Próxima fase: [Fase 4](ROADMAP_FASE_4.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
 ---
 
@@ -61,7 +64,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante--ok) | recurso | Por último, como combinado | ✅ OK; falta jogar uma campanha |
-| 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
+| 17 | [As pendências das fases anteriores](#17-as-pendências-das-fases-anteriores) | dívida | Tudo o que ficou para trás, antes de jogar a Fase 4 | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
 
@@ -1445,13 +1448,67 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
   - a IA ainda não sai do chão em chamas, nem foge do necromante;
   - uma segunda calamidade mágica, com outra fraqueza, pode vir no fechamento, se a campanha pedir.
 
-## 17. Fechamento: jogar uma campanha inteira
-**Objetivo:** fechar a fase jogando, e não só simulando.
-- Uma campanha do começo ao fim, anotando o que quebra e o que cansa.
-- Ajustar o equilíbrio dos Marcos 14 a 23, da progressão e das rações.
-- Testar saves antigos com tudo o que mudou nesta fase.
+## 17. As pendências das fases anteriores
+**Objetivo:** terminar tudo o que as Fases 1, 2 e 3 deixaram para depois, antes da Fase 4. Pedido em 9 de novembro: "termine todas as pendências deixadas nas fases anteriores".
 
-**Pronto quando:** uma campanha vai do primeiro contrato ao herdeiro sem um erro que obrigue a recomeçar.
+O fechamento que estava aqui ("jogar uma campanha inteira") passou para a [Fase 4](ROADMAP_FASE_4.md).
+
+A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-2) e das notas "Ficou para depois" dos marcos desta fase que continuam abertas. Foram conferidas no código em 9 de novembro.
+- As que já foram resolvidas saíram da lista: a Liça em pixel art (G4), os testes de unidade dos capitães e o herói que se rende e vira prisioneiro (Marco 21).
+- O equilíbrio jogado não entra aqui: é da Fase 4.
+
+**Em partes,** cada uma com o seu commit:
+1. **Os testes que falham por sorte e as dívidas da IA no cerco:**
+   - os confrontos com mais lutas por caso, ou limites mais largos;
+   - as checagens instáveis da suíte `ia`;
+   - a muralha que não ajuda (a IA dos defensores) e a checagem "com muralha vai melhor que em campo aberto";
+   - o assalto sem fim, a abordagem sem fim (numa rodada da bateria, uma luta no convés passou de 281 s; sozinha, acabou em 64) e a defesa que demora a acabar;
+   - as outras checagens que já falharam por sorte: o portão da `fortaleza`, o halo da fogueira na `atmosfera`;
+   - a IA que não sai do chão em chamas.
+2. **Saves antigos:** saves gravados em commits antigos desta fase carregam no código de agora, com as migrações que faltarem.
+3. **Lendas e herdeiros:**
+   - o título no feminino para quem herda (o jogo passa a guardar o gênero);
+   - nomes iguais que não confundem as páginas das Lendas;
+   - mundos que lembram as vilas fundadas pelo bando e o mapa político.
+4. **Mar, parte 1:**
+   - ilhas pequenas no Mapa Múndi;
+   - despachar carga própria por barcaça ou navio, sem o bando ir junto;
+   - recrutar as tropas típicas de ultramar.
+5. **Mar, parte 2:**
+   - batalha entre navios, com dano no casco: a frota pode afundar;
+   - reinos que invadem pelo mar.
+6. **Calamidades de cada continente,** uma delas mágica, com outra fraqueza.
+7. **Os cercos da IA à vista:** as escadas e os aríetes inimigos nos muros de uma cidade alheia.
+8. **Comboio e expedições no mapa:**
+   - a coluna anda de verdade e pode ser atacada;
+   - a luta dela vira batalha, e não um cálculo;
+   - a suíte de navegador do comboio.
+9. **Batalha personalizada:** aliados controlados pela IA, e capitães.
+10. **Capitães e duelos:**
+    - a companhia marchando com a cavalaria nos flancos (`companyArrangement` existe, mas não está ligado);
+    - o estandarte do capitão à frente da coluna no mapa;
+    - o capitão do bando que perde um duelo pode ser preso;
+    - a figura do herói com a arma da ficha;
+    - o resgate pedido depende da mão do herói;
+    - os capitães inimigos que caem também podem ser presos.
+11. **Locais de missão:**
+    - os moradores andam pela região e saem para caçar;
+    - o contrato não aponta para um local que acabou de ser limpo.
+12. **O acabamento da arte:**
+    - a água que se mexe também de longe, e a onda que corre na praia;
+    - o mastro de pé no convés;
+    - o mar que se mexe até longe dos navios;
+    - a harpia que pousa;
+    - as crianças, com uma figura menor;
+    - o zoom na Cidade Alta;
+    - menos telhado liso nos prédios grandes;
+    - a arquibancada da Liça que torce.
+13. **Batalhões grandes e o alcance dos arcos:**
+    - de 60 a 100 soldados na milícia, e poucos na elite;
+    - arcos com alcance perto de 480.
+    - O motor já aguenta (1600 soldados de perto a 60 fps). Ficou por último porque muda o equilíbrio de tudo, logo antes de jogar a Fase 4. O plano dele (o alcance, o tamanho por tropa, o estandarte e por fim a campanha) é confirmado com o usuário antes de começar.
+
+**Pronto quando:** a seção de pendências fica vazia, e a Fase 4 começa sem nada da Fase 3 para trás.
 
 ---
 
@@ -1461,9 +1518,9 @@ Levantamento feito depois do Marco 18 e atualizado nesta fase. Vale o que está 
 As notas de mecânica vêm das regras e dos números do código e de batalhas simuladas. **Ninguém jogou uma campanha inteira.** Elas dizem onde há decisão de verdade, não onde o jogo é divertido.
 
 ### Combinado e não feito
-- **Batalhões grandes:** 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
-- **Alcance dos arcos:** subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
-- **Magia do Comandante:** etapa 16, em andamento.
+- **Batalhões grandes** (etapa 17, parte 13): 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
+- **Alcance dos arcos** (etapa 17, parte 13): subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
+- ~~**Magia do Comandante.**~~ ✅ Feita na etapa 16.
 
 ### Sistemas incompletos
 | De onde veio | O que falta |
@@ -1513,11 +1570,11 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 | Corte e nobreza | **Amplo, sem prova** | 6 tipos de favor, tramas e duelos. É o sistema mais longe do que o jogador faz no dia a dia |
 | Reino | **Raso** | 11 construções são uma lista de efeitos. Rei com 4 povoados é cedo, e governar é abrir um menu |
 | Mar | **Raso** | Primeira versão: uma viagem são segundos assistindo, com 3 eventos, e navio é só capacidade |
-| **Comandante em si** | **Raso, o pior caso agora** | Anda, bate e grita. Não evolui. Os duelos (etapa 9) e a magia (etapa 16) são o que está planejado para ele |
+| **Comandante em si** | **Médio, falta jogar** | Antes, só andava, batia e gritava. Agora também duela (etapa 9) e lança magia (etapa 16), com a magia aprendida pelo mundo e paga em Honra, Temor e marcas no corpo. Ainda não evolui por conta própria |
 
 ### O que eu faria, em ordem de retorno
 1. ~~**Progressão:** escolha exclusiva, habilidades que mudam comportamento e promoção de tropa.~~ ✅ Feito nesta fase.
-2. **Jogar uma campanha inteira** e corrigir o que aparecer: nenhum teste substitui isso (etapa 17, mas vale antes, aos poucos).
+2. **Jogar uma campanha inteira** e corrigir o que aparecer: nenhum teste substitui isso. Agora é o começo da [Fase 4](ROADMAP_FASE_4.md).
 3. **Comandante:** habilidades ativas ligadas aos traços, antes mesmo da magia.
 4. **Contratos em cadeia:** o que você fez para um cliente abre ou fecha o próximo.
 5. **Reino com decisão:** eventos de governo, com escolha e custo, em vez de só construções.
