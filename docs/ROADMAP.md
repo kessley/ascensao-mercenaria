@@ -5,8 +5,8 @@ Desenvolvido em **greybox** (formas de código, UI em React + Tailwind) e agora 
 O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 - [Fase 1 — O bando](ROADMAP_FASE_1.md): Marcos 1 a 9 — ✅ OK, fase concluída.
 - [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md): Marcos 10 a 18 — ✅ OK, fase concluída.
-- [Fase 3 — O arcano](ROADMAP_FASE_3.md): pixel art, rações refeitas, Marcos 19 a 23 (magia, capitães, duelos, acampamento construído, cultura e religião) e as pendências das fases anteriores, numa fila só que alterna arte e recursos. Os marcos estão feitos; em andamento, a etapa 17: terminar as pendências.
-- [Fase 4 — título a definir](ROADMAP_FASE_4.md): tornar o jogo divertido, viciante e desafiador. Quem define as etapas é o usuário, jogando. Começa com a campanha inteira que era o fechamento da Fase 3.
+- [Fase 3 — O arcano](ROADMAP_FASE_3.md): pixel art, rações refeitas, Marcos 19 a 23 (magia, capitães, duelos, acampamento construído, cultura e religião) e as pendências das fases anteriores, numa fila só que alterna arte e recursos. Os marcos estão feitos; a etapa 17 (pendências) está parada depois da parte 2, à espera da decisão sobre a Fase 4.
+- [Fase 4 — título a definir](ROADMAP_FASE_4.md): tornar o jogo divertido, viciante e desafiador. O usuário jogou em 10 de novembro, e as notas dele viraram uma proposta de 10 etapas (combate por perícia, missões com história, lugares vivos, gente com nome, rivais, duelo, a escada da campanha, a primeira hora). Está à espera do aval dele. As ideias e os cortes estão no [brainstorm](FASE_4_BRAINSTORM.md).
 
 **OK** = marco concluído e jogável.
 
@@ -48,7 +48,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | G6 | Pixel art: atmosfera | ✅ OK |
 | | 19 | Magia do Comandante (era o Marco 8, continua por último) | ✅ OK |
 | | — | As pendências das fases anteriores (etapa 17, em 13 partes) | em andamento: partes 1 e 2 ✅ |
-| [4 — a definir](ROADMAP_FASE_4.md) | — | Jogar uma campanha inteira; o resto, o usuário define jogando | |
+| [4 — a definir](ROADMAP_FASE_4.md) | 1 a 10 | Proposta de 10 de novembro: a régua, combate por perícia, missões com história, lugares vivos, gente com nome, rivais e nêmesis, duelo, a escada da campanha, a primeira hora e a campanha inteira | proposta, à espera do aval |
 
 **Regras para todos os marcos novos** (detalhes no GDD, seção 8.1):
 - toda mecânica cria uma decisão com custo e conta uma história no diário;

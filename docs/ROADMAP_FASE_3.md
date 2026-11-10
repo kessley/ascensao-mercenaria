@@ -30,7 +30,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - o fechamento ("jogar uma campanha inteira") virou a [Fase 4](ROADMAP_FASE_4.md). O título dela será dado depois. A intenção é tornar o jogo divertido, viciante e desafiador, e quem define as etapas é o usuário, jogando;
   - antes disso, a Fase 3 termina todas as pendências das fases anteriores. Elas viraram a etapa 17, em partes, cada uma com o seu commit. Os batalhões grandes, que esperavam um sinal, entram por último.
 - **Feito em 10 de novembro:** a etapa 17, partes 1 e 2: os testes que falhavam por sorte, as dívidas da IA no cerco e os saves antigos.
-- **A seguir:** a etapa 17, parte 3: lendas e herdeiros.
+- **Parada em 10 de novembro:** o usuário jogou e pediu o desenho da [Fase 4](ROADMAP_FASE_4.md). A etapa 17 fica na parte 3 até ele decidir a ordem. A proposta da Fase 4 leva cinco das partes que faltam (3, 9, 10, 11 e 13) para dentro das etapas dela.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Próxima fase: [Fase 4](ROADMAP_FASE_4.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
