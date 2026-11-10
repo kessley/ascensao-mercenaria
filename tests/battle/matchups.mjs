@@ -2,13 +2,15 @@
  * Tropa contra tropa: oito (ou doze) de cada lado, sem Comandante por perto, com a IA ligada. É aqui
  * que se vê se cada tropa tem um papel: quem ganha de quem, e por quê.
  *
- * Cada luta é sorteada. Os casos perto do limite lutam 10 vezes, e os limites ficam onde a taxa
- * medida (20 lutas por caso, em 10 de novembro) quase nunca falha por azar: lanças contra cavalo
- * vencem 90%, cavaleiros contra lanceiros 85%, guarda pesada contra soldados 50%, contra
- * brutamontes 60% (e 35% sem fim). Os casos de 0% ou 100% lutam 6 vezes.
+ * Cada luta é sorteada. Os casos perto do limite lutam mais vezes, e os limites ficam onde a taxa
+ * medida quase nunca falha por azar (cerca de 1 vez em 100). Somando as medidas de 10 de novembro:
+ * lanças contra cavalo vencem cerca de 78% (60 lutas), cavaleiros contra lanceiros 72% (50 lutas);
+ * os dois lutam 16 vezes e precisam vencer a metade. Guarda pesada contra soldados vence 50% a 55%,
+ * contra brutamontes 60% (e 35% sem fim): lutam 10 vezes. Os casos de 0% ou 100% lutam 6 vezes.
  */
 const RUNS = 6;
 const CLOSE = 10;
+const TIGHT = 16;
 
 async function duel({ battle, ev }, troop, force, faction, n = 8, hold = false) {
   await battle({ army: [[troop, n]], force, faction, distance: 900, stance: "ATTACK", competence: 2, trait: "BRAVE" });
@@ -55,9 +57,9 @@ async function record(ctx, troop, force, faction, n = 8, hold = false, runs = RU
 export async function matchups(ctx, { check }) {
   const share = (r) => `${r.wins}/${r.runs}`;
   // Lança não ataca cavalo: fica firme e deixa ele vir
-  const spearVsCav = await record(ctx, "SPEARMEN", { LANCER: 6 }, "KINGDOM", 8, true, CLOSE);
+  const spearVsCav = await record(ctx, "SPEARMEN", { LANCER: 6 }, "KINGDOM", 8, true, TIGHT);
   const swordVsCav = await record(ctx, "INFANTRY", { LANCER: 6 }, "KINGDOM", 8, true);
-  check("lanças vencem cavalaria do mesmo custo", spearVsCav.wins >= 6, share(spearVsCav));
+  check("lanças vencem cavalaria do mesmo custo", spearVsCav.wins >= TIGHT / 2, share(spearVsCav));
   check("lanças se saem melhor contra cavalo que espadas", spearVsCav.wins / spearVsCav.runs > swordVsCav.wins / swordVsCav.runs, `${share(spearVsCav)} × ${share(swordVsCav)}`);
 
   const cavVsBow = await record(ctx, "CAVALRY", { LONGBOW: 8 }, "KINGDOM");
@@ -71,8 +73,8 @@ export async function matchups(ctx, { check }) {
   const swordVsGoblins = await record(ctx, "INFANTRY", { GOBLIN: 8 }, "GOBLINS");
   check("infantaria vence goblins em igual número", swordVsGoblins.wins >= 4, share(swordVsGoblins));
 
-  const knightVsLancer = await record(ctx, "KNIGHTS", { LANCER: 12 }, "KINGDOM", 8, false, CLOSE);
-  check("cavaleiros vencem mais lanceiros montados", knightVsLancer.wins >= 5, share(knightVsLancer));
+  const knightVsLancer = await record(ctx, "KNIGHTS", { LANCER: 12 }, "KINGDOM", 8, false, TIGHT);
+  check("cavaleiros vencem mais lanceiros montados", knightVsLancer.wins >= TIGHT / 2, share(knightVsLancer));
 
   const orcVsSoldier = await record(ctx, "INFANTRY", { ORC: 8 }, "ORCS");
   // Aguentar é não cair: contra brutamontes, a luta muitas vezes não acaba nos 150 s

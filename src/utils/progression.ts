@@ -24,6 +24,23 @@ export function gainXp(b: BattalionData, amount: number): { battalion: Battalion
   return { battalion: { ...b, level, xp, skillPoints }, levelsGained };
 }
 
+/**
+ * Save de antes da progressão da Fase 3: as duas habilidades de uma linha podiam ser aprendidas
+ * (eram dois ramos, cada um com o seu pré-requisito). Hoje a linha é escolha exclusiva: fica a
+ * aprendida primeiro, e o ponto da outra volta. Devolve o mesmo objeto se não há o que mudar.
+ */
+export function exclusiveSkills(b: BattalionData): BattalionData {
+  const skills = b.skills ?? [];
+  const tree = SKILL_TREE[TROOPS[b.troopType]?.family];
+  if (!tree || skills.length < 2) return b;
+  const kept = skills.filter((id, i) => {
+    const line = tree.find((pair) => pair.includes(id));
+    return !line || !skills.slice(0, i).some((x) => line.includes(x));
+  });
+  if (kept.length === skills.length) return b;
+  return { ...b, skills: kept, skillPoints: (b.skillPoints ?? 0) + skills.length - kept.length };
+}
+
 /** Pode aprender a habilidade agora? Retorna o motivo se não puder. */
 export function canLearn(b: BattalionData, id: SkillId): string | null {
   const skill = SKILLS[id];

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { SKILLS, SKILL_TREE, type SkillId } from "../../src/game/data/skills";
 import type { BattalionData } from "../../src/store/useGameStore";
 import { PROGRESSION, TROOPS, type TroopType } from "../../src/utils/constants";
-import { PROMOTIONS, battalionMods, canLearn, canPromote, canTrain, describeMods, gainXp, promotionCost, soldierStats, trainingCost } from "../../src/utils/progression";
+import { PROMOTIONS, battalionMods, canLearn, canPromote, canTrain, describeMods, exclusiveSkills, gainXp, promotionCost, soldierStats, trainingCost } from "../../src/utils/progression";
+import { migrateSkills } from "../../src/store/useGameStore";
 
 const unit = (over: Partial<BattalionData> = {}): BattalionData => ({ id: "b", name: "Teste", troopType: "INFANTRY", formation: "LINE", level: 1, xp: 0, skillPoints: 0, skills: [], equipment: { weapon: 0, armor: 0 }, totalKills: 0, soldiers: 8, maxSoldiers: 8, ...over });
 const FAMILIES = ["INFANTRY", "ARCHERS", "CAVALRY"] as const;
@@ -157,5 +158,49 @@ describe("promoção", () => {
       for (const n of PROMOTIONS[t] ?? []) seen(n, [...path, t]);
     };
     for (const [from] of paths) seen(from, []);
+  });
+});
+
+describe("saves de antes da progressão da Fase 3", () => {
+  it("as duas da mesma linha viram uma: fica a aprendida primeiro, e o ponto volta", () => {
+    const old = unit({ level: 5, skillPoints: 0, skills: ["IRON_DISCIPLINE", "REINFORCED_SHIELDS", "COUNTERATTACK", "LIVING_WALL"] });
+    const b = exclusiveSkills(old);
+    expect(b.skills).toEqual(["IRON_DISCIPLINE", "COUNTERATTACK"]);
+    expect(b.skillPoints).toBe(2);
+    // Com os pontos de volta, a árvore de hoje deixa seguir pela linha de baixo
+    expect(canLearn({ ...b }, "CLOSE_RANKS")).toBeNull();
+    expect(canLearn({ ...b }, "REINFORCED_SHIELDS")).toMatch(/se perdeu/);
+  });
+
+  it("um ramo só do jeito antigo já vale hoje e não muda", () => {
+    const old = unit({ troopType: "ARCHERS", level: 3, skillPoints: 0, skills: ["RAPID_FIRE", "SKIRMISHERS"] });
+    expect(exclusiveSkills(old)).toBe(old);
+    const fresh = unit();
+    expect(exclusiveSkills(fresh)).toBe(fresh);
+  });
+
+  it("o save inteiro: bando, expedição, escolta do comboio e o cais do outro continente", () => {
+    const both = (id: string) => unit({ id, troopType: "CAVALRY", level: 3, skills: ["CHARGE_LANCES", "GALLOP"] });
+    const store: Record<string, unknown> = {
+      battalions: [both("a"), unit({ id: "b" })],
+      expeditions: [{ id: "e", battalions: [both("c")] }],
+      convoy: { id: "k", escort: [both("d")] },
+      parked: { C0: { store: {}, left: [both("f")] } },
+    };
+    migrateSkills(store);
+    const all = [
+      ...(store.battalions as BattalionData[]),
+      ...(store.expeditions as { battalions: BattalionData[] }[])[0].battalions,
+      ...(store.convoy as { escort: BattalionData[] }).escort,
+      ...(store.parked as Record<string, { left: BattalionData[] }>).C0.left,
+    ];
+    expect(all.filter((b) => b.troopType === "CAVALRY").map((b) => b.skills)).toEqual([["CHARGE_LANCES"], ["CHARGE_LANCES"], ["CHARGE_LANCES"], ["CHARGE_LANCES"]]);
+    expect(all.filter((b) => b.troopType === "CAVALRY").every((b) => b.skillPoints === 1)).toBe(true);
+  });
+
+  it("save sem nada disso não quebra", () => {
+    const store: Record<string, unknown> = { battalions: [], convoy: null };
+    migrateSkills(store);
+    expect(store).toEqual({ battalions: [], convoy: null });
   });
 });

@@ -203,7 +203,7 @@ import {
   type Staffing,
 } from "../game/sim/campDays";
 import { seasonDay, seasonOf } from "../utils/season";
-import { canPromote, canTrain, promotionCost, trainingCost, canLearn, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
+import { canPromote, canTrain, promotionCost, trainingCost, canLearn, exclusiveSkills, forgeCost, gainXp, type EquipmentSlot } from "../utils/progression";
 import { SKILLS, type SkillId } from "../game/data/skills";
 import { fullName, generateLieutenant, opinionOn, PASSIVES, type LieutenantData } from "../game/data/lieutenants";
 import {
@@ -1358,6 +1358,20 @@ export function migrateCampPlan(store: Record<string, unknown>, battalions?: num
   delete store.campWorks;
 }
 
+/**
+ * Save de antes da progressão da Fase 3: cada batalhão guardado (no bando, numa expedição, na
+ * escolta do comboio ou num cais de outro continente) fica com uma habilidade só por linha.
+ */
+export function migrateSkills(store: Record<string, unknown>): void {
+  const fix = (list: unknown) => (Array.isArray(list) ? (list as BattalionData[]).map(exclusiveSkills) : list);
+  store.battalions = fix(store.battalions);
+  if (Array.isArray(store.expeditions)) store.expeditions = (store.expeditions as Expedition[]).map((e) => ({ ...e, battalions: fix(e.battalions) as BattalionData[] }));
+  const convoy = store.convoy as SupplyConvoy | null | undefined;
+  if (convoy) store.convoy = { ...convoy, escort: fix(convoy.escort) as BattalionData[] };
+  const parked = store.parked as Record<string, { left?: BattalionData[] }> | undefined;
+  for (const land of Object.values(parked ?? {})) if (land.left) land.left = fix(land.left) as BattalionData[];
+}
+
 /** A vila da sede vira um povoado do bando no reino (Marco 22, parte 4): no lugar da fortaleza, com nome novo. */
 function seatSettlement(s: GameState, city: SeatCity): Settlement {
   const world = s.world as WorldDef;
@@ -2317,6 +2331,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
     // Save com fortaleza de antes da cidade da sede (Marco 22, parte 4)
     migrateSeatCity(loaded as Record<string, unknown>);
     for (const land of Object.values(loaded.parked ?? {})) migrateSeatCity({ ...(land.store as Record<string, unknown>), followers: [], battalions: [] });
+    // Save de antes da progressão da Fase 3: uma habilidade só por linha
+    migrateSkills(loaded as Record<string, unknown>);
     set({
       ...campaignState(world),
       ...loaded,

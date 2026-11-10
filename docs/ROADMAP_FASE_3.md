@@ -29,8 +29,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 9 de novembro:**
   - o fechamento ("jogar uma campanha inteira") virou a [Fase 4](ROADMAP_FASE_4.md). O título dela será dado depois. A intenção é tornar o jogo divertido, viciante e desafiador, e quem define as etapas é o usuário, jogando;
   - antes disso, a Fase 3 termina todas as pendências das fases anteriores. Elas viraram a etapa 17, em partes, cada uma com o seu commit. Os batalhões grandes, que esperavam um sinal, entram por último.
-- **Feito em 10 de novembro:** a etapa 17, parte 1: os testes que falhavam por sorte e as dívidas da IA no cerco.
-- **A seguir:** a etapa 17, parte 2: os saves antigos.
+- **Feito em 10 de novembro:** a etapa 17, partes 1 e 2: os testes que falhavam por sorte, as dívidas da IA no cerco e os saves antigos.
+- **A seguir:** a etapa 17, parte 3: lendas e herdeiros.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Próxima fase: [Fase 4](ROADMAP_FASE_4.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -1466,7 +1466,7 @@ A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-
    - o assalto sem fim, a abordagem sem fim (numa rodada da bateria, uma luta no convés passou de 281 s; sozinha, acabou em 64) e a defesa que demora a acabar;
    - as outras checagens que já falharam por sorte: o portão da `fortaleza`, o halo da fogueira na `atmosfera`;
    - a IA que não sai do chão em chamas.
-2. **Saves antigos:** saves gravados em commits antigos desta fase carregam no código de agora, com as migrações que faltarem.
+2. **Saves antigos** ✅ OK (ver abaixo)**:** saves gravados em commits antigos desta fase carregam no código de agora, com as migrações que faltarem.
 3. **Lendas e herdeiros:**
    - o título no feminino para quem herda (o jogo passa a guardar o gênero);
    - nomes iguais que não confundem as páginas das Lendas;
@@ -1555,6 +1555,40 @@ A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-
 - **A abordagem sem fim não voltou:** 24 lutas no convés, com um bando fraco e com um forte, acabaram entre 54 e 104 s.
 - **Para os experimentos:** `boardingScenario` entrou no `window.__scenarios` do modo de desenvolvimento.
 
+**Feito na parte 2, os saves antigos:**
+- **Gravados de verdade, em 10 commits:** do fim da Fase 2 (578bf75) ao Marco 19, parte 3 (6b0354e). Cada commit rodou num servidor próprio, começou uma campanha pela tela e gravou.
+  - Primeiro, saves simples: uma semana de jogo, andando.
+  - Depois, saves cheios, com o que cada commit tinha:
+    - tropas novas, tenentes, capitão com companhia, herdeiro, contrato, presos e carta náutica;
+    - a partir do Marco 22, a planta do acampamento construída e a fortaleza;
+    - no Marco 19, as magias.
+  - Por fim, em 5 deles, o bando atravessou o mar e gravou do outro lado, com a terra de casa guardada.
+- **No código de agora, todos:**
+  - carregam, sem número quebrado (NaN) no estado;
+  - abrem todos os painéis (de 27 a 50 por save), o mapa e as Lendas, sem erro no console;
+  - passam dias, gravam e carregam de novo;
+  - com fortaleza: o cerco à sede, a defesa nas muralhas e a volta para a fortaleza, que continua de pé;
+  - do outro lado do mar: o bando volta para casa, para o mesmo mundo, as mesmas vilas e a mesma fortaleza.
+- **A única migração que faltava, a das habilidades** (`exclusiveSkills` em `utils/progression.ts`, `migrateSkills` no `loadGame`):
+  - na Fase 2, cada tropa tinha dois ramos de duas habilidades, e um veterano podia aprender as quatro;
+  - na progressão de hoje, as mesmas quatro são duas linhas de escolha exclusiva;
+  - no save antigo, fica a habilidade aprendida primeiro de cada linha, e o ponto da outra volta para ser gasto na árvore nova;
+  - vale para os batalhões do bando, das expedições, da escolta do comboio e dos que ficaram num cais de outro continente.
+- **O resto já estava coberto** pelos valores padrão: a planta antiga do acampamento, a cidade da sede, as mochilas, a cultura, as línguas, as magias e os capitães.
+- **A suíte nova `saves`** (23 verificações) guarda 4 desses saves em `tests/battle/saves/`, comprimidos:
+  - o fim da Fase 2, a sede com magia e os dois do outro lado do mar;
+  - um veterano do jeito antigo, com as quatro habilidades, entra no save da Fase 2 antes de carregar.
+  - Se o gerador de mundo mudar (as ilhas da parte 4, por exemplo), é ela que avisa: o save diz "o gerador mudou" e não carrega.
+- Mais 4 testes de unidade, em `progression.test.ts`.
+- **A bateria inteira deu 447 de 450,** e as 3 falhas não vêm dos saves:
+  - **`confrontos`, de novo por sorte.** "Lanças vencem cavalaria" deu 4 de 10, e na repetição foi "cavaleiros vencem lanceiros" que deu 4 de 10.
+    - Somando tudo o que foi medido, as taxas reais são menores que as da parte 1: lanças cerca de 78% (60 lutas) e cavaleiros 72% (50 lutas).
+    - Com 10 lutas, cada checagem falhava por azar de 4% a 7% das vezes. Agora os dois casos lutam 16 vezes e precisam vencer a metade (falha por azar perto de 1 em 100).
+    - Com a mudança: 13 de 16 e 11 de 16.
+  - **`cercos` para no meio, e a causa não foi achada.** Depois dos três assaltos ao Forte da Fronteira, a batalha seguinte (o Último Portão) não começa: o navegador responde "WebGL unsupported", e a suíte acaba ali (36 de 38).
+    - Repetiu em 3 rodadas seguidas. Recarregar a página antes dos cercos prontos não resolveu, e o Último Portão sozinho começa em 1,3 s.
+    - O código da suíte e do cerco não mudou desde a parte 1, quando a bateria passou inteira. Entrou na [Dívida](#dívida).
+
 ---
 
 ## Pendências das Fases 1 e 2
@@ -1585,7 +1619,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
 
 ### Dívida
 - **Equilíbrio:** nada foi ajustado jogando. Os Marcos 14 a 18, a nova progressão e as rações foram calibrados só por simulação.
-- **Saves antigos:** não foram testados com os Marcos 16, 17 e 18, com a nova progressão nem com as mochilas e os capitães.
+- ~~**Saves antigos:** não foram testados com os Marcos 16, 17 e 18, com a nova progressão nem com as mochilas e os capitães.~~ ✅ Etapa 17, parte 2: saves de 10 commits carregam, e a suíte `saves` guarda 4 deles.
 - ~~**Testes de confronto:** usam 6 lutas por caso, pouco para um resultado aleatório. Passam ou falham por sorte perto do limite ("cavaleiros vencem mais lanceiros montados" ficou em 2 a 4 de 6). Precisam de mais amostras ou de limites mais largos.~~ ✅ Etapa 17, parte 1 (também os três itens abaixo).
   - O mesmo vale para "nem o covarde larga a luta com a primeira baixa" (suíte `ia`): 3 lutas, cada uma com pelo menos 4 baixas. Numa rodada do G2, uma luta teve 3; sozinha, a suíte passou.
   - E para "arqueiros treinados acertam menos os próprios homens que os novatos" (suíte `ia`): é uma batalha de cada lado. Repetida 6 vezes, os treinados acertam menos em todas, no código antigo e no novo (médias de 52 e 55 contra 98 e 84), mas uma batalha sozinha varia de 12 a 96. Numa rodada da etapa de desempenho deu 91 contra 84.
@@ -1595,6 +1629,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
   - Na rodada de desempenho: 8 defesas sozinhas com cada código, contando da entrada dos orcs. O antigo levou de 69 a 273 s (1 passou dos 240 s do teste), e o novo, de 59 a 176 s. Na suíte, o novo passou do limite 2 vezes em 8.
 - ~~**Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.~~ ✅ Etapa 17, parte 1: a escada virou gargalo.
   - Por isso a verificação "com muralha vai melhor que em campo aberto" (suíte `cercos`, 4 lutas de cada lado) falha muitas vezes: na rodada de desempenho, falhou em 1 de 3 rodadas com o código antigo e em 6 de 8 com o novo. Medida com 12 defesas de cada código, a diferença é sorte: 16 pontos por luta no antigo e 20 no novo, e cada luta vai de 4 (cai) a 43 (repele).
+- **Suíte `cercos` sem WebGL:** depois de três assaltos seguidos ao Forte da Fronteira, o navegador de teste recusa o WebGL ("WebGL unsupported") e a batalha seguinte não começa. Apareceu em 10 de novembro (etapa 17, parte 2), em 3 rodadas seguidas, sem mudança no código do cerco. Falta descobrir se é o jogo que deixa de soltar algum recurso nas batalhas longas ou se é a máquina.
 - **`WorldScene.ts`:** passava de 6000 linhas. Virou a etapa 8 ✅ OK: agora são 942 linhas e 13 partes em `src/game/scenes/worldScene/`.
 
 ### Avaliação das mecânicas

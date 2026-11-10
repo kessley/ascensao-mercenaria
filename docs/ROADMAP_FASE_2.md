@@ -708,7 +708,7 @@ Objetivo da fase: mundos maiores e mais vivos, em que cada sistema (geografia, e
 - **Comércio:** as oficinas locais produzem o luxo da terra. Medido: âmbar a 24 onde nasce e 79 em casa; 12 unidades compradas por 359 renderam 752.
 - **Terra distante:** a terceira camada da simulação (`farWorld.ts`). Uma semana em passos grossos: prosperidade, cidades que mudam de mãos, tronos e povoados do bando que se perdem. As notícias chegam semanas depois, e na volta o porto conta o que faltava.
 - **A IA no mar:** corsários desembarcam na praia perto de um porto e marcham para saqueá-lo.
-- **Teste automatizado:** 32 testes unitários e 45 verificações em jogo (`npm run test:battle -- mar`), do cais à volta para casa, com save longe de casa. Saves antigos não foram testados com o marco.
+- **Teste automatizado:** 32 testes unitários e 45 verificações em jogo (`npm run test:battle -- mar`), do cais à volta para casa, com save longe de casa. Saves antigos não foram testados com o marco (testados depois, na [Fase 3, etapa 17, parte 2](ROADMAP_FASE_3.md#17-as-pendências-das-fases-anteriores)).
 - **Desempenho:** gerar um continente leva menos de 0,1 s; a troca de continente inteira, cerca de 1,6 s. O save com um continente guardado tem cerca de 130 KB.
 - **Ficou de fora:**
   - calamidades próprias de cada continente: os outros continentes usam as de sempre;

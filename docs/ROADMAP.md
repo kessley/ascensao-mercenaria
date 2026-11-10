@@ -47,7 +47,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | 23 | Cultura, religião e língua | ✅ OK |
 | | G6 | Pixel art: atmosfera | ✅ OK |
 | | 19 | Magia do Comandante (era o Marco 8, continua por último) | ✅ OK |
-| | — | As pendências das fases anteriores (etapa 17, em 13 partes) | em andamento: parte 1 ✅ |
+| | — | As pendências das fases anteriores (etapa 17, em 13 partes) | em andamento: partes 1 e 2 ✅ |
 | [4 — a definir](ROADMAP_FASE_4.md) | — | Jogar uma campanha inteira; o resto, o usuário define jogando | |
 
 **Regras para todos os marcos novos** (detalhes no GDD, seção 8.1):
