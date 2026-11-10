@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { BLAST_CELL, BLAST_FRAMES, BLAST_RADIUS, blastSheet, fireballSheet, FIREBALL_CELL, FIREBALL_FRAMES, mendSheet, MEND_CELL, MEND_FRAMES, RING_FRAMES, ringSheet } from "../../src/game/art/magicArt";
-import { arcaneAfter, blastDamage, castProblem, castsPerFill, clampToRange, mendAmount, SPELL_IDS, SPELL_KEYS } from "../../src/game/sim/magic";
+import {
+  arcaneAfter,
+  blastDamage,
+  castProblem,
+  castsPerFill,
+  clampToRange,
+  COURT_SPELLS,
+  courtMageSpell,
+  masterOffers,
+  mendAmount,
+  nextGrimoire,
+  RUIN_SPELLS,
+  SPELL_IDS,
+  SPELL_KEYS,
+  waysToLearn,
+} from "../../src/game/sim/magic";
 import { updateMorale, type MoraleGroup } from "../../src/game/systems/MoraleSystem";
 import { INITIAL_MAGIC, magicSlice, type MagicState } from "../../src/store/magicSlice";
 import type { GameState } from "../../src/store/useGameStore";
@@ -152,6 +167,108 @@ describe("o arcano no store", () => {
     expect(s.get().spells).toEqual(["MEND"]);
     s.actions.restoreArcane(1);
     expect(s.get().arcane).toBe(MAGIC.ARCANE_PER_DAY);
+  });
+});
+
+describe("aprender pelo mundo (Marco 19, parte 3)", () => {
+  /** O slice com o resto do store de mentira: o relógio conta os dias e a crônica guarda o texto. */
+  const make = (start: Record<string, unknown>) => {
+    const told: string[] = [];
+    let days = 0;
+    let state = {
+      ...INITIAL_MAGIC,
+      gold: 0,
+      leader: { name: "Aldo" },
+      captiveOfficers: [],
+      settlements: [],
+      world: { culture: "REALMS" },
+      ...start,
+    } as unknown as GameState;
+    const actions = magicSlice(
+      (partial) => {
+        state = { ...state, ...partial };
+      },
+      () => state,
+    );
+    state = {
+      ...state,
+      ...actions,
+      chronicle: (text: string) => told.push(text),
+      advanceTime: (d: number) => {
+        days += d;
+      },
+    } as GameState;
+    return { actions, get: () => state, told, days: () => days };
+  };
+
+  it("o Comandante começa sem magia, e cada magia tem um caminho no mundo", () => {
+    expect(INITIAL_MAGIC.spells).toEqual([]);
+    expect(INITIAL_MAGIC.arcane).toBe(0);
+    for (const s of SPELL_IDS) expect(waysToLearn(s).length).toBeGreaterThan(0);
+    // Na terra do bando não há mestre: é preciso cruzar o mar
+    expect(masterOffers("REALMS", [])).toEqual([]);
+    expect(masterOffers("SANDS", ["TERROR"])).toEqual(["FIREBALL"]);
+  });
+
+  it("cada ruína dá o seu grimório uma vez só, e estudar leva dias", () => {
+    const s = make({});
+    expect(s.actions.findGrimoire("ruina-1")).toBe(RUIN_SPELLS[0]);
+    expect(s.actions.findGrimoire("ruina-1")).toBeNull();
+    expect(s.actions.findGrimoire("ruina-2")).toBe(RUIN_SPELLS[1]);
+    expect(s.get().grimoires).toEqual([RUIN_SPELLS[0], RUIN_SPELLS[1]]);
+    expect(s.actions.studyGrimoire("TERROR")).toMatch(/não tem esse grimório/);
+    expect(s.actions.studyGrimoire(RUIN_SPELLS[0])).toBeNull();
+    expect(s.get().spells).toEqual([RUIN_SPELLS[0]]);
+    expect(s.get().grimoires).toEqual([RUIN_SPELLS[1]]);
+    expect(s.days()).toBe(MAGIC.LEARN.GRIMOIRE_DAYS);
+    // O que já sabe ou já tem em grimório não volta das ruínas
+    expect(nextGrimoire([RUIN_SPELLS[0]], [RUIN_SPELLS[1]])).toBe(RUIN_SPELLS[2]);
+    expect(nextGrimoire([...RUIN_SPELLS], [])).toBeNull();
+  });
+
+  it("o mago da corte sabe uma magia que o Comandante não sabe, e cada corte começa num ponto", () => {
+    const ids = Array.from({ length: 20 }, (_, i) => `S${i}`);
+    const first = ids.map((id) => courtMageSpell(id, []));
+    expect(first.every((s) => s && COURT_SPELLS.includes(s))).toBe(true);
+    expect(new Set(first).size).toBeGreaterThan(1);
+    expect(courtMageSpell("S1", [])).toBe(courtMageSpell("S1", []));
+    expect(courtMageSpell("S1", [...COURT_SPELLS])).toBeNull();
+    const known = courtMageSpell("S1", []);
+    expect(courtMageSpell("S1", known ? [known] : [])).not.toBe(known);
+  });
+
+  it("o mago da corte preso ensina à força: leva dias e o resgate se perde", () => {
+    const s = make({
+      captiveOfficers: [
+        { id: "o1", name: "o mago da corte de Vau", factionId: null, nobleId: null, ransom: 250, day: 0, questioned: false, mage: "DOUSE" },
+        { id: "o2", name: "um capitão", factionId: null, nobleId: null, ransom: 80, day: 0, questioned: false },
+      ],
+    });
+    expect(s.actions.learnFromCaptive("o2")).toMatch(/não sabe magia/);
+    expect(s.actions.learnFromCaptive("o1")).toBeNull();
+    expect(s.get().spells).toEqual(["DOUSE"]);
+    expect(s.get().captiveOfficers.map((o) => o.id)).toEqual(["o2"]);
+    expect(s.days()).toBe(MAGIC.LEARN.COURT_DAYS);
+  });
+
+  it("o mestre de outra terra cobra ouro e dias, e só ensina o que sabe", () => {
+    const towns = [
+      { id: "C", name: "Qasr", kind: "CITY", owner: "F1" },
+      { id: "V", name: "Aldeia", kind: "VILLAGE", owner: "F1" },
+    ];
+    const s = make({ settlements: towns, world: { culture: "SANDS" }, gold: MAGIC.LEARN.MASTER_GOLD - 1 });
+    expect(s.actions.learnFromMaster("C", "TERROR")).toMatch(/cobra/);
+    s.get().gold = MAGIC.LEARN.MASTER_GOLD + 100;
+    expect(s.actions.learnFromMaster("V", "TERROR")).toMatch(/Não há mestre/);
+    expect(s.actions.learnFromMaster("C", "MIST")).toMatch(/não ensina/);
+    expect(s.actions.learnFromMaster("C", "TERROR")).toBeNull();
+    expect(s.get().spells).toEqual(["TERROR"]);
+    expect(s.get().gold).toBe(100);
+    expect(s.days()).toBe(MAGIC.LEARN.MASTER_DAYS);
+    expect(s.actions.learnFromMaster("C", "TERROR")).toMatch(/não ensina/);
+    // Na terra do bando, ninguém ensina
+    const home = make({ settlements: towns, gold: 5000 });
+    expect(home.actions.learnFromMaster("C", "TERROR")).toMatch(/não ensina/);
   });
 });
 

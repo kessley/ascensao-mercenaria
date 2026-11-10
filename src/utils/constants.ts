@@ -1992,6 +1992,11 @@ export const MAGIC = {
       cooldown: 20,
     },
   },
+  /**
+   * Aprender pelo mundo (parte 3): os dias de estudo de um grimório, de um mago da corte preso e
+   * de um mestre de outra terra, o que o mestre cobra e o resgate de um mago da corte.
+   */
+  LEARN: { GRIMOIRE_DAYS: 2, COURT_DAYS: 3, MASTER_DAYS: 4, MASTER_GOLD: 800, MAGE_RANSOM: 250 },
   /** Quanto dura o que as magias do mundo mexem (s) e o anel que corre ao lançar (ms). */
   WORLD: { FREEZE_SECONDS: 90, MIST_SECONDS: 75, DOUSE_SECONDS: 60, RING_MS: 520 },
   /**

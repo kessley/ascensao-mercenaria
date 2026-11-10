@@ -6,6 +6,7 @@ import { Unit } from "../../entities/Unit";
 import type { VisionSource } from "../../systems/FogOfWar";
 import { makeStaff, promoteRoster, type StaffData, type WarHost } from "../../systems/WarHost";
 import { kingdomsAtWar } from "../../sim/realm";
+import { spellDef } from "../../sim/magic";
 import { ofRealm } from "../../worldgen/names";
 import type { EnemyGroupDef } from "../../data/battleMaps";
 import type { SiteDef } from "../../data/world";
@@ -284,6 +285,11 @@ export const combatMethods = {
     this.engagement?.notes.push(text);
     this.pushFeed(text);
     s.chronicle(text, "good");
+    // As ruínas assombradas guardam um grimório (Marco 19, parte 3)
+    if (site.theme === "HAUNTED_RUINS") {
+      const g = useGameStore.getState().findGrimoire(site.id);
+      if (g) this.pushFeed(`Nas ruínas, um grimório: ${spellDef(g).name}. Dá para estudá-lo na tenda.`);
+    }
   },
 
   /** Contrato cumprido (todos os inimigos do local mortos), povoado tomado ou líder de calamidade abatido. */

@@ -1,4 +1,5 @@
 import { CAPTAINS, PRISONERS, type TroopType } from "../utils/constants";
+import type { SpellId } from "../game/sim/magic";
 import { nobleDies } from "../game/sim/kingdoms";
 import { RANSOM_OF, nobleName, remember } from "../game/sim/nobility";
 import type { RealmState } from "../game/sim/realm";
@@ -43,6 +44,8 @@ export interface CaptiveOfficer {
   hero?: HeroData;
   /** Já recusou servir ao bando. */
   refused?: boolean;
+  /** Um mago da corte (Marco 19, parte 3): a magia que ele sabe e pode ser forçado a ensinar. */
+  mage?: SpellId;
 }
 
 /** O Comandante nas mãos do inimigo: um tenente leva o bando enquanto isso. */

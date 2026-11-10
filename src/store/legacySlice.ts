@@ -172,6 +172,9 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
         honor: Math.round(s.honor + (50 - s.honor) * LEGACY.HONOR_FADE),
         campMood: Math.max(-100, s.campMood - LEGACY.MOURNING),
         succession: { dead: old.name, cause, heir: leader.name, origin, stranger: !heir },
+        // A magia morre com quem a sabia; os grimórios ficam com o bando (Marco 19)
+        spells: [],
+        arcane: 0,
       });
       links.note(`${old.name} morreu aos ${age} anos: ${cause}. ${leader.name} ergueu o estandarte.`, "bad");
     },

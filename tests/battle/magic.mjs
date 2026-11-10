@@ -1,7 +1,9 @@
 /**
  * Marco 19: a magia do Comandante. A parte 1 (o arcano e as primeiras magias): a bola de fogo,
  * que fere todos em volta, assusta e deixa o chão em chamas, e a cura, que fecha as feridas de um
- * batalhão e o tira do pânico. O arcano dá para poucas magias por batalha.
+ * batalhão e o tira do pânico. O arcano dá para poucas magias por batalha. A parte 2 (as magias
+ * que mexem no mundo): congelar, nevoeiro, apagar o fogo e pavor. A parte 3 (aprender pelo mundo):
+ * a campanha começa sem magia; grimórios nas ruínas, o mago da corte preso e o mestre de outra terra.
  * As fotos ficam em `tests/battle/.shots-m19-*.png`.
  */
 const SHOTS = "tests/battle/.shots-m19";
@@ -400,4 +402,123 @@ export async function magic({ page, ev, battle }, { check }) {
     return { p, m0, m1: sq.morale, terror: w.lastTerror };
   });
   check("os mortos-vivos não sentem o pavor", undead.p === null && undead.m1 === undead.m0 && undead.terror.fearless >= 1 && undead.terror.struck === 0, JSON.stringify(undead));
+
+  // --- 16.3: aprender pelo mundo ---
+  await ev(() => localStorage.clear());
+  await page.reload();
+  await page.waitForSelector("nav >> text=Nova campanha");
+  await page.click("nav >> text=Nova campanha");
+  await page.waitForSelector("text=Começar campanha");
+  await page.click("text=Começar campanha");
+  await page.waitForFunction(() => window.__world && !window.__world.run && window.__store.getState().battleHud && !window.__world.scene.isPaused(), null, { timeout: 60000 });
+  await page.waitForTimeout(800);
+  const fresh = await ev(() => {
+    const s = window.__store.getState();
+    return { spells: s.spells, arcane: s.arcane, grimoires: s.grimoires, hud: window.__world.magicHud() };
+  });
+  check("a campanha começa sem magia: sem magias, sem arcano e sem nada no campo", fresh.spells.length === 0 && fresh.arcane === 0 && fresh.grimoires.length === 0 && fresh.hud === null, JSON.stringify(fresh));
+  await ev(() => window.__store.getState().setCampPanel({ kind: "TENT" }));
+  await page.waitForTimeout(300);
+  const hint = await ev(() => document.body.innerText.includes("O Comandante não sabe magia"));
+  check("na tenda, o painel da magia diz onde ela se aprende", hint, String(hint));
+  await ev(() => window.__store.getState().setCampPanel(null));
+
+  // As ruínas assombradas limpas guardam um grimório, uma vez só
+  const ruins = await ev(() => {
+    const w = window.__world;
+    const st = window.__store;
+    const sites = w.world.sites.filter((x) => x.theme === "HAUNTED_RUINS");
+    const other = w.world.sites.find((x) => x.theme !== "HAUNTED_RUINS");
+    w.siteCleared(sites[0]);
+    const first = [...st.getState().grimoires];
+    w.siteCleared(sites[0]);
+    const again = [...st.getState().grimoires];
+    if (other) w.siteCleared(other);
+    const afterOther = [...st.getState().grimoires];
+    return { ruins: sites.length, first, again, afterOther, feed: w.feed.filter((l) => /grimório/.test(l)) };
+  });
+  console.log("   ruínas:", JSON.stringify(ruins));
+  check(
+    "as ruínas assombradas limpas dão um grimório, e as mesmas ruínas não dão outro",
+    ruins.ruins >= 1 && ruins.first.join() === "FIREBALL" && ruins.again.join() === "FIREBALL" && ruins.afterOther.join() === "FIREBALL" && ruins.feed.length === 1,
+    JSON.stringify(ruins),
+  );
+
+  // Estudar o grimório na tenda leva dias
+  await ev(() => window.__store.getState().setCampPanel({ kind: "TENT" }));
+  await page.waitForSelector("button:has-text('Estudar')");
+  const day0 = await ev(() => window.__store.getState().day);
+  await page.click("button:has-text('Estudar')");
+  await page.waitForTimeout(400);
+  const studied = await ev(() => {
+    const s = window.__store.getState();
+    return { spells: s.spells, grimoires: s.grimoires, day: s.day, arcane: s.arcane, panel: document.body.innerText.includes("Sabe:") };
+  });
+  check("estudar o grimório ensina a magia e leva 2 dias", studied.spells.join() === "FIREBALL" && studied.grimoires.length === 0 && studied.day - day0 === 2 && studied.panel, JSON.stringify({ ...studied, day0 }));
+  check("com a magia aprendida, o arcano começa a voltar com os dias", studied.arcane > 0, JSON.stringify(studied));
+  await page.screenshot({ path: `${SHOTS}-tenda.png` });
+
+  // Tomar uma cidade prende o mago da corte, que pode ser forçado a ensinar
+  const court = await ev(() => {
+    const st = window.__store;
+    const s = st.getState();
+    const t = s.settlements.find((x) => x.kind === "CITY" && x.owner !== "RUINED" && x.owner !== "PLAYER");
+    st.getState().conquerSettlement(t.id);
+    const mage = st.getState().captiveOfficers.find((o) => o.mage);
+    return { town: t.name, mage: mage ? { name: mage.name, spell: mage.mage, ransom: mage.ransom } : null };
+  });
+  console.log("   corte:", JSON.stringify(court));
+  check("ao tomar uma cidade, o mago da corte fica preso com a magia que sabe", !!court.mage && court.mage.spell !== "FIREBALL" && court.mage.ransom === 250, JSON.stringify(court));
+  await ev(() => window.__store.getState().setCampPanel(null));
+  await ev(() => window.__store.getState().setCampPanel({ kind: "TENT" }));
+  await page.waitForSelector("button:has-text('Forçar a ensinar')");
+  const day1 = await ev(() => window.__store.getState().day);
+  await page.click("button:has-text('Forçar a ensinar')");
+  await page.waitForTimeout(400);
+  const forced = await ev(() => {
+    const s = window.__store.getState();
+    return { spells: s.spells, mages: s.captiveOfficers.filter((o) => o.mage).length, day: s.day };
+  });
+  check(
+    "forçado, o mago ensina em 3 dias e some, sem resgate",
+    !!court.mage && forced.spells.includes(court.mage.spell) && forced.mages === 0 && forced.day - day1 === 3,
+    JSON.stringify({ ...forced, day1 }),
+  );
+  await ev(() => window.__store.getState().setCampPanel(null));
+
+  // O mestre de outra terra: ouro e dias. Na terra do bando, não há mestre
+  const masterTown = await ev(() => {
+    const s = window.__store.getState();
+    const atWar = new Set(s.factions.filter((f) => f.atWar).map((f) => f.id));
+    const t = s.settlements.find((x) => (x.kind === "CITY" || x.kind === "CAPITAL") && x.owner !== "RUINED" && x.owner !== "PLAYER" && !atWar.has(x.owner) && !x.besiegedBy);
+    return t ? t.id : null;
+  });
+  await ev((id) => window.__store.getState().setCampPanel({ kind: "TOWN", settlementId: id }), masterTown);
+  await page.waitForTimeout(400);
+  const home = await ev(() => document.body.innerText.includes("Mestre de magia"));
+  await ev(() => window.__store.getState().setCampPanel(null));
+  await ev(() => {
+    const st = window.__store;
+    st.setState({ world: { ...st.getState().world, culture: "SANDS" }, gold: 900 });
+  });
+  await ev((id) => window.__store.getState().setCampPanel({ kind: "TOWN", settlementId: id }), masterTown);
+  await page.waitForSelector("text=Mestre de magia");
+  await ev(() => [...document.querySelectorAll("h3")].find((h) => h.textContent === "Mestre de magia")?.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${SHOTS}-mestre.png` });
+  const day2 = await ev(() => window.__store.getState().day);
+  await page.click("button:has-text('Aprender (800 de ouro')");
+  await page.waitForTimeout(400);
+  const master = await ev(() => {
+    const s = window.__store.getState();
+    return { spells: s.spells, gold: s.gold, day: s.day, paid: s.log.some((e) => /um mestre ensinou Pavor ao Comandante, por 800 de ouro/.test(e.text)), hud: window.__world.magicHud()?.spells.map((x) => x.id) ?? null };
+  });
+  await ev(() => {
+    const st = window.__store;
+    st.getState().setCampPanel(null);
+    st.setState({ world: { ...st.getState().world, culture: "REALMS" } });
+  });
+  check("na terra do bando, as cidades não têm mestre de magia", masterTown !== null && !home, JSON.stringify({ masterTown, home }));
+  check("o mestre de outra terra ensina por 800 de ouro e 4 dias", master.spells.includes("TERROR") && master.paid && master.gold < 900 - 600 && master.day - day2 === 4, JSON.stringify({ ...master, day2 }));
+  check("o que o Comandante aprendeu aparece no campo", !!master.hud && master.spells.every((sp) => master.hud.includes(sp)), JSON.stringify(master.hud));
 }

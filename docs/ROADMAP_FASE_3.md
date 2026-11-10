@@ -25,8 +25,8 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **Em andamento:** o Marco 19 (etapa 16), a magia do Comandante. Estão feitas a parte 1 (o arcano e as primeiras magias) e a 2 (as magias que mexem no mundo).
-- **A seguir:** a parte 3 do Marco 19: aprender pelo mundo.
+- **Em andamento:** o Marco 19 (etapa 16), a magia do Comandante. Estão feitas a parte 1 (o arcano e as primeiras magias), a 2 (as magias que mexem no mundo) e a 3 (aprender pelo mundo).
+- **A seguir:** a parte 4 do Marco 19: o preço e as calamidades mágicas.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -60,7 +60,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
-| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | partes 1 e 2 de 4 |
+| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | partes 1 a 3 de 4 |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
@@ -1378,6 +1378,28 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
     - o pavor derruba a moral e a segura, e a tropa abalada foge;
     - o pavor também pega os nossos, e não pega os mortos-vivos.
   - Fotos novas: `.shots-m19-gelo.png`, `.shots-m19-escuro.png` e `.shots-m19-pavor.png`.
+
+**Feito na parte 3, aprender pelo mundo:**
+- **O Comandante começa sem magia.** Só o cenário de teste `magic` entra sabendo todas. Sem magia, o arcano não volta e o campo não mostra nada dela.
+- **Três caminhos, nenhum de graça** (as listas e as regras em `src/game/sim/magic.ts`, o estado em `store/magicSlice.ts`):
+  - **Grimórios nas ruínas assombradas.** Limpar umas ruínas (`siteCleared`) dá um grimório: bola de fogo, depois congelar, depois nevoeiro. Cada ruína dá o seu uma vez só (`searchedRuins`). Estudar o grimório na tenda leva 2 dias. O grimório fica com o bando, mesmo se o Comandante morrer.
+  - **O mago da corte de uma cidade tomada.** Tomar uma cidade ou capital (não libertar) prende o mago da corte, com uma magia que o Comandante ainda não sabe: cura, apagar o fogo ou bola de fogo. Cada corte começa num ponto da lista. Ele vale 250 de resgate; forçado a ensinar, leva 3 dias e depois some, sem resgate.
+  - **O mestre de outra terra.** Nas cidades das outras terras, um mestre ensina por 800 de ouro e 4 dias: nas Areias, pavor e bola de fogo; nas Ilhas, nevoeiro e congelar; no Jade, pavor e cura. Na terra do bando não há mestre: é preciso cruzar o mar.
+  - Cada magia tem ao menos um caminho (`waysToLearn`). Apagar o fogo só se aprende com o mago da corte, e pavor só do outro lado do mar.
+- **A magia morre com quem a sabe:** na sucessão, o herdeiro começa sem magia e sem arcano.
+- **A interface:**
+  - na tenda, o painel "Magia" (`ui/components/tent/MagicPanel.tsx`) mostra o que o Comandante sabe e o arcano, os grimórios para estudar, os magos presos para forçar e onde se acha cada magia que falta;
+  - no povoado, a seção "Mestre de magia" aparece nas cidades das outras terras.
+- **Testes:**
+  - 5 de regras novos em `tests/unit/magic.test.ts`: o começo sem magia e um caminho para cada magia; a ruína que dá o grimório uma vez só; o mago da corte; o preso forçado; o mestre e o seu preço;
+  - a suíte `magia` passou a 39 verificações. Numa campanha nova, ela confere:
+    - o Comandante começa sem magia, e a tenda diz onde aprender;
+    - as ruínas dão o grimório uma vez, e estudar pelo botão leva 2 dias;
+    - a cidade tomada prende o mago, e forçá-lo leva 3 dias;
+    - na terra do bando não há mestre, e o de fora cobra ouro e dias;
+    - o que se aprende aparece no campo.
+  - Fotos novas: `.shots-m19-tenda.png` e `.shots-m19-mestre.png`.
+- **Ficou para a parte 4:** os artefatos das ruínas, junto com as calamidades mágicas e as suas respostas.
 
 ## 17. Fechamento: jogar uma campanha inteira
 **Objetivo:** fechar a fase jogando, e não só simulando.

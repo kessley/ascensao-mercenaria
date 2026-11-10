@@ -81,7 +81,7 @@ import { INITIAL_WAR, warSlice, type WarActions, type WarState } from "./warSlic
 import { fieldCampOf } from "../game/sim/fortress";
 import { INITIAL_FORTRESS, fortressSlice, ironBuyPrice, migrateSeatCity, type FortressActions, type FortressState } from "./fortressSlice";
 import { INITIAL_MAGIC, magicSlice, type MagicActions, type MagicState } from "./magicSlice";
-import { SPELL_IDS, type SpellId } from "../game/sim/magic";
+import { courtMageSpell, spellDef, SPELL_IDS, type SpellId } from "../game/sim/magic";
 
 /** A magia no HUD da batalha (Marco 19). */
 export interface MagicHud {
@@ -3320,6 +3320,16 @@ export const useGameStore = create<GameState>()((set, get) => ({
         ...titleChange(s.settlements, settlements, s.day),
       ]),
     });
+    // O mago da corte de uma cidade tomada (Marco 19, parte 3): fica preso, com a magia que sabe
+    if (!liberated && t.owner !== "RUINED" && (t.kind === "CITY" || t.kind === "CAPITAL")) {
+      const now = get();
+      const held = now.captiveOfficers.flatMap((o) => (o.mage ? [o.mage] : []));
+      const spell = courtMageSpell(t.id, [...now.spells, ...now.grimoires, ...held]);
+      if (spell) {
+        now.addCaptiveOfficer({ name: `o mago da corte de ${t.name}`, factionId: s.factions.some((f) => f.id === t.owner) ? t.owner : null, nobleId: null, ransom: MAGIC.LEARN.MAGE_RANSOM, mage: spell });
+        now.chronicle(`Em ${t.name}, o mago da corte foi preso: ele sabe ${spellDef(spell).name}.`, "good");
+      }
+    }
   },
 
   build: (id, building) => {

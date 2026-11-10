@@ -24,6 +24,9 @@ import { foodGood } from "../../game/sim/market";
 import { canHost, freightWeight } from "../../game/sim/trade";
 import { ContractDelivery, GoodsMarket } from "./trade/GoodsMarket";
 import { BAND_HOME, cultureOf, folkOf, foreignRule, mixText, rulerCulture } from "../../game/sim/culture";
+import { useState } from "react";
+import { MASTER_SPELLS, masterOffers, spellDef } from "../../game/sim/magic";
+import { MAGIC } from "../../utils/constants";
 
 const sectionTitle = "text-sm font-bold uppercase tracking-wider text-neutral-400";
 
@@ -87,6 +90,38 @@ function Market({ t }: { t: Settlement }) {
 }
 
 /** Sala de Administração: impostos, construções e milícia de um povoado do jogador. */
+/**
+ * O mestre de magia (Marco 19, parte 3): nas cidades de outra terra, um mestre ensina o que sabe,
+ * por ouro e dias. Na terra do bando não há mestre: é preciso cruzar o mar.
+ */
+function MagicMaster({ t }: { t: Settlement }) {
+  const land = useGameStore((s) => s.world?.culture);
+  const spells = useGameStore((s) => s.spells);
+  const gold = useGameStore((s) => s.gold);
+  const learn = useGameStore((s) => s.learnFromMaster);
+  const [note, setNote] = useState<string | null>(null);
+  if ((t.kind !== "CITY" && t.kind !== "CAPITAL") || (MASTER_SPELLS[land ?? BAND_HOME] ?? []).length === 0) return null;
+  const offers = masterOffers(land, spells);
+  const L = MAGIC.LEARN;
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className={sectionTitle}>Mestre de magia</h3>
+      {offers.length === 0 && <p className="text-xs text-neutral-400">O mestre daqui já ensinou ao Comandante tudo o que sabe.</p>}
+      {offers.map((sp) => (
+        <div key={sp} className="flex flex-col gap-1 text-sm">
+          <span>
+            <b className="text-violet-300">{spellDef(sp).name}</b>: <span className="text-xs text-neutral-400">{spellDef(sp).hint}.</span>
+          </span>
+          <Button disabled={gold < L.MASTER_GOLD} onClick={() => setNote(learn(t.id, sp) ?? `O Comandante aprendeu ${spellDef(sp).name}.`)}>
+            Aprender ({L.MASTER_GOLD} de ouro, {L.MASTER_DAYS} dias)
+          </Button>
+        </div>
+      ))}
+      {note && <p className="text-xs text-amber-300">{note}</p>}
+    </section>
+  );
+}
+
 function Administration({ t }: { t: Settlement }) {
   const gold = useGameStore((s) => s.gold);
   const iron = useGameStore((s) => s.iron);
@@ -300,6 +335,7 @@ export function SettlementPanel({ settlementId, at }: { settlementId: string; at
 
       {t.owner === "PLAYER" && <Administration t={t} />}
       {t.owner !== "RUINED" && !occupied && !faction?.atWar && <Market t={t} />}
+      {t.owner !== "RUINED" && !occupied && !faction?.atWar && <MagicMaster t={t} />}
 
       {t.owner === "RUINED" && (
         <section className="flex flex-col gap-2">
