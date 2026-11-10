@@ -7,7 +7,9 @@ Feito em 10 de novembro, depois da primeira sessão de jogo do usuário. São tr
 2. **Apertar:** passar cada ideia pelas regras do jogo e pelas lentes de design, ver o custo e decidir o que entra.
 3. **Fechar:** montar a espinha da fase e a ordem das etapas.
 
-Nada aqui está decidido. É a proposta para o usuário aprovar, cortar ou reordenar.
+Quando foi escrito, nada aqui estava decidido: era a proposta para o usuário aprovar, cortar ou reordenar.
+
+**Depois dele:** no mesmo dia, o usuário deixou a decisão com o plano e pediu mais: som, o duelo como luta de ação com magia, guerras no mapa provocadas pela campanha, mais história, e as pendências da Fase 3 dentro da fase. O plano decidido está no [ROADMAP_FASE_4.md](ROADMAP_FASE_4.md), com 17 etapas no lugar das 10 da rodada 3. O que este documento guarda é o caminho até lá: o diagnóstico, as ideias e os cortes.
 
 ---
 

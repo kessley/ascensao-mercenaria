@@ -30,7 +30,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
   - o fechamento ("jogar uma campanha inteira") virou a [Fase 4](ROADMAP_FASE_4.md). O título dela será dado depois. A intenção é tornar o jogo divertido, viciante e desafiador, e quem define as etapas é o usuário, jogando;
   - antes disso, a Fase 3 termina todas as pendências das fases anteriores. Elas viraram a etapa 17, em partes, cada uma com o seu commit. Os batalhões grandes, que esperavam um sinal, entram por último.
 - **Feito em 10 de novembro:** a etapa 17, partes 1 e 2: os testes que falhavam por sorte, as dívidas da IA no cerco e os saves antigos.
-- **Parada em 10 de novembro:** o usuário jogou e pediu o desenho da [Fase 4](ROADMAP_FASE_4.md). A etapa 17 fica na parte 3 até ele decidir a ordem. A proposta da Fase 4 leva cinco das partes que faltam (3, 9, 10, 11 e 13) para dentro das etapas dela.
+- **Fase fechada em 10 de novembro:** o usuário jogou, pediu a [Fase 4](ROADMAP_FASE_4.md) e mandou levar as pendências para dentro dela. As partes 3 a 13 da etapa 17 e a dívida da suíte `cercos` passaram para lá: a tabela está em [As pendências da Fase 3 dentro da Fase 4](ROADMAP_FASE_4.md#as-pendências-da-fase-3-dentro-da-fase-4).
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Próxima fase: [Fase 4](ROADMAP_FASE_4.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -65,7 +65,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
 | 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante--ok) | recurso | Por último, como combinado | ✅ OK; falta jogar uma campanha |
-| 17 | [As pendências das fases anteriores](#17-as-pendências-das-fases-anteriores) | dívida | Tudo o que ficou para trás, antes de jogar a Fase 4 | |
+| 17 | [As pendências das fases anteriores](#17-as-pendências-das-fases-anteriores) | dívida | Tudo o que ficou para trás, antes de jogar a Fase 4 | partes 1 e 2 ✅ OK; as outras foram para a [Fase 4](ROADMAP_FASE_4.md#as-pendências-da-fase-3-dentro-da-fase-4) |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
 
@@ -1454,6 +1454,8 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
 
 O fechamento que estava aqui ("jogar uma campanha inteira") passou para a [Fase 4](ROADMAP_FASE_4.md).
 
+**Em 10 de novembro, as partes 3 a 13 também passaram para a Fase 4,** a pedido do usuário. Cada uma entrou no marco que mexe no mesmo lugar: a tabela está em [As pendências da Fase 3 dentro da Fase 4](ROADMAP_FASE_4.md#as-pendências-da-fase-3-dentro-da-fase-4). Aqui ficam feitas as partes 1 e 2. A lista abaixo continua como registro do que cada parte pede.
+
 A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-2) e das notas "Ficou para depois" dos marcos desta fase que continuam abertas. Foram conferidas no código em 9 de novembro.
 - As que já foram resolvidas saíram da lista: a Liça em pixel art (G4), os testes de unidade dos capitães e o herói que se rende e vira prisioneiro (Marco 21).
 - O equilíbrio jogado não entra aqui: é da Fase 4.
@@ -1509,7 +1511,7 @@ A lista vem da seção [Pendências das Fases 1 e 2](#pendências-das-fases-1-e-
     - arcos com alcance perto de 480.
     - O motor já aguenta (1600 soldados de perto a 60 fps). Ficou por último porque muda o equilíbrio de tudo, logo antes de jogar a Fase 4. O plano dele (o alcance, o tamanho por tropa, o estandarte e por fim a campanha) é confirmado com o usuário antes de começar.
 
-**Pronto quando:** a seção de pendências fica vazia, e a Fase 4 começa sem nada da Fase 3 para trás.
+**Pronto quando:** a seção de pendências fica vazia, e a Fase 4 começa sem nada da Fase 3 para trás. (Mudou em 10 de novembro: o que faltava é feito dentro da Fase 4.)
 
 **Feito na parte 1, os testes que falhavam por sorte e o cerco:**
 - **Medido antes de mexer.** Cada confronto da suíte `confrontos` lutou 20 vezes:
@@ -1597,7 +1599,7 @@ Levantamento feito depois do Marco 18 e atualizado nesta fase. Vale o que está 
 As notas de mecânica vêm das regras e dos números do código e de batalhas simuladas. **Ninguém jogou uma campanha inteira.** Elas dizem onde há decisão de verdade, não onde o jogo é divertido.
 
 ### Combinado e não feito
-- **Batalhões grandes** (etapa 17, parte 13): 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Espera o seu sinal; o melhor lugar na fila é depois da etapa 6.
+- **Batalhões grandes** (etapa 17, parte 13): 60 a 100 na milícia, poucos na elite. Com as figuras do G1 o desenho deixou de ser o limite, e com a rodada de desempenho a simulação também: 1600 soldados de perto custam 7,6 ms de simulação e 3,8 ms de desenho por quadro (antes, 31 ms de simulação). Entram no [Marco 24 da Fase 4](ROADMAP_FASE_4.md#3-marco-24--batalha-perícia-em-vez-de-vida), junto com o combate por perícia.
 - **Alcance dos arcos** (etapa 17, parte 13): subir de 230 para perto de 480. Hoje a infantaria correndo atravessa o alcance em menos de 3 s. Anda junto com os batalhões grandes.
 - ~~**Magia do Comandante.**~~ ✅ Feita na etapa 16.
 
@@ -1629,7 +1631,7 @@ As notas de mecânica vêm das regras e dos números do código e de batalhas si
   - Na rodada de desempenho: 8 defesas sozinhas com cada código, contando da entrada dos orcs. O antigo levou de 69 a 273 s (1 passou dos 240 s do teste), e o novo, de 59 a 176 s. Na suíte, o novo passou do limite 2 vezes em 8.
 - ~~**Muralha que não ajuda:** com 8 lutas de cada lado, defender o forte com o robô de teste rendeu menos que lutar em campo aberto (167 com a regra antiga da torre do portão, 135 com a nova, contra 182). Não foi o G3 que criou o problema. Vale rever a IA dos defensores e medir com mais lutas.~~ ✅ Etapa 17, parte 1: a escada virou gargalo.
   - Por isso a verificação "com muralha vai melhor que em campo aberto" (suíte `cercos`, 4 lutas de cada lado) falha muitas vezes: na rodada de desempenho, falhou em 1 de 3 rodadas com o código antigo e em 6 de 8 com o novo. Medida com 12 defesas de cada código, a diferença é sorte: 16 pontos por luta no antigo e 20 no novo, e cada luta vai de 4 (cai) a 43 (repele).
-- **Suíte `cercos` sem WebGL:** depois de três assaltos seguidos ao Forte da Fronteira, o navegador de teste recusa o WebGL ("WebGL unsupported") e a batalha seguinte não começa. Apareceu em 10 de novembro (etapa 17, parte 2), em 3 rodadas seguidas, sem mudança no código do cerco. Falta descobrir se é o jogo que deixa de soltar algum recurso nas batalhas longas ou se é a máquina.
+- **Suíte `cercos` sem WebGL:** depois de três assaltos seguidos ao Forte da Fronteira, o navegador de teste recusa o WebGL ("WebGL unsupported") e a batalha seguinte não começa. Apareceu em 10 de novembro (etapa 17, parte 2), em 3 rodadas seguidas, sem mudança no código do cerco. Falta descobrir se é o jogo que deixa de soltar algum recurso nas batalhas longas ou se é a máquina. Passou para a [etapa 2 da Fase 4](ROADMAP_FASE_4.md#2-a-régua-e-a-bancada).
 - **`WorldScene.ts`:** passava de 6000 linhas. Virou a etapa 8 ✅ OK: agora são 942 linhas e 13 partes em `src/game/scenes/worldScene/`.
 
 ### Avaliação das mecânicas

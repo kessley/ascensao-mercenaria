@@ -5,8 +5,8 @@ Desenvolvido em **greybox** (formas de código, UI em React + Tailwind) e agora 
 O roadmap fica dividido por fase, para os arquivos não ficarem longos:
 - [Fase 1 — O bando](ROADMAP_FASE_1.md): Marcos 1 a 9 — ✅ OK, fase concluída.
 - [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md): Marcos 10 a 18 — ✅ OK, fase concluída.
-- [Fase 3 — O arcano](ROADMAP_FASE_3.md): pixel art, rações refeitas, Marcos 19 a 23 (magia, capitães, duelos, acampamento construído, cultura e religião) e as pendências das fases anteriores, numa fila só que alterna arte e recursos. Os marcos estão feitos; a etapa 17 (pendências) está parada depois da parte 2, à espera da decisão sobre a Fase 4.
-- [Fase 4 — título a definir](ROADMAP_FASE_4.md): tornar o jogo divertido, viciante e desafiador. O usuário jogou em 10 de novembro, e as notas dele viraram uma proposta de 10 etapas (combate por perícia, missões com história, lugares vivos, gente com nome, rivais, duelo, a escada da campanha, a primeira hora). Está à espera do aval dele. As ideias e os cortes estão no [brainstorm](FASE_4_BRAINSTORM.md).
+- [Fase 3 — O arcano](ROADMAP_FASE_3.md): pixel art, rações refeitas, Marcos 19 a 23 (magia, capitães, duelos, acampamento construído, cultura e religião), numa fila só que alterna arte e recursos — ✅ OK, fase concluída. As pendências que sobraram foram para a Fase 4.
+- [Fase 4 — O bando que tem nome](ROADMAP_FASE_4.md): tornar o jogo divertido, viciante e desafiador. Som, combate por perícia, duelo de ação, missões com história, lugares vivos, gente com nome, rivais, guerras com causa, a Grande Questão, a escada da campanha, o mar e a primeira hora: Marcos 24 a 35, três etapas de som (S1 a S3) e uma de arte (G7). Plano decidido em 10 de novembro; começa pelo som. As ideias e os cortes estão no [brainstorm](FASE_4_BRAINSTORM.md).
 
 **OK** = marco concluído e jogável.
 
@@ -47,8 +47,24 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | 23 | Cultura, religião e língua | ✅ OK |
 | | G6 | Pixel art: atmosfera | ✅ OK |
 | | 19 | Magia do Comandante (era o Marco 8, continua por último) | ✅ OK |
-| | — | As pendências das fases anteriores (etapa 17, em 13 partes) | em andamento: partes 1 e 2 ✅ |
-| [4 — a definir](ROADMAP_FASE_4.md) | 1 a 10 | Proposta de 10 de novembro: a régua, combate por perícia, missões com história, lugares vivos, gente com nome, rivais e nêmesis, duelo, a escada da campanha, a primeira hora e a campanha inteira | proposta, à espera do aval |
+| | — | As pendências das fases anteriores (etapa 17) | partes 1 e 2 ✅ OK; as outras foram para a Fase 4 |
+| [4 — O bando que tem nome](ROADMAP_FASE_4.md) | S1 | Som: a voz do bando (mesa de som, fala inventada, interface, combate, alarmes) | a fazer |
+| | — | A régua e a bancada (medir o começo; aliados da IA na batalha personalizada; a suíte `cercos`) | a fazer |
+| | 24 | Batalha: perícia em vez de vida, pressão, fôlego e batalhões grandes | a fazer |
+| | 25 | O Comandante em campo e o duelo de ação (8 tipos de adversário, magia, decisões) | a fazer |
+| | 26 | Missões com história (objetivos, reviravoltas, negociar, ambições curtas) | a fazer |
+| | 27 | O mundo refeito: lugares vivos (única mudança no gerador e nos saves) | a fazer |
+| | S2 | Som: o mundo que se ouve | a fazer |
+| | 28 | Gente com nome (notáveis, família, vida simulada, missões pessoais) | a fazer |
+| | 29 | Rivais e nêmesis (bandos rivais, a tábua dos bandos, o flagelo da região) | a fazer |
+| | 30 | Guerras com causa (tensão entre reinos, batalha campal, cercos da IA à vista) | a fazer |
+| | 31 | A Grande Questão e as calamidades de cada continente | a fazer |
+| | S3 | Som: a música | a fazer |
+| | 32 | A escada da campanha (atos, o Cronista, veteranos com nome, cinco finais) | a fazer |
+| | G7 | Arte: o mar e o acabamento | a fazer |
+| | 33 | O mar de verdade (batalha entre navios, carga própria, invasões) | a fazer |
+| | 34 | A primeira hora (prólogo, origens, heráldica) | a fazer |
+| | 35 | Jogar a campanha inteira | a fazer |
 
 **Regras para todos os marcos novos** (detalhes no GDD, seção 8.1):
 - toda mecânica cria uma decisão com custo e conta uma história no diário;
