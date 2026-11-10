@@ -1,4 +1,18 @@
-import { arcaneAfter, masterOffers, nextGrimoire, spellDef, type SpellId } from "../game/sim/magic";
+import {
+  arcaneAfter,
+  arcaneMax,
+  artifactDef,
+  magicPrice,
+  marksFor,
+  markWeight,
+  MARK_TEXT,
+  masterOffers,
+  nextArtifact,
+  nextGrimoire,
+  spellDef,
+  type ArtifactId,
+  type SpellId,
+} from "../game/sim/magic";
 import { MAGIC } from "../utils/constants";
 import type { GameState } from "./useGameStore";
 
@@ -14,9 +28,18 @@ export interface MagicState {
   arcane: number;
   /** Grimórios achados e ainda não estudados (parte 3). Ficam com o bando, mesmo se o Comandante morrer. */
   grimoires: SpellId[];
-  /** As ruínas que já deram o seu grimório. */
+  /** As ruínas que já deram o seu grimório (ou o seu artefato). */
   searchedRuins: string[];
+  /** Os artefatos do bando (parte 4). Ficam com o bando, mesmo se o Comandante morrer. */
+  artifacts: ArtifactId[];
+  /** O arcano que o Comandante de agora já gastou (o que conta para as marcas no corpo). */
+  arcaneSpent: number;
+  /** O último dia em que a magia foi assunto nas cortes e nos templos (para a crônica falar uma vez por dia). */
+  magicTalkDay: number;
 }
+
+/** O que umas ruínas dão: um grimório ou, sem grimório a achar, um artefato. */
+export type RuinFind = { spell: SpellId } | { artifact: ArtifactId };
 
 export interface MagicActions {
   /** Gasta o arcano de uma magia; false = não sabe ou não tem arcano. */
@@ -25,8 +48,12 @@ export interface MagicActions {
   learnSpell: (spell: SpellId) => void;
   /** O arcano volta com os dias (o relógio do mundo chama). */
   restoreArcane: (days: number) => void;
-  /** Ruínas assombradas limpas: devolve o grimório achado (null = essas ruínas já deram o seu, ou não há o que achar). */
-  findGrimoire: (siteId: string) => SpellId | null;
+  /** Ruínas assombradas limpas: um grimório ou um artefato (null = essas ruínas já deram o seu, ou não há o que achar). */
+  searchRuins: (siteId: string) => RuinFind | null;
+  /** O bando ganha um artefato (o do Lorde Necromante vencido, por exemplo): o próximo que não tem. */
+  gainArtifact: (from: string) => ArtifactId | null;
+  /** Depois de lançar: as cortes e os templos cobram, e o corpo marca. Devolve a marca nova (1 a 4) ou 0. */
+  payForMagic: (spell: SpellId) => number;
   /** Estudar um grimório: leva dias. Devolve o motivo se não deu. */
   studyGrimoire: (spell: SpellId) => string | null;
   /** Arrancar a magia de um mago da corte preso: leva dias, e ele some depois (sem resgate). */
@@ -35,7 +62,7 @@ export interface MagicActions {
   learnFromMaster: (townId: string, spell: SpellId) => string | null;
 }
 
-export const INITIAL_MAGIC: MagicState = { spells: [], arcane: 0, grimoires: [], searchedRuins: [] };
+export const INITIAL_MAGIC: MagicState = { spells: [], arcane: 0, grimoires: [], searchedRuins: [], artifacts: [], arcaneSpent: 0, magicTalkDay: -1 };
 
 type Setter = (partial: Partial<GameState>) => void;
 
@@ -55,16 +82,49 @@ export function magicSlice(set: Setter, get: () => GameState): MagicActions {
     },
     restoreArcane: (days) => {
       const s = get();
-      if (s.spells.length === 0 || s.arcane >= MAGIC.ARCANE_MAX) return;
-      set({ arcane: arcaneAfter(s.arcane, days) });
+      const max = arcaneMax(s.artifacts);
+      if (s.spells.length === 0 || s.arcane >= max) return;
+      set({ arcane: arcaneAfter(s.arcane, days, max) });
     },
-    findGrimoire: (siteId) => {
+    searchRuins: (siteId) => {
       const s = get();
       if (s.searchedRuins.includes(siteId)) return null;
       const spell = nextGrimoire(s.spells, s.grimoires);
-      set({ searchedRuins: [...s.searchedRuins, siteId], ...(spell ? { grimoires: [...s.grimoires, spell] } : {}) });
-      if (spell) s.chronicle(`Nas ruínas, entre os ossos, um grimório: ${spellDef(spell).name}.`, "good");
-      return spell;
+      if (spell) {
+        set({ searchedRuins: [...s.searchedRuins, siteId], grimoires: [...s.grimoires, spell] });
+        s.chronicle(`Nas ruínas, entre os ossos, um grimório: ${spellDef(spell).name}.`, "good");
+        return { spell };
+      }
+      set({ searchedRuins: [...s.searchedRuins, siteId] });
+      const artifact = get().gainArtifact("Nas ruínas, num nicho selado");
+      return artifact ? { artifact } : null;
+    },
+    gainArtifact: (from) => {
+      const s = get();
+      const artifact = nextArtifact(s.artifacts);
+      if (!artifact) return null;
+      set({ artifacts: [...s.artifacts, artifact] });
+      const def = artifactDef(artifact);
+      s.chronicle(`${from}, um artefato: ${def.name} (${def.hint}).`, "good");
+      return artifact;
+    },
+    payForMagic: (spell) => {
+      const s = get();
+      const price = magicPrice(spell, s.artifacts);
+      const arcaneSpent = s.arcaneSpent + markWeight(spellDef(spell).cost, s.artifacts);
+      const before = s.leader.marks ?? 0;
+      const marks = Math.max(before, marksFor(arcaneSpent));
+      const talk = s.magicTalkDay !== s.day && price.honor + price.fear > 0;
+      set({
+        honor: Math.max(0, s.honor - price.honor),
+        fear: Math.min(100, s.fear + price.fear),
+        arcaneSpent,
+        ...(talk ? { magicTalkDay: s.day } : {}),
+        ...(marks > before ? { leader: { ...s.leader, marks } } : {}),
+      });
+      if (talk) s.chronicle("Corre a notícia da magia do Comandante: as cortes torcem o nariz, e os templos rezam contra a magia (menos Honra, mais Temor).", "bad");
+      if (marks > before) s.chronicle(`Uma marca nova no corpo de ${s.leader.name}: ${MARK_TEXT[marks - 1]}.`, "bad");
+      return marks > before ? marks : 0;
     },
     studyGrimoire: (spell) => {
       const s = get();
@@ -75,7 +135,7 @@ export function magicSlice(set: Setter, get: () => GameState): MagicActions {
       const days = MAGIC.LEARN.GRIMOIRE_DAYS;
       get().learnSpell(spell);
       get().advanceTime(days);
-      get().chronicle(`${s.leader.name} passou ${days} dias debruçado num grimório e aprendeu ${spellDef(spell).name}.`, "good");
+      get().chronicle(`${s.leader.name} passou ${days} dias sobre um grimório e aprendeu ${spellDef(spell).name}.`, "good");
       return null;
     },
     learnFromCaptive: (officerId) => {

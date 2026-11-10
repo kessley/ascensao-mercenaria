@@ -41,7 +41,8 @@ export function SagaPanel() {
           <div className="flex flex-col gap-1">
             <h3 className="font-serif text-xl text-amber-100">{leader.name}</h3>
             <p className="text-neutral-300">
-              {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es) · {leader.origin} · {peopleOf(cultureOf(leader))}
+              {leader.generation}º Comandante · {age} anos · {leader.wounds} cicatriz(es)
+              {(leader.marks ?? 0) > 0 && ` · ${leader.marks} marca(s) da magia`} · {leader.origin} · {peopleOf(cultureOf(leader))}
             </p>
             <p className="text-xs text-neutral-400">Chance de não se levantar se cair em combate: {Math.round(fallDeathChance(age, leader.wounds) * 100)}%.</p>
             <p className="text-xs text-neutral-400" data-leader-tongues>

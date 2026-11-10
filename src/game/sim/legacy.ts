@@ -1,4 +1,4 @@
-import { LEGACY, SEASONS } from "../../utils/constants";
+import { LEGACY, MAGIC, SEASONS } from "../../utils/constants";
 import type { TraitId } from "../data/lieutenants";
 import type { CultureId } from "../data/planet";
 import { clamp } from "../../utils/math";
@@ -27,6 +27,8 @@ export interface Leader {
   culture?: CultureId;
   /** Quanto ele já aprendeu das línguas de fora, de 0 a 100 (Marco 23). */
   tongues?: Partial<Record<CultureId, number>>;
+  /** As marcas que a magia deixou no corpo (Marco 19): cada uma tira um pouco da vida. */
+  marks?: number;
 }
 
 export interface FormerLeader {
@@ -79,7 +81,7 @@ export const LEADER_TRAITS: Record<TraitId, { bonus: Partial<LeaderBonus>; text:
   LOYAL: { bonus: { hp: 1.1, honor: 1 }, text: "aguenta 10% mais, cada contrato dá 1 de Honra a mais" },
 };
 
-export function leaderBonus(leader: Pick<Leader, "traits" | "wounds">): LeaderBonus {
+export function leaderBonus(leader: Pick<Leader, "traits" | "wounds" | "marks">): LeaderBonus {
   const out: LeaderBonus = { damage: 1, hp: 1, reward: 1, honor: 0 };
   for (const t of leader.traits) {
     const b = LEADER_TRAITS[t].bonus;
@@ -89,6 +91,7 @@ export function leaderBonus(leader: Pick<Leader, "traits" | "wounds">): LeaderBo
     out.honor += b.honor ?? 0;
   }
   out.hp *= 1 - Math.min(LEGACY.WOUND_MAX, leader.wounds) * LEGACY.WOUND_HP;
+  out.hp *= 1 - Math.min(MAGIC.MARKS.MAX, leader.marks ?? 0) * MAGIC.MARKS.HP;
   return out;
 }
 

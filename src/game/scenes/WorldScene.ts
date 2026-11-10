@@ -242,7 +242,9 @@ export class WorldScene extends Phaser.Scene {
   lastBlast: { at: { x: number; y: number }; wounded: number; ours: number; groups: number } | null = null;
   /** A última magia do mundo lançada (para os testes): o efeito ligado e onde. */
   lastPlaceSpell: { spell: SpellId; id: number; at: { x: number; y: number } } | null = null;
-  lastTerror: { at: { x: number; y: number }; struck: number; shaken: number; fearless: number; ours: number } | null = null;
+  lastTerror: { at: { x: number; y: number }; struck: number; shaken: number; fearless: number; ours: number; by: string | null } | null = null;
+  /** Quando cada Lorde Necromante em campo lança o pavor de novo (Marco 19, parte 4). */
+  necroReadyAt = new Map<object, number>();
   lastMend: { battalion: string; healed: number } | null = null;
 
   // --- Estações, clima e logística (Marco 13) ---
@@ -372,6 +374,7 @@ export class WorldScene extends Phaser.Scene {
     this.lastBlast = null;
     this.lastPlaceSpell = null;
     this.lastTerror = null;
+    this.necroReadyAt = new Map();
     this.lastMend = null;
     this.walkPath = null;
     this.inCamp = !useGameStore.getState().scenario;

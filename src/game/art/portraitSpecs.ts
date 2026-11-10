@@ -26,7 +26,7 @@ export function bandAge(seed: string): number {
   return 22 + (hashSeed(`${seed}#idade`) % 24);
 }
 
-export function commanderPortrait(leader: Pick<Leader, "name" | "generation" | "wounds" | "face" | "culture">, age: number): PortraitSpec {
+export function commanderPortrait(leader: Pick<Leader, "name" | "generation" | "wounds" | "face" | "culture" | "marks">, age: number): PortraitSpec {
   return {
     seed: leader.face ?? `${leader.name}#${leader.generation}`,
     female: isWoman(leader.name),
@@ -35,6 +35,7 @@ export function commanderPortrait(leader: Pick<Leader, "name" | "generation" | "
     scars: leader.wounds,
     role: "COMMANDER",
     color: COLORS.ALLY,
+    marks: leader.marks ?? 0,
   };
 }
 

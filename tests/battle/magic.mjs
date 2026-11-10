@@ -41,6 +41,8 @@ export async function magic({ page, ev, battle }, { check }) {
       lab.freezeAI();
       // Os heróis do outro lado não vêm desafiar o Comandante para um duelo no meio do teste
       for (const e of w.enemies) w.duelDone.add(e);
+      // Sem a passiva do tenente sorteado, que muda quanto o esquadrão aguenta: o teste mede a magia
+      for (const sq of w.warbands.bands.flatMap((b) => b.host?.squads ?? [])) sq.passive = null;
       w.commander.x = 3700;
       w.commander.y = 3600;
       lab.place(lab.battalion(), 3640, 3700, 0, 4);
@@ -370,7 +372,8 @@ export async function magic({ page, ev, battle }, { check }) {
   await drawFresh();
   await page.screenshot({ path: `${SHOTS}-pavor.png` });
   console.log("   pavor:", JSON.stringify(terror));
-  check("o pavor derruba a moral de uma vez, e ela não volta enquanto dura", terror.p === null && terror.first?.struck === 1 && terror.hit <= terror.morale0 - 30 && terror.later <= terror.hit + 1, JSON.stringify(terror));
+  // (45 de pavor, menos o que o lorde firma, 0,7, e a bandeira à vista, 0,85: uns 27)
+  check("o pavor derruba a moral de uma vez, e ela não volta enquanto dura", terror.p === null && terror.first?.struck === 1 && terror.hit <= terror.morale0 - 25 && terror.later <= terror.hit + 1, JSON.stringify(terror));
   check("passado o pavor, a tropa se recompõe; a que já vacilava foge", terror.after > terror.later + 5 && terror.broke, JSON.stringify(terror));
 
   // O pavor não escolhe lado, e os mortos-vivos não sentem medo
@@ -402,6 +405,142 @@ export async function magic({ page, ev, battle }, { check }) {
     return { p, m0, m1: sq.morale, terror: w.lastTerror };
   });
   check("os mortos-vivos não sentem o pavor", undead.p === null && undead.m1 === undead.m0 && undead.terror.fearless >= 1 && undead.terror.struck === 0, JSON.stringify(undead));
+
+  // --- 16.4: o preço, e a calamidade mágica ---
+  // Cada magia chega às cortes e aos templos; o arcano gasto marca o corpo
+  await setup();
+  const price = await ev(() => {
+    const st = window.__store;
+    const w = window.__world;
+    const lab = window.__lab;
+    st.setState({ honor: 50, fear: 10, arcaneSpent: 220, magicTalkDay: -1, leader: { ...st.getState().leader, marks: 0 } });
+    lab.step(0.1);
+    const hp0 = w.commander.maxHp;
+    const talk = () => st.getState().log.filter((e) => /Corre a notícia da magia/.test(e.text)).length;
+    const p = w.castAt("FIREBALL", lab.squad().center);
+    lab.step(1);
+    const after = st.getState();
+    const first = { honor: after.honor, fear: after.fear, talk: talk() };
+    const p2 = w.castAt("MEND", lab.battalion().center);
+    lab.step(0.5);
+    const s = st.getState();
+    return {
+      p,
+      p2,
+      first,
+      second: { honor: s.honor, fear: s.fear, talk: talk() },
+      spent: s.arcaneSpent,
+      marks: s.leader.marks ?? 0,
+      hp0,
+      hp1: w.commander.maxHp,
+      markLog: s.log.some((e) => /marca nova/.test(e.text)),
+      markFeed: w.feed.some((l) => /marca nova/.test(l)),
+    };
+  });
+  console.log("   preço:", JSON.stringify(price));
+  check("cada magia lançada custa Honra e traz Temor: as cortes e os templos sabem", price.p === null && price.first.honor === 47 && price.first.fear === 13 && price.first.talk === 1, JSON.stringify(price.first));
+  check("a cura custa menos, e a crônica fala da magia uma vez por dia", price.p2 === null && price.second.honor === 46 && price.second.fear === 13 && price.second.talk === 1, JSON.stringify(price.second));
+  check(
+    "o arcano gasto deixa uma marca no corpo, que tira vida do Comandante",
+    price.marks === 1 && price.markLog && price.markFeed && price.hp1 < price.hp0 * 0.96,
+    JSON.stringify({ marks: price.marks, hp0: price.hp0, hp1: price.hp1, spent: price.spent }),
+  );
+
+  // O Lorde Necromante responde com magia: lança o pavor no bando; os mortos dele não sentem, e queimam mais
+  await battle({ army: [["INFANTRY"]], force: { NECROMANCER: 1, SKELETON: 6 }, faction: "UNDEAD" });
+  const necro = await ev(() => {
+    const lab = window.__lab;
+    const w = window.__world;
+    lab.freezeAI();
+    for (const e of w.enemies) w.duelDone.add(e);
+    lab.parkCommander();
+    const b = lab.battalion();
+    lab.place(b, 3600, 3600, 0, 4);
+    const squads = w.warbands.bands.flatMap((x) => x.host?.squads ?? []);
+    squads.forEach((sq, i) => lab.placeSquad(sq, 3960 + i * 60, 3600 + i * 120, Math.PI));
+    const boss = w.enemies.find((e) => e.kind === "NECROMANCER");
+    const m0 = b.morale;
+    let at = null;
+    lab.step(6, (scene) => {
+      if (scene.lastTerror?.by && at === null) at = scene.time.now;
+      return at !== null;
+    });
+    const first = { ...w.lastTerror, dread: b.dreadUntil > w.time.now, m1: Math.round(b.morale) };
+    lab.step(19);
+    const casts = w.feed.filter((l) => /Lorde Necromante lança o pavor/.test(l)).length;
+    // O fogo nos mortos e nos vivos
+    const sk = w.enemies.find((e) => e.kind === "SKELETON" && e.isAlive);
+    const s0 = sk.hp;
+    sk.scorch(10, null, null);
+    const soldier = b.soldiers.find((s) => s.isAlive);
+    const h0 = soldier?.hp ?? 0;
+    soldier?.scorch(10, null, null);
+    return { boss: !!boss, m0, first, casts, skeleton: s0 - sk.hp, soldier: soldier ? h0 - soldier.hp : null };
+  });
+  console.log("   necromante:", JSON.stringify(necro));
+  check(
+    "o Lorde Necromante lança o pavor no bando, e o batalhão não se recompõe",
+    necro.boss && necro.first.by === "O Lorde Necromante" && necro.first.ours >= 1 && necro.first.dread && necro.first.m1 < necro.m0,
+    JSON.stringify(necro.first),
+  );
+  check("ele lança de novo depois de um tempo", necro.casts >= 2, String(necro.casts));
+  check("os mortos queimam mais: o fogo fere o esqueleto 1,6 vez o que fere um soldado", Math.abs(necro.skeleton - 16) < 0.01 && necro.soldier !== null && Math.abs(necro.soldier - 10) < 0.01, JSON.stringify(necro));
+
+  // O "Pronto quando": oito contra dezesseis salteadores. Sem magia o batalhão cai; com a magia bem usada, eles fogem.
+  // (Contra um exército do reino, o lorde firma a tropa, e duas magias não bastam: a magia quebra a ralé, não a disciplina)
+  const fight = async (magic) => {
+    await battle({ army: [["INFANTRY"]], force: { BANDIT: 16 }, faction: "BANDITS", setup: magic ? "s.magic = true;" : "" });
+    return ev((magic) => {
+      const lab = window.__lab;
+      const w = window.__world;
+      const st = window.__store;
+      for (const e of w.enemies) w.duelDone.add(e);
+      st.setState({ honor: 50, fear: 10 });
+      w.commander.x = 3500;
+      w.commander.y = 3600;
+      lab.place(lab.battalion(), 3640, 3600, 0, 4);
+      const squads = w.warbands.bands.flatMap((x) => x.host?.squads ?? []);
+      squads.forEach((sq, i) => lab.placeSquad(sq, 4300, 3450 + i * 300, Math.PI));
+      // Sem a passiva do tenente sorteado, que muda quanto o esquadrão aguenta: o teste mede a magia
+      // (no jogo, um tenente Inabalável pode segurar a tropa)
+      for (const sq of squads) sq.passive = null;
+      const alive = (sq) => sq.soldiers.filter((s) => s.isAlive).length;
+      const casts = [];
+      let t = 0;
+      while (t < 90 && !st.getState().scenarioResult) {
+        lab.attackNearest();
+        const b = lab.battalion();
+        // O Comandante fica atrás do batalhão
+        if (!b.isDestroyed) {
+          w.commander.x = b.center.x - 140;
+          w.commander.y = b.center.y;
+        }
+        if (magic) {
+          const reach = squads.filter((sq) => alive(sq) > 0 && !sq.panicking && Math.hypot(sq.center.x - w.commander.x, sq.center.y - w.commander.y) < 440);
+          const dense = [...reach].sort((a, c) => alive(c) - alive(a))[0];
+          // A bola no esquadrão cerrado, antes que ele chegue no batalhão; o pavor logo depois, longe dos nossos
+          if (dense && Math.hypot(dense.center.x - b.center.x, dense.center.y - b.center.y) > 130 && !w.castAt("FIREBALL", dense.center)) casts.push("FIREBALL");
+          const far = reach.filter((sq) => Math.hypot(sq.center.x - b.center.x, sq.center.y - b.center.y) > 200).sort((a, c) => alive(c) - alive(a))[0];
+          if (far && st.getState().arcane >= 45 && !w.castAt("TERROR", far.center)) casts.push("TERROR");
+        }
+        lab.step(0.25);
+        t += 0.25;
+      }
+      const r = st.getState().scenarioResult;
+      const s = st.getState();
+      return { outcome: r?.outcome ?? null, t, ours: lab.battalion().soldiers.filter((x) => x.isAlive).length, fled: r?.enemyFled ?? 0, casts, honor: s.honor, fear: s.fear };
+    }, magic);
+  };
+  const plainFight = await fight(false);
+  const magicFight = await fight(true);
+  console.log("   oito contra dezesseis:", JSON.stringify({ sem: plainFight, com: magicFight }));
+  check("sem magia, oito contra dezesseis salteadores é derrota", plainFight.outcome === "DEFEAT", JSON.stringify(plainFight));
+  check(
+    "com a bola de fogo e o pavor bem usados, o inimigo foge e o batalhão fica de pé",
+    magicFight.outcome === "VICTORY" && magicFight.ours >= 6 && magicFight.casts.includes("FIREBALL") && magicFight.casts.includes("TERROR"),
+    JSON.stringify(magicFight),
+  );
+  check("e a vitória custou Honra e trouxe Temor", magicFight.honor <= 50 - 7 && magicFight.fear >= 10 + 7, JSON.stringify({ honor: magicFight.honor, fear: magicFight.fear }));
 
   // --- 16.3: aprender pelo mundo ---
   await ev(() => localStorage.clear());
@@ -462,7 +601,7 @@ export async function magic({ page, ev, battle }, { check }) {
   const court = await ev(() => {
     const st = window.__store;
     const s = st.getState();
-    const t = s.settlements.find((x) => x.kind === "CITY" && x.owner !== "RUINED" && x.owner !== "PLAYER");
+    const t = s.settlements.find((x) => x.kind === "CITY" && x.owner !== "RUINED" && x.owner !== "PLAYER") ?? s.settlements.find((x) => x.kind === "CAPITAL" && x.owner !== "PLAYER");
     st.getState().conquerSettlement(t.id);
     const mage = st.getState().captiveOfficers.find((o) => o.mage);
     return { town: t.name, mage: mage ? { name: mage.name, spell: mage.mage, ransom: mage.ransom } : null };
@@ -521,4 +660,28 @@ export async function magic({ page, ev, battle }, { check }) {
   check("na terra do bando, as cidades não têm mestre de magia", masterTown !== null && !home, JSON.stringify({ masterTown, home }));
   check("o mestre de outra terra ensina por 800 de ouro e 4 dias", master.spells.includes("TERROR") && master.paid && master.gold < 900 - 600 && master.day - day2 === 4, JSON.stringify({ ...master, day2 }));
   check("o que o Comandante aprendeu aparece no campo", !!master.hud && master.spells.every((sp) => master.hud.includes(sp)), JSON.stringify(master.hud));
+
+  // O Lorde Necromante vencido deixa um artefato; o tapa-olho, as marcas e os artefatos aparecem
+  const relic = await ev(() => {
+    const st = window.__store;
+    const s = st.getState();
+    const lair = s.world.lairs[0];
+    const cal = { id: "C-teste", kind: "NECROMANCER", name: "A Noite de Morvan", leader: "Morvan, o Pálido", lair: { x: lair.x, y: lair.y }, region: "o teste", startDay: s.day, power: 1, revealed: true, defeated: false, lastHordeDay: s.day };
+    st.setState({ calamities: [...s.calamities, cal] });
+    st.getState().defeatCalamity("C-teste");
+    const after = st.getState();
+    return { artifacts: after.artifacts, line: after.log.some((e) => /Entre as coisas de Morvan, o Pálido, um artefato: Pedra do Arcano/.test(e.text)), hud: window.__world.magicHud()?.max ?? null };
+  });
+  check("o Lorde Necromante vencido deixa um artefato, e a pedra enche mais o arcano", relic.artifacts.join() === "STONE" && relic.line && relic.hud === 130, JSON.stringify(relic));
+  await ev(() => {
+    const st = window.__store;
+    st.setState({ leader: { ...st.getState().leader, marks: 4 }, arcaneSpent: 990 });
+    st.getState().setCampPanel({ kind: "TENT" });
+  });
+  await page.waitForSelector("[data-magic-marks='4']");
+  await ev(() => document.querySelector("[data-magic-marks]")?.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}-marcas.png` });
+  const marked = await ev(() => document.querySelector("[data-magic-marks]")?.textContent ?? "");
+  check("a tenda mostra as marcas no corpo e o que cada uma fez", /4\/4/.test(marked) && /cabelo embranqueceu/.test(marked), marked);
 }

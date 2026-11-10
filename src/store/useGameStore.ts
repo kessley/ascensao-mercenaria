@@ -2215,7 +2215,7 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     warDifficulty: scenario.difficulty,
     scenario,
     // O Comandante mago (Marco 19): sabe todas as magias e começa com o arcano cheio
-    ...(scenario.magic ? { spells: [...SPELL_IDS], arcane: MAGIC.ARCANE_MAX } : {}),
+    ...(scenario.magic ? { spells: [...SPELL_IDS], arcane: MAGIC.ARCANE_MAX, arcaneSpent: 0 } : {}),
     // Escadas e aríete vêm prontos: o relógio parado não deixa ninguém cortar madeira
     siege: scenario.siege && { settlementId: SCENARIO_TOWN, walled: true, startDay: 0, food: 0, wood: 0, ladders: scenario.siege.role === "ATTACK" ? scenario.siege.ladders : 0, ram: scenario.siege.role === "ATTACK" ? scenario.siege.rams : 0 },
   };
@@ -3398,6 +3398,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
         entry(s.day, `Os reinos agradecem: ${REALM.CALAMITY_REWARD} de ouro e a gratidão das coroas.`, "good"),
       ]),
     });
+    // O Lorde Necromante guardava um artefato (Marco 19, parte 4)
+    if (c.kind === "NECROMANCER") get().gainArtifact(`Entre as coisas de ${c.leader}`);
   },
 
   revealCalamity: (id) =>

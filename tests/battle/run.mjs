@@ -25,20 +25,22 @@ const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, 
 
 const chosen = process.argv.slice(2);
 const names = chosen.length > 0 ? chosen : Object.keys(SUITES);
-const lab = await openLab();
 const board = scoreboard();
-try {
-  for (const name of names) {
-    console.log(`\n== ${name}`);
-    // Uma suíte que recarrega a página (a de missões) leva o laboratório junto
-    if (!(await lab.page.evaluate(() => Boolean(window.__lab)))) await lab.page.evaluate(lab.labScript);
+const errors = [];
+for (const name of names) {
+  console.log(`\n== ${name}`);
+  // Um navegador novo por suíte: cada batalha cria um jogo, e o WebGL de uma suíte não pesa na outra.
+  // Uma suíte que quebra não leva as seguintes junto.
+  const lab = await openLab();
+  try {
     await SUITES[name](lab, board);
+  } catch (e) {
+    board.check(`${name}: a suíte terminou`, false, e.message);
   }
-} catch (e) {
-  board.check("a suíte terminou", false, e.message);
+  errors.push(...lab.errors.map((m) => `${name}: ${m}`));
+  await lab.browser.close();
 }
-board.check("sem erros no console", lab.errors.length === 0, lab.errors.slice(0, 4).join(" || "));
+board.check("sem erros no console", errors.length === 0, errors.slice(0, 4).join(" || "));
 const ok = board.results.filter((r) => r.ok).length;
 console.log(`\n${ok}/${board.results.length} verificações OK`);
-await lab.browser.close();
 process.exit(ok === board.results.length ? 0 : 1);

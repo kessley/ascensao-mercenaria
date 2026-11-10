@@ -22,11 +22,11 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
     - as línguas, com o intérprete;
     - a chegada a outra terra, que avisa o que muda.
   - o G6 inteiro (etapa 15 ✅ OK): a noite e o fogo, o clima, os efeitos de combate e o que a magia mexe.
+  - o Marco 19 inteiro (etapa 16 ✅ OK): o arcano e as primeiras magias, as magias que mexem no mundo, aprender pelo mundo, e o preço com a calamidade mágica.
 - **Combinado em 4 de novembro, depois de um brainstorm:**
   - o Marco 22 foi refeito (etapa 12 e [GDD, seção 9](GDD.md#9-do-bivaque-à-cidade-o-bando-que-constrói-fase-3-marco-22)): do bivaque ao acampamento, à fortaleza e a uma cidade que nasce sozinha;
   - os locais de missão passam a ter moradores fixos (etapa 10, já feita).
-- **Em andamento:** o Marco 19 (etapa 16), a magia do Comandante. Estão feitas a parte 1 (o arcano e as primeiras magias), a 2 (as magias que mexem no mundo) e a 3 (aprender pelo mundo).
-- **A seguir:** a parte 4 do Marco 19: o preço e as calamidades mágicas.
+- **A seguir:** o fechamento (etapa 17): jogar uma campanha inteira.
 
 Índice e visão geral: [ROADMAP.md](ROADMAP.md) · Fase anterior: [Fase 2 — O mundo que respira](ROADMAP_FASE_2.md) · Design: [GDD.md](GDD.md), seção 8 · Arte: [PLANO_GRAFICO.md](PLANO_GRAFICO.md) (por quê e como) e [ARTE.md](ARTE.md) (o que existe e o que falta).
 
@@ -60,7 +60,7 @@ Objetivo da fase: trocar o greybox por pixel art e, junto, dar ao bando o que fa
 | 13 | [G5: interface](#13-g5-interface--ok) | arte | Retratos de capitães e tenentes e ícones das construções; o Marco 23 enche a interface de fé e língua | ✅ OK |
 | 14 | [Marco 23: cultura, religião e língua](#14-marco-23-cultura-religião-e-língua--ok) | recurso | | ✅ OK; falta jogar uma campanha |
 | 15 | [G6: atmosfera](#15-g6-atmosfera--ok) | arte | Nevoeiro, tochas, gelo e fogo são o que a magia mexe | ✅ OK |
-| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante) | recurso | Por último, como combinado | partes 1 a 3 de 4 |
+| 16 | [Marco 19: magia do Comandante](#16-marco-19-magia-do-comandante--ok) | recurso | Por último, como combinado | ✅ OK; falta jogar uma campanha |
 | 17 | [Fechamento: jogar uma campanha inteira](#17-fechamento-jogar-uma-campanha-inteira) | dívida | Equilíbrio, saves antigos e o que aparecer | |
 
 **Fora da fila, esperando o seu sinal:** batalhões grandes (60 a 100 na milícia) e o alcance dos arcos. O melhor lugar é logo depois da etapa 6, porque com companhias um exército grande fica controlável. Ver [Pendências](#pendências-das-fases-1-e-2).
@@ -1295,7 +1295,7 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
     - o fechamento, que confere o "Pronto quando": uma investida à noite, na chuva. A batalha se lê pela luz das tochas, e a nuvem da investida bate na luz delas e se vê de longe.
   - Fotos novas: `.shots-g6-magia-nevoeiro.png`, `.shots-g6-magia-fogo.png`, `.shots-g6-magia-gelo.png`, `.shots-g6-pronto.png` (de longe) e `.shots-g6-pronto-perto.png`.
 
-## 16. Marco 19: magia do Comandante
+## 16. Marco 19: magia do Comandante ✅ OK
 **Objetivo:** magia rara e poderosa, mas cara. GDD 3 e 8.14. Era o Marco 8, deixado por último.
 - **Dano em área** e **suporte e controle**, como previsto desde o início.
 - **Aprendizado pelo mundo:** grimórios e artefatos em ruínas antigas, magos da corte capturados e mestres de outro continente.
@@ -1400,6 +1400,50 @@ São quatro partes, uma por vez, como no Marco 21. Cada uma termina jogável. Se
     - o que se aprende aparece no campo.
   - Fotos novas: `.shots-m19-tenda.png` e `.shots-m19-mestre.png`.
 - **Ficou para a parte 4:** os artefatos das ruínas, junto com as calamidades mágicas e as suas respostas.
+
+**Feito na parte 4, o preço e a calamidade mágica:**
+- **O preço político** (`payForMagic` em `store/magicSlice.ts`, os números em `MAGIC.PRICE`): cada magia lançada chega às cortes e aos templos.
+  - As que ferem e assustam custam mais: bola de fogo −3 de Honra e +3 de Temor, pavor −4 e +4. As de apoio custam 1 de Honra; a cura não traz Temor.
+  - A crônica conta uma vez por dia: "as cortes torcem o nariz, e os templos rezam contra a magia".
+- **As marcas no corpo:** a cada 240 de arcano gasto, uma marca nova no Comandante, até quatro (`Leader.marks`). Cada uma tira 6% da vida dele (`leaderBonus`). O que cada marca faz:
+  1. as veias da mão que lança ficam roxas;
+  2. um olho fica claro como gelo;
+  3. a pele esfria, e os cães rosnam à sua passagem;
+  4. o cabelo embranquece numa noite.
+  - Elas aparecem no retrato (`arcaneMarksOf` em `art/portraits.ts`): as veias na bochecha, o olho claro (o que o tapa-olho não cobre), as olheiras frias e, na quarta, o cabelo todo branco. Também aparecem na tenda e na saga.
+  - Elas são do Comandante: o herdeiro começa sem marcas e sem arcano gasto.
+- **Os artefatos,** um contra cada preço. Ficam com o bando, mesmo se o Comandante morrer:
+  - **Pedra do Arcano:** o arcano cheio vai a 130.
+  - **Amuleto do Silêncio:** as cortes e os templos cobram metade.
+  - **Cálice de Cinza:** as marcas vêm mais devagar (o gasto conta 60%).
+  - Eles vêm das ruínas assombradas, quando não há mais grimório a achar (`searchRuins`), e do Lorde Necromante vencido (`defeatCalamity`). Vêm na ordem acima.
+- **A calamidade mágica é o Lorde Necromante:**
+  - **A resposta mágica** (`updateNecromancers` em `worldScene/magic.ts`): ele lança o pavor no batalhão do bando mais cheio a até 420 px dele. Lança 3 s depois de ver o bando, e de novo a cada 18 s. Os mortos dele não sentem; o bando, sim.
+  - **A fraqueza:** os mortos queimam. O fogo da bola e do chão fere esqueletos e o necromante 1,6 vez (`Enemy.undead`).
+  - A Horda dos orcs segue sem magia: contra ela, o pavor pega como em qualquer tropa.
+- **A batalha do "Pronto quando":** um batalhão de 8 contra 16 salteadores.
+  - Sem magia, o batalhão é dizimado.
+  - Com a bola de fogo no bando cerrado e o pavor logo depois, os salteadores fogem todos, e o batalhão fica de pé. A vitória custa 7 de Honra e traz 7 de Temor.
+  - **A magia quebra a ralé, não a disciplina.** Contra um exército do reino, o lorde firma o esquadrão (ele perde 70% da moral). Aí a bola e o pavor não bastam: 8 contra 10 soldados é derrota, com ou sem magia. Contra 32 em três esquadrões, com dois batalhões, também.
+- **A firmeza do esquadrão inimigo** (`EnemySquad.steadiness`) passou a ser a do membro mais firme ainda vivo. Antes, valia o primeiro da lista. Então o lorde firmava a tropa ou não conforme a posição em que caía, e as batalhas de teste com magia ganhavam ou perdiam por sorte. Agora um lorde vivo sempre firma os seus, e morto, deixa de firmar.
+- **Testes:**
+  - 6 de regras novos em `tests/unit/magic.test.ts`:
+    - o preço de cada magia e o amuleto;
+    - as marcas e o cálice, e a vida que elas tiram;
+    - a pedra e a ordem dos artefatos;
+    - a crônica uma vez por dia;
+    - as ruínas sem grimório;
+    - o retrato com cada marca.
+  - A suíte `magia` passou a 50 verificações:
+    - o preço da bola e da cura, e a marca que tira vida;
+    - o necromante lançando o pavor duas vezes, e o fogo nos esqueletos;
+    - a batalha de 8 contra 16, com e sem magia;
+    - o artefato do necromante vencido e as marcas na tenda.
+  - As checagens de magia tiram a passiva do tenente sorteado do esquadrão inimigo, que muda quanto ele aguenta. Com isso e com a firmeza nova, os números saem iguais a cada rodada. Antes, a checagem do pavor da parte 2 às vezes falhava.
+  - Foto nova: `.shots-m19-marcas.png`.
+- **Ficou para depois:**
+  - a IA ainda não sai do chão em chamas, nem foge do necromante;
+  - uma segunda calamidade mágica, com outra fraqueza, pode vir no fechamento, se a campanha pedir.
 
 ## 17. Fechamento: jogar uma campanha inteira
 **Objetivo:** fechar a fase jogando, e não só simulando.

@@ -103,9 +103,14 @@ export class EnemySquad implements MoraleGroup {
     if (this.cycle.phase === "IN" && this.cycle.hitAt === null) this.cycle.hitAt = time;
   }
 
-  /** Bravura de quem está nele. */
+  /**
+   * Bravura de quem está nele: o mais firme segura a tropa (um lorde vivo no esquadrão firma todos).
+   * Antes valia o primeiro da lista, e o lorde firmava ou não conforme a posição em que caía.
+   */
   get steadiness(): number {
-    return (this.soldiers[0]?.nerve ?? 1) * (this.command.cornered ? SIEGE.WALLS_NERVE : 1);
+    let nerve = 1;
+    for (const s of this.soldiers) if (s.isAlive && s.nerve < nerve) nerve = s.nerve;
+    return nerve * (this.command.cornered ? SIEGE.WALLS_NERVE : 1);
   }
 
   /** Quem sabe lutar vira a frente para quem o pegou de lado, em vez de morrer olhando para o outro lado. */

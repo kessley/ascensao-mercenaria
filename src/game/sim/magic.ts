@@ -55,8 +55,8 @@ export function mendAmount(hp: number, maxHp: number): number {
 }
 
 /** O arcano depois de `days` dias (enche devagar, até o máximo). */
-export function arcaneAfter(arcane: number, days: number): number {
-  return Math.min(MAGIC.ARCANE_MAX, arcane + Math.max(0, days) * MAGIC.ARCANE_PER_DAY);
+export function arcaneAfter(arcane: number, days: number, max: number = MAGIC.ARCANE_MAX): number {
+  return Math.min(max, arcane + Math.max(0, days) * MAGIC.ARCANE_PER_DAY);
 }
 
 // --- Aprender pelo mundo (parte 3) ---
@@ -106,6 +106,50 @@ export function waysToLearn(spell: SpellId): ("RUINS" | "COURT" | "MASTER")[] {
   if (COURT_SPELLS.includes(spell)) out.push("COURT");
   if (Object.values(MASTER_SPELLS).some((l) => l.includes(spell))) out.push("MASTER");
   return out;
+}
+
+// --- O preço e os artefatos (parte 4) ---
+
+export type ArtifactId = keyof typeof MAGIC.ARTIFACTS;
+export const ARTIFACT_IDS = Object.keys(MAGIC.ARTIFACTS) as ArtifactId[];
+
+export function artifactDef(id: ArtifactId): (typeof MAGIC.ARTIFACTS)[ArtifactId] {
+  return MAGIC.ARTIFACTS[id];
+}
+
+/** O arcano cheio: 100, e mais com a Pedra do Arcano. */
+export function arcaneMax(artifacts: readonly ArtifactId[] = []): number {
+  return MAGIC.ARCANE_MAX + (artifacts.includes("STONE") ? MAGIC.ARTIFACTS.STONE.arcane : 0);
+}
+
+/** O que as cortes e os templos cobram por uma magia (o Amuleto do Silêncio corta pela metade). */
+export function magicPrice(spell: SpellId, artifacts: readonly ArtifactId[] = []): { honor: number; fear: number } {
+  const p = MAGIC.PRICE[spell];
+  const k = artifacts.includes("AMULET") ? MAGIC.ARTIFACTS.AMULET.price : 1;
+  return { honor: Math.ceil(p.honor * k), fear: Math.ceil(p.fear * k) };
+}
+
+/** Quanto de um gasto de arcano conta para as marcas (com o Cálice de Cinza, menos). */
+export function markWeight(cost: number, artifacts: readonly ArtifactId[] = []): number {
+  return cost * (artifacts.includes("CHALICE") ? MAGIC.ARTIFACTS.CHALICE.marks : 1);
+}
+
+/** Quantas marcas o corpo tem depois de gastar `spent` de arcano. */
+export function marksFor(spent: number): number {
+  return Math.min(MAGIC.MARKS.MAX, Math.floor(Math.max(0, spent) / MAGIC.MARKS.EVERY));
+}
+
+/** O que cada marca nova faz no corpo do Comandante (a primeira, a segunda...). */
+export const MARK_TEXT = [
+  "as veias da mão que lança ficaram roxas",
+  "um olho ficou claro como gelo",
+  "a pele esfriou, e os cães rosnam à sua passagem",
+  "o cabelo embranqueceu numa noite",
+] as const;
+
+/** O próximo artefato que o bando ainda não tem (null = já tem todos). */
+export function nextArtifact(owned: readonly ArtifactId[]): ArtifactId | null {
+  return ARTIFACT_IDS.find((a) => !owned.includes(a)) ?? null;
 }
 
 /** Quantas magias cabem no arcano cheio, gastando primeiro a mais barata (para a interface e os testes). */

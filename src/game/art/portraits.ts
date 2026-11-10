@@ -27,6 +27,8 @@ export interface PortraitSpec {
   /** A cor da roupa: a do bando ou a do reino do nobre. */
   color: number;
   crown?: PortraitCrown;
+  /** As marcas da magia (Marco 19): as veias roxas, o olho claro, as olheiras frias e o cabelo branco. */
+  marks?: number;
 }
 
 /** Os tons de pele de cada cultura, do mais claro ao mais escuro (as faixas se cruzam). */
@@ -63,7 +65,7 @@ export const hashSeed = hashString;
 
 /** O que muda o desenho, numa chave (para guardar a imagem pronta). */
 export function portraitKey(p: PortraitSpec): string {
-  return [p.seed, p.female ? "F" : "M", Math.floor(p.age / 5), p.culture, Math.min(p.scars, 5), p.role, p.color, p.crown ?? ""].join("|");
+  return [p.seed, p.female ? "F" : "M", Math.floor(p.age / 5), p.culture, Math.min(p.scars, 5), p.role, p.color, p.crown ?? "", Math.min(p.marks ?? 0, 4)].join("|");
 }
 
 /** As escolhas tiradas da semente: sempre as mesmas para o mesmo personagem. */
@@ -271,6 +273,22 @@ function scarsOf(g: Grid, n: number, skin: Ramp): void {
   if (n >= 5) for (const [x, y] of [[14, 8], [15, 8], [16, 9], [17, 9]]) g.px(x, y, mark);
 }
 
+/** O roxo das marcas da magia e o claro do olho tocado. */
+const ARCANE_VEIN = 0x7a3aa8;
+const ARCANE_EYE = 0xd8ccff;
+
+/**
+ * As marcas da magia no rosto: as veias roxas descendo da têmpora, o olho claro como gelo (o que o
+ * tapa-olho não cobre) e as olheiras frias. O cabelo branco da quarta vem antes, no tom do cabelo.
+ */
+function arcaneMarksOf(g: Grid, n: number, skin: Ramp, scars: number): void {
+  const vein = mix(skin.base, ARCANE_VEIN, 0.7);
+  if (n >= 1) for (const [x, y] of [[21, 14], [22, 15], [21, 16], [20, 17]]) g.px(x, y, vein);
+  if (n >= 2) g.px(scars >= 4 ? 13 : 19, 12, ARCANE_EYE);
+  // As olheiras (debaixo do tapa-olho, só a do outro lado)
+  if (n >= 3) for (const [x, y] of scars >= 4 ? [[12, 13], [13, 13]] : [[12, 13], [13, 13], [19, 13], [20, 13]]) g.px(x, y, mix(skin.dark, ARCANE_VEIN, 0.45));
+}
+
 function crownOf(g: Grid, crown: PortraitCrown | undefined): void {
   if (!crown) return;
   if (crown === "CROWN") {
@@ -295,7 +313,8 @@ export function portraitBitmap(p: PortraitSpec): Bitmap {
   if (hit) return hit;
   const t = portraitTraits(p);
   const skin = ramp(t.skin);
-  const hair = ramp(agedHair(t.hair, p.age));
+  // Da quarta marca da magia em diante, o cabelo embranquece de uma vez
+  const hair = ramp((p.marks ?? 0) >= 4 ? 0xd8d6e0 : agedHair(t.hair, p.age));
   const fig = new Grid(PORTRAIT_SIZE, PORTRAIT_SIZE);
 
   hairBack(fig, t.style, hair);
@@ -351,6 +370,7 @@ export function portraitBitmap(p: PortraitSpec): Bitmap {
   beardOf(fig, t.beard, skin, hair);
   hairTop(fig, t.style, hair, t.cloth);
   scarsOf(fig, p.scars, skin);
+  arcaneMarksOf(fig, p.marks ?? 0, skin, p.scars);
   crownOf(fig, p.crown);
   fig.outline();
 

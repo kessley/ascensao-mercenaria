@@ -148,7 +148,11 @@ export async function openLab() {
       const old = window.__labOldGame;
       // (e o canvas novo, que nasceu embaixo do velho, precisa remedir onde está para o clique)
       if (old && old !== window.__world.sys.game && old.pendingDestroy) {
+        // O Phaser não solta o contexto do WebGL ao se desfazer: depois de muitas batalhas na
+        // mesma página, o navegador recusa um contexto novo ("WebGL unsupported")
+        const gl = old.renderer?.gl;
         old.runDestroy();
+        gl?.getExtension("WEBGL_lose_context")?.loseContext();
         window.__world.sys.game.scale.updateBounds();
       }
       window.__labOldGame = null;

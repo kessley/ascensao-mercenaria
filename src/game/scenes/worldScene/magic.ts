@@ -2,11 +2,11 @@ import { Unit } from "../../entities/Unit";
 import type { Battalion } from "../../entities/Battalion";
 import { sheetKey } from "../../art/atlas";
 import { BLAST_CELL, BLAST_FRAMES, BLAST_RADIUS, blastSheet, fireballSheet, FIREBALL_CELL, FIREBALL_FRAMES, mendSheet, MEND_CELL, MEND_FRAMES, RING_FRAMES, ringSheet } from "../../art/magicArt";
-import { blastDamage, castProblem, mendAmount, spellDef, SPELL_KEY_LABEL, SPELL_KEYS, type SpellId } from "../../sim/magic";
+import { arcaneMax, blastDamage, castProblem, mendAmount, MARK_TEXT, spellDef, SPELL_KEY_LABEL, SPELL_KEYS, type SpellId } from "../../sim/magic";
 import type { Light } from "../../world/NightLayer";
 import { sfx } from "../../../audio/sounds";
 import { useGameStore, type MagicHud } from "../../../store/useGameStore";
-import { BALANCE, MAGIC } from "../../../utils/constants";
+import { BALANCE, ENEMIES, MAGIC } from "../../../utils/constants";
 import { angleTo, distance, type Point } from "../../../utils/math";
 import type { WorldScene } from "../WorldScene";
 
@@ -113,6 +113,12 @@ export const magicMethods = {
     if (spell === "MEND" && !patient) return "Nenhum batalhão ali para curar.";
     if (spell === "FREEZE" && !this.waterNear(at, spellDef(spell).radius)) return "Não há água ali para congelar.";
     if (!s.spendArcane(spell)) return "Arcano de menos.";
+    // O preço (parte 4): as cortes e os templos sabem, e o corpo marca
+    const mark = s.payForMagic(spell);
+    if (mark > 0) {
+      c.floatText("uma marca nova", "#c890f0");
+      this.pushFeed(`Uma marca nova no corpo do Comandante: ${MARK_TEXT[mark - 1]}.`);
+    }
     const def = spellDef(spell);
     this.spellReadyAt[spell] = this.time.now + def.cooldown * 1000;
     this.aiming = null;
@@ -308,7 +314,7 @@ export const magicMethods = {
    * O pavor: uma onda de medo que não escolhe lado. Cada tropa pega perde moral de uma vez e não se
    * recompõe por um tempo; as de perto da borda se abalam. Quem não sente medo (os mortos-vivos) nem pisca.
    */
-  terrorAt(this: WorldScene, at: Point): void {
+  terrorAt(this: WorldScene, at: Point, by: string | null = null): void {
     const radius = MAGIC.SPELLS.TERROR.radius;
     const T = MAGIC.TERROR;
     const now = this.time.now;
@@ -349,10 +355,36 @@ export const magicMethods = {
     this.castRing(at, radius * T.NEAR, SPELL_COLOR.TERROR, 0.5);
     this.cameras.main.shake(260, 0.003);
     sfx.thud(at);
-    this.lastTerror = { at: { x: at.x, y: at.y }, struck, shaken, fearless, ours };
-    if (struck + shaken === 0) this.pushFeed(fearless > 0 ? "Pavor! Mas quem estava ali não sente medo." : "Pavor! Mas não havia ninguém ali para sentir.");
+    this.lastTerror = { at: { x: at.x, y: at.y }, struck, shaken, fearless, ours, by };
+    if (by) this.pushFeed(`${by} lança o pavor: ${ours > 0 ? `${ours} tropas do bando tomadas pelo medo` : "o medo não pegou ninguém do bando"}.`);
+    else if (struck + shaken === 0) this.pushFeed(fearless > 0 ? "Pavor! Mas quem estava ali não sente medo." : "Pavor! Mas não havia ninguém ali para sentir.");
     else if (ours > 0) this.pushFeed(`Pavor! ${struck + shaken} tropas tomadas pelo medo, ${ours} delas do bando.`);
     else this.pushFeed(`Pavor! ${struck + shaken} tropas tomadas pelo medo.`);
+  },
+
+  /**
+   * A resposta mágica da calamidade (parte 4): o Lorde Necromante lança o pavor no batalhão do bando
+   * mais cheio ao alcance dele, de tempos em tempos. Os mortos dele não sentem; quem é do bando, sim.
+   */
+  updateNecromancers(this: WorldScene): void {
+    const N = MAGIC.NECRO;
+    const now = this.time.now;
+    for (const e of this.enemies) {
+      if (e.kind !== "NECROMANCER" || !e.isAlive || e.dormant || e.friendly) continue;
+      const ready = this.necroReadyAt.get(e);
+      const near = this.battalions.filter((b) => !b.isDestroyed && b.soldiers.some((u) => u.isAlive && distance(u, e) <= N.TERROR_RANGE));
+      if (near.length === 0) continue;
+      // Ao ver o bando pela primeira vez, ele leva um instante para começar
+      if (ready === undefined) {
+        this.necroReadyAt.set(e, now + N.FIRST_MS);
+        continue;
+      }
+      if (now < ready) continue;
+      const target = near.reduce((a, b) => (b.soldiers.filter((u) => u.isAlive).length > a.soldiers.filter((u) => u.isAlive).length ? b : a));
+      e.floatText("Pavor", css(SPELL_COLOR.TERROR));
+      this.terrorAt(target.center, `O ${ENEMIES.NECROMANCER.label}`);
+      this.necroReadyAt.set(e, now + N.TERROR_EVERY * 1000);
+    }
   },
 
   /** O anel da magia: corre do ponto até a borda da área, na cor dela, e se desfaz (com um clarão na noite). */
@@ -394,6 +426,7 @@ export const magicMethods = {
     }
     this.magicFlashes = this.magicFlashes.filter((f) => time < f.until);
     for (const f of this.magicFlashes) if (f.fade > 0) f.light.radius = Math.max(1, f.light.radius * (1 - dt * (1000 / f.fade) * 0.5));
+    this.updateNecromancers();
     this.burnClock += dt;
     if (this.burnClock < BURN_TICK) return;
     this.burnClock -= BURN_TICK;
@@ -435,7 +468,7 @@ export const magicMethods = {
     if (s.spells.length === 0) return null;
     return {
       arcane: Math.floor(s.arcane),
-      max: MAGIC.ARCANE_MAX,
+      max: arcaneMax(s.artifacts),
       aiming: this.aiming,
       spells: s.spells.map((id, i) => {
         const def = spellDef(id);

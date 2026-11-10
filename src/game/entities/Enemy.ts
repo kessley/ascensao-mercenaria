@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
-import { BALANCE, COLORS, ENEMIES, FORMATIONS, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
+import { BALANCE, COLORS, ENEMIES, FORMATIONS, MAGIC, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 import { enemyLook } from "../art/looks";
@@ -296,7 +296,13 @@ export class Enemy extends Unit {
 
   override scorch(amount: number, from: { x: number; y: number } | null, credit: Unit | null = null): void {
     if (credit?.team === "ALLY" && !this.hostile && !this.friendly) this.provoked = true;
-    super.scorch(amount, from, credit);
+    // Os mortos queimam mais (Marco 19, parte 4)
+    super.scorch(this.undead ? amount * MAGIC.NECRO.UNDEAD_FIRE : amount, from, credit);
+  }
+
+  /** Esqueletos e o Lorde Necromante: não sentem medo e queimam mais. */
+  get undead(): boolean {
+    return this.kind === "SKELETON" || this.kind === "NECROMANCER";
   }
 
   /** Gente que não luta (refugiados, mensageiros, mercadores): foge de quem chegar perto. */

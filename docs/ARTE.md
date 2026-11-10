@@ -192,6 +192,7 @@ Ainda são greybox: as marcas de ordem, de destino e de seleção (de propósito
 | Molduras, botões e painéis (React) | ✅ pixel art (G5, parte 2): `art/frames.ts`; madeira nos painéis e no menu, ferro no HUD, pergaminho no diário, botões em cinco tons |
 | Ícones (tropas, bens, construções, ordens, formações, tempo e sinais do texto) | ✅ pixel art (G5, parte 3): `art/iconArt.ts` e `art/icons.ts`; 12 px na linha do texto, 24 px nos botões e nas listas |
 | Retratos do Comandante, dos capitães, dos tenentes e dos nobres | ✅ pixel art (G5, parte 4): `art/portraits.ts` e `art/portraitSpecs.ts`; busto de 32×32 com a cultura, a idade, as cicatrizes e o papel; 32 px nas listas, 64 px nas fichas e no HUD |
+| Marcas da magia no retrato do Comandante | ✅ Marco 19, parte 4 (`arcaneMarksOf` em `art/portraits.ts`). São quatro: as veias roxas na bochecha, o olho claro como gelo (o que o tapa-olho não cobre), as olheiras frias e, na quarta, o cabelo todo branco |
 | Mapa do Continente e Mapa Múndi | greybox |
 
 ## O que falta, por etapa

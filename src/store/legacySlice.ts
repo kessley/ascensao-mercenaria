@@ -175,6 +175,7 @@ export function legacySlice(set: Setter, get: () => GameState, links: { note: (t
         // A magia morre com quem a sabia; os grimórios ficam com o bando (Marco 19)
         spells: [],
         arcane: 0,
+        arcaneSpent: 0,
       });
       links.note(`${old.name} morreu aos ${age} anos: ${cause}. ${leader.name} ergueu o estandarte.`, "bad");
     },

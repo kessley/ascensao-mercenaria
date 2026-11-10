@@ -2,14 +2,19 @@ import { describe, expect, it } from "vitest";
 import { BLAST_CELL, BLAST_FRAMES, BLAST_RADIUS, blastSheet, fireballSheet, FIREBALL_CELL, FIREBALL_FRAMES, mendSheet, MEND_CELL, MEND_FRAMES, RING_FRAMES, ringSheet } from "../../src/game/art/magicArt";
 import {
   arcaneAfter,
+  arcaneMax,
   blastDamage,
   castProblem,
   castsPerFill,
   clampToRange,
   COURT_SPELLS,
   courtMageSpell,
+  magicPrice,
+  marksFor,
+  markWeight,
   masterOffers,
   mendAmount,
+  nextArtifact,
   nextGrimoire,
   RUIN_SPELLS,
   SPELL_IDS,
@@ -17,6 +22,8 @@ import {
   waysToLearn,
 } from "../../src/game/sim/magic";
 import { updateMorale, type MoraleGroup } from "../../src/game/systems/MoraleSystem";
+import { leaderBonus } from "../../src/game/sim/legacy";
+import { portraitBitmap, portraitKey, type PortraitSpec } from "../../src/game/art/portraits";
 import { INITIAL_MAGIC, magicSlice, type MagicState } from "../../src/store/magicSlice";
 import type { GameState } from "../../src/store/useGameStore";
 import { MAGIC } from "../../src/utils/constants";
@@ -212,9 +219,9 @@ describe("aprender pelo mundo (Marco 19, parte 3)", () => {
 
   it("cada ruína dá o seu grimório uma vez só, e estudar leva dias", () => {
     const s = make({});
-    expect(s.actions.findGrimoire("ruina-1")).toBe(RUIN_SPELLS[0]);
-    expect(s.actions.findGrimoire("ruina-1")).toBeNull();
-    expect(s.actions.findGrimoire("ruina-2")).toBe(RUIN_SPELLS[1]);
+    expect(s.actions.searchRuins("ruina-1")).toEqual({ spell: RUIN_SPELLS[0] });
+    expect(s.actions.searchRuins("ruina-1")).toBeNull();
+    expect(s.actions.searchRuins("ruina-2")).toEqual({ spell: RUIN_SPELLS[1] });
     expect(s.get().grimoires).toEqual([RUIN_SPELLS[0], RUIN_SPELLS[1]]);
     expect(s.actions.studyGrimoire("TERROR")).toMatch(/não tem esse grimório/);
     expect(s.actions.studyGrimoire(RUIN_SPELLS[0])).toBeNull();
@@ -269,6 +276,89 @@ describe("aprender pelo mundo (Marco 19, parte 3)", () => {
     // Na terra do bando, ninguém ensina
     const home = make({ settlements: towns, gold: 5000 });
     expect(home.actions.learnFromMaster("C", "TERROR")).toMatch(/não ensina/);
+  });
+});
+
+describe("o preço da magia (Marco 19, parte 4)", () => {
+  const make = (start: Record<string, unknown>) => {
+    const told: string[] = [];
+    let state = { ...INITIAL_MAGIC, honor: 50, fear: 10, day: 3, leader: { name: "Aldo", traits: [], wounds: 0 }, ...start } as unknown as GameState;
+    const actions = magicSlice(
+      (partial) => {
+        state = { ...state, ...partial };
+      },
+      () => state,
+    );
+    state = { ...state, ...actions, chronicle: (text: string) => told.push(text) } as GameState;
+    return { actions, get: () => state, told };
+  };
+
+  it("as que ferem e assustam custam mais Honra e trazem mais Temor; o amuleto corta pela metade", () => {
+    expect(magicPrice("FIREBALL")).toEqual({ honor: 3, fear: 3 });
+    expect(magicPrice("TERROR")).toEqual({ honor: 4, fear: 4 });
+    expect(magicPrice("MEND")).toEqual({ honor: 1, fear: 0 });
+    expect(magicPrice("FIREBALL", ["AMULET"])).toEqual({ honor: 2, fear: 2 });
+    expect(magicPrice("TERROR", ["AMULET"])).toEqual({ honor: 2, fear: 2 });
+    for (const s of SPELL_IDS) expect(magicPrice(s).honor).toBeGreaterThan(0);
+  });
+
+  it("as marcas vêm com o arcano gasto, até quatro; o cálice as faz vir mais devagar", () => {
+    const E = MAGIC.MARKS.EVERY;
+    expect(marksFor(0)).toBe(0);
+    expect(marksFor(E - 1)).toBe(0);
+    expect(marksFor(E)).toBe(1);
+    expect(marksFor(E * 10)).toBe(MAGIC.MARKS.MAX);
+    expect(markWeight(40)).toBe(40);
+    expect(markWeight(40, ["CHALICE"])).toBeLessThan(40);
+    // Cada marca tira um pouco da vida do Comandante
+    expect(leaderBonus({ traits: [], wounds: 0, marks: 2 }).hp).toBeCloseTo(1 - 2 * MAGIC.MARKS.HP);
+    expect(leaderBonus({ traits: [], wounds: 0 }).hp).toBe(1);
+  });
+
+  it("a pedra do arcano enche mais o arcano, e cada artefato vem uma vez", () => {
+    expect(arcaneMax()).toBe(MAGIC.ARCANE_MAX);
+    expect(arcaneMax(["STONE"])).toBe(MAGIC.ARCANE_MAX + MAGIC.ARTIFACTS.STONE.arcane);
+    expect(arcaneAfter(MAGIC.ARCANE_MAX, 5, arcaneMax(["STONE"]))).toBe(arcaneMax(["STONE"]));
+    expect(nextArtifact([])).toBe("STONE");
+    expect(nextArtifact(["STONE", "AMULET", "CHALICE"])).toBeNull();
+  });
+
+  it("lançar cobra das cortes e dos templos, a crônica fala uma vez por dia, e o corpo marca", () => {
+    const s = make({ arcaneSpent: MAGIC.MARKS.EVERY - 50 });
+    expect(s.actions.payForMagic("MEND")).toBe(0);
+    expect(s.get().honor).toBe(49);
+    expect(s.get().fear).toBe(10);
+    expect(s.actions.payForMagic("FIREBALL")).toBe(1);
+    expect(s.get().honor).toBe(46);
+    expect(s.get().fear).toBe(13);
+    expect(s.get().leader.marks).toBe(1);
+    expect(s.told.filter((t) => /Corre a notícia/.test(t))).toHaveLength(1);
+    expect(s.told.filter((t) => /marca nova/.test(t))).toHaveLength(1);
+    // No dia seguinte, a notícia corre de novo
+    s.get().day = 4;
+    s.actions.payForMagic("FIREBALL");
+    expect(s.told.filter((t) => /Corre a notícia/.test(t))).toHaveLength(2);
+  });
+
+  it("sem grimório a achar, as ruínas dão um artefato", () => {
+    const s = make({ spells: [...RUIN_SPELLS] });
+    expect(s.actions.searchRuins("ruina-1")).toEqual({ artifact: "STONE" });
+    expect(s.actions.searchRuins("ruina-1")).toBeNull();
+    expect(s.actions.searchRuins("ruina-2")).toEqual({ artifact: "AMULET" });
+    expect(s.actions.gainArtifact("Entre as coisas do necromante")).toBe("CHALICE");
+    expect(s.actions.searchRuins("ruina-3")).toBeNull();
+    expect(s.get().artifacts).toEqual(["STONE", "AMULET", "CHALICE"]);
+  });
+
+  it("cada marca muda o retrato do Comandante, e a quarta embranquece o cabelo", () => {
+    const base: PortraitSpec = { seed: "Aldo#1", female: false, age: 30, culture: "REALMS", scars: 0, role: "COMMANDER", color: 0x3a6ac8 };
+    const keys = [0, 1, 2, 3, 4].map((marks) => portraitKey({ ...base, marks }));
+    expect(new Set(keys).size).toBe(5);
+    const pics = [0, 1, 2, 3, 4].map((marks) => Array.from(portraitBitmap({ ...base, marks }).rgba).join());
+    for (let i = 1; i < pics.length; i++) expect(pics[i]).not.toBe(pics[i - 1]);
+    // Com o tapa-olho, o olho claro vai para o outro lado (e o retrato ainda muda)
+    const patched = [1, 2].map((marks) => Array.from(portraitBitmap({ ...base, scars: 4, marks }).rgba).join());
+    expect(patched[0]).not.toBe(patched[1]);
   });
 });
 

@@ -1997,6 +1997,38 @@ export const MAGIC = {
    * de um mestre de outra terra, o que o mestre cobra e o resgate de um mago da corte.
    */
   LEARN: { GRIMOIRE_DAYS: 2, COURT_DAYS: 3, MASTER_DAYS: 4, MASTER_GOLD: 800, MAGE_RANSOM: 250 },
+  /**
+   * O preço político (parte 4): cada magia lançada chega às cortes e aos templos, e custa Honra e
+   * traz Temor. As que ferem e assustam custam mais que as de apoio.
+   */
+  PRICE: {
+    FIREBALL: { honor: 3, fear: 3 },
+    MEND: { honor: 1, fear: 0 },
+    FREEZE: { honor: 1, fear: 1 },
+    MIST: { honor: 1, fear: 1 },
+    DOUSE: { honor: 1, fear: 1 },
+    TERROR: { honor: 4, fear: 4 },
+  },
+  /**
+   * As marcas no corpo (parte 4): a cada `EVERY` de arcano gasto, uma marca nova no Comandante, até
+   * `MAX`. Cada uma tira `HP` da vida dele.
+   */
+  MARKS: { EVERY: 240, MAX: 4, HP: 0.06 },
+  /**
+   * Os artefatos (parte 4), um contra cada preço: das ruínas, quando não há mais grimório, e do
+   * Lorde Necromante vencido.
+   */
+  ARTIFACTS: {
+    STONE: { name: "Pedra do Arcano", hint: "o arcano cheio vai a 130", arcane: 30 },
+    AMULET: { name: "Amuleto do Silêncio", hint: "as cortes e os templos cobram metade da Honra e do Temor", price: 0.5 },
+    CHALICE: { name: "Cálice de Cinza", hint: "as marcas no corpo vêm mais devagar", marks: 0.6 },
+  },
+  /**
+   * O Lorde Necromante, a calamidade mágica (parte 4): os mortos queimam mais (o fogo os fere
+   * `UNDEAD_FIRE` vezes), e ele lança o pavor no bando a cada `TERROR_EVERY` s, em quem chega a
+   * `TERROR_RANGE` px dele. Os mortos dele não sentem.
+   */
+  NECRO: { UNDEAD_FIRE: 1.6, TERROR_EVERY: 18, TERROR_RANGE: 420, FIRST_MS: 3000 },
   /** Quanto dura o que as magias do mundo mexem (s) e o anel que corre ao lançar (ms). */
   WORLD: { FREEZE_SECONDS: 90, MIST_SECONDS: 75, DOUSE_SECONDS: 60, RING_MS: 520 },
   /**
