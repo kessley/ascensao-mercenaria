@@ -680,6 +680,7 @@ export class WorldScene extends Phaser.Scene {
       activeScene = null;
       this.stopSlowMotion();
       stopCampfireAmbience();
+      AudioEngine.setPaused(false);
       useGameStore.getState().setCampPrompt(null);
       Unit.darkness = 0;
       Unit.weather = "CLEAR";
@@ -733,6 +734,8 @@ export class WorldScene extends Phaser.Scene {
     this.weatherLayer.update(this.cameras.main, this.weather, weatherDt, this.wind);
     this.groundWeather.update(this.cameras.main, this.weather, weatherDt, Unit.groundStamp);
     AudioEngine.setListener(view.centerX, view.centerY, view.width);
+    // Com o mapa, um painel ou um relatório abertos, o combate se cala (o resto do som continua)
+    AudioEngine.setPaused(this.ended);
     AudioEngine.setLoopVolume("campfire", Math.max(0, 1 - distance({ x: view.centerX, y: view.centerY }, this.campArea.campfire) / 1100));
 
     // Pausa tática: mapa, relatório ou painel abertos (comandos da UI ainda valem, ex.: viajar)
