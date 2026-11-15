@@ -803,6 +803,7 @@ export const inputMethods = {
     }
     for (const b of battalions) if (!b.isDestroyed) b.selected = true;
     for (const s of scouts) if (s.isAlive) s.selected = true;
+    this.selectionBark(battalions, scouts);
   },
 
   /** Selecionados; sem seleção, todos (atalho de teclado). */

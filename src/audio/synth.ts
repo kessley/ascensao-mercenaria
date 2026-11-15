@@ -5,6 +5,9 @@
  */
 
 export function envelope(g: GainNode, start: number, attack: number, dur: number, peak: number): void {
+  // Calado desde antes do começo: a fonte pode entrar uma amostra antes do primeiro ponto do
+  // envelope, e com o ganho ainda em 1 isso é um estalo
+  g.gain.value = 0.0001;
   g.gain.setValueAtTime(0.0001, start);
   g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), start + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
@@ -77,6 +80,7 @@ export function brass(ctx: BaseAudioContext, out: AudioNode, notes: readonly (re
     f.type = "lowpass";
     f.frequency.value = brightness;
     const g = ctx.createGain();
+    g.gain.value = 0.0001;
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(gain, t + 0.03);
     g.gain.setValueAtTime(gain, t + dur * 0.75);

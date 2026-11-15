@@ -5,6 +5,9 @@ import { useGameStore, type TrumpetCall } from "../../../store/useGameStore";
 import { BALANCE, COLORS, LANGUAGE, SUPPORT } from "../../../utils/constants";
 import { orderVoice } from "../../sim/language";
 import { sfx } from "../../../audio/sounds";
+import { barkForOrder } from "../../../audio/speech";
+import { say } from "../../../audio/voice";
+import { riderSpeaker } from "./voices";
 import { distance, type Point } from "../../../utils/math";
 import { FEED_SIZE, type OrderRecipient, type OrderChannel, type Reach, type PendingDelivery, TRUMPET_LABEL } from "./shared";
 import type { WorldScene } from "../WorldScene";
@@ -113,6 +116,8 @@ export const ordersMethods = {
     this.warCryAt = this.time.now;
     this.signalWave(this.commander.x, this.commander.y, COLORS.PANIC, W.RADIUS);
     this.commander.floatText("Pela Ascensão!", "#ffb4a8");
+    // O Comandante puxa o grito e o bando responde
+    this.commanderSays("warcry");
     sfx.warCry(this.commander);
     const heard: string[] = [];
     for (const b of this.battalions) {
@@ -183,6 +188,14 @@ export const ordersMethods = {
         this.companies.playerOrdered(recipient, this.time.now);
       };
     }
+    // Quem recebe a ordem responde na hora em que ela chega: de viva voz, pelo toque ou pelo mensageiro
+    {
+      const inner = apply;
+      apply = () => {
+        inner();
+        this.troopSays(recipient, barkForOrder(order));
+      };
+    }
     const name = this.recipientName(recipient);
     const reach = this.reachOf(recipient, channel);
     // Marco 23: a ordem falada (de viva voz ou pelo mensageiro) a um batalhão que não fala a língua
@@ -248,6 +261,7 @@ export const ordersMethods = {
   lostInTranslation(this: WorldScene, b: Battalion, order: string, apply: () => void): void {
     b.pendingOrder = order;
     const now = this.time.now;
+    this.troopSays(b, "confused");
     if (now - (lostNoted.get(b) ?? -Infinity) > 8000) {
       lostNoted.set(b, now);
       this.pushFeed(`${b.name} não entende de primeira "${order}": ninguém ali fala a língua do Comandante.`);
@@ -321,6 +335,8 @@ export const ordersMethods = {
         messenger.send({ order, stops: group.map((d) => d.stop) });
         used.push(messenger);
         sent = true;
+        // O mensageiro toca o cavalo: é o sinal de que a ordem saiu
+        say(riderSpeaker(messenger.rider), "hup", messenger, { floor: 0.4 });
         this.pushFeed(`${messenger.rider.name} partiu com "${order}" para ${names}.`);
       } else if (used.length > 0) {
         const carrier = used[used.length - 1];

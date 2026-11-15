@@ -29,6 +29,8 @@ export interface PlayOptions {
   alarm?: boolean;
   /** Quanto o som dura, em segundos: é o tempo em que ele conta como soando. */
   seconds?: number;
+  /** Com posição, ouve-se mesmo de longe, com pelo menos este volume (a tropa selecionada fora da tela). */
+  floor?: number;
 }
 
 export type SoundRecipe = (ctx: BaseAudioContext, out: AudioNode, opts: { pitch: number; noise: AudioBuffer }) => void;
@@ -156,9 +158,9 @@ class AudioEngineImpl {
     let pan = 0;
     if (positional) {
       const placed = placeSound((opts.x as number) - this.listener.x, (opts.y as number) - this.listener.y, this.listener.hearing, this.listener.halfWidth);
-      if (!placed) return false; // longe demais para ouvir
-      gain *= placed.gain;
-      pan = placed.pan;
+      if (!placed && !opts.floor) return false; // longe demais para ouvir
+      gain *= Math.max(placed?.gain ?? 0, opts.floor ?? 0);
+      pan = placed?.pan ?? Math.sign((opts.x as number) - this.listener.x) * 0.6;
     }
     const seconds = opts.seconds ?? 0.4;
     if (!this.gate.allow(name, bus, now, throttleMs, maxVoices, seconds * 1000)) return false;

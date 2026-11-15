@@ -16,6 +16,7 @@ import { PlaceEffects } from "../world/PlaceEffects";
 import { FlagSprite } from "../world/FlagSprite";
 import { isFlood, seasonOf, weatherAt, windAt, type Wind } from "../../utils/season";
 import { resolveAttacks } from "../systems/CombatSystem";
+import type { EnemySquad } from "../systems/EnemySquad";
 import { FogOfWar } from "../systems/FogOfWar";
 import { spreadRout, updateMorale, type MoraleGroup } from "../systems/MoraleSystem";
 import { setArrowField } from "../systems/ProjectileSystem";
@@ -72,6 +73,7 @@ import { scoutsMethods, type ScoutsMethods } from "./worldScene/scouts";
 import { hudMethods, type HudMethods } from "./worldScene/hud";
 import { duelMethods, type DuelMethods, type FieldDuel } from "./worldScene/duel";
 import { magicMethods, type MagicAnim, type MagicFlash, type MagicMethods } from "./worldScene/magic";
+import { voicesMethods, type VoicesMethods } from "./worldScene/voices";
 import type { SpellId } from "../sim/magic";
 import type { DuelInput } from "../sim/duel";
 
@@ -166,6 +168,11 @@ export class WorldScene extends Phaser.Scene {
   /** Notícias do bando a caminho dos reinos (ver newsTick). */
   newsOfArmy: { key: string; at: ArmyIntel }[] = [];
   engagement: Engagement | null = null;
+  /** As vozes (S1): quando a cena olhou o ânimo de cada um pela última vez e o que viu. */
+  voiceWatchAt = 0;
+  voiceMood = new WeakMap<Battalion, number>();
+  squadPanic = new WeakMap<EnemySquad, boolean>();
+  nextTauntAt = 0;
   /** Inimigos do contrato ativo e do motim, já postos no mapa. */
   contractEnemies: Enemy[] = [];
   contractId: string | null = null;
@@ -862,6 +869,7 @@ export class WorldScene extends Phaser.Scene {
     this.collectSupportLosses();
     this.collectWagonLosses();
     this.updateFatigue(dt);
+    this.updateVoices(time);
     this.checkThinIce(time);
     this.drawMissions();
     this.drawDestinations();
@@ -1119,5 +1127,5 @@ export class WorldScene extends Phaser.Scene {
  * A cena passava de 6000 linhas: as partes moram em `./worldScene/`, cada uma um objeto de métodos
  * com `this: WorldScene`, e entram aqui no protótipo. A interface diz ao TypeScript que são da cena.
  */
-export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods, MagicMethods {}
-Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods, magicMethods);
+export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods, MagicMethods, VoicesMethods {}
+Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods, magicMethods, voicesMethods);

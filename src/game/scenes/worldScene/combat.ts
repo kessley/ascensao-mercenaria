@@ -391,8 +391,12 @@ export const combatMethods = {
     const siteContract = !!store.activeContract && (store.activeContract.contract.kind ?? "SITE") === "SITE";
     const contractDone = !!eng?.contractDone || (!!this.contractId && this.contractEnemies.length === 0 && siteContract);
 
-    if (result === "VICTORY") sfx.victory();
-    else if (result === "DEFEAT") sfx.defeat();
+    if (result === "VICTORY") {
+      sfx.victory();
+      // Quem lutou comemora
+      const winner = eng ? [...eng.participants].find((b) => !b.isDestroyed && !b.panicking) : null;
+      if (winner) this.troopSays(winner, "cheer", { floor: 0.5 });
+    } else if (result === "DEFEAT") sfx.defeat();
     this.storeWagonHp();
     this.selectionBox.clear();
     store.setContextMenu(null);
