@@ -4,7 +4,8 @@ import { fireVolley } from "./ProjectileSystem";
 import { chargePush, hitChance } from "../sim/combatRules";
 import { COMBAT } from "../../utils/constants";
 import { angleTo, distance } from "../../utils/math";
-import { sfx } from "../../audio/sounds";
+import { battle } from "../../audio/combatSounds";
+import { parrySurface, weaponClass, woundSurface } from "../../audio/hitRules";
 import { combatFx } from "../world/CombatEffects";
 
 /** Lanças firmes de frente: a investida morre nelas e quem carregou paga o preço. */
@@ -18,7 +19,7 @@ function breakCharge(scene: Phaser.Scene, unit: Unit, target: Unit, time: number
   unit.stunnedUntil = time + COMBAT.BRACE_STUN_MS;
   unit.takeDamage(target.outgoingDamage(unit) * COMBAT.BRACE_COUNTER, target, time, "MELEE");
   target.floatText("lanças!", "#ffe9a8");
-  sfx.charge(target);
+  battle.charge(target);
 }
 
 /** O choque: joga o alvo para trás, derruba, abala a tropa dele e abre caminho entre os vizinhos. */
@@ -27,7 +28,7 @@ function chargeImpact(scene: Phaser.Scene, unit: Unit, target: Unit, units: read
   // A nuvem do choque: é por ela que se vê de longe onde a investida bateu (G6)
   combatFx(scene)?.impact(target.x, target.foot.y, a, unit.chargePower);
   const push = chargePush(unit.chargeKnockback, unit.mass, target.mass);
-  sfx.charge(target);
+  battle.charge(target);
   target.shove(a, push);
   target.stunnedUntil = time + COMBAT.CHARGE_STUN_MS;
   target.shock(COMBAT.CHARGE_SHOCK * unit.chargeShock);
@@ -63,15 +64,18 @@ export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time
       continue;
     }
     // A investida sempre chega; o golpe comum pode errar ou ser aparado
-    if (!charging && Math.random() > hitChance(unit.meleeSkill(), target.defenseSkill(time), target.approachOf(unit))) {
-      sfx.clash(target);
+    const approach = target.approachOf(unit);
+    if (!charging && Math.random() > hitChance(unit.meleeSkill(), target.defenseSkill(time), approach)) {
+      // O golpe que não entrou: no escudo, aço no aço, ou no ar
+      battle.melee(parrySurface(unit.strike, target.strike, approach === "FRONT"), weaponClass(unit.strike), target);
       // Aparado: aço no aço solta faísca (só entre quem tem arma de metal: carros e bichos, não)
       if (unit.matter !== "WOOD" && target.matter !== "WOOD") combatFx(scene)?.spark(unit, target);
       continue;
     }
     target.takeDamage(unit.outgoingDamage(target), unit, time, "MELEE");
     if (unit.meleeShock > 0) target.shock(unit.meleeShock);
-    sfx.clash(target);
+    // O golpe que entrou soa conforme o que o alvo veste e do que ele é feito
+    battle.melee(woundSurface(target.strike), weaponClass(unit.strike), target);
     if (charging) chargeImpact(scene, unit, target, units, time);
   }
 }

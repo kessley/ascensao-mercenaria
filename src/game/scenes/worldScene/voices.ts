@@ -1,5 +1,11 @@
 import { Battalion } from "../../entities/Battalion";
 import type { Enemy } from "../../entities/Enemy";
+import { Unit } from "../../entities/Unit";
+import { insideTown } from "../../world/townLayout";
+import { geoOf } from "../../worldgen/geoMap";
+import { fieldSound } from "../../../audio/fieldLoops";
+import { census, groundKind, type FieldUnit, type Ground } from "../../../audio/hitRules";
+import type { Point } from "../../../utils/math";
 import type { EnemySquad } from "../../systems/EnemySquad";
 import { useGameStore } from "../../../store/useGameStore";
 import { FATIGUE } from "../../../utils/constants";
@@ -16,6 +22,27 @@ import type { WorldScene } from "../WorldScene";
  * As vozes do campo (S1): quem responde à seleção e à ordem, quem grita de medo, de cansaço e de
  * vitória, e o que o inimigo berra. Uma parte da `WorldScene`: os métodos entram no protótipo dela.
  */
+
+/** De quanto em quanto tempo a cena conta quem se ouve (ms). */
+const CENSUS_MS = 150;
+/** Quem trocou golpes há menos que isto está lutando (ms). */
+const FIGHTING_MS = 1300;
+
+/** Passa as unidades para a contagem sem criar um objeto por unidade a cada vez. */
+function* heardUnits(units: readonly Unit[], time: number): Generator<FieldUnit> {
+  const u: FieldUnit = { x: 0, y: 0, moving: false, mounted: false, fighting: false, fast: false };
+  for (const s of units) {
+    if (!s.isAlive || s.strike.vehicle) continue;
+    const fleeing = s.unitState === "FLEEING";
+    u.x = s.x;
+    u.y = s.y;
+    u.moving = fleeing || s.unitState === "MOVING";
+    u.mounted = s.mounted;
+    u.fighting = !s.ranged && !!s.target && time - s.lastAttackAt < FIGHTING_MS;
+    u.fast = fleeing || s.isCharging;
+    yield u;
+  }
+}
 
 /** De quanto em quanto tempo a cena olha quem mudou de ânimo (ms). */
 const WATCH_MS = 200;
@@ -83,6 +110,31 @@ export const voicesMethods = {
   selectionBark(this: WorldScene, battalions: readonly Battalion[], scouts: readonly OrderRecipient[]): void {
     const first = battalions.find((b) => !b.isDestroyed) ?? scouts[0];
     if (first) this.troopSays(first, "select", { floor: 0.5 });
+  },
+
+  /** O chão que se ouve num ponto: ponte, pedra das estradas e das ruas, neve, lama ou grama. */
+  soundGround(this: WorldScene, p: Point): Ground {
+    const terrain = Unit.terrain;
+    const t = terrain?.typeAt(p.x, p.y) ?? "GRASS";
+    const snowBelow = terrain?.season.snowBelow ?? null;
+    const wet = this.weather === "RAIN" || this.weather === "STORM";
+    return groundKind(t, {
+      snow: snowBelow !== null && geoOf(this.world.geo).temperatureAt(p.x, p.y) < snowBelow,
+      muddy: this.season === "SPRING" || wet,
+      paved: this.nav.isRoad(p.x, p.y) || this.settlementLayer.layouts.some((l) => insideTown(l, p)),
+    });
+  },
+
+  /**
+   * Os sons contínuos do campo: conta quem luta, quem cavalga e quem marcha ao alcance do ouvido,
+   * e entrega ao rugido da linha, aos cascos e à marcha.
+   */
+  updateFieldSound(this: WorldScene, time: number, units: readonly Unit[]): void {
+    if (time - this.fieldSoundAt < CENSUS_MS) return;
+    this.fieldSoundAt = time;
+    const c = census(heardUnits(units, time), (x, y) => AudioEngine.audibility(x, y));
+    const walkers = c.marching.n > 0 ? c.marching : c.hooves;
+    fieldSound.update(c, walkers.n > 0 ? this.soundGround(walkers) : "grass");
   },
 
   /**

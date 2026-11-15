@@ -56,6 +56,7 @@ import { BALANCE, COMBAT, SUPPORT, GEO, TERRAIN, WORLD, WORLD_HEIGHT, WORLD_WIDT
 import { NO_FAITH_DAY, keptToday } from "../sim/faith";
 import { AudioEngine } from "../../audio/AudioEngine";
 import { sfx, startCampfireAmbience, stopCampfireAmbience } from "../../audio/sounds";
+import { fieldSound } from "../../audio/fieldLoops";
 import { distance, type Point } from "../../utils/math";
 import { type BattleKeys, type PendingDelivery, type Engagement, type ScenarioRun, type GateRule, inRect, SNAPSHOT_MS } from "./worldScene/shared";
 import { armyMethods, type ArmyMethods } from "./worldScene/army";
@@ -170,6 +171,7 @@ export class WorldScene extends Phaser.Scene {
   engagement: Engagement | null = null;
   /** As vozes (S1): quando a cena olhou o ânimo de cada um pela última vez e o que viu. */
   voiceWatchAt = 0;
+  fieldSoundAt = 0;
   voiceMood = new WeakMap<Battalion, number>();
   squadPanic = new WeakMap<EnemySquad, boolean>();
   nextTauntAt = 0;
@@ -618,6 +620,7 @@ export class WorldScene extends Phaser.Scene {
     this.setupInput();
     this.setupMagic();
     startCampfireAmbience();
+    fieldSound.start();
     this.syncContract();
     this.syncCalamities();
     this.syncSiege();
@@ -687,6 +690,7 @@ export class WorldScene extends Phaser.Scene {
       activeScene = null;
       this.stopSlowMotion();
       stopCampfireAmbience();
+      fieldSound.stop();
       AudioEngine.setPaused(false);
       useGameStore.getState().setCampPrompt(null);
       Unit.darkness = 0;
@@ -706,7 +710,11 @@ export class WorldScene extends Phaser.Scene {
     const wake = (_sys: unknown, data?: { after?: string | null; text?: string }) => this.onWake(data);
     this.events.on(Phaser.Scenes.Events.WAKE, wake);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.WAKE, wake));
-    const sleep = () => this.stopSlowMotion();
+    const sleep = () => {
+      this.stopSlowMotion();
+      // A cena dorme (interior, cidade, duelo): o campo se cala
+      fieldSound.quiet();
+    };
     this.events.on(Phaser.Scenes.Events.SLEEP, sleep);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.SLEEP, sleep));
 
@@ -763,6 +771,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.processUiCommands();
     if (this.tacticalPause) {
+      fieldSound.quiet();
       this.updateFreeCamera(dt / timeRate());
       for (const b of this.battalions) if (!b.isDestroyed) b.drawBanner();
       this.drawDestinations();
@@ -846,6 +855,7 @@ export class WorldScene extends Phaser.Scene {
     const everyone: Unit[] = [...allies, ...active];
     setArrowField(everyone);
     resolveAttacks(this, everyone, time);
+    this.updateFieldSound(time, everyone);
     this.combatFx.update(time, dt, everyone, Unit.lod);
     this.updateMagic(time, dt, everyone);
     this.hosts.afterCombat(hostWorld);

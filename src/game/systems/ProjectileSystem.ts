@@ -4,7 +4,8 @@ import { scatterPoint, victimAt, volleySpread } from "../sim/combatRules";
 import { COMBAT } from "../../utils/constants";
 import { combatFx, type Flight } from "../world/CombatEffects";
 import { distance, type Point } from "../../utils/math";
-import { sfx } from "../../audio/sounds";
+import { battle } from "../../audio/combatSounds";
+import { arrowSurface } from "../../audio/hitRules";
 
 /** Quem está em campo agora: uma flecha que cai não escolhe lado. A cena atualiza a cada quadro. */
 let field: readonly Unit[] = [];
@@ -19,9 +20,14 @@ const inTheWay = (u: Unit) => u.isAlive && u.strayTarget;
 /** A queda: acerta quem estiver ali (true) ou finca no chão (false). */
 function land(scene: Phaser.Scene, shooter: Unit, at: Point, damage: number): boolean {
   const victim = victimAt(field.filter(inTheWay), at);
-  if (!victim) return false;
+  if (!victim) {
+    battle.arrowLand("ground", at);
+    return false;
+  }
+  const before = victim.hp;
   victim.takeDamage(damage, shooter, scene.time.now, "RANGED");
-  sfx.arrowHit(at);
+  // Sem dano: o escudo parou (ou ele se esquivou)
+  battle.arrowLand(arrowSurface(victim.strike, victim.hp === before), at);
   return true;
 }
 
@@ -38,6 +44,8 @@ function launch(scene: Phaser.Scene, shooter: Unit, from: Point, to: Point, dama
     if (flight) fx?.land(flight, !hit);
   });
   flight = fx?.launch(shooter.missile, from, to, flat, timer) ?? null;
+  // A flecha de voo longo assobia no meio do caminho
+  if (!flat && duration > 450) battle.whistle({ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 });
 }
 
 /**
@@ -50,7 +58,7 @@ export function fireVolley(scene: Phaser.Scene, shooter: Unit, target: Unit): vo
   const aim = { x: target.x, y: target.y };
   const spread = volleySpread(distance(from, aim), shooter.spread, shooter.volleySize);
   const damage = shooter.outgoingDamage(target) / shooter.volley;
-  sfx.bowShot(from);
+  battle.shot(shooter.missile, from);
   shooter.spendAmmo();
   for (let i = 0; i < shooter.volley; i++) launch(scene, shooter, from, scatterPoint(from, aim, spread), damage);
 }

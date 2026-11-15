@@ -3,7 +3,7 @@ import { Unit } from "../entities/Unit";
 import { wallOutward, type Gate, type Rect, type TownLayout } from "../world/townLayout";
 import { gateBarPiece, gateDebrisPiece, gateDoorPiece, ladderPiece, type Culture } from "../art/buildings";
 import { vehicleLook } from "../art/looks";
-import { sfx } from "../../audio/sounds";
+import { battle } from "../../audio/combatSounds";
 import { pieceImage } from "../world/TownArt";
 import { COLORS, GEO, SIEGE } from "../../utils/constants";
 import { angleTo, distance, type Point } from "../../utils/math";
@@ -173,6 +173,7 @@ export class SiegeWorks {
     this.ladders.push(rect);
     this.draw();
     this.onChange();
+    battle.ladder({ x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 });
     return rect;
   }
 
@@ -221,9 +222,14 @@ export class SiegeWorks {
   /** Golpes num portão (aríete ou machado). */
   batter(g: SiegeGate, damage: number): void {
     if (g.broken) return;
+    const before = g.hp / g.maxHp;
     g.hp -= damage;
+    // O portão avisa antes de cair: racha a dois terços e a um terço
+    const after = g.hp / g.maxHp;
+    if (g.hp > 0 && ((before > 2 / 3 && after <= 2 / 3) || (before > 1 / 3 && after <= 1 / 3))) battle.gateCrack(g.gate);
     if (g.hp > 0) return;
     g.broken = true;
+    battle.gateFall(g.gate);
     this.draw();
     this.onChange();
     this.onGateDown(g.gate);
@@ -253,7 +259,7 @@ export class SiegeWorks {
     if (time - r.lastAttackAt >= SIEGE.RAM_SWING_MS) {
       r.lastAttackAt = time;
       r.setFacing(angleTo(r, g.gate));
-      sfx.charge(r);
+      battle.ram(g.gate);
     }
     this.batter(g, SIEGE.RAM_DPS * dt);
   }

@@ -57,6 +57,8 @@ function makeNoise(ctx: BaseAudioContext): AudioBuffer {
 class AudioEngineImpl {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
+  private meter: AnalyserNode | null = null;
   private buses: Record<Bus, GainNode> | null = null;
   private noise: AudioBuffer | null = null;
   private listener = { x: 0, y: 0, halfWidth: 640, hearing: 1400 };
@@ -95,6 +97,7 @@ class AudioEngineImpl {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.2;
       limiter.connect(ctx.destination);
+      this.limiter = limiter;
       this.master = ctx.createGain();
       this.master.connect(limiter);
       const buses = {} as Record<Bus, GainNode>;
@@ -135,6 +138,11 @@ class AudioEngineImpl {
   /** Quanto se ouve, de 0 a 1, um som nesta posição do mundo (0 = longe demais). */
   audibility(x: number, y: number): number {
     return placeSound(x - this.listener.x, y - this.listener.y, this.listener.hearing, this.listener.halfWidth)?.gain ?? 0;
+  }
+
+  /** De que lado vem um som nesta posição do mundo (−1 esquerda, 1 direita). */
+  panOf(x: number, y: number): number {
+    return placeSound(x - this.listener.x, y - this.listener.y, Infinity, this.listener.halfWidth)?.pan ?? 0;
   }
 
   /** Um alarme está tocando agora? (as vozes esperam) */
@@ -184,6 +192,28 @@ class AudioEngineImpl {
     if (!import.meta.env.DEV) return;
     this.log.push({ name, bus, at: now, alarm });
     if (this.log.length > LOG_MAX) this.log.splice(0, this.log.length - LOG_MAX);
+  }
+
+  /**
+   * O que está saindo agora, depois do limitador: o pico e a média (RMS) das últimas amostras.
+   * É por aqui que os testes conferem que uma batalha grande não estoura.
+   */
+  outputLevel(): { peak: number; rms: number } {
+    if (!this.ctx || !this.limiter) return { peak: 0, rms: 0 };
+    if (!this.meter) {
+      this.meter = this.ctx.createAnalyser();
+      this.meter.fftSize = 2048;
+      this.limiter.connect(this.meter);
+    }
+    const buf = new Float32Array(this.meter.fftSize);
+    this.meter.getFloatTimeDomainData(buf);
+    let peak = 0;
+    let sq = 0;
+    for (const v of buf) {
+      peak = Math.max(peak, Math.abs(v));
+      sq += v * v;
+    }
+    return { peak, rms: Math.sqrt(sq / buf.length) };
   }
 
   /** Quantos sons estão soando agora, em todos os canais. */
@@ -312,7 +342,7 @@ class AudioEngineImpl {
     if (!this.master || !this.buses || !this.ctx) return;
     const t = this.ctx.currentTime;
     const v = this.settings.muted ? 0 : this.settings.volume;
-    this.master.gain.setTargetAtTime(v * 0.8, t, 0.02);
+    this.master.gain.setTargetAtTime(v, t, 0.02);
     for (const b of BUSES) {
       if (ramp <= 0) this.buses[b].gain.value = this.busLevel(b);
       else this.buses[b].gain.setTargetAtTime(this.busLevel(b), t, ramp);

@@ -3,6 +3,8 @@ import { BALANCE, COMBAT, GEO, SIEGE, TERRAIN, TIME, WEATHER, type AttackKind, t
 import { distance, type Point } from "../../utils/math";
 import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/combatRules";
 import { sfx } from "../../audio/sounds";
+import { battle } from "../../audio/combatSounds";
+import { BARE, type StrikeLook } from "../../audio/hitRules";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
 import { flameKey, LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
@@ -245,6 +247,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.sprite = null;
     this.skin = null;
     this.look = look;
+    this.strike = look
+      ? { weapon: look.weapon, shield: look.shield !== "NONE", armor: look.armor, skeleton: look.body === "SKELETON" && !look.beast, vehicle: !!look.vehicle, beast: !!look.beast }
+      : BARE;
     if (!look) return;
     this.skin = skinOf(this.scene, look);
     this.sprite = new Phaser.GameObjects.Image(this.scene, 0, this.feetY, this.skin.full, 0);
@@ -254,6 +259,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     this.setFacing(this.facing);
     this.applyLod();
   }
+
+  /** O que o som precisa saber desta figura (S1): a arma, o escudo, a armadura e do que ela é feita. */
+  strike: StrikeLook = BARE;
 
   /** Do que é feito quem leva o golpe (G6): sangue; osso nos mortos-vivos; lasca nos carros. */
   get matter(): Matter {
@@ -846,7 +854,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   }
 
   protected die(): void {
-    sfx.death(this);
+    const matter = this.matter;
+    battle.fall(matter === "BONE" || matter === "WOOD" ? matter : "BLOOD", this.mounted, this);
     this.unitState = "DEAD";
     combatFx(this.scene)?.fall(this);
     this.target = null;

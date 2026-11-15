@@ -18,19 +18,6 @@ const swing: SoundRecipe = (ctx, out, { pitch, noise }) => {
   noiseBurst(ctx, out, noise, { filter: "bandpass", freq: 700 * pitch, freqEnd: 2200 * pitch, q: 2, dur: 0.18, attack: 0.04, gain: 0.45 });
 };
 
-const bowShot: SoundRecipe = (ctx, out, { pitch, noise }) => {
-  tone(ctx, out, { type: "triangle", freq: 190 * pitch, freqEnd: 120 * pitch, dur: 0.09, gain: 0.25 });
-  noiseBurst(ctx, out, noise, { filter: "highpass", freq: 3200, freqEnd: 1200, dur: 0.14, attack: 0.01, gain: 0.18, delay: 0.02 });
-};
-
-const arrowHit: SoundRecipe = (ctx, out, { pitch, noise }) => {
-  noiseBurst(ctx, out, noise, { filter: "lowpass", freq: 700 * pitch, dur: 0.06, gain: 0.4 });
-};
-
-const death: SoundRecipe = (ctx, out, { pitch, noise }) => {
-  tone(ctx, out, { type: "sine", freq: 150 * pitch, freqEnd: 55, dur: 0.28, gain: 0.35 });
-  noiseBurst(ctx, out, noise, { filter: "lowpass", freq: 380, dur: 0.18, gain: 0.3 });
-};
 
 const dodge: SoundRecipe = (ctx, out, { noise }) => {
   noiseBurst(ctx, out, noise, { filter: "bandpass", freq: 1400, freqEnd: 3200, q: 2, dur: 0.11, attack: 0.02, gain: 0.18 });
@@ -96,9 +83,7 @@ type Pos = Pick<PlayOptions, "x" | "y">;
 export const sfx = {
   clash: (p: Pos) => AudioEngine.play("clash", clash, { ...p, pitch: jitter(), volume: 0.55 }, 35, 6),
   swing: (p: Pos) => AudioEngine.play("swing", swing, { ...p, pitch: jitter() }, 60, 2),
-  bowShot: (p: Pos) => AudioEngine.play("bow", bowShot, { ...p, pitch: jitter(), volume: 0.6 }, 40, 5),
-  arrowHit: (p: Pos) => AudioEngine.play("arrowHit", arrowHit, { ...p, pitch: jitter(), volume: 0.5 }, 40, 5),
-  death: (p: Pos) => AudioEngine.play("death", death, { ...p, pitch: jitter(), volume: 0.7 }, 60, 4),
+
   dodge: (p: Pos) => AudioEngine.play("dodge", dodge, { ...p }, 120, 2),
   charge: (p: Pos) => AudioEngine.play("charge", chargeImpact, { ...p }, 150, 2),
   banner: (p: Pos) => AudioEngine.play("banner", bannerFlap, { ...p }, 300, 1),
