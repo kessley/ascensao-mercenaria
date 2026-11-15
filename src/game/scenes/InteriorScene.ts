@@ -14,6 +14,7 @@ import { commanderLook, folkLook, nobleLook, troopLook } from "../art/looks";
 import type { Look } from "../art/figures";
 import { seedFromText } from "../worldgen/rng";
 import { PIXEL_FONT } from "../art/font";
+import { playUi } from "../../audio/uiSounds";
 
 /** Ao entrar: qual prédio e para onde o Comandante volta ao sair. */
 export interface InteriorData {
@@ -493,6 +494,7 @@ export class InteriorScene extends Phaser.Scene {
     this.leaving = true;
     const store = useGameStore.getState();
     store.setCampPrompt(null);
+    playUi("door");
     const finish = () => {
       useGameStore.getState().leaveInterior();
       const after = this.after;

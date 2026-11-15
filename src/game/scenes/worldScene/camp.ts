@@ -18,6 +18,7 @@ import { campMoraleBonus, dailyRations, startingMorale } from "../../../utils/ec
 import { darknessAt, hourOf } from "../../../utils/time";
 import { distance, type Point } from "../../../utils/math";
 import { isFactionFriend } from "./shared";
+import { playUi } from "../../../audio/uiSounds";
 import type { WorldScene } from "../WorldScene";
 
 /**
@@ -318,6 +319,8 @@ export const campMethods = {
     const cam = this.cameras.main;
     cam.fadeOut(160, 0, 0, 0);
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      // Entrar pelo portão da cidade ou pela porta da casa
+      playUi(capital ? "gate" : "door");
       if (capital) this.scene.launch("CapitalScene", { townId: capital });
       else this.scene.launch("InteriorScene", { key: spot.enter, title: spot.label });
       this.scene.sleep();

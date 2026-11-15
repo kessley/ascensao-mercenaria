@@ -27,6 +27,7 @@ import { paintCapitalBase, paveCapital } from "../world/capitalPaint";
 import { createRng, seedFromText } from "../worldgen/rng";
 import type { WorldScene } from "./WorldScene";
 import { PIXEL_FONT } from "../art/font";
+import { playUi } from "../../audio/uiSounds";
 
 export interface CapitalData {
   townId: string;
@@ -886,6 +887,7 @@ export class CapitalScene extends Phaser.Scene {
   private enter(key: string, title: string): void {
     const s = useGameStore.getState();
     s.setCampPrompt(null);
+    playUi("door");
     this.cameras.main.fadeOut(160, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.launch("InteriorScene", { key: `town:${this.townId}:${key}`, title, returnTo: "CapitalScene" });
@@ -999,6 +1001,7 @@ export class CapitalScene extends Phaser.Scene {
     const s = useGameStore.getState();
     s.setCampPrompt(null);
     s.setDialog(null);
+    playUi("gate");
     const finish = () => {
       if (this.clock > 0) this.world().advanceAbroad(this.clock);
       useGameStore.getState().setCity(null);

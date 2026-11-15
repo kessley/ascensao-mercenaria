@@ -83,14 +83,6 @@ const victory: SoundRecipe = (ctx, out) =>
 const defeat: SoundRecipe = (ctx, out) =>
   brass(ctx, out, [[392, 0.45], [311, 0.45], [262, 1.2]], 0.18, 1200);
 
-const coin: SoundRecipe = (ctx, out, { pitch }) => {
-  tone(ctx, out, { type: "sine", freq: 2100 * pitch, dur: 0.12, gain: 0.12 });
-  tone(ctx, out, { type: "sine", freq: 2800 * pitch, dur: 0.16, gain: 0.1, delay: 0.06 });
-};
-
-const click: SoundRecipe = (ctx, out) => {
-  tone(ctx, out, { type: "square", freq: 620, dur: 0.035, gain: 0.06 });
-};
 
 const footstepThud: SoundRecipe = (ctx, out, { noise }) => {
   noiseBurst(ctx, out, noise, { filter: "lowpass", freq: 220, dur: 0.07, gain: 0.25 });
@@ -115,8 +107,7 @@ export const sfx = {
   messengerHorn: (p: Pos) => AudioEngine.play("messengerHorn", messengerHorn, { ...p, volume: 0.8 }, 150, 2),
   victory: () => AudioEngine.play("victory", victory, {}, 2000, 1),
   defeat: () => AudioEngine.play("defeat", defeat, {}, 2000, 1),
-  coin: (gain: boolean) => AudioEngine.play("coin", coin, { pitch: gain ? 1.15 : 0.85 }, 80, 2),
-  click: () => AudioEngine.play("click", click, {}, 40, 2),
+
   thud: (p: Pos) => AudioEngine.play("thud", footstepThud, { ...p, volume: 0.6 }, 120, 1),
 };
 
