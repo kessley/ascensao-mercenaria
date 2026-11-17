@@ -17,12 +17,13 @@ import { culture } from "./culture.mjs";
 import { atmosphere } from "./atmosphere.mjs";
 import { magic } from "./magic.mjs";
 import { saves } from "./saves.mjs";
+import { sound } from "./sound.mjs";
 
 /**
  * Batalhas de verdade, medidas no jogo: `npm run test:battle` (com `npm run dev` rodando).
  * Para rodar só parte: `npm run test:battle -- arquearia`.
  */
-const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, duelos: duels, cercos: sieges, mar: sea, lendas: legacy, progressao: progression, locais: sites, fortaleza: fortress, interface: ui, cultura: culture, atmosfera: atmosphere, magia: magic, saves };
+const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, duelos: duels, cercos: sieges, mar: sea, lendas: legacy, progressao: progression, locais: sites, fortaleza: fortress, interface: ui, cultura: culture, atmosfera: atmosphere, magia: magic, saves, som: sound };
 
 const chosen = process.argv.slice(2);
 const names = chosen.length > 0 ? chosen : Object.keys(SUITES);

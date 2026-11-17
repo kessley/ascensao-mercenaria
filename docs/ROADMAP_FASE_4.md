@@ -4,7 +4,7 @@
 
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
-- **Nenhuma etapa começou.** A primeira é o som.
+- **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md). A próxima é a régua e a bancada.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -67,7 +67,7 @@ O usuário deixou estas escolhas com o plano.
 
 | # | Etapa | Tipo | Por que aqui | Estado |
 | --- | --- | --- | --- | --- |
-| 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando) | som | Pedido para já; não mexe no equilíbrio | a fazer |
+| 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada) | ferramenta e dívida | Medir antes de mudar o combate | a fazer |
 | 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | a fazer |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
@@ -92,7 +92,7 @@ O usuário deixou estas escolhas com o plano.
 
 ---
 
-## 1. S1 — Som, parte 1: a voz do bando
+## 1. S1 — Som, parte 1: a voz do bando ✅ OK
 **Objetivo:** toda ação responde com um som, e dá para saber o que acontece sem olhar.
 
 **O espírito:** em *Age of Empires II*, a tropa responde quando é escolhida e quando recebe ordem, cada prédio tem um som próprio, o sino avisa do ataque antes de a tela mostrar, e subir de era tem fanfarra. É isso que se quer aqui. **Nada é copiado de lá:** os sons são feitos no código do jogo, e a fala das tropas é inventada.
@@ -151,6 +151,17 @@ O usuário deixou estas escolhas com o plano.
 - os cinco volumes ficam guardados.
 
 **A pergunta para o usuário:** com o som ligado, ficou mais gostoso de mexer? Algum som cansa?
+
+**Como ficou** (17 de novembro, em seis partes, cada uma com o seu commit). O inventário completo está em [SOM.md](SOM.md).
+1. **A mesa de som:** os cinco canais, com os volumes guardados; o alarme abaixa os outros e a voz abaixa o ambiente; a porteira por som e por canal; o limitador; a pausa cala o combate.
+2. **A fala inventada:** o sintetizador de voz (fonte, três filtros de vogal, ruído de consoante). As palavras saem das sílabas de cada cultura. Há timbre por tropa, por pessoa (tenente, capitão e Comandante, tirado da semente) e por espécie inimiga.
+3. **A interface e a assinatura de cada lugar** (as partes 3 e 4 do plano, juntas): os cliques de quatro pesos, os painéis, os livros, o mapa, as fanfarras e 17 sons de lugar.
+4. **O combate inteiro:** o golpe por material e por arma, a flecha do tiro à chegada, a salva, o cerco, e os três laços do campo (o rugido da linha, os cascos e a marcha conforme o chão).
+5. **Alarmes e sinais:** os dez da lista, cada um com o seu som e uma seta na borda da tela. Clicar na seta leva a câmera até lá. Um alarme menor que chega durante um maior espera a vez.
+6. **O inventário e a suíte `som`:** 23 verificações no navegador. Uma delas põe 1600 soldados lutando: ficaram no máximo 30 sons juntos, o combate no teto de 28, e a saída com pico de 0,58. A bateria inteira deu 470 de 473: as falhas são a suíte `cercos` (o WebGL que some, parte 3 da etapa 2) e uma checagem da `ia` que passa rodando a suíte sozinha.
+
+- **Ficou para depois** (está no inventário): o duelo, a magia e as trombetas de ordem ainda usam os sons de antes. O ambiente é a S2 e a música, a S3.
+- **O que só jogando se sabe:** os volumes foram igualados por medição (o pico e a média de cada som), não de ouvido. Se algum som cansa depois de muitas repetições, só o jogo dirá.
 
 ## 2. A régua e a bancada
 **Objetivo:** medir o começo de hoje e deixar a bancada de testes inteira antes de mexer no combate.

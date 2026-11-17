@@ -48,7 +48,7 @@ O que ficou de fora e a avaliação das mecânicas: [Fase 3, seção "Pendência
 | | G6 | Pixel art: atmosfera | ✅ OK |
 | | 19 | Magia do Comandante (era o Marco 8, continua por último) | ✅ OK |
 | | — | As pendências das fases anteriores (etapa 17) | partes 1 e 2 ✅ OK; as outras foram para a Fase 4 |
-| [4 — O bando que tem nome](ROADMAP_FASE_4.md) | S1 | Som: a voz do bando (mesa de som, fala inventada, interface, combate, alarmes) | a fazer |
+| [4 — O bando que tem nome](ROADMAP_FASE_4.md) | S1 | Som: a voz do bando (mesa de som, fala inventada, interface, combate, alarmes) | ✅ OK |
 | | — | A régua e a bancada (medir o começo; aliados da IA na batalha personalizada; a suíte `cercos`) | a fazer |
 | | 24 | Batalha: perícia em vez de vida, pressão, fôlego e batalhões grandes | a fazer |
 | | 25 | O Comandante em campo e o duelo de ação (8 tipos de adversário, magia, decisões) | a fazer |
