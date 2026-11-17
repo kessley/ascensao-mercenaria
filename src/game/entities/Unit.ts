@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { BALANCE, COMBAT, GEO, SIEGE, TERRAIN, TIME, WEATHER, type AttackKind, type TerrainType, type UnitStats, type Weather } from "../../utils/constants";
 import { distance, type Point } from "../../utils/math";
-import { approachOf, armorFactor, sideDamage, type Approach } from "../sim/combatRules";
+import { approachOf, armorFactor, pressureCut, sideDamage, type Approach, type Pressure } from "../sim/combatRules";
 import { sfx } from "../../audio/sounds";
 import { battle } from "../../audio/combatSounds";
 import { BARE, type StrikeLook } from "../../audio/hitRules";
@@ -133,6 +133,13 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   lastHitAt = -Infinity;
   /** O primeiro golpe que levou (tempo da cena). */
   firstHitAt = -Infinity;
+  /** Quem bateu nele de perto há pouco, quando e com que peso (a pressão do Marco 24). */
+  private pressers: Unit[] = [];
+  private pressedAt: number[] = [];
+  private pressWeight: number[] = [];
+  /** Fileira: a última olhada (a conta dos vizinhos não roda a cada golpe). */
+  private rankAt = -Infinity;
+  private rankSeen = false;
 
   /** Cavalaria: acumula distância percorrida para a investida. */
   canCharge = false;
@@ -500,6 +507,68 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return this.attack;
   }
 
+  /** Alguém bateu nele de perto agora (a investida pesa mais). */
+  notePresser(by: Unit, time: number, weight = 1): void {
+    const i = this.pressers.indexOf(by);
+    if (i >= 0) {
+      this.pressedAt[i] = time;
+      this.pressWeight[i] = Math.max(weight, time - this.pressedAt[i] > COMBAT.PRESSURE_MS ? weight : this.pressWeight[i]);
+      return;
+    }
+    this.pressers.push(by);
+    this.pressedAt.push(time);
+    this.pressWeight.push(weight);
+  }
+
+  /** Quem está em cima dele agora: vivos, de pé, que bateram há menos de PRESSURE_MS. */
+  pressure(time: number): Pressure {
+    let attackers = 0;
+    let front = 0;
+    for (let i = this.pressers.length - 1; i >= 0; i--) {
+      const u = this.pressers[i];
+      if (!u.isAlive || time - this.pressedAt[i] > COMBAT.PRESSURE_MS) {
+        this.pressers.splice(i, 1);
+        this.pressedAt.splice(i, 1);
+        this.pressWeight.splice(i, 1);
+        continue;
+      }
+      attackers += this.pressWeight[i];
+      if (this.approachOf(u) === "FRONT") front += this.pressWeight[i];
+    }
+    return { attackers, front, inRank: attackers > 1 && this.inRank(time), shieldWall: this.inShieldWall };
+  }
+
+  /** Quantos estão em cima dele agora (sem peso): a leitura da guarda aberta. */
+  pressedBy(time: number): number {
+    let n = 0;
+    for (let i = 0; i < this.pressers.length; i++) if (this.pressers[i].isAlive && time - this.pressedAt[i] <= COMBAT.PRESSURE_MS) n++;
+    return n;
+  }
+
+  /** Os vizinhos de fileira (tropa em formação). Sem formação, ninguém: luta sozinho. */
+  protected rankmates(): readonly Unit[] {
+    return [];
+  }
+
+  /** Está numa parede de escudos. */
+  get inShieldWall(): boolean {
+    return false;
+  }
+
+  /** Tem um vizinho de pé na fileira (olhado no máximo a cada 250 ms). */
+  inRank(time: number): boolean {
+    if (time - this.rankAt < 250) return this.rankSeen;
+    this.rankAt = time;
+    const gap = (COMBAT.RANK_GAP + this.radius) ** 2;
+    this.rankSeen = this.rankmates().some((u) => u !== this && u.isAlive && u.unitState !== "FLEEING" && (u.x - this.x) ** 2 + (u.y - this.y) ** 2 <= gap);
+    return this.rankSeen;
+  }
+
+  /** Quanto do aparo e da esquiva a pressão de agora tira (0 a 1). */
+  pressedCut(time: number): number {
+    return pressureCut(this.pressure(time));
+  }
+
   /** Defesa agora: derrubado, não apara nada; subindo a escada, apara mal. */
   defenseSkill(time: number): number {
     if (time < this.stunnedUntil) return 0;
@@ -740,7 +809,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
 
   takeDamage(amount: number, source: Unit, time: number, kind: AttackKind = "MELEE"): void {
     if (!this.isAlive) return;
-    if (this.evasion > 0 && Math.random() < this.evasion) {
+    // A esquiva cai com a pressão, como a defesa: cercado, não há para onde pular
+    if (this.evasion > 0 && Math.random() < this.evasion * (1 - this.pressedCut(time))) {
       this.floatText("esquiva", "#c6ff8a");
       sfx.dodge(this);
       return;

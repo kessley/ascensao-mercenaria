@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approachOf, armorFactor, chargePush, cycleStep, defenseAt, hitChance, scatterPoint, sideDamage, victimAt, volleySpread } from "../../src/game/sim/combatRules";
+import { approachOf, armorFactor, chargePush, cycleStep, defenseAt, hitChance, pressedHit, pressureCut, scatterPoint, sideDamage, victimAt, volleySpread, type Pressure } from "../../src/game/sim/combatRules";
 import { COMBAT } from "../../src/utils/constants";
 
 const at = { x: 0, y: 0 };
@@ -156,5 +156,40 @@ describe("investida", () => {
     expect(cycleStep({ phase: "IN", hitAt: 1000 }, 1000 + COMBAT.CYCLE_HIT_MS, false)).toBe("WITHDRAW");
     expect(cycleStep({ phase: "OUT", hitAt: null }, 5000, false)).toBe("WAIT");
     expect(cycleStep({ phase: "OUT", hitAt: null }, 5000, true)).toBe("CHARGE");
+  });
+});
+
+describe("pressão (Marco 24): ninguém segura uma multidão", () => {
+  const p = (o: Partial<Pressure>): Pressure => ({ attackers: 1, front: 1, inRank: false, shieldWall: false, ...o });
+
+  it("um atacante não pesa; cada um a mais tira 20% da defesa na fileira e 30% sozinho", () => {
+    expect(pressureCut(p({}))).toBe(0);
+    expect(pressureCut(p({ attackers: 2, front: 2, inRank: true }))).toBeCloseTo(0.2);
+    expect(pressureCut(p({ attackers: 3, front: 1, inRank: true }))).toBeCloseTo(0.4);
+    expect(pressureCut(p({ attackers: 2, front: 2 }))).toBeCloseTo(0.3);
+    expect(pressureCut(p({ attackers: 3, front: 1 }))).toBeCloseTo(0.6);
+  });
+
+  it("na fileira o teto é 60%; sozinho, 90%", () => {
+    expect(pressureCut(p({ attackers: 6, front: 6, inRank: true }))).toBeCloseTo(COMBAT.PRESSURE_CAP_RANK);
+    expect(pressureCut(p({ attackers: 6, front: 6 }))).toBeCloseTo(COMBAT.PRESSURE_CAP_ALONE);
+  });
+
+  it("na parede de escudos, pela frente só dois contam; pelo lado, todos", () => {
+    expect(pressureCut(p({ attackers: 5, front: 5, inRank: true, shieldWall: true }))).toBeCloseTo(0.2);
+    expect(pressureCut(p({ attackers: 5, front: 3, inRank: true, shieldWall: true }))).toBeCloseTo(0.6);
+  });
+
+  it("o Comandante (defesa 70) com 4 goblins (ataque 30) batendo junto apara menos de 2 golpes em 10", () => {
+    const one = hitChance(30, 70, "FRONT");
+    expect(1 - pressedHit(one, pressureCut(p({})))).toBeCloseTo(0.85);
+    expect(1 - pressedHit(one, pressureCut(p({ attackers: 4, front: 4 })))).toBeLessThan(0.2);
+    // Com 3, ainda apara um terço: a queda é gradual
+    expect(1 - pressedHit(one, pressureCut(p({ attackers: 3, front: 3 })))).toBeGreaterThan(0.3);
+  });
+
+  it("a pressão corta o aparo, não a perícia: a chance de acerto nunca cai", () => {
+    for (const c of [0.15, 0.5, 0.92]) for (const cut of [0, 0.3, 0.9]) expect(pressedHit(c, cut)).toBeGreaterThanOrEqual(c);
+    expect(pressedHit(0.5, 0)).toBe(0.5);
   });
 });

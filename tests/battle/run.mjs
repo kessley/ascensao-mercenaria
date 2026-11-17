@@ -20,12 +20,13 @@ import { saves } from "./saves.mjs";
 import { sound } from "./sound.mjs";
 import { bench } from "./bench.mjs";
 import { baseline } from "./baseline.mjs";
+import { skill } from "./skill.mjs";
 
 /**
  * Batalhas de verdade, medidas no jogo: `npm run test:battle` (com `npm run dev` rodando).
  * Para rodar só parte: `npm run test:battle -- arquearia`.
  */
-const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, duelos: duels, cercos: sieges, mar: sea, lendas: legacy, progressao: progression, locais: sites, fortaleza: fortress, interface: ui, cultura: culture, atmosfera: atmosphere, magia: magic, saves, som: sound, bancada: bench, linha: baseline };
+const SUITES = { mecanica: mechanics, arquearia: archery, confrontos: matchups, ia: ai, missoes: missions, companhias: companies, duelos: duels, cercos: sieges, mar: sea, lendas: legacy, progressao: progression, locais: sites, fortaleza: fortress, interface: ui, cultura: culture, atmosfera: atmosphere, magia: magic, saves, som: sound, bancada: bench, linha: baseline, pericia: skill };
 
 const chosen = process.argv.slice(2);
 const names = chosen.length > 0 ? chosen : Object.keys(SUITES);

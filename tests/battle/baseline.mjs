@@ -57,7 +57,7 @@ function brawl() {
 }
 
 /** O Comandante sozinho no meio de `n` goblins: quantos golpes ele apara e quanto aguenta. */
-function surrounded(n, immortal) {
+export function surrounded(n, immortal) {
   const lab = window.__lab;
   const w = window.__world;
   lab.freezeAI();

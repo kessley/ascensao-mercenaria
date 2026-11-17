@@ -1,7 +1,7 @@
 import type Phaser from "phaser";
 import type { Unit } from "../entities/Unit";
 import { fireVolley } from "./ProjectileSystem";
-import { chargePush, hitChance } from "../sim/combatRules";
+import { chargePush, hitChance, pressedHit } from "../sim/combatRules";
 import { COMBAT } from "../../utils/constants";
 import { angleTo, distance } from "../../utils/math";
 import { battle } from "../../audio/combatSounds";
@@ -63,9 +63,11 @@ export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time
       breakCharge(scene, unit, target, time);
       continue;
     }
-    // A investida sempre chega; o golpe comum pode errar ou ser aparado
+    // Quem bateu entra na conta da pressão (a investida pesa por dois)
+    target.notePresser(unit, time, charging ? COMBAT.PRESSURE_CHARGE_WEIGHT : 1);
+    // A investida sempre chega; o golpe comum pode errar ou ser aparado, e cercado apara menos
     const approach = target.approachOf(unit);
-    if (!charging && Math.random() > hitChance(unit.meleeSkill(), target.defenseSkill(time), approach)) {
+    if (!charging && Math.random() > pressedHit(hitChance(unit.meleeSkill(), target.defenseSkill(time), approach), target.pressedCut(time))) {
       // O golpe que não entrou: no escudo, aço no aço, ou no ar
       battle.melee(parrySurface(unit.strike, target.strike, approach === "FRONT"), weaponClass(unit.strike), target);
       // Aparado: aço no aço solta faísca (só entre quem tem arma de metal: carros e bichos, não)

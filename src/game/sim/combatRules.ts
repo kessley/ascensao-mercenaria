@@ -28,6 +28,38 @@ export function hitChance(attack: number, defense: number, approach: Approach): 
   return clamp(COMBAT.HIT_BASE + (attack - defenseAt(defense, approach)) / 100, COMBAT.HIT_MIN, COMBAT.HIT_MAX);
 }
 
+/** Quem está em cima de alguém agora (já pesado: a investida conta por dois). */
+export interface Pressure {
+  /** Todos os atacantes de perto. */
+  attackers: number;
+  /** Os que vêm pela frente. */
+  front: number;
+  /** Tem vizinho de pé na fileira. */
+  inRank: boolean;
+  /** Está numa parede de escudos. */
+  shieldWall: boolean;
+}
+
+/**
+ * Pressão (Marco 24): a fração da chance de aparar (e de desviar) que se perde por ter vários em
+ * cima. Cada atacante além do primeiro tira um tanto; na parede de escudos, pela frente só cabem
+ * dois. Na fileira o teto é baixo; sozinho, quase nada sobra: ninguém segura uma multidão.
+ */
+export function pressureCut(p: Pressure): number {
+  const front = p.shieldWall ? Math.min(p.front, COMBAT.PRESSURE_SHIELD_FRONT) : p.front;
+  const n = front + Math.max(0, p.attackers - p.front);
+  const cut = Math.max(0, n - 1) * (p.inRank ? COMBAT.PRESSURE_PER_ATTACKER : COMBAT.PRESSURE_PER_ATTACKER_ALONE);
+  return Math.min(cut, p.inRank ? COMBAT.PRESSURE_CAP_RANK : COMBAT.PRESSURE_CAP_ALONE);
+}
+
+/**
+ * A chance de acerto com a pressão: o que se corta é o aparo, e não a perícia. Até o goblin fraco
+ * acerta quem tem seis em cima, porque ninguém apara seis lâminas de uma vez.
+ */
+export function pressedHit(chance: number, cut: number): number {
+  return 1 - (1 - chance) * (1 - cut);
+}
+
 /** Fração do dano que passa pela armadura. */
 export function armorFactor(armor: number, pierce: number): number {
   return 1 - armor * (1 - pierce);

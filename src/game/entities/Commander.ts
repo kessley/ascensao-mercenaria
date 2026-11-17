@@ -105,6 +105,7 @@ export class Commander extends Unit {
     for (const enemy of enemies) {
       if (!enemy.isAlive || !this.inRange(enemy)) continue;
       if (angleDiff(this.facing, angleTo(this, enemy)) <= BALANCE.COMMANDER_SWING_ARC) {
+        enemy.notePresser(this, time);
         enemy.takeDamage(this.outgoingDamage(enemy), this, time);
       }
     }

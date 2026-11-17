@@ -1372,6 +1372,25 @@ export const COMBAT = {
   HIT_BASE: 0.5,
   HIT_MIN: 0.15,
   HIT_MAX: 0.92,
+  /**
+   * Pressão (Marco 24): quem bateu de perto nos últimos PRESSURE_MS conta. Cada atacante além do
+   * primeiro tira PRESSURE_PER_ATTACKER da defesa (e da esquiva), até o teto: numa fileira, os
+   * vizinhos seguram parte; sozinho (o Comandante, um herói, quem se isolou), quase nada sobra.
+   */
+  PRESSURE_MS: 1500,
+  PRESSURE_PER_ATTACKER: 0.2,
+  /** Sozinho, cada um a mais pesa mais: não há vizinho que apare o golpe que vem de lado. */
+  PRESSURE_PER_ATTACKER_ALONE: 0.3,
+  PRESSURE_CAP_RANK: 0.6,
+  PRESSURE_CAP_ALONE: 0.9,
+  /** A cavalaria em investida pesa por dois. */
+  PRESSURE_CHARGE_WEIGHT: 2,
+  /** Na parede de escudos, pela frente só cabem estes. */
+  PRESSURE_SHIELD_FRONT: 2,
+  /** Um vizinho de pé a até esta distância (px) faz fileira. */
+  RANK_GAP: 46,
+  /** A IA fecha o cerco: quem está isolado parece mais perto (multiplica a distância na escolha do alvo). */
+  ISOLATED_LURE: 0.7,
   /** Moral: o choque de ser pego pelo lado (no máximo uma vez a cada tanto) e o de ver vizinhos fugirem. */
   FLANK_SHOCK: 10,
   FLANK_SHOCK_EVERY_MS: 8000,

@@ -5,7 +5,7 @@
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
 - **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
-- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: a parte 0, a linha de base, está feita.
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: a parte 0 (a linha de base) e a parte 2 (a pressão) estão feitas.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -70,7 +70,7 @@ O usuário deixou estas escolhas com o plano.
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
-| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (parte 0 feita) |
+| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 e 2 feitas) |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
 | 6 | [Marco 27 — O mundo refeito: lugares vivos](#6-marco-27--o-mundo-refeito-lugares-vivos) | recurso e arte | A única mudança no gerador; os marcos seguintes moram nele | a fazer |
@@ -230,7 +230,7 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
    - O nível soma ataque e defesa: +5 de cada por nível. Deixa de somar vida e dano.
    - Os inimigos também têm nível: a horda veterana acerta mais, e não aguenta mais.
    - As habilidades que mexem em vida e dano continuam como estão.
-2. **Pressão** (`entities/Unit.ts`, `systems/CombatSystem.ts`).
+2. **Pressão** (`entities/Unit.ts`, `systems/CombatSystem.ts`) — ✅ feita em 17 de novembro (veio antes da parte 1, por ser a mais urgente).
    - Cada unidade lembra quem a atacou nos últimos 1,5 s.
    - Cada atacante além do primeiro tira 20% da defesa, até 60%. O lado do golpe continua valendo, por cima.
    - **Ninguém segura uma multidão sozinho** (pedido do usuário em 17 de novembro): quem luta sem fileira do lado (o Comandante, um herói, um capitão a pé, o soldado que se isolou) não tem o teto de 60%. Cada atacante a mais continua tirando 20%, até 85%. Com 6 em cima, sobra 15% da defesa: ele quase não consegue mais aparar nem desviar, como seria de verdade.
@@ -239,6 +239,12 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
    - Na parede de escudos, só dois contam pela frente.
    - A cavalaria em investida conta por dois.
    - A IA aprende as duas coisas: fechar o cerco em quem está isolado, e não deixar os seus isolados.
+   - **Como ficou:**
+     - **O que a pressão corta é o aparo, e não a perícia.** Cortar a defesa não bastava: o goblin tem ataque 30, e mesmo com a defesa do Comandante a zero ele só acertaria 80%. Agora a chance de aparar (e a de desviar) é que perde a fração: com 6 em cima, o Comandante apara uns 15%, contra qualquer inimigo.
+     - Na fileira, cada atacante a mais tira 20%, até 60%. Sozinho, tira 30%, até 90%: com 3 em cima ele ainda apara um terço; com 4 ou mais, quase nada.
+     - Fileira é ter um vizinho de pé a até 46 px, do mesmo batalhão ou esquadrão, que não esteja fugindo. O batalhão em pânico não faz fileira. O chefe e o herói inimigo lutam sozinhos, como o Comandante.
+     - A IA inimiga escolhe o alvo isolado como se estivesse 30% mais perto. "Não deixar os seus isolados" fica com a formação, que já segura cada um no seu lugar, e com a guarda do Comandante (parte 5).
+     - **Medido** (suíte `pericia`): o Comandante cercado por 6 goblins que não caem apara 15% e cai em 18 s; contra um só, apara 85%. Com 4 goblins em cima, o soldado no meio da linha apara 67%; o soldado sozinho, 6%.
 3. **Fôlego.** A fadiga de lutar já existe (`FATIGUE.COMBAT_PER_SEC`). Agora ela tira defesa: nada até 40, e 30% a menos com 100.
    - Uma linha se cansa em cerca de 2 minutos de luta seguida, e descansa fora dela.
    - **Ordem nova, "Revezar":** o batalhão da frente passa por dentro do de trás, que assume a linha, sem ninguém se desorganizar.

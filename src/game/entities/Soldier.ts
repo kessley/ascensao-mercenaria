@@ -116,6 +116,15 @@ export class Soldier extends Unit {
     return this.battalion.facing;
   }
 
+  /** A fileira é o batalhão, enquanto ele não corre. */
+  protected override rankmates(): readonly Unit[] {
+    return this.battalion.panicking ? [] : this.battalion.soldiers;
+  }
+
+  override get inShieldWall(): boolean {
+    return this.battalion.formation === "SHIELD_WALL";
+  }
+
   override shock(amount: number): void {
     this.battalion.pendingShock += amount;
   }

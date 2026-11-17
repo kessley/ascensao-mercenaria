@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Unit, type Team } from "./Unit";
-import { BALANCE, COLORS, ENEMIES, FORMATIONS, MAGIC, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
+import { BALANCE, COLORS, COMBAT, ENEMIES, FORMATIONS, MAGIC, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 import { enemyLook } from "../art/looks";
@@ -162,6 +162,15 @@ export class Enemy extends Unit {
 
   override get frontFacing(): number | null {
     return this.squad?.facing ?? null;
+  }
+
+  /** A fileira é o esquadrão; o chefe e o herói lutam sozinhos, como o Comandante. */
+  protected override rankmates(): readonly Unit[] {
+    return this.squad && !this.hero && !this.isBoss ? this.squad.soldiers : [];
+  }
+
+  override get inShieldWall(): boolean {
+    return this.squad?.formation === "SHIELD_WALL";
   }
 
   override shock(amount: number): void {
@@ -413,8 +422,9 @@ export class Enemy extends Unit {
           Enemy.onSpot?.(this, u);
           if (!this.huntsScouts) return;
         }
-        // Carroças atraem saqueadores: a comida do bando vale mais que um soldado
-        const d = distance(u, this) * u.lure;
+        // Carroças atraem saqueadores: a comida do bando vale mais que um soldado; quem está
+        // sozinho (sem vizinho de fileira) atrai o cerco
+        const d = distance(u, this) * u.lure * (u.inRank(this.scene.time.now) ? 1 : COMBAT.ISOLATED_LURE);
         if (d < bestDist) {
           best = u;
           bestDist = d;
