@@ -4,7 +4,8 @@
 
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
-- **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md). A próxima é a régua e a bancada.
+- **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O próximo é o Marco 24.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -68,7 +69,7 @@ O usuário deixou estas escolhas com o plano.
 | # | Etapa | Tipo | Por que aqui | Estado |
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
-| 2 | [A régua e a bancada](#2-a-régua-e-a-bancada) | ferramenta e dívida | Medir antes de mudar o combate | a fazer |
+| 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
 | 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | a fazer |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
@@ -163,7 +164,7 @@ O usuário deixou estas escolhas com o plano.
 - **Ficou para depois** (está no inventário): o duelo, a magia e as trombetas de ordem ainda usam os sons de antes. O ambiente é a S2 e a música, a S3.
 - **O que só jogando se sabe:** os volumes foram igualados por medição (o pico e a média de cada som), não de ouvido. Se algum som cansa depois de muitas repetições, só o jogo dirá.
 
-## 2. A régua e a bancada
+## 2. A régua e a bancada — ✅ OK
 **Objetivo:** medir o começo de hoje e deixar a bancada de testes inteira antes de mexer no combate.
 
 **Em partes:**
@@ -196,6 +197,15 @@ O usuário deixou estas escolhas com o plano.
 - a bateria passa inteira;
 - uma batalha personalizada com um aliado da IA acaba sozinha, sem o jogador.
 
+**Como ficou** (17 de novembro, em duas partes, cada uma com o seu commit; as outras duas mudaram de lugar):
+1. **O diário de ritmo** (`src/dev/paceLog.ts`, só no modo de desenvolvimento): o tempo em cada estado, a primeira luta, as decisões, as missões da porta à porta e quanto cada inimigo leva para cair. F9 abre o painel; no console, `__pace.report()`.
+2. **A bancada de batalha:** na batalha personalizada, uma força pode ser **aliada**. Ela usa o mesmo `WarHost` dos inimigos, nasce do lado do bando (azul, com o anel de aliado), enxerga para ele e vai atrás da força inimiga mais perto. Não conta como inimiga no placar nem na vitória; a tela final mostra quantos dela ficaram de pé e quantos ela derrubou. Até 3 **capitães** no cenário, com nome, comando, tática, postura inicial e companhia.
+   - Cada unidade ganhou um lado de verdade: o aliado da IA conta como nosso no fogo amigo, na baixa creditada, no choque da carga e no empurrão. O fogo amigo do inimigo virou um contador à parte.
+   - A suíte `bancada` (10 verificações): a batalha com um aliado da IA acabou sozinha, em 52 s; duas linhas iguais de 20 soldados da IA se pegaram aos 6 s, e uma quebrou 26 s depois.
+- **Mudou de lugar** (17 de novembro, depois de uma pergunta do usuário): o Marco 24 refaz o combate e recalibra as verificações de batalha, então consertar agora o que ele vai quebrar não faz sentido.
+  - **Parte 3, a suíte `cercos`:** rodando sozinha, passa inteira (39 de 39). O WebGL só some na bateria completa. Vai para a parte 8 do Marco 24, junto com os limites novos.
+  - **Parte 4, a linha de base:** vira a parte 0 do Marco 24. A bancada mede os tempos de hoje antes de qualquer número mudar, e a coluna "Hoje" da tabela acima é preenchida lá.
+
 ## 3. Marco 24 — Batalha: perícia em vez de vida
 **Objetivo:** o inimigo forte é forte porque luta bem, e não porque demora a morrer. É a ideia do usuário, levada para todo o combate, junto com os batalhões grandes.
 
@@ -207,6 +217,7 @@ O usuário deixou estas escolhas com o plano.
 - o batalhão tem 8 soldados, e o arco alcança 230.
 
 **Em partes:**
+0. **A linha de base** (era a parte 4 da etapa 2). Antes de mudar qualquer número, a bancada mede como está hoje e preenche a coluna "Hoje" da tabela da etapa 2: um soldado contra um goblin, dois soldados iguais, a escaramuça de um batalhão, a batalha média e o Comandante cercado. Sem isso não dá para dizer se ficou melhor.
 1. **Perícia** (`utils/progression.ts`, `sim/combatRules.ts`).
    - O nível soma ataque e defesa: +5 de cada por nível. Deixa de somar vida e dano.
    - Os inimigos também têm nível: a horda veterana acerta mais, e não aguenta mais.
@@ -214,6 +225,9 @@ O usuário deixou estas escolhas com o plano.
 2. **Pressão** (`entities/Unit.ts`, `systems/CombatSystem.ts`).
    - Cada unidade lembra quem a atacou nos últimos 1,5 s.
    - Cada atacante além do primeiro tira 20% da defesa, até 60%. O lado do golpe continua valendo, por cima.
+   - **Ninguém segura uma multidão sozinho** (pedido do usuário em 17 de novembro): quem luta sem fileira do lado (o Comandante, um herói, um capitão a pé, o soldado que se isolou) não tem o teto de 60%. Cada atacante a mais continua tirando 20%, até 85%. Com 6 em cima, sobra 15% da defesa: ele quase não consegue mais aparar nem desviar, como seria de verdade.
+   - A esquiva (do batedor, do mensageiro e, no Marco 25, a do Comandante no duelo de ação e em campo) cai na mesma conta.
+   - A saída é não ficar sozinho: a guarda do Comandante (parte 5), recuar para dentro da linha, ou a investida que abre o cerco.
    - Na parede de escudos, só dois contam pela frente.
    - A cavalaria em investida conta por dois.
    - A IA aprende as duas coisas: fechar o cerco em quem está isolado, e não deixar os seus isolados.
@@ -270,6 +284,7 @@ O usuário deixou estas escolhas com o plano.
 | Infantaria nível 5 contra goblin | acerta 62%; 24 s | acerta 82%; cerca de 7 s |
 | Goblin contra infantaria nível 5, de frente | acerta 32% | acerta 15% |
 | O mesmo veterano cercado por 4 goblins | o da frente acerta 32% | o da frente acerta 53% |
+| O Comandante sozinho, cercado por 6 | medir na parte 0 | ele apara ou desvia de menos de 2 golpes em cada 10 |
 | Senhor da Guerra, de frente | um soldado acerta 36% | um soldado acerta 15% |
 | Senhor da Guerra, cercado por 4 | só o lado do golpe muda | os soldados acertam 60% ou mais, e ele cai em menos de meio minuto |
 
@@ -283,6 +298,7 @@ O usuário deixou estas escolhas com o plano.
 **Pronto quando:**
 - um batalhão veterano vence dois de novatos do mesmo tipo em 7 de 10 lutas, com a mesma vida deles;
 - o Comandante cai em menos de 10 s cercado por 5, sem a guarda, e aguenta com ela;
+- cercado por 6, o Comandante sozinho apara ou desvia de menos de 2 golpes em cada 10;
 - o Senhor da Guerra cai por manobra, e não por minutos de pancada de frente;
 - revezar a linha a tempo vence uma luta que, sem revezar, se perde;
 - os tempos da tabela da etapa 2 ficam dentro dos alvos;
