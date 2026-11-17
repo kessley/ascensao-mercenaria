@@ -57,6 +57,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   static pace = 1;
   /** Flecha caiu sobre gente do próprio lado (a cena conta e avisa). */
   static onFriendlyFire: ((victim: Unit, shooter: Unit) => void) | null = null;
+  /** Alguém caiu (o diário de ritmo, no modo de desenvolvimento, mede quanto ele levou para cair). */
+  static onFall: ((u: Unit, firstHitAt: number) => void) | null = null;
   /** Nível de detalhe das figuras (a cena troca junto com o zoom). */
   static lod: Lod = "FULL";
   /** Onde os mortos ficam caídos (a cena do mundo liga; sem ela, quem morre some). */
@@ -129,6 +131,8 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   lastAttackAt = -Infinity;
   lastHitFrom: Unit | null = null;
   lastHitAt = -Infinity;
+  /** O primeiro golpe que levou (tempo da cena). */
+  firstHitAt = -Infinity;
 
   /** Cavalaria: acumula distância percorrida para a investida. */
   canCharge = false;
@@ -742,6 +746,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     else {
       this.lastHitFrom = source;
       this.lastHitAt = time;
+      if (this.firstHitAt === -Infinity) this.firstHitAt = time;
       // Revida quem bateu se não estiver ocupado com outro alvo
       if (source.isAlive && (!this.target || !this.target.isAlive)) this.target = source;
     }
@@ -854,6 +859,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   }
 
   protected die(): void {
+    Unit.onFall?.(this, this.firstHitAt);
     const matter = this.matter;
     battle.fall(matter === "BONE" || matter === "WOOD" ? matter : "BLOOD", this.mounted, this);
     this.unitState = "DEAD";

@@ -7,6 +7,8 @@ import { installPixelFrames } from "./ui/pixelFrames";
 import "./index.css";
 
 installStoreSounds();
+// O diário de ritmo (Fase 4, etapa 2): só no modo de desenvolvimento
+if (import.meta.env.DEV) void import("./dev/paceLog").then((m) => m.installPaceLog());
 // As molduras e os botões (G5): imagens feitas por código, postas como variáveis do CSS
 installPixelFrames();
 
