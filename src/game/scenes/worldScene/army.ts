@@ -174,6 +174,7 @@ export const armyMethods = {
     if (!site) return;
     scaleGroups(site.groups, DIFFICULTY[contract.difficulty].enemyMultiplier).forEach((group, i) => {
       const units = this.spawnEnemyGroup(group, { kind: "CONTRACT", contractId: contract.id }, undefined, true);
+      for (const u of units) u.setLevel(DIFFICULTY[contract.difficulty].level);
       this.contractEnemies.push(...units);
       this.attachGroup(`contract:${contract.id}:${i}`, units);
     });

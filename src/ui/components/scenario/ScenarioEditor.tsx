@@ -43,6 +43,8 @@ const inputClass = "w-full rounded border border-neutral-600 bg-neutral-900 px-2
 const COMPETENCE = ["Novato", "Experiente", "Capaz", "Veterano", "Grande capitão"];
 /** Do 3 em diante, o bravo, o cruel e o ambicioso procuram o Comandante para um duelo (Marco 21). */
 const DUEL_HANDS = ["mão fraca", "razoável", "herói", "temido", "campeão"];
+/** Nível da tropa inimiga (Marco 24): cada um soma 5 de ataque e de defesa. */
+const TROOP_LEVELS = ["recrutas", "treinados", "experientes", "veteranos", "elite"];
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -240,7 +242,7 @@ function ForceEditor({ force, index, siege, onChange, onRemove }: { force: Scena
   // Só há "atrás dos muros" quando os muros são do inimigo (e o aliado não fica lá); lá dentro, ou no assalto, o inimigo não escolhe o que fazer
   const sides = (Object.entries(FORCE_SIDES) as [ForceSide, string][]).filter(([id]) => id !== "WALLS" || (siege?.role === "ATTACK" && !allied));
   const fixed = force.side === "WALLS" || (siege?.role === "DEFEND" && !allied);
-  const setFaction = (id: EnemyFactionId) => onChange({ ...newForce(id), id: force.id, side: force.side, stance: force.stance, delay: force.delay, competence: force.competence, trait: force.trait, chief: force.chief, duel: force.duel, ...(allied ? { allied } : {}) });
+  const setFaction = (id: EnemyFactionId) => onChange({ ...newForce(id), id: force.id, side: force.side, stance: force.stance, delay: force.delay, competence: force.competence, trait: force.trait, chief: force.chief, duel: force.duel, level: force.level, ...(allied ? { allied } : {}) });
   const setAllied = (on: boolean) => {
     const { allied: _, ...rest } = force;
     onChange(on ? { ...rest, allied: true, side: force.side === "WALLS" ? "FRONT" : force.side } : rest);
@@ -278,7 +280,7 @@ function ForceEditor({ force, index, siege, onChange, onRemove }: { force: Scena
           <Count key={kind} label={ENEMIES[kind].label} value={force.units[kind] ?? 0} min={0} max={SCENARIO_LIMITS.UNITS} step={2} onChange={(n) => onChange({ ...force, units: { ...force.units, [kind]: n } })} />
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Field label="Comandante (vazio = sorteado)">
           <input value={force.chief} maxLength={40} onChange={(e) => onChange({ ...force, chief: e.target.value })} className={inputClass} />
         </Field>
@@ -289,6 +291,12 @@ function ForceEditor({ force, index, siege, onChange, onRemove }: { force: Scena
           value={String(force.duel ?? 0)}
           options={[["0", "Pela competência"], ...DUEL_HANDS.map((text, i): [string, string] => [String(i + 1), `${i + 1} · ${text}`])]}
           onChange={(v) => onChange({ ...force, duel: Number(v) || undefined })}
+        />
+        <Pick<string>
+          label="Nível da tropa"
+          value={String(force.level ?? 1)}
+          options={TROOP_LEVELS.map((text, i): [string, string] => [String(i + 1), `${i + 1} · ${text}`])}
+          onChange={(v) => onChange({ ...force, level: Number(v) > 1 ? Number(v) : undefined })}
         />
       </div>
       {!fixed && force.stance === "HOLD" && force.delay > 0 && <p className="text-xs text-neutral-400">Quem chega depois e espera em posição só luta se você for até lá.</p>}

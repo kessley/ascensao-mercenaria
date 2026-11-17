@@ -19,6 +19,8 @@ export interface EnemySave {
   hp: number;
   color?: number;
   owner: Enemy["owner"];
+  /** Nível da tropa (Marco 24); sem valor, 1. */
+  level?: number;
 }
 
 /** Retrato do campo: o que só a cena sabe. */

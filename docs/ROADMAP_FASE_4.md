@@ -5,7 +5,7 @@
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
 - **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
-- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: a parte 0 (a linha de base) e a parte 2 (a pressão) estão feitas.
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: a parte 0 (a linha de base), a 1 (a perícia) e a 2 (a pressão) estão feitas.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -70,7 +70,7 @@ O usuário deixou estas escolhas com o plano.
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
-| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 e 2 feitas) |
+| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0, 1 e 2 feitas) |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
 | 6 | [Marco 27 — O mundo refeito: lugares vivos](#6-marco-27--o-mundo-refeito-lugares-vivos) | recurso e arte | A única mudança no gerador; os marcos seguintes moram nele | a fazer |
@@ -226,10 +226,16 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
    - O dano não sobe para 50% de saída. O número sai da medida: o soldado mata o goblin em 7 a 9 s, sozinho. Dobrar o dano deixaria as batalhas, que já são curtas, mais curtas ainda.
    - A batalha média tem de durar de 3 a 6 minutos. Quem segura isso é a moral (o goblin que foge cedo demais), o fôlego e os batalhões grandes (parte 7), e não a vida.
    - A pressão é a mudança mais urgente: hoje o Comandante apara 80% dos golpes com 6 em cima.
-1. **Perícia** (`utils/progression.ts`, `sim/combatRules.ts`).
+1. **Perícia** (`utils/progression.ts`, `sim/combatRules.ts`) — ✅ feita em 17 de novembro.
    - O nível soma ataque e defesa: +5 de cada por nível. Deixa de somar vida e dano.
    - Os inimigos também têm nível: a horda veterana acerta mais, e não aguenta mais.
    - As habilidades que mexem em vida e dano continuam como estão.
+   - **Como ficou:**
+     - Quem atira também ganha com o nível: a dispersão das flechas cai 5% por nível (20% no nível 5). Sem isso, o arqueiro veterano não valeria nada a mais de longe.
+     - O inimigo ganha nível de três jeitos. O contrato difícil tem tropa de nível 2. Os exércitos dos reinos e as hordas são de nível 2; os outros bandos, de nível 1. Na batalha personalizada, cada força escolhe o nível da tropa, de 1 (recrutas) a 5 (elite). Os cenários prontos de bandidos e de orcs vêm com nível 2, e o do reino com nível 3.
+     - O nível do inimigo vai no save. A ficha do batalhão mostra "Ataque e defesa +N".
+     - A força de um batalhão nas expedições passa a contar a perícia (o quanto ele acerta e apara contra um soldado comum).
+     - **Medido** (suíte `pericia`): a infantaria nível 5 acerta o goblin 83%, e a de nível 1, 57%. Na conta, 82% e 62%.
 2. **Pressão** (`entities/Unit.ts`, `systems/CombatSystem.ts`) — ✅ feita em 17 de novembro (veio antes da parte 1, por ser a mais urgente).
    - Cada unidade lembra quem a atacou nos últimos 1,5 s.
    - Cada atacante além do primeiro tira 20% da defesa, até 60%. O lado do golpe continua valendo, por cima.
@@ -244,7 +250,7 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
      - Na fileira, cada atacante a mais tira 20%, até 60%. Sozinho, tira 30%, até 90%: com 3 em cima ele ainda apara um terço; com 4 ou mais, quase nada.
      - Fileira é ter um vizinho de pé a até 46 px, do mesmo batalhão ou esquadrão, que não esteja fugindo. O batalhão em pânico não faz fileira. O chefe e o herói inimigo lutam sozinhos, como o Comandante.
      - A IA inimiga escolhe o alvo isolado como se estivesse 30% mais perto. "Não deixar os seus isolados" fica com a formação, que já segura cada um no seu lugar, e com a guarda do Comandante (parte 5).
-     - **Medido** (suíte `pericia`): o Comandante cercado por 6 goblins que não caem apara 15% e cai em 18 s; contra um só, apara 85%. Com 4 goblins em cima, o soldado no meio da linha apara 67%; o soldado sozinho, 6%.
+     - **Medido** (suíte `pericia`, com centenas de golpes): o Comandante cercado por 6 goblins apara de 7% a 12%, e cai em 11 a 18 s; contra um só, apara 85%. Com 4 goblins em cima, o soldado no meio da linha apara 67%; o soldado sozinho, 6%.
 3. **Fôlego.** A fadiga de lutar já existe (`FATIGUE.COMBAT_PER_SEC`). Agora ela tira defesa: nada até 40, e 30% a menos com 100.
    - Uma linha se cansa em cerca de 2 minutos de luta seguida, e descansa fora dela.
    - **Ordem nova, "Revezar":** o batalhão da frente passa por dentro do de trás, que assume a linha, sem ninguém se desorganizar.
@@ -295,7 +301,7 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
 | Caso | Hoje | Depois |
 | --- | --- | --- |
 | Infantaria nível 1 contra goblin | acerta 62%; 11 s para matar (medido) | acerta 62%; cerca de 9 s |
-| Infantaria nível 5 contra goblin | acerta 62%; 9,8 s (medido) | acerta 82%; cerca de 7 s |
+| Infantaria nível 5 contra goblin | acerta 62%; 9,8 s (medido) | acerta 82% (medido: 83%); cerca de 7 s |
 | Goblin contra infantaria nível 5, de frente | acerta 32% | acerta 15% |
 | O mesmo veterano cercado por 4 goblins | o da frente acerta 32% | o da frente acerta 53% |
 | O Comandante sozinho, cercado por 6 | apara 81% dos golpes | ele apara ou desvia de menos de 2 golpes em cada 10 |

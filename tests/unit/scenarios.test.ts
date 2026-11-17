@@ -241,3 +241,18 @@ describe("forças aliadas e capitães (Fase 4, etapa 2)", () => {
     expect(back.army.captains?.[1].command).toBe(5);
   });
 });
+
+describe("nível da tropa inimiga (Marco 24)", () => {
+  it("o nível vai junto no cenário salvo, entre 1 e 5; o 1 não se escreve", () => {
+    const s = blankScenario();
+    const vet = { ...newForce("ORCS"), level: 3 };
+    const wild = { ...newForce("ORCS"), level: 9 };
+    const plain = { ...newForce("ORCS"), level: 1 };
+    const back = cleanScenario(JSON.parse(JSON.stringify({ ...s, forces: [vet, wild, plain] })));
+    expect(back.forces.map((f) => f.level)).toEqual([3, 5, undefined]);
+  });
+
+  it("os cenários prontos de exército de verdade trazem veteranos", () => {
+    expect(PRESET_SCENARIOS.some((p) => p.forces.some((f) => (f.level ?? 1) >= 3))).toBe(true);
+  });
+});

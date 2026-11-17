@@ -106,8 +106,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   /** No alto da muralha: alcança mais, bate mais forte, apanha menos de flecha. */
   onWall = false;
   /** Perícia, defesa, armadura e escudo (ver `UnitStats`). */
-  readonly attack: number;
-  readonly defense: number;
+  /** Perícia de ataque e de defesa (o nível do inimigo soma nelas: ver `Enemy.setLevel`). */
+  attack: number;
+  defense: number;
   readonly armor: number;
   readonly shieldBlock: number;
   readonly pierce: number;
@@ -117,7 +118,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
   readonly nerve: number;
   readonly mounted: boolean;
   readonly chargePower: number;
-  readonly spread: number;
+  spread: number;
   readonly volley: number;
   readonly flatShot: boolean;
   readonly kite: boolean;

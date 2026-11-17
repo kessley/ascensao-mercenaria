@@ -67,10 +67,11 @@ export interface EconomyContext {
   relationOf: (factionId: string) => number;
 }
 
-export const DIFFICULTY: Record<Difficulty, { label: string; enemyMultiplier: number; advance: number; reward: number }> = {
-  1: { label: "Fácil", enemyMultiplier: 0.7, advance: 20, reward: 70 },
-  2: { label: "Média", enemyMultiplier: 1, advance: 30, reward: 110 },
-  3: { label: "Difícil", enemyMultiplier: 1.4, advance: 45, reward: 170 },
+/** Tamanho do grupo, pagamento e o nível da tropa que espera (Marco 24: o difícil tem veteranos). */
+export const DIFFICULTY: Record<Difficulty, { label: string; enemyMultiplier: number; advance: number; reward: number; level: number }> = {
+  1: { label: "Fácil", enemyMultiplier: 0.7, advance: 20, reward: 70, level: 1 },
+  2: { label: "Média", enemyMultiplier: 1, advance: 30, reward: 110, level: 1 },
+  3: { label: "Difícil", enemyMultiplier: 1.4, advance: 45, reward: 170, level: 2 },
 };
 
 const TEMPLATES: Record<SiteTheme, { title: string; description: string }[]> = {

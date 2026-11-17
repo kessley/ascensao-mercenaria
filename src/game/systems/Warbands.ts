@@ -2,7 +2,7 @@ import type { Enemy } from "../entities/Enemy";
 import { clampToWorldBounds } from "../data/world";
 import { chiefName } from "../worldgen/names";
 import { isCalamityOwner, isRaiderKind, type BandKind, type CalamityKind, type Settlement } from "../sim/realm";
-import { AGENTS, WAR_AI, WORLD, type EnemyKind, type Good } from "../../utils/constants";
+import { AGENTS, PROGRESSION, WAR_AI, WORLD, type EnemyKind, type Good } from "../../utils/constants";
 import { centroid, distance, type Point } from "../../utils/math";
 import { makeStaff, promoteRoster, type Doctrine, type StaffData, type WallPlan, type WarHost } from "./WarHost";
 
@@ -47,6 +47,8 @@ export interface BandSpec {
   chief?: { name: string; traits: StaffData["traits"]; martial?: number };
   /** Lição aprendida com derrotas: o que reforçar neste exército. */
   doctrine?: Doctrine;
+  /** Nível da tropa (Marco 24); sem valor, sai do tipo de bando. */
+  level?: number;
 }
 
 /** Um integrante do bando enquanto ele é só dados (fora da bolha de detalhe). */
@@ -74,6 +76,8 @@ export interface Warband {
   storming?: boolean;
   calamityKind?: CalamityKind;
   color?: number;
+  /** Nível da tropa (Marco 24): soma na perícia de cada um. */
+  level?: number;
   materialized: boolean;
   roster: BandMember[];
   members: Enemy[];
@@ -263,6 +267,7 @@ export class WarbandManager {
       ownerId: spec.ownerId,
       calamityKind: spec.calamityKind,
       color: spec.color,
+      level: spec.level ?? PROGRESSION.BAND_LEVEL[spec.kind] ?? 1,
       materialized: false,
       roster: kinds.map((kind, i) => ({
         kind,
@@ -492,6 +497,7 @@ export class WarbandManager {
         ownerId: b.ownerId,
         calamityKind: b.calamityKind,
         color: b.color,
+        level: b.level,
         roster: b.materialized
           ? b.members.filter((m) => m.isAlive).map((m) => ({ kind: m.kind, hp: m.hp, offset: { x: m.x - b.anchor.x, y: m.y - b.anchor.y } }))
           : b.roster.map((r) => ({ ...r, hp: Number.isFinite(r.hp) ? r.hp : -1 })),
@@ -542,6 +548,7 @@ export class WarbandManager {
     band.materialized = true;
     band.members = band.roster.map((r) => {
       const e = this.spawn(band.anchor.x + r.offset.x, band.anchor.y + r.offset.y, r.kind, band.color);
+      if (band.level && band.level > 1) e.setLevel(band.level);
       if (Number.isFinite(r.hp)) e.restoreHp(r.hp);
       e.owner = { kind: "WARBAND", id: band.id };
       // Patrulhas, mensageiros, refugiados e caravanas nascem em paz (a cena acerta a guerra no quadro seguinte)

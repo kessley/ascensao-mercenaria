@@ -85,6 +85,8 @@ export interface ScenarioForce {
   chief: string;
   /** Mão do comandante no um contra um, de 1 a 5 (Marco 21); sem valor, sai da competência. */
   duel?: number;
+  /** Nível da tropa, de 1 a 5 (Marco 24): soma ataque e defesa; sem valor, 1. */
+  level?: number;
   /**
    * Força aliada (Fase 4, etapa 2): luta do lado do bando, com o mesmo comando dos inimigos
    * (`WarHost`), mas o jogador não manda nela. Começa perto do bando e vai atrás do inimigo.
@@ -690,7 +692,7 @@ export const PRESET_SCENARIOS: readonly BattleScenario[] = [
     season: "AUTUMN",
     weather: "FOG",
     army: { battalions: [B("INFANTRY", 2, 1, true), B("INFANTRY", 2), B("ARCHERS", 2)], scouts: 2, messengers: 1, wagons: 2 },
-    forces: [force("BANDITS", { BANDIT: 18, BANDIT_ARCHER: 8, BANDIT_JAVELIN: 6, BANDIT_RIDER: 4 }, { competence: 4, trait: "CUNNING", stance: "HOLD" })],
+    forces: [force("BANDITS", { BANDIT: 18, BANDIT_ARCHER: 8, BANDIT_JAVELIN: 6, BANDIT_RIDER: 4 }, { competence: 4, trait: "CUNNING", stance: "HOLD", level: 2 })],
   }),
   preset("colina-do-rei", {
     name: "A Colina do Rei",
@@ -698,7 +700,7 @@ export const PRESET_SCENARIOS: readonly BattleScenario[] = [
     map: "HILL",
     distance: 1800,
     army: { battalions: [B("HEAVY", 3, 1, true), B("INFANTRY", 3, 1), B("SPEARMEN", 3, 1), B("ARCHERS", 3, 1), B("CROSSBOW", 3, 1), B("KNIGHTS", 3, 1, true)], scouts: 1, messengers: 2, wagons: 0 },
-    forces: [force("KINGDOM", { SOLDIER: 22, PIKEMAN: 10, MAN_AT_ARMS: 6, CROSSBOW: 8, LONGBOW: 6, LANCER: 6, OUTRIDER: 2 }, { competence: 4, trait: "HONORABLE", stance: "HOLD" })],
+    forces: [force("KINGDOM", { SOLDIER: 22, PIKEMAN: 10, MAN_AT_ARMS: 6, CROSSBOW: 8, LONGBOW: 6, LANCER: 6, OUTRIDER: 2 }, { competence: 4, trait: "HONORABLE", stance: "HOLD", level: 3 })],
   }),
   preset("vau-de-sangue", {
     name: "O Vau de Sangue",
@@ -707,7 +709,7 @@ export const PRESET_SCENARIOS: readonly BattleScenario[] = [
     season: "SPRING",
     weather: "RAIN",
     army: { battalions: [B("INFANTRY", 3, 2, true), B("SPEARMEN", 3, 2), B("HEAVY", 3, 1), B("ARCHERS", 3, 1)], scouts: 1, messengers: 2, wagons: 0 },
-    forces: [force("ORCS", { ORC: 14, ORC_BRUTE: 3, GOBLIN_ARCHER: 8, WOLF_RIDER: 5 }, { competence: 3, trait: "CRUEL" })],
+    forces: [force("ORCS", { ORC: 14, ORC_BRUTE: 3, GOBLIN_ARCHER: 8, WOLF_RIDER: 5 }, { competence: 3, trait: "CRUEL", level: 2 })],
   }),
   preset("ponte-dos-mortos", {
     name: "A Ponte dos Mortos",
@@ -877,6 +879,7 @@ function cleanForce(raw: Partial<ScenarioForce>): ScenarioForce {
     trait: oneOf<NobleTrait>(raw.trait, FORCE_TRAITS, "BRAVE"),
     chief: typeof raw.chief === "string" ? raw.chief.slice(0, 40) : "",
     ...(typeof raw.duel === "number" ? { duel: clamp(raw.duel, 1, 5, 3) } : {}),
+    ...(typeof raw.level === "number" && raw.level > 1 ? { level: clamp(raw.level, 1, 5, 1) } : {}),
     ...(raw.allied ? { allied: true } : {}),
   };
 }

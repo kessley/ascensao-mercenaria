@@ -30,7 +30,7 @@ export const saveMethods = {
     const enemies: EnemySave[] = this.enemies
       // Guarnições e bichos não vão no save: voltam a aparecer quando o bando chega perto
       .filter((e) => e.isAlive && e.owner?.kind !== "WARBAND" && e.owner?.kind !== "MUTINY" && e.owner?.kind !== "GARRISON" && e.owner?.kind !== "WILDLIFE" && e.owner?.kind !== "SITE")
-      .map((e) => ({ kind: e.kind, x: e.x, y: e.y, hp: e.hp, color: e.bodyColor, owner: e.owner }));
+      .map((e) => ({ kind: e.kind, x: e.x, y: e.y, hp: e.hp, color: e.bodyColor, owner: e.owner, ...(e.level > 1 ? { level: e.level } : {}) }));
     return {
       commander: { x: c.x, y: c.y, hp: c.hp, facing: c.facing },
       quartered: [...this.quartered],
@@ -111,6 +111,7 @@ export const saveMethods = {
     for (const saved of field.enemies) {
       const e = this.spawnEnemy(saved.x, saved.y, saved.kind, saved.color);
       e.owner = saved.owner;
+      if (saved.level) e.setLevel(saved.level);
       e.restoreHp(saved.hp);
       if (saved.owner?.kind === "CONTRACT") this.contractEnemies.push(e);
       else if (saved.owner?.kind === "CALAMITY" && e.isBoss) {

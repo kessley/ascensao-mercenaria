@@ -1,6 +1,58 @@
 /** Marco 24: perícia em vez de vida. A pressão de ter vários em cima, a fileira e o Comandante cercado. */
 import { surrounded } from "./baseline.mjs";
 
+/** A perícia em campo: o que o nível deu ao soldado e ao goblin. */
+function skills() {
+  const w = window.__world;
+  const s = w.battalions[0].soldiers[0];
+  const e = window.__lab.allEnemies()[0];
+  return { soldier: { attack: s.attack, defense: s.defense, hp: s.maxHp }, goblin: { level: e.level, attack: e.attack, defense: e.defense, hp: e.maxHp } };
+}
+
+/** Um contra um, muitos golpes: quanto o soldado acerta o goblin (os dois não caem). */
+function hitRate() {
+  const lab = window.__lab;
+  lab.freezeAI();
+  lab.parkCommander();
+  const b = lab.battalion();
+  const s = b.soldiers[0];
+  const e = lab.allEnemies()[0];
+  lab.place(b, 4000, 3500, 0);
+  e.x = 4040;
+  e.y = 3500;
+  e.home = { x: e.x, y: e.y };
+  e.dormant = false;
+  for (const u of [s, e]) {
+    u.maxHp = 1e6;
+    u.restoreHp(1e6);
+  }
+  let swings = 0;
+  let hits = 0;
+  const play = s.playAttack.bind(s);
+  s.playAttack = (t) => {
+    if (t === e) swings++;
+    play(t);
+  };
+  const take = e.takeDamage.bind(e);
+  e.takeDamage = (amount, source, time, kind) => {
+    if (source === s && kind !== "RANGED") hits++;
+    take(amount, source, time, kind);
+  };
+  b.orderAttack(e);
+  e.target = s;
+  lab.step(120, () => {
+    b.morale = 100;
+    // Os dois de frente um para o outro (o esquadrão do goblin olha para o leste: o soldado viria pelas costas)
+    if (e.squad) {
+      e.squad.facing = Math.PI;
+      e.squad.morale = 100;
+      e.squad.panicking = false;
+    }
+    if (e.unitState === "FLEEING") e.unitState = "ATTACKING";
+  });
+  return { swings, hits, rate: swings > 0 ? Math.round((hits / swings) * 100) : null, side: e.approachOf(s), state: e.unitState };
+}
+
 /** Quatro goblins que não caem em cima de um soldado: no meio da linha do batalhão, ou sozinho. */
 function pressedSoldier(alone) {
   const lab = window.__lab;
@@ -49,13 +101,30 @@ function pressedSoldier(alone) {
 }
 
 export async function skill({ battle, ev }, { check }) {
+  // Parte 1: o nível vira perícia, para o bando e para o inimigo
+  await battle({ army: [["INFANTRY", 1, 5]], forces: [{ faction: "GOBLINS", units: { GOBLIN: 2 }, level: 3 }], distance: 2400 });
+  const vet = await ev(skills);
+  await battle({ army: [["INFANTRY", 1, 1]], forces: [{ faction: "GOBLINS", units: { GOBLIN: 2 } }], distance: 2400 });
+  const green = await ev(skills);
+  check("o nível 5 soma 20 de ataque e de defesa, e nada de vida", vet.soldier.attack === green.soldier.attack + 20 && vet.soldier.defense === green.soldier.defense + 20 && vet.soldier.hp === green.soldier.hp, JSON.stringify({ vet: vet.soldier, green: green.soldier }));
+  check("o goblin de nível 3 da batalha personalizada luta melhor, e não aguenta mais", vet.goblin.level === 3 && vet.goblin.attack === green.goblin.attack + 10 && vet.goblin.hp === green.goblin.hp, JSON.stringify({ vet: vet.goblin, green: green.goblin }));
+
+  await battle({ army: [["INFANTRY", 1, 5]], force: { GOBLIN: 1 }, faction: "GOBLINS", distance: 2400 });
+  const fiveHits = await ev(hitRate);
+  await battle({ army: [["INFANTRY", 1, 1]], force: { GOBLIN: 1 }, faction: "GOBLINS", distance: 2400 });
+  const oneHits = await ev(hitRate);
+  check("o veterano acerta o goblin bem mais que o novato (82% contra 62%)", fiveHits.rate !== null && oneHits.rate !== null && fiveHits.rate > oneHits.rate + 8, JSON.stringify({ five: fiveHits, one: oneHits }));
+
   await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
-  const six = await ev(surrounded, 6, true);
+  // Duro (não cai): centenas de golpes para contar o aparo; depois, de verdade, quanto ele aguenta
+  const six = await ev(surrounded, { n: 6, immortal: true, tough: true });
   check("cercado por 6, o Comandante sozinho apara menos de 2 golpes em 10", six.parried !== null && six.parried < 20, JSON.stringify(six));
-  check("e cai em menos de um minuto", six.fell !== null, JSON.stringify(six));
+  await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
+  const fall = await ev(surrounded, { n: 6, immortal: true });
+  check("e cai em menos de um minuto", fall.fell !== null, JSON.stringify(fall));
 
   await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 1 }, faction: "GOBLINS", distance: 2400 });
-  const one = await ev(surrounded, 1, true);
+  const one = await ev(surrounded, { n: 1, immortal: true });
   check("contra um só, ele continua aparando a maioria", one.parried !== null && one.parried >= 65, JSON.stringify(one));
 
   await battle({ army: [["INFANTRY", 8]], force: { GOBLIN: 4 }, faction: "GOBLINS", distance: 2400 });

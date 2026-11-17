@@ -57,7 +57,9 @@ function brawl() {
 }
 
 /** O Comandante sozinho no meio de `n` goblins: quantos golpes ele apara e quanto aguenta. */
-export function surrounded(n, immortal) {
+export function surrounded(opts) {
+  // `ev` passa um argumento só: o número, ou { n, immortal, tough }
+  const { n, immortal = false, tough = false } = typeof opts === "number" ? { n: opts } : opts;
   const lab = window.__lab;
   const w = window.__world;
   lab.freezeAI();
@@ -97,7 +99,11 @@ export function surrounded(n, immortal) {
     };
   });
   const t0 = w.time.now;
-  lab.step(60, () => !c.isAlive || goblins.every((e) => !e.isAlive));
+  // Duro: o Comandante não cai (para contar muitos golpes)
+  lab.step(60, () => {
+    if (tough) c.restoreHp(c.maxHp);
+    return !c.isAlive || goblins.every((e) => !e.isAlive);
+  });
   return { blows, hits, parried: blows > 0 ? Math.round(((blows - hits) / blows) * 100) : null, fell: c.isAlive ? null : Math.round((w.time.now - t0) / 100) / 10, alive: goblins.filter((e) => e.isAlive).length };
 }
 
@@ -189,12 +195,12 @@ export async function baseline({ battle, ev }, { check }) {
   // O Comandante sozinho, cercado: com goblins que não caem (para contar os golpes) e com goblins de verdade
   for (const n of [1, 3, 6]) {
     await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: Math.max(n, 1) }, faction: "GOBLINS", distance: 2400 });
-    const imm = await ev(surrounded, n, true);
+    const imm = await ev(surrounded, { n, immortal: true });
     table[`Comandante cercado por ${n}`] = imm;
     check(`linha: Comandante cercado por ${n}`, imm.blows > 0, JSON.stringify(imm));
   }
   await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
-  const real = await ev(surrounded, 6, false);
+  const real = await ev(surrounded, { n: 6 });
   table["Comandante contra 6 goblins de verdade"] = real;
   check("linha: Comandante contra 6 goblins de verdade", real.blows > 0, JSON.stringify(real));
 

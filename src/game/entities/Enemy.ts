@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Unit, type Team } from "./Unit";
-import { BALANCE, COLORS, COMBAT, ENEMIES, FORMATIONS, MAGIC, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
+import { BALANCE, COLORS, COMBAT, ENEMIES, FORMATIONS, MAGIC, PROGRESSION, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
+import { levelSkill, levelSpread } from "../../utils/progression";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 import { enemyLook } from "../art/looks";
@@ -200,6 +201,17 @@ export class Enemy extends Unit {
   /** Patrulha em paz não leva flecha perdida: ninguém começa uma guerra por acidente. */
   override get strayTarget(): boolean {
     return this.hostile || this.friendly;
+  }
+
+  /** Nível (Marco 24): a horda veterana acerta e apara mais, e não aguenta mais pancada. */
+  level = 1;
+
+  setLevel(level: number): void {
+    const gain = levelSkill(level) - levelSkill(this.level);
+    this.attack += gain;
+    this.defense += gain;
+    this.spread *= levelSpread(level) / levelSpread(this.level);
+    this.level = Math.max(1, Math.min(PROGRESSION.MAX_LEVEL, Math.round(level)));
   }
 
   override meleeSkill(): number {

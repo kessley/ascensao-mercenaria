@@ -111,11 +111,20 @@ export interface BattalionMods extends Required<Pick<SkillMods, "hp" | "damage" 
   shieldWallSpeed: number;
 }
 
+/** Ataque e defesa que o nível soma (Marco 24): +5 de cada por nível acima do 1. */
+export function levelSkill(level: number): number {
+  return PROGRESSION.SKILL_PER_LEVEL * (Math.max(1, Math.min(PROGRESSION.MAX_LEVEL, Math.round(level))) - 1);
+}
+
+/** A dispersão das flechas com o nível: o veterano erra menos o alvo. */
+export function levelSpread(level: number): number {
+  return 1 - PROGRESSION.SPREAD_PER_LEVEL * (Math.max(1, Math.min(PROGRESSION.MAX_LEVEL, Math.round(level))) - 1);
+}
+
 export function battalionMods(b: BattalionData): BattalionMods {
-  const levelBonus = 1 + PROGRESSION.LEVEL_STAT_BONUS * (b.level - 1);
   const mods: BattalionMods = {
-    hp: levelBonus,
-    damage: levelBonus * (1 + PROGRESSION.WEAPON_DAMAGE_PER_TIER * b.equipment.weapon),
+    hp: 1,
+    damage: 1 + PROGRESSION.WEAPON_DAMAGE_PER_TIER * b.equipment.weapon,
     range: 1,
     cooldown: 1,
     speed: 1,
@@ -173,17 +182,20 @@ export function battalionMods(b: BattalionData): BattalionMods {
   return mods;
 }
 
-/** Atributos de um soldado deste batalhão (base da tropa com os modificadores). */
+/** Atributos de um soldado deste batalhão (base da tropa com os modificadores e o nível). */
 export function soldierStats(b: BattalionData, mods: BattalionMods): UnitStats {
   const base = TROOPS[b.troopType].stats;
+  const skill = levelSkill(b.level);
   return {
     ...base,
+    attack: (base.attack ?? 40) + skill,
+    defense: (base.defense ?? 40) + skill,
     hp: Math.round(base.hp * mods.hp),
     damage: base.damage * mods.damage,
     range: base.range * mods.range,
     cooldown: base.cooldown * mods.cooldown,
     speed: base.speed * mods.speed,
-    ...(base.ranged ? { spread: (base.spread ?? 1) * mods.spread } : {}),
+    ...(base.ranged ? { spread: (base.spread ?? 1) * mods.spread * levelSpread(b.level) } : {}),
     ...(base.ammo === undefined ? {} : { ammo: Math.round(base.ammo * mods.ammo) }),
   };
 }
@@ -193,6 +205,7 @@ export function describeMods(b: BattalionData): string[] {
   const m = battalionMods(b);
   const pct = (x: number) => `${x >= 1 ? "+" : "−"}${Math.round(Math.abs(x - 1) * 100)}%`;
   const lines: string[] = [];
+  if (b.level > 1) lines.push(`Ataque e defesa +${levelSkill(b.level)} (nível ${b.level})`);
   if (m.hp !== 1) lines.push(`Vida ${pct(m.hp)}`);
   if (m.damage !== 1) lines.push(`Dano ${pct(m.damage)}`);
   if (m.range !== 1) lines.push(`Alcance ${pct(m.range)}`);

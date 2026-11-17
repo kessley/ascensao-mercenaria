@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SKILLS, SKILL_TREE, type SkillId } from "../../src/game/data/skills";
 import type { BattalionData } from "../../src/store/useGameStore";
-import { PROGRESSION, TROOPS, type TroopType } from "../../src/utils/constants";
-import { PROMOTIONS, battalionMods, canLearn, canPromote, canTrain, describeMods, exclusiveSkills, gainXp, promotionCost, soldierStats, trainingCost } from "../../src/utils/progression";
+import { ENEMIES, PROGRESSION, TROOPS, type TroopType } from "../../src/utils/constants";
+import { PROMOTIONS, battalionMods, canLearn, canPromote, canTrain, describeMods, exclusiveSkills, gainXp, levelSkill, levelSpread, promotionCost, soldierStats, trainingCost } from "../../src/utils/progression";
+import { hitChance } from "../../src/game/sim/combatRules";
+import { battalionStrength } from "../../src/game/sim/expeditions";
 import { migrateSkills } from "../../src/store/useGameStore";
 
 const unit = (over: Partial<BattalionData> = {}): BattalionData => ({ id: "b", name: "Teste", troopType: "INFANTRY", formation: "LINE", level: 1, xp: 0, skillPoints: 0, skills: [], equipment: { weapon: 0, armor: 0 }, totalKills: 0, soldiers: 8, maxSoldiers: 8, ...over });
@@ -202,5 +204,50 @@ describe("saves de antes da progressão da Fase 3", () => {
     const store: Record<string, unknown> = { battalions: [], convoy: null };
     migrateSkills(store);
     expect(store).toEqual({ battalions: [], convoy: null });
+  });
+});
+
+describe("perícia (Marco 24): o nível soma ataque e defesa, e não vida nem dano", () => {
+  const stats = (over: Partial<BattalionData>) => {
+    const b = unit(over);
+    return soldierStats(b, battalionMods(b));
+  };
+
+  it("+5 de ataque e de defesa por nível acima do 1", () => {
+    const one = stats({ level: 1 });
+    const five = stats({ level: 5 });
+    expect(five.attack).toBe((TROOPS.INFANTRY.stats.attack ?? 40) + 20);
+    expect(five.defense).toBe((TROOPS.INFANTRY.stats.defense ?? 40) + 20);
+    expect(one.attack).toBe(TROOPS.INFANTRY.stats.attack);
+    expect(levelSkill(1)).toBe(0);
+    expect(levelSkill(99)).toBe(levelSkill(PROGRESSION.MAX_LEVEL));
+  });
+
+  it("a vida e o dano não mudam com o nível (as armas e as habilidades continuam valendo)", () => {
+    const one = stats({ level: 1 });
+    const five = stats({ level: 5 });
+    expect(five.hp).toBe(one.hp);
+    expect(five.damage).toBe(one.damage);
+    expect(stats({ level: 5, equipment: { weapon: 2, armor: 0 } }).damage).toBeGreaterThan(one.damage);
+  });
+
+  it("os números da tabela: a infantaria nível 5 acerta o goblin 82%, e o goblin acerta ela 15%", () => {
+    const goblin = ENEMIES.GOBLIN.stats;
+    const one = stats({ level: 1 });
+    const five = stats({ level: 5 });
+    expect(hitChance(one.attack ?? 40, goblin.defense ?? 40, "FRONT")).toBeCloseTo(0.62);
+    expect(hitChance(five.attack ?? 40, goblin.defense ?? 40, "FRONT")).toBeCloseTo(0.82);
+    expect(hitChance(goblin.attack ?? 40, five.defense ?? 40, "FRONT")).toBeCloseTo(0.15);
+  });
+
+  it("quem atira erra menos com o nível", () => {
+    expect(stats({ troopType: "ARCHERS", level: 5 }).spread).toBeLessThan(stats({ troopType: "ARCHERS", level: 1 }).spread as number);
+    expect(levelSpread(1)).toBe(1);
+  });
+
+  it("o resumo mostra o que o nível dá, e a expedição conta a perícia", () => {
+    expect(describeMods(unit({ level: 3 })).join(" ")).toContain("+10");
+    expect(describeMods(unit({ level: 1 }))).toEqual([]);
+    expect(battalionStrength(unit({ level: 5 }), false)).toBeGreaterThan(battalionStrength(unit({ level: 1 }), false) * 1.3);
   });
 });

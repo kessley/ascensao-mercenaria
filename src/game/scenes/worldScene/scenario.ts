@@ -108,6 +108,7 @@ export const scenarioMethods = {
       ownerId: allied ? "PLAYER" : null,
       color: allied ? COLORS.ALLY : undefined,
       chief: force.chief ? { name: force.chief, traits: [force.trait] } : undefined,
+      level: force.level ?? 1,
     });
     // A ficha do chefe acompanha o que o cenário pediu (sem mão escolhida, sai de novo com a competência)
     const hero = band.staff?.hero && force.duel ? { ...band.staff.hero, duel: force.duel, trait: force.trait } : undefined;

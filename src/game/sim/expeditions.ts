@@ -1,4 +1,5 @@
 import { CAPTAINS, EXPEDITION, TROOPS } from "../../utils/constants";
+import { hitChance } from "./combatRules";
 import { battalionMods, gainXp, soldierStats } from "../../utils/progression";
 import { dailyRations } from "../../utils/economy";
 import type { BattalionData } from "../../store/useGameStore";
@@ -21,10 +22,14 @@ export function canDelegate(c: Contract): boolean {
   return DELEGABLE.includes(c.kind ?? "SITE");
 }
 
-/** Quanto vale um batalhão em campo: vida atrás da armadura vezes o que ele bate. */
+/**
+ * Quanto vale um batalhão em campo: vida atrás da armadura vezes o que ele bate, e a perícia
+ * (quanto ele acerta e quanto apara, contra um soldado comum).
+ */
 export function battalionStrength(b: BattalionData, led: boolean): number {
   const s = soldierStats(b, battalionMods(b));
-  const man = Math.sqrt((s.hp / (1 - (s.armor ?? 0) * 0.8)) * ((s.damage * 1000) / s.cooldown));
+  const skill = Math.sqrt(hitChance(s.attack ?? 40, 40, "FRONT") / hitChance(40, s.defense ?? 40, "FRONT"));
+  const man = Math.sqrt((s.hp / (1 - (s.armor ?? 0) * 0.8)) * ((s.damage * 1000) / s.cooldown)) * skill;
   return man * b.soldiers * (led ? EXPEDITION.LEADER_BONUS : 1);
 }
 

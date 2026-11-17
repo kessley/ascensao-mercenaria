@@ -755,8 +755,14 @@ export const PROGRESSION = {
   /** XP por sobreviver à batalha; vitória soma o bônus. */
   XP_PARTICIPATION: 15,
   XP_VICTORY: 40,
-  /** Bônus de vida e dano por nível acima do 1. */
-  LEVEL_STAT_BONUS: 0.06,
+  /**
+   * Perícia (Marco 24): cada nível acima do 1 soma ataque e defesa, e aperta a mira de quem atira.
+   * O nível não dá mais vida nem dano: o veterano é forte porque luta melhor.
+   */
+  SKILL_PER_LEVEL: 5,
+  SPREAD_PER_LEVEL: 0.05,
+  /** Nível dos inimigos de cada tipo de bando (os outros, 1): exércitos e hordas têm veteranos. */
+  BAND_LEVEL: { FACTION: 2, HORDE: 2 } as Partial<Record<string, number>>,
   /** Veteranos cobram mais: salário +10% por nível acima do 1. */
   LEVEL_WAGE_BONUS: 0.1,
 
