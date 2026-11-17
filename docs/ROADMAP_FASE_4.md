@@ -5,7 +5,7 @@
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
 - **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
-- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O próximo é o Marco 24.
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: a parte 0, a linha de base, está feita.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -70,7 +70,7 @@ O usuário deixou estas escolhas com o plano.
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
-| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | a fazer |
+| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (parte 0 feita) |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
 | 6 | [Marco 27 — O mundo refeito: lugares vivos](#6-marco-27--o-mundo-refeito-lugares-vivos) | recurso e arte | A única mudança no gerador; os marcos seguintes moram nele | a fazer |
@@ -181,16 +181,18 @@ O usuário deixou estas escolhas com o plano.
 3. **A suíte `cercos`.** Achar por que o navegador de teste perde o WebGL depois dos assaltos ao Forte da Fronteira, e fechar a bateria em 450 de 450.
 4. **A linha de base.** O laboratório joga o primeiro contrato 10 vezes, e a tabela abaixo ganha a coluna "Hoje".
 
-| O quê | Hoje | Alvo |
+| O quê | Hoje (medido em 17 de novembro, parte 0 do Marco 24) | Alvo |
 | --- | --- | --- |
-| Primeira luta da campanha | a medir | até o minuto 2 |
-| Uma decisão com custo | a medir | a cada 2 ou 3 minutos |
-| Missão curta, da porta à porta | a medir | de 4 a 8 minutos |
-| Um soldado mata um goblin sozinho | cerca de 30 s | menos de 10 s |
-| Dois soldados iguais, um contra o outro | a medir | de 12 a 20 s |
-| Escaramuça de um batalhão | de 30 a 150 s | de 1 a 2 minutos |
-| Batalha média | a medir | de 3 a 6 minutos |
+| Primeira luta da campanha | estimada: do minuto 1,5 ao 3, se o jogador aceita na hora o contrato de covil mais perto e sai marchando | até o minuto 2 |
+| Uma decisão com custo | só jogando: o diário de ritmo mede (F9) | a cada 2 ou 3 minutos |
+| Missão curta, da porta à porta | estimada: de 4 a 7 minutos (de 1 a 3 minutos de marcha para cada lado, mais a luta) | de 4 a 8 minutos |
+| Um soldado mata um goblin sozinho | 11 s (no nível 5, 9,8 s) | menos de 10 s |
+| Dois soldados iguais, um contra o outro | 24 s; o do reino sempre foge antes de cair | de 12 a 20 s |
+| Escaramuça de um batalhão | de 55 a 153 s; 8 de infantaria contra 10 goblins vencem de 1 a 3 vezes em 4 | de 1 a 2 minutos |
+| Batalha média | de 24 a 71 s de luta ("Primeiro Sangue", 24 contra 21 goblins): o goblin foge cedo | de 3 a 6 minutos |
 | Batalha campal | não existe | de 8 a 12 minutos |
+
+Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e imprime tudo de novo.
 
 **Pronto quando:**
 - a coluna "Hoje" está preenchida com números medidos;
@@ -209,15 +211,21 @@ O usuário deixou estas escolhas com o plano.
 ## 3. Marco 24 — Batalha: perícia em vez de vida
 **Objetivo:** o inimigo forte é forte porque luta bem, e não porque demora a morrer. É a ideia do usuário, levada para todo o combate, junto com os batalhões grandes.
 
-**Como é hoje** (conferido no código):
-- cada golpe certo tira só 24% do dano (`COMBAT.DAMAGE_PACE`). Um soldado leva cerca de 30 s para matar um goblin, e no nível 5 leva 24 s;
+**Como é hoje** (conferido no código e medido na parte 0):
+- cada golpe certo tira só 24% do dano (`COMBAT.DAMAGE_PACE`). A conta no papel dava 30 s para um soldado matar um goblin; **medido, são 11 s** (9,8 s no nível 5). Sozinho contra um orc, 32 s;
+- **contra um batalhão, ninguém é esponja:** 8 de infantaria derrubam um orc em 4 s e um brutamontes em 7,6 s;
+- **as batalhas são curtas:** a batalha média acaba depois de 24 a 71 s de luta, porque o goblin foge cedo. A duração vem da moral, não da vida;
+- **o Comandante apara uns 80% dos golpes, com 1, 3 ou 6 goblins em cima:** o número de atacantes não conta. Com 6 que não caem, ele aguentou de 36 s a mais de um minuto;
 - o nível dá +6% de vida e de dano (`PROGRESSION.LEVEL_STAT_BONUS`). A chance de acerto não muda;
 - a defesa cai de lado e pelas costas, mas o número de atacantes não conta;
 - o Senhor da Guerra orc tem 1200 de vida: de frente, são vários minutos de pancada;
 - o batalhão tem 8 soldados, e o arco alcança 230.
 
 **Em partes:**
-0. **A linha de base** (era a parte 4 da etapa 2). Antes de mudar qualquer número, a bancada mede como está hoje e preenche a coluna "Hoje" da tabela da etapa 2: um soldado contra um goblin, dois soldados iguais, a escaramuça de um batalhão, a batalha média e o Comandante cercado. Sem isso não dá para dizer se ficou melhor.
+0. **A linha de base** (era a parte 4 da etapa 2) — ✅ feita em 17 de novembro. A suíte `linha` mede como está hoje e preencheu a coluna "Hoje" da tabela da etapa 2. **O que ela mudou no plano:**
+   - O dano não sobe para 50% de saída. O número sai da medida: o soldado mata o goblin em 7 a 9 s, sozinho. Dobrar o dano deixaria as batalhas, que já são curtas, mais curtas ainda.
+   - A batalha média tem de durar de 3 a 6 minutos. Quem segura isso é a moral (o goblin que foge cedo demais), o fôlego e os batalhões grandes (parte 7), e não a vida.
+   - A pressão é a mudança mais urgente: hoje o Comandante apara 80% dos golpes com 6 em cima.
 1. **Perícia** (`utils/progression.ts`, `sim/combatRules.ts`).
    - O nível soma ataque e defesa: +5 de cada por nível. Deixa de somar vida e dano.
    - Os inimigos também têm nível: a horda veterana acerta mais, e não aguenta mais.
@@ -280,11 +288,11 @@ O usuário deixou estas escolhas com o plano.
 
 | Caso | Hoje | Depois |
 | --- | --- | --- |
-| Infantaria nível 1 contra goblin | acerta 62%; 30 s para matar | acerta 62%; cerca de 9 s |
-| Infantaria nível 5 contra goblin | acerta 62%; 24 s | acerta 82%; cerca de 7 s |
+| Infantaria nível 1 contra goblin | acerta 62%; 11 s para matar (medido) | acerta 62%; cerca de 9 s |
+| Infantaria nível 5 contra goblin | acerta 62%; 9,8 s (medido) | acerta 82%; cerca de 7 s |
 | Goblin contra infantaria nível 5, de frente | acerta 32% | acerta 15% |
 | O mesmo veterano cercado por 4 goblins | o da frente acerta 32% | o da frente acerta 53% |
-| O Comandante sozinho, cercado por 6 | medir na parte 0 | ele apara ou desvia de menos de 2 golpes em cada 10 |
+| O Comandante sozinho, cercado por 6 | apara 81% dos golpes | ele apara ou desvia de menos de 2 golpes em cada 10 |
 | Senhor da Guerra, de frente | um soldado acerta 36% | um soldado acerta 15% |
 | Senhor da Guerra, cercado por 4 | só o lado do golpe muda | os soldados acertam 60% ou mais, e ele cai em menos de meio minuto |
 
