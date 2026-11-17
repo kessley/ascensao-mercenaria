@@ -3,7 +3,7 @@ import type { Unit } from "../entities/Unit";
 import { fireVolley } from "./ProjectileSystem";
 import { chargePush, hitChance, pressedHit } from "../sim/combatRules";
 import { COMBAT } from "../../utils/constants";
-import { angleTo, distance } from "../../utils/math";
+import { angleDiff, angleTo, distance } from "../../utils/math";
 import { battle } from "../../audio/combatSounds";
 import { parrySurface, weaponClass, woundSurface } from "../../audio/hitRules";
 import { combatFx } from "../world/CombatEffects";
@@ -41,6 +41,22 @@ function chargeImpact(scene: Phaser.Scene, unit: Unit, target: Unit, units: read
   unit.rideThrough(a, time);
 }
 
+/** O golpe de assinatura do chefe: um giro que pega todos na frente, sem aparar, e empurra. */
+function signatureBlow(scene: Phaser.Scene, unit: Unit, units: readonly Unit[], time: number): void {
+  unit.signatureAt = time + COMBAT.SIGNATURE_MS;
+  unit.floatText("giro!", "#ffb070");
+  combatFx(scene)?.impact(unit.x, unit.foot.y, unit.facing, 1.4);
+  const reach = unit.range + unit.radius + COMBAT.SIGNATURE_REACH;
+  for (const o of units) {
+    if (!o.isAlive || o.allegiance === unit.allegiance || o.dueling) continue;
+    if (distance(o, unit) - o.radius > reach || angleDiff(unit.facing, angleTo(unit, o)) > COMBAT.SIGNATURE_ARC) continue;
+    o.notePresser(unit, time);
+    o.takeDamage(unit.outgoingDamage(o) * COMBAT.SIGNATURE_DAMAGE, unit, time, "MELEE");
+    o.shove(angleTo(unit, o), COMBAT.SIGNATURE_PUSH);
+    battle.melee(woundSurface(o.strike), weaponClass(unit.strike), o);
+  }
+}
+
 /** Resolve os ataques automáticos de todas as unidades que já estão no alcance do alvo. */
 export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time: number): void {
   for (const unit of units) {
@@ -59,6 +75,12 @@ export function resolveAttacks(scene: Phaser.Scene, units: readonly Unit[], time
 
     const charging = unit.isCharging;
     unit.playAttack(target);
+    // O chefe, de tempos em tempos, gira a arma em vez do golpe comum
+    if (time >= unit.signatureAt) {
+      unit.setFacing(angleTo(unit, target));
+      signatureBlow(scene, unit, units, time);
+      continue;
+    }
     if (charging && target.braces(unit)) {
       breakCharge(scene, unit, target, time);
       continue;

@@ -13,7 +13,7 @@ const median = (xs) => {
 const round = (x) => (x === null ? null : Math.round(x * 10) / 10);
 
 /** Um contra um: o soldado do bando e um inimigo lado a lado, cada um no outro, até um cair ou fugir. */
-function oneOnOne() {
+export function oneOnOne() {
   const lab = window.__lab;
   const w = window.__world;
   lab.freezeAI();

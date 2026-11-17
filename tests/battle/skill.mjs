@@ -1,5 +1,56 @@
 /** Marco 24: perícia em vez de vida. A pressão de ter vários em cima, a fileira e o Comandante cercado. */
-import { surrounded } from "./baseline.mjs";
+import { oneOnOne, surrounded } from "./baseline.mjs";
+
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length === 0 ? null : s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+};
+
+/** O Senhor da Guerra contra os soldados do batalhão (que não caem): quanto acertam nele, quanto ele dura, quantos giros. */
+function warlord() {
+  const lab = window.__lab;
+  const w = window.__world;
+  lab.freezeAI();
+  lab.parkCommander();
+  const b = lab.battalion();
+  lab.place(b, 4000, 3500, 0);
+  const boss = w.spawnEnemy(4080, 3500, "ORC_WARLORD");
+  boss.dormant = false;
+  boss.hostile = true;
+  boss.setVisible(true);
+  boss.home = { x: boss.x, y: boss.y };
+  boss.target = b.soldiers[0];
+  let swings = 0;
+  let hits = 0;
+  let spins = 0;
+  for (const s of b.soldiers) {
+    s.maxHp = 1e6;
+    s.restoreHp(1e6);
+    const play = s.playAttack.bind(s);
+    s.playAttack = (t) => {
+      if (t === boss) swings++;
+      play(t);
+    };
+  }
+  const take = boss.takeDamage.bind(boss);
+  boss.takeDamage = (amount, source, time, kind) => {
+    if (b.soldiers.includes(source) && kind !== "RANGED") hits++;
+    take(amount, source, time, kind);
+  };
+  const say = boss.floatText.bind(boss);
+  boss.floatText = (text, color) => {
+    if (text === "giro!") spins++;
+    say(text, color);
+  };
+  b.orderAttack(boss);
+  const t0 = w.time.now;
+  lab.step(90, () => {
+    b.morale = 100;
+    b.panicking = false;
+    return !boss.isAlive;
+  });
+  return { hp: boss.maxHp, swings, hits, rate: swings > 0 ? Math.round((hits / swings) * 100) : null, fell: boss.isAlive ? null : Math.round((w.time.now - t0) / 100) / 10, spins };
+}
 
 /** A perícia em campo: o que o nível deu ao soldado e ao goblin. */
 function skills() {
@@ -212,7 +263,67 @@ function pressedSoldier(alone) {
   return { blows, hits, parried: blows > 0 ? Math.round(((blows - hits) / blows) * 100) : null, inRank: ranked > looks / 2 };
 }
 
+/** A guarda pessoal: dois brutamontes longe do chefe voltam e batem em quem está em cima dele. */
+function bossGuard() {
+  const lab = window.__lab;
+  const w = window.__world;
+  lab.freezeAI();
+  lab.parkCommander();
+  const b = lab.battalion();
+  lab.place(b, 4000, 3500, 0);
+  const boss = w.spawnEnemy(4080, 3500, "ORC_WARLORD");
+  const guards = [w.spawnEnemy(4300, 3300, "ORC_BRUTE"), w.spawnEnemy(4300, 3700, "ORC_BRUTE")];
+  for (const e of [boss, ...guards]) {
+    e.dormant = false;
+    e.hostile = true;
+    e.setVisible(true);
+    e.home = { x: e.x, y: e.y };
+  }
+  for (const g of guards) g.guardOf(boss, () => w.bossFoes());
+  boss.target = b.soldiers[0];
+  let guardHits = 0;
+  for (const s of b.soldiers) {
+    s.maxHp = 1e6;
+    s.restoreHp(1e6);
+    const take = s.takeDamage.bind(s);
+    s.takeDamage = (amount, source, time, kind) => {
+      if (guards.includes(source)) guardHits++;
+      take(amount, source, time, kind);
+    };
+  }
+  boss.maxHp = 1e6;
+  boss.restoreHp(1e6);
+  b.orderAttack(boss);
+  lab.step(20, () => {
+    b.morale = 100;
+    b.panicking = false;
+  });
+  const near = guards.map((g) => Math.round(Math.hypot(g.x - boss.x, g.y - boss.y)));
+  return { guardHits, near };
+}
+
 export async function skill({ battle, ev }, { check }) {
+  await battle({ army: [["INFANTRY", 4]], force: { ORC: 1 }, faction: "ORCS", distance: 2400 });
+  const guard = await ev(bossGuard);
+  check("a guarda pessoal volta para o chefe e bate em quem está em cima dele", guard.guardHits > 0 && guard.near.every((d) => d < 150), JSON.stringify(guard));
+  // Parte 4: a vida vem do corpo, e o golpe sai da medida
+  const times = [];
+  for (let i = 0; i < 6; i++) {
+    await battle({ army: [["INFANTRY", 1]], force: { GOBLIN: 1 }, faction: "GOBLINS", distance: 2400 });
+    const r = await ev(oneOnOne);
+    if (r.won === "nosso" && r.seconds !== null) times.push(Math.round(r.seconds * 10) / 10);
+  }
+  const mid = median(times);
+  check("um soldado derruba um goblin em 7 a 9 s", mid !== null && mid >= 6.5 && mid <= 10, JSON.stringify({ mediana: mid, tempos: times }));
+  await battle({ army: [["INFANTRY", 1]], force: { ORC: 1 }, faction: "ORCS", distance: 2400 });
+  const front = await ev(warlord);
+  check("o Senhor da Guerra tem 160 de vida e, de frente, um soldado quase não acerta nele", front.hp === 160 && front.rate !== null && front.rate <= 25, JSON.stringify(front));
+  await battle({ army: [["INFANTRY", 4]], force: { ORC: 1 }, faction: "ORCS", distance: 2400 });
+  const four = await ev(warlord);
+  check("cercado por 4, os soldados acertam 60% ou mais nele, e ele cai em menos de meio minuto", four.rate !== null && four.rate >= 60 && four.fell !== null && four.fell < 30, JSON.stringify(four));
+  check("e ele gira a arma de tempos em tempos", four.spins >= 2, JSON.stringify(four));
+  console.log("   Senhor da Guerra cercado por 4:", JSON.stringify(four));
+
   // Parte 3: o fôlego e o revezamento
   await battle({ army: [["INFANTRY", 8]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
   const breath = await ev(windedLine);

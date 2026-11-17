@@ -16,7 +16,7 @@ import { ferryDocks, regionName } from "../../data/world";
 import { isRaiderKind } from "../../sim/realm";
 import { activeLairs, siteFill } from "../../sim/siteLife";
 import { campWatched, useGameStore } from "../../../store/useGameStore";
-import { SUPPORT, GEO, PROGRESSION, REALM, KINGDOM, WOLF, WORLD, CAMP_MOVE, FATIGUE, SEASONS, TRADE, WORLD_HEIGHT, WORLD_WIDTH } from "../../../utils/constants";
+import { COMBAT, SUPPORT, GEO, PROGRESSION, REALM, KINGDOM, WOLF, WORLD, CAMP_MOVE, FATIGUE, SEASONS, TRADE, WORLD_HEIGHT, WORLD_WIDTH } from "../../../utils/constants";
 import { cargoCapacity } from "../../../utils/economy";
 import { freightWeight } from "../../sim/trade";
 import { distance, pointAlong, routeLength, type Point } from "../../../utils/math";
@@ -64,10 +64,23 @@ export const realmMethods = {
         { x: c.lair.x, y: c.lair.y, units: [[c.kind === "NECROMANCER" ? "NECROMANCER" : "ORC_WARLORD", 1]] },
         { kind: "CALAMITY", id: c.id },
       );
+      // A guarda pessoal (Marco 24): não sai do lado dele, e é ela que faz do chefe um problema
+      const personal = this.spawnEnemyGroup(
+        { x: c.lair.x - 40, y: c.lair.y + 30, units: [[c.kind === "NECROMANCER" ? "BONE_GUARD" : "ORC_BRUTE", COMBAT.BOSS_GUARD]] },
+        { kind: "CALAMITY", id: c.id },
+      );
+      for (const g of personal) g.guardOf(boss, () => this.bossFoes());
       this.calamityObjects.set(c.id, { objects, boss });
       this.attachGroup(`calamity:${c.id}`, [...guards, boss], { name: c.leader, traits: ["CRUEL"], martial: 5 + c.power }).standFast = true;
       this.applyLair(c.lair);
     }
+  },
+
+  /** Em quem a guarda de um chefe bate: os soldados do bando e o Comandante. */
+  bossFoes(this: WorldScene): Unit[] {
+    const out: Unit[] = [this.commander];
+    for (const b of this.battalions) for (const s of b.soldiers) out.push(s);
+    return out;
   },
 
   /** Covil novo ou vencido: os sólidos dos ermos, o chão do covil e as rotas em volta. */

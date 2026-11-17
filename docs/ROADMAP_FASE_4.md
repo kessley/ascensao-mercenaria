@@ -5,7 +5,7 @@
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
 - **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
-- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: as partes 0 (a linha de base), 1 (a perícia), 2 (a pressão) e 3 (o fôlego e "Revezar") estão feitas.
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: as partes 0 (a linha de base), 1 (a perícia), 2 (a pressão), 3 (o fôlego e "Revezar") e 4 (a vida e o golpe) estão feitas.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -70,7 +70,7 @@ O usuário deixou estas escolhas com o plano.
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
-| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 a 3 feitas) |
+| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 a 4 feitas) |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
 | 6 | [Marco 27 — O mundo refeito: lugares vivos](#6-marco-27--o-mundo-refeito-lugares-vivos) | recurso e arte | A única mudança no gerador; os marcos seguintes moram nele | a fazer |
@@ -259,7 +259,7 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
      - "Revezar" fica na barra, junto dos toques, e na tecla K. Vale para os selecionados (ou para todo o exército): quem está no corpo a corpo troca com o batalhão mais perto que está logo atrás dele, a até 320 px, e que não luta. Quem assume a linha fica com a largura dela. Por 9 s, as duas linhas passam uma por dentro da outra sem se empurrar. É um toque combinado: chega pela voz, pela trombeta ou pelo mensageiro.
      - **Medido** (suíte `pericia`): 2 minutos de luta deixam a linha com 84 de cansaço e 78% da defesa; 70 s longe da luta, ela volta a 1. No revezamento, a linha de trás assume a frente e a da frente passa para trás, sem pânico.
      - "Revezar a tempo vence a luta que, sem revezar, se perde" é medido na parte 8, com a vida e o golpe novos.
-4. **Vida e golpe.**
+4. **Vida e golpe** — ✅ feita em 17 de novembro.
    - A vida vem do corpo, e a armadura é o que faz a tropa pesada aguentar.
 
      | Corpo | Vida hoje | Vida nova |
@@ -273,6 +273,12 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
    - Cada golpe certo passa a tirar 50% do dano. As flechas e a investida sobem na mesma medida.
    - Dos que caem, voltam feridos 55% (hoje 40%), ou 70% com curandeira (hoje 55%).
    - Chefe não é mais saco de pancada: perícia alta, guarda pessoal de 6 e um golpe de assinatura.
+   - **Como ficou:**
+     - A tabela vale para todos os tipos, do bando e dos inimigos. O homem a pé fica entre 40 e 50 (a guarda pesada e o homem de armas, 50, com a armadura de antes); montado, de 55 a 65; os oficiais inimigos, de 40 (capitão goblin) a 130 (chefe orc). O Comandante continua com 220 até a ficha da parte 5.
+     - **O golpe não mudou.** Com a vida nova e o golpe de 24%, o soldado derruba o goblin em 7,75 s (mediana de 6 lutas), dentro dos 7 a 9 s. As flechas e a investida ficam como estavam, e por isso pesam, em relação à vida, tanto quanto o golpe.
+     - Os feridos que voltam: 55%, e 70% com curandeira.
+     - **O Senhor da Guerra:** 160 de vida, ataque 82, defesa 78 e armadura 0,25. **O Necromante:** 140 de vida, ataque 60 e defesa 72. Cada um tem uma guarda pessoal de 6 (brutamontes ou guardas de ossos) que não se afasta mais de 150 px dele e bate em quem chega nele. O Senhor da Guerra abre a luta com o golpe de assinatura, e repete a cada 6 s: um giro que pega todos na frente dele, sem aparar, com o dobro do dano, e empurra.
+     - **Medido** (suíte `pericia`): de frente, um soldado acerta o Senhor da Guerra 14%. Cercado por 4, os soldados acertam 93%, e ele cai em 28 s, girando a arma 5 vezes.
 5. **A ficha de quem tem nome.** Comandante, tenentes, capitães e heróis inimigos usam a mesma ficha de luta, de 1 a 10:
    - **Armas** dá o ataque, **Guarda** dá a defesa, **Vigor** dá a vida e o fôlego.
    - O Duelo dos capitães e a habilidade dos nobres (`martial`) viram essa ficha.
@@ -310,8 +316,8 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
 | Goblin contra infantaria nível 5, de frente | acerta 32% | acerta 15% |
 | O mesmo veterano cercado por 4 goblins | o da frente acerta 32% | o da frente acerta 53% |
 | O Comandante sozinho, cercado por 6 | apara 81% dos golpes | ele apara ou desvia de menos de 2 golpes em cada 10 |
-| Senhor da Guerra, de frente | um soldado acerta 36% | um soldado acerta 15% |
-| Senhor da Guerra, cercado por 4 | só o lado do golpe muda | os soldados acertam 60% ou mais, e ele cai em menos de meio minuto |
+| Senhor da Guerra, de frente | um soldado acerta 36% | um soldado acerta 15% (medido: 14%) |
+| Senhor da Guerra, cercado por 4 | só o lado do golpe muda | os soldados acertam 60% ou mais, e ele cai em menos de meio minuto (medido: 93%, 28 s) |
 
 **Som do marco:** o aparar, a guarda que abre, a ordem "Revezar", "Dividir" e "Reunir".
 

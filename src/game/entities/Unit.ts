@@ -546,6 +546,9 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return n;
   }
 
+  /** Golpe de assinatura (chefes, Marco 24): pronto a partir deste tempo; sem golpe, nunca. */
+  signatureAt = Infinity;
+
   /** Passa por dentro de `other` sem empurrar (o revezamento das linhas). */
   passesThrough(_other: Unit): boolean {
     return false;

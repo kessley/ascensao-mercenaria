@@ -106,6 +106,8 @@ export class Enemy extends Unit {
     // Chefe de calamidade que luta de perto: herói por natureza
     const boss = BOSS_HEROES[kind];
     if (boss) this.makeHero(ENEMIES[kind].label, boss);
+    // O chefe que luta de perto abre com o golpe de assinatura
+    if (ENEMIES[kind].boss && !this.ranged) this.signatureAt = 0;
   }
 
   /** Oficial: o nome aparece sobre ele (o jogador tem de saber em quem mirar). */
@@ -201,6 +203,47 @@ export class Enemy extends Unit {
   /** Patrulha em paz não leva flecha perdida: ninguém começa uma guerra por acidente. */
   override get strayTarget(): boolean {
     return this.hostile || this.friendly;
+  }
+
+  /** Guarda pessoal de um chefe (Marco 24): fica perto dele e luta com quem chega nele. */
+  guardOf(boss: Enemy, foes: () => readonly Unit[]): void {
+    let pickAt = -Infinity;
+    this.driver = (dt) => {
+      if (!boss.isAlive) {
+        this.driver = null;
+        return;
+      }
+      const now = this.scene.time.now;
+      // Quem está perto do chefe (e de mim): olhado a cada 0,4 s
+      if (now - pickAt > 400 || (this.target && !this.target.isAlive)) {
+        pickAt = now;
+        let best: Unit | null = null;
+        let bestD: number = COMBAT.BOSS_GUARD_LEASH;
+        for (const u of foes()) {
+          if (!u.isAlive) continue;
+          const d = distance(u, boss);
+          if (d < bestD) {
+            best = u;
+            bestD = d;
+          }
+        }
+        this.target = best;
+      }
+      const t = this.target;
+      if (t && this.inRange(t)) {
+        this.unitState = "ATTACKING";
+        return;
+      }
+      if (t) {
+        this.moveTowards(t.x, t.y, dt);
+        this.unitState = "MOVING";
+        return;
+      }
+      // Ninguém em cima: volta para o lado do chefe
+      const near = distance(this, boss) < boss.radius + this.radius + 26;
+      if (!near) this.moveTowards(boss.x, boss.y, dt);
+      this.unitState = near ? "IDLE" : "MOVING";
+    };
   }
 
   /** Nível (Marco 24): a horda veterana acerta e apara mais, e não aguenta mais pancada. */

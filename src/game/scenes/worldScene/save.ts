@@ -142,6 +142,13 @@ export const saveMethods = {
       );
       lair.boss = boss;
     }
+    // A guarda pessoal de cada chefe volta a andar com ele (Marco 24)
+    for (const [id, lair] of this.calamityObjects) {
+      for (const e of this.enemies) {
+        const o = e.owner;
+        if (e.isAlive && o?.kind === "CALAMITY" && o.id === id && (e.kind === "ORC_BRUTE" || e.kind === "BONE_GUARD")) e.guardOf(lair.boss, () => this.bossFoes());
+      }
+    }
 
     if (field.siegeWorks) this.works?.restore(field.siegeWorks);
     this.torches = field.torches;

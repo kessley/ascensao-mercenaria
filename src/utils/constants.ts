@@ -243,7 +243,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Espada e escudo: a linha de frente equilibrada.",
     cost: 60,
     wagePerSoldier: 1.5,
-    stats: { hp: 60, speed: 125, damage: 8, range: 8, cooldown: 900, radius: 9, attack: 42, defense: 48, armor: 0.2, shield: 0.35 },
+    stats: { hp: 46, speed: 125, damage: 8, range: 8, cooldown: 900, radius: 9, attack: 42, defense: 48, armor: 0.2, shield: 0.35 },
     formations: ["LINE", "SHIELD_WALL", "WEDGE", "LOOSE"],
   },
   SPEARMEN: {
@@ -252,7 +252,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Baratos e firmes. Parados e de frente, seguram a investida da cavalaria.",
     cost: 65,
     wagePerSoldier: 1.5,
-    stats: { hp: 55, speed: 118, damage: 7, range: 30, cooldown: 1000, radius: 9, attack: 34, defense: 52, armor: 0.15, shield: 0.25, antiCavalry: 3.4, brace: true },
+    stats: { hp: 45, speed: 118, damage: 7, range: 30, cooldown: 1000, radius: 9, attack: 34, defense: 52, armor: 0.15, shield: 0.25, antiCavalry: 3.4, brace: true },
     formations: ["LINE", "SHIELD_WALL", "LOOSE"],
   },
   HEAVY: {
@@ -261,7 +261,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Muita armadura, muito peso: quebra a linha inimiga, mas é lenta e cara.",
     cost: 130,
     wagePerSoldier: 3,
-    stats: { hp: 90, speed: 98, damage: 11, range: 8, cooldown: 1050, radius: 10, attack: 54, defense: 58, armor: 0.5, shield: 0.3, pierce: 0.2, mass: 1.7, nerve: 0.75 },
+    stats: { hp: 50, speed: 98, damage: 11, range: 8, cooldown: 1050, radius: 10, attack: 54, defense: 58, armor: 0.5, shield: 0.3, pierce: 0.2, mass: 1.7, nerve: 0.75 },
     formations: ["LINE", "SHIELD_WALL", "WEDGE"],
   },
   ARCHERS: {
@@ -279,7 +279,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Tiro lento, reto e preciso que atravessa armadura.",
     cost: 90,
     wagePerSoldier: 2,
-    stats: { hp: 46, speed: 108, damage: 16, range: 215, cooldown: 2600, radius: 9, ranged: true, attack: 26, defense: 26, armor: 0.15, pierce: 0.6, ammo: 20, volley: 1, spread: 0.55, flat: true },
+    stats: { hp: 42, speed: 108, damage: 16, range: 215, cooldown: 2600, radius: 9, ranged: true, attack: 26, defense: 26, armor: 0.15, pierce: 0.6, ammo: 20, volley: 1, spread: 0.55, flat: true },
     formations: ["LINE", "LOOSE"],
   },
   JAVELINS: {
@@ -288,7 +288,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Rápidos, de pouco alcance e poucos dardos: fustigam e fogem de quem chega perto.",
     cost: 65,
     wagePerSoldier: 1.75,
-    stats: { hp: 42, speed: 150, damage: 13, range: 115, cooldown: 1700, radius: 8, ranged: true, attack: 30, defense: 28, armor: 0.05, pierce: 0.35, ammo: 10, volley: 1, spread: 0.8, flat: true, kite: true },
+    stats: { hp: 40, speed: 150, damage: 13, range: 115, cooldown: 1700, radius: 8, ranged: true, attack: 30, defense: 28, armor: 0.05, pierce: 0.35, ammo: 10, volley: 1, spread: 0.8, flat: true, kite: true },
     formations: ["LOOSE", "LINE"],
   },
   CAVALRY: {
@@ -297,7 +297,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Rápida. A investida empurra e derruba; depois é sair e voltar. Atola na lama.",
     cost: 100,
     wagePerSoldier: 2.5,
-    stats: { hp: 90, speed: 205, damage: 10, range: 10, cooldown: 900, radius: 11, mounted: true, attack: 46, defense: 34, armor: 0.2, mass: 2.2, charge: 1 },
+    stats: { hp: 60, speed: 205, damage: 10, range: 10, cooldown: 900, radius: 11, mounted: true, attack: 46, defense: 34, armor: 0.2, mass: 2.2, charge: 1 },
     formations: ["LINE", "WEDGE", "LOOSE"],
   },
   KNIGHTS: {
@@ -306,7 +306,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Cavalaria pesada: a investida mais forte do campo, ao preço de um pequeno feudo.",
     cost: 200,
     wagePerSoldier: 5,
-    stats: { hp: 130, speed: 170, damage: 13, range: 10, cooldown: 1000, radius: 12, mounted: true, attack: 56, defense: 50, armor: 0.5, mass: 3.2, charge: 1.4, nerve: 0.8 },
+    stats: { hp: 65, speed: 170, damage: 13, range: 10, cooldown: 1000, radius: 12, mounted: true, attack: 56, defense: 50, armor: 0.5, mass: 3.2, charge: 1.4, nerve: 0.8 },
     formations: ["WEDGE", "LINE"],
   },
   HORSE_ARCHERS: {
@@ -315,7 +315,7 @@ export const TROOPS: Record<TroopType, TroopDef> = {
     hint: "Atiram em movimento e somem de quem chega perto. Fracos no choque.",
     cost: 135,
     wagePerSoldier: 3.5,
-    stats: { hp: 62, speed: 205, damage: 8, range: 170, cooldown: 1500, radius: 11, mounted: true, ranged: true, attack: 26, defense: 26, armor: 0.1, mass: 1.6, ammo: 20, volley: 3, spread: 1.25, kite: true },
+    stats: { hp: 55, speed: 205, damage: 8, range: 170, cooldown: 1500, radius: 11, mounted: true, ranged: true, attack: 26, defense: 26, armor: 0.1, mass: 1.6, ammo: 20, volley: 3, spread: 1.25, kite: true },
     formations: ["LOOSE", "LINE"],
   },
 };
@@ -339,12 +339,12 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   GOBLIN: {
     label: "Goblin",
     color: COLORS.ENEMY,
-    stats: { hp: 40, speed: 105, damage: 7, range: 8, cooldown: 1000, radius: 9 },
+    stats: { hp: 24, speed: 105, damage: 7, range: 8, cooldown: 1000, radius: 9 },
   },
   GOBLIN_ARCHER: {
     label: "Goblin arqueiro",
     color: COLORS.ENEMY_ARCHER,
-    stats: { hp: 30, speed: 100, damage: 6, range: 180, cooldown: 1700, radius: 8, ranged: true },
+    stats: { hp: 20, speed: 100, damage: 6, range: 180, cooldown: 1700, radius: 8, ranged: true },
   },
   MUTINEER: {
     label: "Amotinado",
@@ -367,47 +367,47 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   BANDIT: {
     label: "Bandido",
     color: 0x8a5a2b,
-    stats: { hp: 45, speed: 110, damage: 8, range: 8, cooldown: 950, radius: 9 },
+    stats: { hp: 42, speed: 110, damage: 8, range: 8, cooldown: 950, radius: 9 },
   },
   BANDIT_ARCHER: {
     label: "Bandido arqueiro",
     color: 0xa87a4b,
-    stats: { hp: 32, speed: 105, damage: 7, range: 190, cooldown: 1600, radius: 8, ranged: true },
+    stats: { hp: 38, speed: 105, damage: 7, range: 190, cooldown: 1600, radius: 8, ranged: true },
   },
   // Soldados dos reinos: a cor real vem da facção (ver Enemy)
   SOLDIER: {
     label: "Soldado",
     color: 0x7f8c8d,
-    stats: { hp: 70, speed: 110, damage: 9, range: 8, cooldown: 900, radius: 10 },
+    stats: { hp: 48, speed: 110, damage: 9, range: 8, cooldown: 900, radius: 10 },
   },
   CROSSBOW: {
     label: "Besteiro",
     color: 0x95a5a6,
-    stats: { hp: 45, speed: 100, damage: 12, range: 220, cooldown: 2100, radius: 9, ranged: true },
+    stats: { hp: 42, speed: 100, damage: 12, range: 220, cooldown: 2100, radius: 9, ranged: true },
   },
   SKELETON: {
     label: "Esqueleto",
     color: 0xd8d2c0,
-    stats: { hp: 35, speed: 95, damage: 7, range: 8, cooldown: 1000, radius: 9 },
+    stats: { hp: 30, speed: 95, damage: 7, range: 8, cooldown: 1000, radius: 9 },
   },
   NECROMANCER: {
     label: "Lorde Necromante",
     color: 0x5b2c6f,
     boss: true,
     aggroRange: 420,
-    stats: { hp: 900, speed: 80, damage: 18, range: 230, cooldown: 1400, radius: 16, ranged: true },
+    stats: { hp: 140, speed: 80, damage: 18, range: 230, cooldown: 1400, radius: 16, ranged: true },
   },
   ORC: {
     label: "Orc",
     color: 0x4e6b2a,
-    stats: { hp: 85, speed: 110, damage: 11, range: 9, cooldown: 1000, radius: 11 },
+    stats: { hp: 60, speed: 110, damage: 11, range: 9, cooldown: 1000, radius: 11 },
   },
   ORC_WARLORD: {
     label: "Senhor da Guerra orc",
     color: 0x2f4a16,
     boss: true,
     aggroRange: 380,
-    stats: { hp: 1200, speed: 100, damage: 24, range: 10, cooldown: 1100, radius: 17 },
+    stats: { hp: 160, speed: 100, damage: 24, range: 10, cooldown: 1100, radius: 17 },
   },
   CIVILIAN: {
     label: "Refugiado",
@@ -419,13 +419,13 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     label: "Mensageiro real",
     color: 0xe0d27a,
     aggroRange: 0,
-    stats: { hp: 55, speed: 230, damage: 4, range: 10, cooldown: 1200, radius: 10 },
+    stats: { hp: 50, speed: 230, damage: 4, range: 10, cooldown: 1200, radius: 10 },
   },
   WOLF: {
     label: "Lobo",
     color: 0x7a7468,
     aggroRange: 480,
-    stats: { hp: 38, speed: 190, damage: 7, range: 8, cooldown: 800, radius: 9 },
+    stats: { hp: 26, speed: 190, damage: 7, range: 8, cooldown: 800, radius: 9 },
   },
   MERCHANT: {
     label: "Mercador",
@@ -436,7 +436,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   CARAVAN_GUARD: {
     label: "Guarda de caravana",
     color: 0x9a7b4f,
-    stats: { hp: 55, speed: 100, damage: 8, range: 8, cooldown: 950, radius: 9 },
+    stats: { hp: 45, speed: 100, damage: 8, range: 8, cooldown: 950, radius: 9 },
   },
   CART: {
     label: "Carroça de mercador",
@@ -445,44 +445,44 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     stats: { hp: 160, speed: 90, damage: 0, range: 0, cooldown: 1e9, radius: 15 },
   },
   // Marco 16: oficiais valem o mesmo que os tenentes do jogador (2,5× a vida, 1,5× o dano do soldado)
-  GOBLIN_CHIEF: { label: "Chefe goblin", color: 0x9c2a1c, officer: "CHIEF", stats: { hp: 140, speed: 108, damage: 12, range: 8, cooldown: 900, radius: 13 } },
-  GOBLIN_CAPTAIN: { label: "Capitão goblin", color: 0xa83a2a, officer: "CAPTAIN", stats: { hp: 100, speed: 106, damage: 10.5, range: 8, cooldown: 950, radius: 12 } },
-  BANDIT_CHIEF: { label: "Chefe dos salteadores", color: 0x6d4620, officer: "CHIEF", stats: { hp: 150, speed: 112, damage: 13, range: 8, cooldown: 900, radius: 13 } },
-  BANDIT_CAPTAIN: { label: "Capitão dos salteadores", color: 0x7a5228, officer: "CAPTAIN", stats: { hp: 112, speed: 112, damage: 12, range: 8, cooldown: 900, radius: 12 } },
-  SERGEANT: { label: "Sargento", color: 0x7f8c8d, officer: "CHIEF", stats: { hp: 175, speed: 110, damage: 13.5, range: 8, cooldown: 900, radius: 13 } },
-  CAPTAIN: { label: "Capitão", color: 0x7f8c8d, officer: "CAPTAIN", stats: { hp: 190, speed: 112, damage: 14, range: 8, cooldown: 880, radius: 13 } },
-  LORD: { label: "Lorde", color: 0x7f8c8d, officer: "CHIEF", stats: { hp: 320, speed: 115, damage: 17, range: 9, cooldown: 800, radius: 15 } },
-  ORC_CHIEF: { label: "Chefe orc", color: 0x3a5a1e, officer: "CHIEF", stats: { hp: 300, speed: 110, damage: 18, range: 9, cooldown: 950, radius: 15 } },
-  ORC_CAPTAIN: { label: "Capitão orc", color: 0x41622a, officer: "CAPTAIN", stats: { hp: 212, speed: 110, damage: 16.5, range: 9, cooldown: 1000, radius: 14 } },
-  DEATH_KNIGHT: { label: "Cavaleiro morto", color: 0x8d8775, officer: "CAPTAIN", stats: { hp: 180, speed: 98, damage: 14, range: 8, cooldown: 1000, radius: 13 } },
+  GOBLIN_CHIEF: { label: "Chefe goblin", color: 0x9c2a1c, officer: "CHIEF", stats: { hp: 50, speed: 108, damage: 12, range: 8, cooldown: 900, radius: 13 } },
+  GOBLIN_CAPTAIN: { label: "Capitão goblin", color: 0xa83a2a, officer: "CAPTAIN", stats: { hp: 40, speed: 106, damage: 10.5, range: 8, cooldown: 950, radius: 12 } },
+  BANDIT_CHIEF: { label: "Chefe dos salteadores", color: 0x6d4620, officer: "CHIEF", stats: { hp: 70, speed: 112, damage: 13, range: 8, cooldown: 900, radius: 13 } },
+  BANDIT_CAPTAIN: { label: "Capitão dos salteadores", color: 0x7a5228, officer: "CAPTAIN", stats: { hp: 60, speed: 112, damage: 12, range: 8, cooldown: 900, radius: 12 } },
+  SERGEANT: { label: "Sargento", color: 0x7f8c8d, officer: "CHIEF", stats: { hp: 70, speed: 110, damage: 13.5, range: 8, cooldown: 900, radius: 13 } },
+  CAPTAIN: { label: "Capitão", color: 0x7f8c8d, officer: "CAPTAIN", stats: { hp: 75, speed: 112, damage: 14, range: 8, cooldown: 880, radius: 13 } },
+  LORD: { label: "Lorde", color: 0x7f8c8d, officer: "CHIEF", stats: { hp: 90, speed: 115, damage: 17, range: 9, cooldown: 800, radius: 15 } },
+  ORC_CHIEF: { label: "Chefe orc", color: 0x3a5a1e, officer: "CHIEF", stats: { hp: 130, speed: 110, damage: 18, range: 9, cooldown: 950, radius: 15 } },
+  ORC_CAPTAIN: { label: "Capitão orc", color: 0x41622a, officer: "CAPTAIN", stats: { hp: 110, speed: 110, damage: 16.5, range: 9, cooldown: 1000, radius: 14 } },
+  DEATH_KNIGHT: { label: "Cavaleiro morto", color: 0x8d8775, officer: "CAPTAIN", stats: { hp: 70, speed: 98, damage: 14, range: 8, cooldown: 1000, radius: 13 } },
   // Olhos do inimigo: enxergam longe e não ficam para lutar (ver WarHost)
-  OUTRIDER: { label: "Batedor inimigo", color: 0x6b7f7f, aggroRange: 520, stats: { hp: 55, speed: 240, damage: 6, range: 8, cooldown: 1000, radius: 10 } },
-  WOLF_RIDER: { label: "Goblin montado em lobo", color: 0x8a5a4a, aggroRange: 480, stats: { hp: 48, speed: 215, damage: 7, range: 8, cooldown: 950, radius: 10 } },
+  OUTRIDER: { label: "Batedor inimigo", color: 0x6b7f7f, aggroRange: 520, stats: { hp: 52, speed: 240, damage: 6, range: 8, cooldown: 1000, radius: 10 } },
+  WOLF_RIDER: { label: "Goblin montado em lobo", color: 0x8a5a4a, aggroRange: 480, stats: { hp: 34, speed: 215, damage: 7, range: 8, cooldown: 950, radius: 10 } },
   HERALD: { label: "Arauto inimigo", color: 0xd8c86a, aggroRange: 0, stats: { hp: 50, speed: 235, damage: 4, range: 8, cooldown: 1200, radius: 9 } },
-  SAND_SPEAR: { label: "Lanceiro das areias", color: 0xc9a25c, stats: { hp: 52, speed: 118, damage: 7, range: 26, cooldown: 1000, radius: 9, attack: 38, defense: 46, armor: 0.1, shield: 0.3, antiCavalry: 2.4, brace: true } },
-  DUNE_ARCHER: { label: "Arqueiro das dunas", color: 0xd8b25a, stats: { hp: 56, speed: 185, damage: 7, range: 170, cooldown: 1700, radius: 11, ranged: true, mounted: true, attack: 24, defense: 26, ammo: 18, volley: 1, spread: 0.9, kite: true, mass: 1.6 } },
-  MAMELUKE: { label: "Mameluco", color: 0xa8843c, stats: { hp: 95, speed: 190, damage: 11, range: 10, cooldown: 1000, radius: 11, mounted: true, attack: 50, defense: 44, armor: 0.3, mass: 2.4, charge: 1.1 } },
-  AXEMAN: { label: "Machadeiro", color: 0x6f8aa0, stats: { hp: 72, speed: 115, damage: 11, range: 14, cooldown: 1100, radius: 10, attack: 48, defense: 34, armor: 0.15, pierce: 0.3, shield: 0.2, nerve: 0.85 } },
-  HOUSECARL: { label: "Huscarlo", color: 0x4f6a80, stats: { hp: 95, speed: 105, damage: 12, range: 14, cooldown: 1150, radius: 10, attack: 54, defense: 52, armor: 0.4, pierce: 0.35, shield: 0.35, nerve: 0.7 } },
-  PIKE_LEVY: { label: "Alabardeiro de jade", color: 0x5c9a7a, stats: { hp: 54, speed: 104, damage: 7, range: 30, cooldown: 1050, radius: 9, attack: 36, defense: 50, armor: 0.2, shield: 0.15, antiCavalry: 3, brace: true } },
-  REPEATER: { label: "Besteiro de repetição", color: 0x7ab890, stats: { hp: 46, speed: 110, damage: 6, range: 180, cooldown: 1000, radius: 9, ranged: true, attack: 24, defense: 26, pierce: 0.3, ammo: 30, volley: 2, spread: 0.9, flat: true } },
-  JADE_GUARD: { label: "Guarda de jade", color: 0x3f7a5c, stats: { hp: 90, speed: 105, damage: 11, range: 16, cooldown: 1100, radius: 10, attack: 50, defense: 56, armor: 0.35, shield: 0.35, nerve: 0.75 } },
-  PIRATE: { label: "Pirata", color: 0x8a5a5a, stats: { hp: 48, speed: 125, damage: 8, range: 12, cooldown: 950, radius: 9, attack: 40, defense: 34, armor: 0.05 } },
-  PIRATE_BOW: { label: "Pirata besteiro", color: 0x9a6a6a, stats: { hp: 38, speed: 120, damage: 8, range: 170, cooldown: 1900, radius: 8, ranged: true, attack: 24, defense: 24, pierce: 0.4, ammo: 18, volley: 1, spread: 0.8, flat: true } },
-  PIRATE_CAPTAIN: { label: "Capitão pirata", color: 0x5a2a2a, stats: { hp: 150, speed: 125, damage: 13, range: 14, cooldown: 900, radius: 11, attack: 56, defense: 50, armor: 0.25 } },
+  SAND_SPEAR: { label: "Lanceiro das areias", color: 0xc9a25c, stats: { hp: 45, speed: 118, damage: 7, range: 26, cooldown: 1000, radius: 9, attack: 38, defense: 46, armor: 0.1, shield: 0.3, antiCavalry: 2.4, brace: true } },
+  DUNE_ARCHER: { label: "Arqueiro das dunas", color: 0xd8b25a, stats: { hp: 50, speed: 185, damage: 7, range: 170, cooldown: 1700, radius: 11, ranged: true, mounted: true, attack: 24, defense: 26, ammo: 18, volley: 1, spread: 0.9, kite: true, mass: 1.6 } },
+  MAMELUKE: { label: "Mameluco", color: 0xa8843c, stats: { hp: 62, speed: 190, damage: 11, range: 10, cooldown: 1000, radius: 11, mounted: true, attack: 50, defense: 44, armor: 0.3, mass: 2.4, charge: 1.1 } },
+  AXEMAN: { label: "Machadeiro", color: 0x6f8aa0, stats: { hp: 50, speed: 115, damage: 11, range: 14, cooldown: 1100, radius: 10, attack: 48, defense: 34, armor: 0.15, pierce: 0.3, shield: 0.2, nerve: 0.85 } },
+  HOUSECARL: { label: "Huscarlo", color: 0x4f6a80, stats: { hp: 50, speed: 105, damage: 12, range: 14, cooldown: 1150, radius: 10, attack: 54, defense: 52, armor: 0.4, pierce: 0.35, shield: 0.35, nerve: 0.7 } },
+  PIKE_LEVY: { label: "Alabardeiro de jade", color: 0x5c9a7a, stats: { hp: 45, speed: 104, damage: 7, range: 30, cooldown: 1050, radius: 9, attack: 36, defense: 50, armor: 0.2, shield: 0.15, antiCavalry: 3, brace: true } },
+  REPEATER: { label: "Besteiro de repetição", color: 0x7ab890, stats: { hp: 42, speed: 110, damage: 6, range: 180, cooldown: 1000, radius: 9, ranged: true, attack: 24, defense: 26, pierce: 0.3, ammo: 30, volley: 2, spread: 0.9, flat: true } },
+  JADE_GUARD: { label: "Guarda de jade", color: 0x3f7a5c, stats: { hp: 50, speed: 105, damage: 11, range: 16, cooldown: 1100, radius: 10, attack: 50, defense: 56, armor: 0.35, shield: 0.35, nerve: 0.75 } },
+  PIRATE: { label: "Pirata", color: 0x8a5a5a, stats: { hp: 45, speed: 125, damage: 8, range: 12, cooldown: 950, radius: 9, attack: 40, defense: 34, armor: 0.05 } },
+  PIRATE_BOW: { label: "Pirata besteiro", color: 0x9a6a6a, stats: { hp: 40, speed: 120, damage: 8, range: 170, cooldown: 1900, radius: 8, ranged: true, attack: 24, defense: 24, pierce: 0.4, ammo: 18, volley: 1, spread: 0.8, flat: true } },
+  PIRATE_CAPTAIN: { label: "Capitão pirata", color: 0x5a2a2a, stats: { hp: 70, speed: 125, damage: 13, range: 14, cooldown: 900, radius: 11, attack: 56, defense: 50, armor: 0.25 } },
   SIEGE_RAM: { label: "Aríete", color: 0x5a3e24, aggroRange: 0, stats: { hp: 420, speed: 42, damage: 0, range: 0, cooldown: 1e9, radius: 18, armor: 0.5, mass: 12 } },
   // Cavalaria dos exércitos: o braço rápido de quem flanqueia e caça mensageiros
-  LANCER: { label: "Lanceiro montado", color: 0x7f8c8d, stats: { hp: 80, speed: 190, damage: 10, range: 10, cooldown: 1000, radius: 11 } },
-  GOBLIN_SPEAR: { label: "Goblin lanceiro", color: 0xb5463a, stats: { hp: 38, speed: 100, damage: 6, range: 26, cooldown: 1000, radius: 9, attack: 28, defense: 38, antiCavalry: 2.6, brace: true, shield: 0.15 } },
-  BANDIT_JAVELIN: { label: "Bandido dardeiro", color: 0xb08a50, stats: { hp: 34, speed: 125, damage: 11, range: 110, cooldown: 1800, radius: 8, ranged: true, attack: 28, defense: 26, pierce: 0.3, ammo: 10, volley: 1, spread: 0.85, flat: true } },
-  BANDIT_RIDER: { label: "Salteador montado", color: 0x7a5a30, stats: { hp: 66, speed: 190, damage: 8.5, range: 10, cooldown: 950, radius: 11, mounted: true, attack: 38, defense: 30, armor: 0.1, mass: 2, charge: 0.9 } },
-  PIKEMAN: { label: "Piqueiro", color: 0x7f8c8d, stats: { hp: 62, speed: 102, damage: 7.5, range: 32, cooldown: 1050, radius: 10, attack: 36, defense: 54, armor: 0.2, shield: 0.2, antiCavalry: 3.4, brace: true } },
-  MAN_AT_ARMS: { label: "Homem de armas", color: 0x7f8c8d, stats: { hp: 96, speed: 96, damage: 11, range: 8, cooldown: 1050, radius: 10, attack: 54, defense: 60, armor: 0.5, shield: 0.3, pierce: 0.2, mass: 1.7, nerve: 0.75 } },
-  LONGBOW: { label: "Arqueiro de guerra", color: 0x95a5a6, stats: { hp: 42, speed: 112, damage: 9.5, range: 240, cooldown: 1500, radius: 8, ranged: true, attack: 26, defense: 24, armor: 0.1, ammo: 30, volley: 3, spread: 0.9 } },
-  KNIGHT: { label: "Cavaleiro", color: 0x7f8c8d, stats: { hp: 125, speed: 170, damage: 13, range: 10, cooldown: 1000, radius: 12, mounted: true, attack: 56, defense: 50, armor: 0.5, mass: 3.2, charge: 1.4, nerve: 0.8 } },
-  ORC_BRUTE: { label: "Brutamontes orc", color: 0x3f5a22, stats: { hp: 140, speed: 96, damage: 16, range: 9, cooldown: 1350, radius: 13, attack: 55, defense: 36, armor: 0.3, pierce: 0.35, mass: 2.6, nerve: 0.7 } },
-  SKELETON_ARCHER: { label: "Esqueleto arqueiro", color: 0xc4bda8, stats: { hp: 28, speed: 90, damage: 6.5, range: 190, cooldown: 1700, radius: 8, ranged: true, attack: 20, defense: 20, ammo: 24, volley: 3, spread: 1.2 } },
-  BONE_GUARD: { label: "Guarda de ossos", color: 0xe6e0cc, stats: { hp: 70, speed: 88, damage: 9, range: 9, cooldown: 1050, radius: 10, attack: 44, defense: 50, armor: 0.4, shield: 0.45, mass: 1.5 } },
+  LANCER: { label: "Lanceiro montado", color: 0x7f8c8d, stats: { hp: 58, speed: 190, damage: 10, range: 10, cooldown: 1000, radius: 11 } },
+  GOBLIN_SPEAR: { label: "Goblin lanceiro", color: 0xb5463a, stats: { hp: 24, speed: 100, damage: 6, range: 26, cooldown: 1000, radius: 9, attack: 28, defense: 38, antiCavalry: 2.6, brace: true, shield: 0.15 } },
+  BANDIT_JAVELIN: { label: "Bandido dardeiro", color: 0xb08a50, stats: { hp: 40, speed: 125, damage: 11, range: 110, cooldown: 1800, radius: 8, ranged: true, attack: 28, defense: 26, pierce: 0.3, ammo: 10, volley: 1, spread: 0.85, flat: true } },
+  BANDIT_RIDER: { label: "Salteador montado", color: 0x7a5a30, stats: { hp: 55, speed: 190, damage: 8.5, range: 10, cooldown: 950, radius: 11, mounted: true, attack: 38, defense: 30, armor: 0.1, mass: 2, charge: 0.9 } },
+  PIKEMAN: { label: "Piqueiro", color: 0x7f8c8d, stats: { hp: 45, speed: 102, damage: 7.5, range: 32, cooldown: 1050, radius: 10, attack: 36, defense: 54, armor: 0.2, shield: 0.2, antiCavalry: 3.4, brace: true } },
+  MAN_AT_ARMS: { label: "Homem de armas", color: 0x7f8c8d, stats: { hp: 50, speed: 96, damage: 11, range: 8, cooldown: 1050, radius: 10, attack: 54, defense: 60, armor: 0.5, shield: 0.3, pierce: 0.2, mass: 1.7, nerve: 0.75 } },
+  LONGBOW: { label: "Arqueiro de guerra", color: 0x95a5a6, stats: { hp: 40, speed: 112, damage: 9.5, range: 240, cooldown: 1500, radius: 8, ranged: true, attack: 26, defense: 24, armor: 0.1, ammo: 30, volley: 3, spread: 0.9 } },
+  KNIGHT: { label: "Cavaleiro", color: 0x7f8c8d, stats: { hp: 65, speed: 170, damage: 13, range: 10, cooldown: 1000, radius: 12, mounted: true, attack: 56, defense: 50, armor: 0.5, mass: 3.2, charge: 1.4, nerve: 0.8 } },
+  ORC_BRUTE: { label: "Brutamontes orc", color: 0x3f5a22, stats: { hp: 100, speed: 96, damage: 16, range: 9, cooldown: 1350, radius: 13, attack: 55, defense: 36, armor: 0.3, pierce: 0.35, mass: 2.6, nerve: 0.7 } },
+  SKELETON_ARCHER: { label: "Esqueleto arqueiro", color: 0xc4bda8, stats: { hp: 26, speed: 90, damage: 6.5, range: 190, cooldown: 1700, radius: 8, ranged: true, attack: 20, defense: 20, ammo: 24, volley: 3, spread: 1.2 } },
+  BONE_GUARD: { label: "Guarda de ossos", color: 0xe6e0cc, stats: { hp: 45, speed: 88, damage: 9, range: 9, cooldown: 1050, radius: 10, attack: 44, defense: 50, armor: 0.4, shield: 0.45, mass: 1.5 } },
 };
 
 /** Atributos de combate das tropas que já existiam: quem sabe lutar e quem só tem número. */
@@ -514,8 +514,9 @@ const ENEMY_TRAITS: Partial<Record<EnemyKind, Partial<UnitStats>>> = {
   ORC_CHIEF: { attack: 64, defense: 50, armor: 0.3, mass: 2.2, nerve: 0.7 },
   ORC_CAPTAIN: { attack: 58, defense: 44, armor: 0.25, mass: 2, nerve: 0.75 },
   DEATH_KNIGHT: { attack: 56, defense: 54, armor: 0.4, shield: 0.3, mass: 1.5 },
-  NECROMANCER: { attack: 50, defense: 50, armor: 0.2, ammo: Infinity, volley: 1, spread: 0.6 },
-  ORC_WARLORD: { attack: 72, defense: 56, armor: 0.4, mass: 4, nerve: 0.5 },
+  // Chefes (Marco 24): fortes porque lutam bem, e não porque demoram a cair
+  NECROMANCER: { attack: 60, defense: 72, armor: 0.2, ammo: Infinity, volley: 1, spread: 0.6 },
+  ORC_WARLORD: { attack: 82, defense: 78, armor: 0.25, mass: 4, nerve: 0.5 },
 };
 for (const [kind, traits] of Object.entries(ENEMY_TRAITS)) Object.assign(ENEMIES[kind as EnemyKind].stats, traits);
 
@@ -1356,11 +1357,27 @@ export const BALANCE = {
  * dois lados. Quem anda em ordem vai devagar, correr cansa, e só o último trecho é a toda.
  */
 export const COMBAT = {
-  /** Fração do dano de cada golpe que acerta (metade erra ou é aparada) e de uma salva inteira de flechas. */
+  /**
+   * Fração do dano de cada golpe que acerta e de uma salva inteira de flechas. Marco 24: a vida
+   * caiu (vem do corpo), e o golpe saiu da medida: com estes, um soldado derruba um goblin em 7 a
+   * 9 s (o goblin foge antes de cair, e é a moral que segura a luta).
+   */
   DAMAGE_PACE: 0.24,
   ARROW_PACE: 0.38,
   /** Fração do dano da investida da cavalaria: o choque continua decidindo. */
   CHARGE_PACE: 0.5,
+  /**
+   * Golpe de assinatura do chefe que luta de perto (Marco 24): de tempos em tempos, um giro que
+   * pega todos na frente dele, sem aparar, e empurra. É a hora de não estar na frente.
+   */
+  SIGNATURE_MS: 6000,
+  SIGNATURE_ARC: Math.PI / 2,
+  SIGNATURE_REACH: 22,
+  SIGNATURE_DAMAGE: 2,
+  SIGNATURE_PUSH: 26,
+  /** A guarda pessoal do chefe: quantos, e até onde se afastam dele. */
+  BOSS_GUARD: 6,
+  BOSS_GUARD_LEASH: 150,
   /** O Comandante bate por vários (multiplica DAMAGE_PACE). */
   HERO_PACE: 1.5,
   /** Lados da formação (rad, a partir da frente): até FRONT_ARC é frente; além de REAR_ARC, costas. */
@@ -2206,8 +2223,8 @@ export const SUPPLY = {
 /** Feridos, enfermaria e doenças (Marco 13). */
 export const HEALTH = {
   /** Fração dos que caem em combate que fica ferida (e não morta); com curandeira, mais. */
-  WOUNDED_SHARE: 0.4,
-  WOUNDED_SHARE_HEALER: 0.55,
+  WOUNDED_SHARE: 0.55,
+  WOUNDED_SHARE_HEALER: 0.7,
   /** Por dia: chance de cada ferido voltar ou morrer, na enfermaria (acampamento) ou no campo. */
   RECOVER: { CAMP: 0.3, FIELD: 0.12 },
   DIE: { CAMP: 0.02, FIELD: 0.08 },
