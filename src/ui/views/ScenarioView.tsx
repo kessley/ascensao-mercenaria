@@ -12,6 +12,7 @@ import {
   loadRecords,
   loadScenarios,
   scenarioArmyTotal,
+  scenarioAllyTotal,
   scenarioEnemyTotal,
   scenarioProblem,
   storeScenarios,
@@ -68,6 +69,8 @@ function ScenarioSheet({ s }: { s: BattleScenario }) {
         <Fact label="Dificuldade" value={WAR_AI.DIFFICULTY[s.difficulty].label} />
         <Fact label="Seu exército" value={`${troops} batalh${troops === 1 ? "ão" : "ões"} · ${scenarioArmyTotal(s)} soldados`} />
         <Fact label="Inimigo" value={`${scenarioEnemyTotal(s)} combatentes`} />
+        {scenarioAllyTotal(s) > 0 && <Fact label="Aliados da IA" value={`${scenarioAllyTotal(s)} combatentes`} />}
+        {(s.army.captains ?? []).length > 0 && <Fact label="Capitães" value={String(s.army.captains?.length)} />}
         <Fact label="Névoa de guerra" value={s.fog ? "Ligada" : "Desligada"} />
         <Fact label="Ordens" value={s.directOrders ? "Diretas" : "Voz e mensageiros"} />
         {s.magic && <Fact label="Comandante" value="Mago" />}
@@ -78,7 +81,11 @@ function ScenarioSheet({ s }: { s: BattleScenario }) {
           .filter((f) => forceSize(f) > 0)
           .map((f) => (
             <li key={f.id}>
-              <span className="text-red-300">{ENEMY_FACTIONS[f.faction].label}</span> · {forceSize(f)} · {f.delay > 0 ? `chegam depois de ${clock(f.delay)}` : "em campo desde o início"}
+              <span className={f.allied ? "text-sky-300" : "text-red-300"}>
+                {ENEMY_FACTIONS[f.faction].label}
+                {f.allied ? " (aliados)" : ""}
+              </span>{" "}
+              · {forceSize(f)} · {f.delay > 0 ? `chegam depois de ${clock(f.delay)}` : "em campo desde o início"}
             </li>
           ))}
       </ul>

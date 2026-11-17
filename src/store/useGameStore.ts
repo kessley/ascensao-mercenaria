@@ -92,7 +92,7 @@ export interface MagicHud {
 }
 import { realmFigures, type SeatCity } from "../game/sim/seatCity";
 import { INITIAL_CAPTAINS, allCaptains, captainSlice, captainsWeek, desertions, freshCaptains, pruneCompanies, shiftLoyalty, type CaptainActions, type CaptainState } from "./captainSlice";
-import { captainName, type CaptainData } from "../game/data/captains";
+import { captainName, generateCaptain, type CaptainData } from "../game/data/captains";
 import type { CompanyHud, CompanyStance } from "../game/sim/companies";
 import { SCENARIO_TOWN, buildScenarioWorld, noteResult, scenarioDay, scenarioProgress, type BattleScenario, type ScenarioHud, type ScenarioResult } from "../game/data/scenarios";
 import {
@@ -2208,6 +2208,14 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     battalions.push(b);
     if (spec.lieutenant) lieutenants.push({ ...generateLieutenant(1), battalionId: b.id });
   }
+  // Os capitães do cenário (Marco 20): a ficha sai sorteada, o nome, o comando e a tática vêm dele
+  const captains: CaptainData[] = [];
+  for (const c of scenario.army.captains ?? []) {
+    const ids = c.battalionIds.filter((id) => battalions.some((b) => b.id === id));
+    if (ids.length === 0) continue;
+    const base = generateCaptain(1, "TAVERN");
+    captains.push({ ...base, id: c.id, name: c.name.trim() || base.name, command: c.command, tactics: c.tactics, loyalty: 100, battalionIds: ids });
+  }
   return {
     ...campaignState(world),
     day: scenarioDay(scenario.season),
@@ -2215,7 +2223,7 @@ function scenarioState(scenario: BattleScenario, world: WorldDef): CampaignState
     battalions,
     lieutenants,
     lieutenantCandidates: [],
-    captains: [],
+    captains,
     captainCandidates: [],
     // O exército do cenário já está em campo, com o que tem
     train: "ARMY",

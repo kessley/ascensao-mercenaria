@@ -4,11 +4,11 @@ import { bandSize, type Warband } from "../../systems/Warbands";
 import { SiegeWorks } from "../../systems/SiegeWorks";
 import type { WallPlan } from "../../systems/WarHost";
 import { insideTown, nearestGate, wallOutward, wallPosts, type TownLayout } from "../../world/townLayout";
-import { ENEMY_FACTIONS, SCENARIO_TOWN, SIEGE_TOWNS, armyStart, forceSize, forceStance, forceStart, scenarioEnemyTotal, type BattleScenario, type ScenarioForce, type ScenarioSiegeHud } from "../../data/scenarios";
+import { ENEMY_FACTIONS, SCENARIO_TOWN, SIEGE_TOWNS, armyStart, chiefForce, forceSize, forceStance, forceStart, scenarioEnemyTotal, type BattleScenario, type ScenarioAllyResult, type ScenarioForce, type ScenarioSiegeHud } from "../../data/scenarios";
 import { useGameStore } from "../../../store/useGameStore";
-import { TROOPS, SIEGE, WAR_AI, type EnemyKind } from "../../../utils/constants";
+import { COLORS, TROOPS, SIEGE, WAR_AI, type EnemyKind } from "../../../utils/constants";
 import { sfx } from "../../../audio/sounds";
-import { distance, nearest, type Point } from "../../../utils/math";
+import { centroid, distance, nearest, type Point } from "../../../utils/math";
 import { SIDE_WORD, isFighter, wallSide, type SiegeRun, type ScenarioRun, rectDistance } from "./shared";
 import type { WorldScene } from "../WorldScene";
 
@@ -20,7 +20,28 @@ export const scenarioMethods = {
   /** Põe as tropas no campo: o bando em linha, de frente para o leste, e as forças inimigas. */
   startScenarioField(this: WorldScene, def: BattleScenario): void {
     const start = new Map(useGameStore.getState().battalions.map((b) => [b.id, b.soldiers]));
-    this.run = { def, siege: null, nextSweep: 0, seconds: 0, pending: [...def.forces].filter((f) => forceSize(f) > 0), bands: [], left: [], fled: 0, officers: [], nextCourse: 0, clearSince: null, prey: null, chiefDown: false, start, friendlyFire: 0 };
+    this.run = {
+      def,
+      siege: null,
+      nextSweep: 0,
+      seconds: 0,
+      pending: [...def.forces].filter((f) => forceSize(f) > 0),
+      bands: [],
+      friends: [],
+      allyStart: new Map(),
+      allyGone: new Map(),
+      allyKills: new Map(),
+      left: [],
+      fled: 0,
+      officers: [],
+      nextCourse: 0,
+      clearSince: null,
+      prey: null,
+      chiefDown: false,
+      start,
+      friendlyFire: 0,
+      foeFriendlyFire: 0,
+    };
     this.warbands.allied = true;
     if (def.map === "DECK") this.buildDeck();
     const layout = def.siege ? this.settlementLayer.layoutOf(SCENARIO_TOWN) : undefined;
@@ -35,6 +56,9 @@ export const scenarioMethods = {
     else this.deployArmy(at);
     for (const f of this.run.pending.filter((x) => x.delay === 0)) this.enterForce(this.run, f);
     this.run.pending = this.run.pending.filter((x) => x.delay > 0);
+    // Os capitães (Marco 20) começam na postura que o cenário pediu
+    const stances = new Map((def.army.captains ?? []).filter((c) => c.stance !== "FREE").map((c) => [c.id, c.stance]));
+    if (stances.size > 0) this.companies.open(useGameStore.getState().captains, stances, this.battalions);
     this.updateVision(this.time.now);
     this.pushFeed(`${def.name}: ${def.description || "as tropas estão em posição."}`);
   },
@@ -54,7 +78,7 @@ export const scenarioMethods = {
 
   /** Defesa: quem atira na muralha, de frente para o inimigo; o resto de reserva logo atrás deles. */
   deployOnWalls(this: WorldScene, layout: TownLayout, def: BattleScenario): void {
-    const foe = forceStart(def, def.forces.find((f) => forceSize(f) > 0) ?? def.forces[0]);
+    const foe = forceStart(def, def.forces.find((f) => !f.allied && forceSize(f) > 0) ?? def.forces[0]);
     const posts = [...wallPosts(layout)].sort((a, b) => distance(a, foe) - distance(b, foe));
     const out = wallOutward(layout, posts[0]);
     let shots = 0;
@@ -74,12 +98,15 @@ export const scenarioMethods = {
   enterForce(this: WorldScene, run: ScenarioRun, force: ScenarioForce): void {
     const faction = ENEMY_FACTIONS[force.faction];
     const origin = forceStart(run.def, force);
+    const allied = !!force.allied;
     const band = this.warbands.spawnBand({
-      name: force.chief ? `Hoste de ${force.chief}` : faction.name,
+      name: force.chief ? `Hoste de ${force.chief}` : allied ? `${faction.name} (aliados)` : faction.name,
       kind: faction.band,
       units: Object.entries(force.units).map(([kind, n]) => [kind as EnemyKind, n ?? 0]),
       origin: this.nav.nearestOpen(origin, 2400) ?? origin,
-      ownerId: null,
+      // A força aliada é do bando: nasce do nosso lado (ver onEnterBubble) e veste o azul dele
+      ownerId: allied ? "PLAYER" : null,
+      color: allied ? COLORS.ALLY : undefined,
       chief: force.chief ? { name: force.chief, traits: [force.trait] } : undefined,
     });
     // A ficha do chefe acompanha o que o cenário pediu (sem mão escolhida, sai de novo com a competência)
@@ -88,12 +115,18 @@ export const scenarioMethods = {
     const stance = forceStance(run.def, force);
     if (stance === "HOLD") this.warbands.holdGround(band);
     else run.nextCourse = 0;
+    band.pitched = true;
+    this.scenarioStance.set(band, stance);
+    if (allied) {
+      run.friends.push(band);
+      run.allyStart.set(band, forceSize(force));
+      if (force.delay > 0) this.pushFeed(`Chegam os aliados: ${band.name}.`);
+      return;
+    }
     if (run.siege && force.side === "WALLS") band.walls = this.wallPlan(run.siege.layout, run.def);
     band.storming = run.def.siege?.role === "DEFEND";
-    band.pitched = true;
     run.bands.push(band);
-    if (force === run.def.forces[0]) run.prey = band;
-    this.scenarioStance.set(band, stance);
+    if (force === chiefForce(run.def)) run.prey = band;
     if (force.delay > 0 && run.def.objective !== "SURVIVE") this.pushFeed("Os batedores ouvem mais gente chegando.");
   },
 
@@ -117,7 +150,7 @@ export const scenarioMethods = {
     const w = this.works;
     if (!w || run.seconds < siege.nextLook) return;
     siege.nextLook = run.seconds + 0.25;
-    for (const band of run.bands) {
+    for (const band of [...run.bands, ...run.friends]) {
       if (!band.materialized || siege.seated.has(band)) continue;
       siege.seated.add(band);
       for (const m of band.members) {
@@ -203,6 +236,44 @@ export const scenarioMethods = {
         run.nextCourse = 0;
       }
     }
+    // O aliado que esperava e já apanhou vai para cima; o vencido, sem ninguém na frente, deixa o campo
+    for (const band of run.friends) {
+      const host = band.host;
+      if (!host || run.left.includes(band) || host.retreating) continue;
+      if (band.members.some((m) => m.isAlive && m.target?.isAlive)) continue;
+      if (host.beaten) host.abandon();
+      else if (host.bloodied && this.scenarioStance.get(band) === "HOLD") {
+        this.scenarioStance.set(band, "ATTACK");
+        band.rest = 0;
+        run.nextCourse = 0;
+      }
+    }
+  },
+
+  /**
+   * Para onde vai a força aliada que ataca: atrás da força inimiga mais perto dela, de quem ainda
+   * está de pé. Com a muralha inteira e o inimigo lá dentro, ao portão mais perto.
+   */
+  allyCourse(this: WorldScene, run: ScenarioRun, band: Warband): Point | null {
+    const targets: Point[] = [];
+    for (const foe of run.bands) {
+      if (run.left.includes(foe)) continue;
+      const standing = foe.materialized ? foe.members.filter((m) => m.isAlive && !m.routed) : [];
+      if (standing.length > 0) targets.push(centroid(standing));
+      else if (!foe.materialized && foe.roster.length > 0) targets.push(foe.anchor);
+    }
+    const to = nearest(targets, band.anchor);
+    if (!to) return null;
+    const siege = run.siege;
+    if (siege && !this.works?.open && insideTown(siege.layout, to) !== insideTown(siege.layout, band.anchor)) return nearestGate(siege.layout, band.anchor).outside;
+    return to;
+  },
+
+  /** As forças aliadas da IA que ainda estão em campo, de pé. */
+  scenarioAllies(this: WorldScene, run: ScenarioRun): number {
+    let n = 0;
+    for (const band of run.friends) if (!run.left.includes(band)) n += band.materialized ? band.members.filter((m) => m.isAlive && !m.routed).length : band.roster.length;
+    return n;
   },
 
   /** Quem ainda luta do outro lado. */
@@ -228,7 +299,8 @@ export const scenarioMethods = {
     // Quem deixou o campo em ordem não volta: a batalha é aqui
     for (const band of run.left) {
       if (!this.warbands.bands.includes(band)) continue;
-      run.fled += bandSize(band);
+      if (run.friends.includes(band)) run.allyGone.set(band, bandSize(band));
+      else run.fled += bandSize(band);
       this.warbands.disband(band);
     }
     // Quem vem atacar sabe onde a batalha está; o que fazer ao chegar sai do que os soldados veem
@@ -240,6 +312,12 @@ export const scenarioMethods = {
         const army = nearest(standing, band.anchor) ?? this.commander;
         if (this.scenarioStance.get(band) === "ATTACK" && !run.left.includes(band) && this.warbands.bands.includes(band)) this.warbands.marchOn(band, this.courseOf(run, band, army));
       }
+      // Os aliados não seguem o jogador: vão atrás do inimigo, cada um no mais perto
+      for (const band of run.friends) {
+        if (this.scenarioStance.get(band) !== "ATTACK" || run.left.includes(band) || !this.warbands.bands.includes(band)) continue;
+        const to = this.allyCourse(run, band);
+        if (to) this.warbands.marchOn(band, to);
+      }
     }
     if (run.siege) this.siegeBattleTick(run, run.siege);
     if (run.seconds >= run.nextSweep) {
@@ -247,12 +325,15 @@ export const scenarioMethods = {
       this.sweepField(run);
     }
     const foes = this.scenarioFoes(run);
-    useGameStore.setState({ scenarioHud: { seconds: run.seconds, enemies: foes, enemyTotal: scenarioEnemyTotal(run.def), waiting: run.pending.length > 0, siege: this.siegeHud(run) } });
+    // Só os reforços inimigos seguram a batalha: o aliado atrasado chega quando chegar
+    const coming = run.pending.some((f) => !f.allied);
+    const allies = run.allyStart.size > 0 || run.pending.some((f) => f.allied) ? this.scenarioAllies(run) : undefined;
+    useGameStore.setState({ scenarioHud: { seconds: run.seconds, enemies: foes, enemyTotal: scenarioEnemyTotal(run.def), waiting: coming, siege: this.siegeHud(run), allies } });
 
     if (run.def.objective === "SLAY_CHIEF" && run.chiefDown) return this.endScenario(run, "VICTORY", "O chefe caiu e o inimigo perdeu a cabeça.");
     if (run.def.objective === "SURVIVE" && run.seconds >= run.def.surviveMinutes * 60) return this.endScenario(run, "VICTORY", "O bando resistiu até o fim.");
     if (this.battalions.every((b) => b.isDestroyed)) return this.endScenario(run, "DEFEAT", "Todos os batalhões foram dizimados.");
-    if (foes > 0 || run.pending.length > 0) {
+    if (foes > 0 || coming) {
       run.clearSince = null;
       return;
     }
@@ -280,7 +361,7 @@ export const scenarioMethods = {
   endScenario(this: WorldScene, run: ScenarioRun, outcome: "VICTORY" | "DEFEAT", reason: string): void {
     const store = useGameStore.getState();
     if (store.scenarioResult) return;
-    const total = scenarioEnemyTotal(run.def) - run.pending.reduce((n, f) => n + forceSize(f), 0);
+    const total = scenarioEnemyTotal(run.def) - run.pending.reduce((n, f) => n + (f.allied ? 0 : forceSize(f)), 0);
     const standing = this.scenarioFoes(run);
     // Quem corria, ou só rondava, quando a batalha acabou também saiu vivo
     let afield = 0;
@@ -300,6 +381,7 @@ export const scenarioMethods = {
       commanderMaxHp: this.commander.maxHp,
       officers: run.officers,
       friendlyFire: run.friendlyFire,
+      allies: run.friends.map((b): ScenarioAllyResult => ({ name: b.name, start: run.allyStart.get(b) ?? 0, alive: run.allyGone.get(b) ?? bandSize(b), kills: run.allyKills.get(b) ?? 0 })),
     });
   },
 };

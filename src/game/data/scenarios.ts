@@ -1,6 +1,7 @@
 import type { BattleResult } from "../../store/useGameStore";
 import type { NobleTrait } from "../sim/nobility";
 import type { BandKind } from "../sim/realm";
+import type { CompanyStance } from "../sim/companies";
 import { BALANCE, DEFAULT_WORLD_OPTIONS, GEO, PROGRESSION, REGION_HEIGHT, REGION_WIDTH, SEASONS, TIME, TROOPS, WAR_AI, type EnemyKind, type Formation, type Season, type TroopType, type WarDifficulty, type Weather } from "../../utils/constants";
 import type { Point } from "../../utils/math";
 import { seasonDay, seasonOf } from "../../utils/season";
@@ -46,14 +47,29 @@ export interface ScenarioBattalion {
   lieutenant: boolean;
 }
 
+/** Um capitão do cenário (Marco 20) e a companhia dele. */
+export interface ScenarioCaptain {
+  id: string;
+  /** Vazio: sai um nome sorteado. */
+  name: string;
+  /** 1 a 5. */
+  command: number;
+  tactics: number;
+  /** Como a companhia começa a batalha. */
+  stance: CompanyStance;
+  /** A companhia, na ordem: o primeiro é a guarda dele. */
+  battalionIds: string[];
+}
+
 export interface ScenarioArmy {
   battalions: ScenarioBattalion[];
   scouts: number;
   messengers: number;
   wagons: number;
+  captains?: ScenarioCaptain[];
 }
 
-/** Uma força inimiga, com o próprio comandante. */
+/** Uma força em campo, com o próprio comandante: inimiga ou, marcada `allied`, do lado do bando. */
 export interface ScenarioForce {
   id: string;
   faction: EnemyFactionId;
@@ -69,6 +85,11 @@ export interface ScenarioForce {
   chief: string;
   /** Mão do comandante no um contra um, de 1 a 5 (Marco 21); sem valor, sai da competência. */
   duel?: number;
+  /**
+   * Força aliada (Fase 4, etapa 2): luta do lado do bando, com o mesmo comando dos inimigos
+   * (`WarHost`), mas o jogador não manda nela. Começa perto do bando e vai atrás do inimigo.
+   */
+  allied?: boolean;
 }
 
 export interface BattleScenario {
@@ -110,6 +131,14 @@ export interface ScenarioBattalionResult {
   kills: number;
 }
 
+/** Como saiu cada força aliada. */
+export interface ScenarioAllyResult {
+  name: string;
+  start: number;
+  alive: number;
+  kills: number;
+}
+
 export interface ScenarioResult {
   outcome: Extract<BattleResult, "VICTORY" | "DEFEAT">;
   reason: string;
@@ -124,6 +153,7 @@ export interface ScenarioResult {
   officers: string[];
   /** Flechas que caíram sobre os nossos. */
   friendlyFire: number;
+  allies?: ScenarioAllyResult[];
 }
 
 /** O que a barra da batalha mostra enquanto ela dura. */
@@ -134,6 +164,8 @@ export interface ScenarioHud {
   /** Reforços inimigos que ainda vão chegar (o jogador não sabe quando). */
   waiting: boolean;
   siege?: ScenarioSiegeHud;
+  /** Aliados da IA de pé (sem força aliada, não aparece). */
+  allies?: number;
 }
 
 /** Como estão os muros, para a barra da batalha. */
@@ -156,6 +188,7 @@ export const SCENARIO_LIMITS = {
   MESSENGERS: 4,
   WAGONS: 4,
   FORCES: 4,
+  CAPTAINS: 3,
   /** Por tipo de inimigo. */
   UNITS: 120,
   /** Acima disso o combate fica pesado (o Marco 16 mediu até 300 em campo). */
@@ -247,8 +280,34 @@ export function armyStart(s: Pick<BattleScenario, "distance" | "siege"> & { map?
   return { x: CENTER.x - wall - s.distance / 2, y: CENTER.y };
 }
 
+/**
+ * Onde uma força aliada começa: ao lado do bando, no lado escolhido (dentro dos muros, se o bando
+ * defende); quem chega depois vem de trás, de mais longe.
+ */
+function allyStart(s: Pick<BattleScenario, "distance" | "forces" | "siege"> & { map?: ScenarioMapId }, force: ScenarioForce): Point {
+  const at = armyStart(s);
+  const peers = s.forces.filter((f) => f.allied && f.side === force.side);
+  const k = peers.indexOf(force) - (peers.length - 1) / 2;
+  if (s.map === "DECK") return { x: at.x + 340, y: at.y + k * 200 };
+  // Dentro dos muros não há lugar para abrir uma ala
+  const room = s.siege?.role === "DEFEND" ? 0.4 : 1;
+  const far = force.delay > 0 ? 900 : 0;
+  const inMap = (p: Point): Point => ({ x: Math.max(300, Math.min(SCENARIO_WIDTH - 300, p.x)), y: Math.max(300, Math.min(SCENARIO_HEIGHT - 300, p.y)) });
+  switch (force.side) {
+    case "FRONT":
+      return inMap({ x: at.x + 380 * room - far, y: at.y + k * 380 * room });
+    case "LEFT":
+      return inMap({ x: at.x + k * 360 * room - far, y: at.y - 700 * room });
+    case "RIGHT":
+      return inMap({ x: at.x + k * 360 * room - far, y: at.y + 700 * room });
+    default:
+      return inMap({ x: at.x - 600 * room - far, y: at.y + k * 380 * room });
+  }
+}
+
 /** Onde uma força começa; quem chega depois vem de mais longe, fora de vista. */
 export function forceStart(s: Pick<BattleScenario, "distance" | "forces" | "siege"> & { map?: ScenarioMapId }, force: ScenarioForce): Point {
+  if (force.allied) return allyStart(s, force);
   if (s.map === "DECK") return { x: DECK.THEIRS.x + DECK.THEIRS.w / 2, y: DECK.THEIRS.y + DECK.THEIRS.h / 2 };
   if (force.side === "WALLS") return { ...CENTER };
   const peers = s.forces.filter((f) => f.side === force.side);
@@ -273,6 +332,7 @@ export function forceStart(s: Pick<BattleScenario, "distance" | "forces" | "sieg
 /** O que uma força faz de verdade: num cerco, quem está dentro espera e quem assalta vem. */
 export function forceStance(s: Pick<BattleScenario, "siege">, force: ScenarioForce): ForceStance {
   if (force.side === "WALLS") return "HOLD";
+  if (force.allied) return force.stance;
   return s.siege?.role === "DEFEND" ? "ATTACK" : force.stance;
 }
 
@@ -291,8 +351,18 @@ export function forceSize(force: ScenarioForce): number {
   return Object.values(force.units).reduce((n, c) => n + (c ?? 0), 0);
 }
 
-export function scenarioEnemyTotal(s: BattleScenario): number {
-  return s.forces.reduce((n, f) => n + forceSize(f), 0);
+/** Quantos inimigos o cenário põe em campo (as forças aliadas ficam de fora). */
+export function scenarioEnemyTotal(s: Pick<BattleScenario, "forces">): number {
+  return s.forces.reduce((n, f) => n + (f.allied ? 0 : forceSize(f)), 0);
+}
+
+export function scenarioAllyTotal(s: Pick<BattleScenario, "forces">): number {
+  return s.forces.reduce((n, f) => n + (f.allied ? forceSize(f) : 0), 0);
+}
+
+/** A força cujo chefe o objetivo "matar o chefe" manda caçar: a primeira inimiga. */
+export function chiefForce(s: Pick<BattleScenario, "forces">): ScenarioForce | undefined {
+  return s.forces.find((f) => !f.allied);
 }
 
 export function scenarioArmyTotal(s: BattleScenario): number {
@@ -303,12 +373,14 @@ export function scenarioArmyTotal(s: BattleScenario): number {
 export function scenarioProblem(s: BattleScenario): string | null {
   if (s.army.battalions.length === 0) return "Monte pelo menos um batalhão.";
   if (s.forces.length === 0 || scenarioEnemyTotal(s) === 0) return "Coloque pelo menos um inimigo em campo.";
-  if (s.objective === "SLAY_CHIEF" && forceSize(s.forces[0]) === 0) return "A primeira força precisa de soldados para ter um chefe.";
+  const chief = chiefForce(s);
+  if (s.objective === "SLAY_CHIEF" && (!chief || forceSize(chief) === 0)) return "A primeira força inimiga precisa de soldados para ter um chefe.";
+  if (s.forces.some((f) => f.allied && f.side === "WALLS")) return "Uma força aliada não fica atrás dos muros do inimigo.";
   if (s.siege) {
     if (!SIEGE_MAPS.includes(s.map)) return "A fortaleza não cabe neste mapa: escolha um sem rio nem desfiladeiro.";
     if (s.siege.role === "ATTACK") {
       if (s.siege.ladders + s.siege.rams === 0) return "Sem escadas nem aríete, o exército não tem como entrar.";
-      if (!s.forces.some((f) => f.side === "WALLS" && forceSize(f) > 0)) return "Coloque uma força atrás dos muros.";
+      if (!s.forces.some((f) => f.side === "WALLS" && !f.allied && forceSize(f) > 0)) return "Coloque uma força atrás dos muros.";
     } else if (s.forces.some((f) => f.side === "WALLS")) {
       return "Quem defende os muros é você: as forças inimigas vêm de fora.";
     }
@@ -320,7 +392,8 @@ export function scenarioProblem(s: BattleScenario): string | null {
 export function withSiege(s: BattleScenario, siege: ScenarioSiege | null): BattleScenario {
   const map = siege && !SIEGE_MAPS.includes(s.map) ? "PLAINS" : s.map;
   if (siege?.role === "ATTACK") {
-    const forces = s.forces.some((f) => f.side === "WALLS") ? s.forces : s.forces.map((f, i): ScenarioForce => (i === 0 ? { ...f, side: "WALLS" } : f));
+    const first = s.forces.findIndex((f) => !f.allied);
+    const forces = s.forces.some((f) => f.side === "WALLS" && !f.allied) ? s.forces : s.forces.map((f, i): ScenarioForce => (i === first ? { ...f, side: "WALLS" } : f));
     return { ...s, siege, map, forces };
   }
   return { ...s, siege, map, forces: s.forces.map((f): ScenarioForce => (f.side === "WALLS" ? { ...f, side: "FRONT" } : f)) };
@@ -510,6 +583,16 @@ export function newBattalionSpec(troop: TroopType, level = 1, gear = 0, lieutena
 export function newForce(faction: EnemyFactionId = "GOBLINS"): ScenarioForce {
   const [first, second] = ENEMY_FACTIONS[faction].units;
   return { id: newId(), faction, units: { [first]: 18, ...(second ? { [second]: 6 } : {}) }, side: "FRONT", stance: "ATTACK", delay: 0, competence: 3, trait: "BRAVE", chief: "" };
+}
+
+/** Força aliada nova: um exército de reino ao lado do bando, no flanco direito. */
+export function newAlly(faction: EnemyFactionId = "KINGDOM"): ScenarioForce {
+  return { ...newForce(faction), side: "RIGHT", allied: true, trait: "HONORABLE" };
+}
+
+/** Capitão novo, com a companhia que lhe derem (o primeiro batalhão é a guarda dele). */
+export function newCaptainSpec(battalionIds: string[] = []): ScenarioCaptain {
+  return { id: newId(), name: "", command: 3, tactics: 3, stance: "FREE", battalionIds };
 }
 
 export function blankScenario(): BattleScenario {
@@ -793,13 +876,37 @@ function cleanForce(raw: Partial<ScenarioForce>): ScenarioForce {
     competence: clamp(raw.competence, 1, 5, 3),
     trait: oneOf<NobleTrait>(raw.trait, FORCE_TRAITS, "BRAVE"),
     chief: typeof raw.chief === "string" ? raw.chief.slice(0, 40) : "",
+    ...(typeof raw.duel === "number" ? { duel: clamp(raw.duel, 1, 5, 3) } : {}),
+    ...(raw.allied ? { allied: true } : {}),
   };
+}
+
+/** Capitães guardados: cada batalhão só numa companhia, e só os que existem. */
+function cleanCaptains(raw: unknown, battalions: readonly ScenarioBattalion[]): ScenarioCaptain[] {
+  const taken = new Set<string>();
+  const list: ScenarioCaptain[] = [];
+  for (const c of (Array.isArray(raw) ? raw : []) as Partial<ScenarioCaptain>[]) {
+    if (list.length >= SCENARIO_LIMITS.CAPTAINS) break;
+    const ids = (Array.isArray(c.battalionIds) ? c.battalionIds : []).filter((id): id is string => typeof id === "string" && !taken.has(id) && battalions.some((b) => b.id === id));
+    for (const id of ids) taken.add(id);
+    list.push({
+      id: typeof c.id === "string" ? c.id : newId(),
+      name: typeof c.name === "string" ? c.name.slice(0, 40) : "",
+      command: clamp(c.command, 1, 5, 3),
+      tactics: clamp(c.tactics, 1, 5, 3),
+      stance: oneOf<CompanyStance>(c.stance, ["FREE", "HOLD", "PURSUE"], "FREE"),
+      battalionIds: ids,
+    });
+  }
+  return list;
 }
 
 /** Cenário vindo do armazenamento: o que não fizer sentido volta ao padrão. */
 export function cleanScenario(raw: Partial<BattleScenario>): BattleScenario {
   const base = blankScenario();
   const army: Partial<ScenarioArmy> = raw.army ?? {};
+  const battalions = (Array.isArray(army.battalions) ? army.battalions : []).slice(0, SCENARIO_LIMITS.BATTALIONS).map(cleanBattalion);
+  const captains = cleanCaptains(army.captains, battalions);
   const clean: BattleScenario = {
     ...base,
     id: typeof raw.id === "string" ? raw.id : base.id,
@@ -816,10 +923,11 @@ export function cleanScenario(raw: Partial<BattleScenario>): BattleScenario {
     directOrders: raw.directOrders !== false,
     difficulty: oneOf<WarDifficulty>(raw.difficulty, WAR_AI.DIFFICULTY, "VETERAN"),
     army: {
-      battalions: (Array.isArray(army.battalions) ? army.battalions : []).slice(0, SCENARIO_LIMITS.BATTALIONS).map(cleanBattalion),
+      battalions,
       scouts: clamp(army.scouts, 0, SCENARIO_LIMITS.SCOUTS, 1),
       messengers: clamp(army.messengers, 0, SCENARIO_LIMITS.MESSENGERS, 1),
       wagons: clamp(army.wagons, 0, SCENARIO_LIMITS.WAGONS, 0),
+      ...(captains.length > 0 ? { captains } : {}),
     },
     forces: (Array.isArray(raw.forces) ? raw.forces : []).slice(0, SCENARIO_LIMITS.FORCES).map(cleanForce),
   };
@@ -871,4 +979,4 @@ export function noteResult(id: string, result: ScenarioResult): void {
 }
 
 // Acesso para depuração/testes automatizados (somente em dev)
-if (import.meta.env.DEV && typeof window !== "undefined") (window as unknown as { __scenarios?: unknown }).__scenarios = { blankScenario, newForce, newBattalionSpec, newSiege, withSiege, boardingScenario, presets: PRESET_SCENARIOS };
+if (import.meta.env.DEV && typeof window !== "undefined") (window as unknown as { __scenarios?: unknown }).__scenarios = { blankScenario, newForce, newAlly, newCaptainSpec, newBattalionSpec, newSiege, withSiege, boardingScenario, presets: PRESET_SCENARIOS };

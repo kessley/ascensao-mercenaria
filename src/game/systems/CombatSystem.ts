@@ -33,7 +33,7 @@ function chargeImpact(scene: Phaser.Scene, unit: Unit, target: Unit, units: read
   target.stunnedUntil = time + COMBAT.CHARGE_STUN_MS;
   target.shock(COMBAT.CHARGE_SHOCK * unit.chargeShock);
   for (const other of units) {
-    if (other === target || !other.isAlive || other.team === unit.team || distance(other, target) > COMBAT.CHARGE_SPLASH) continue;
+    if (other === target || !other.isAlive || other.allegiance === unit.allegiance || distance(other, target) > COMBAT.CHARGE_SPLASH) continue;
     other.shove(angleTo(unit, other), push * 0.5);
     other.shock(COMBAT.CHARGE_SHOCK * unit.chargeShock * 0.15);
   }

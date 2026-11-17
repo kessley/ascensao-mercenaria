@@ -279,6 +279,8 @@ export const saveMethods = {
       band.lastSeen = { x: c.x, y: c.y, day };
       if (band.spotted) continue;
       band.spotted = true;
+      // O que é do bando (a caravana, a força aliada do cenário) não é avistado: já se sabe onde está
+      if (band.ownerId === "PLAYER") continue;
       if (!isRaiderKind(band.kind)) {
         // Patrulhas, mensageiros e refugiados: só uma nota (não são ameaça)
         const what = band.kind === "REFUGEES" ? `${band.name} na estrada, fugindo` : `${band.name} passando`;

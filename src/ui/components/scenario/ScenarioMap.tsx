@@ -62,7 +62,9 @@ export function ScenarioMap({ scenario }: { scenario: BattleScenario }) {
       dot(forceStart(scenario, force), (x, y) => {
         const late = force.delay > 0;
         const size = Math.min(13, 6 + forceSize(force) / 8);
-        ctx.fillStyle = late ? "rgba(214,64,44,0.35)" : "#d6402c";
+        // O aliado aparece em azul, como o bando
+        if (force.allied) ctx.fillStyle = late ? "rgba(63,134,214,0.35)" : "#5fa0e6";
+        else ctx.fillStyle = late ? "rgba(214,64,44,0.35)" : "#d6402c";
         ctx.strokeStyle = "#fff0e6";
         ctx.lineWidth = 1.5;
         ctx.setLineDash(late ? [3, 2] : []);

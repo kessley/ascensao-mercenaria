@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENEMY_FACTIONS, PRESET_SCENARIOS, SCENARIO_MAPS, SCENARIO_TOWN, SIEGE_MAPS, armyStart, blankScenario, buildScenarioWorld, cleanScenario, forceSize, forceStance, forceStart, newForce, newSiege, scenarioDay, scenarioProblem, withSiege, type ScenarioMapId } from "../../src/game/data/scenarios";
+import { ENEMY_FACTIONS, PRESET_SCENARIOS, SCENARIO_MAPS, SCENARIO_TOWN, SIEGE_MAPS, armyStart, blankScenario, buildScenarioWorld, chiefForce, cleanScenario, forceSize, forceStance, forceStart, newAlly, newCaptainSpec, newForce, newSiege, scenarioAllyTotal, scenarioDay, scenarioEnemyTotal, scenarioProblem, withSiege, type ScenarioMapId } from "../../src/game/data/scenarios";
 import { TOWN_SIZE } from "../../src/game/world/townLayout";
 import { ENEMIES, TROOPS } from "../../src/utils/constants";
 import { seasonOf } from "../../src/utils/season";
@@ -177,5 +177,67 @@ describe("batalha de cerco", () => {
     expect(sieges.some((p) => p.siege?.role === "ATTACK")).toBe(true);
     expect(sieges.some((p) => p.siege?.role === "DEFEND")).toBe(true);
     for (const p of sieges) expect(scenarioProblem(p), p.name).toBeNull();
+  });
+});
+
+describe("forças aliadas e capitães (Fase 4, etapa 2)", () => {
+  const withAlly = (side: "FRONT" | "LEFT" | "RIGHT" | "REAR" = "RIGHT") => {
+    const s = blankScenario();
+    return { ...s, forces: [...s.forces, { ...newAlly(), side }] };
+  };
+
+  it("o aliado não conta como inimigo", () => {
+    const s = withAlly();
+    expect(scenarioEnemyTotal(s)).toBe(forceSize(s.forces[0]));
+    expect(scenarioAllyTotal(s)).toBe(forceSize(s.forces[1]));
+    expect(scenarioProblem({ ...s, forces: [s.forces[1]] })).not.toBeNull();
+  });
+
+  it("começa ao lado do bando, longe do inimigo", () => {
+    for (const side of ["FRONT", "LEFT", "RIGHT", "REAR"] as const) {
+      const s = withAlly(side);
+      const ally = forceStart(s, s.forces[1]);
+      const army = armyStart(s);
+      const foe = forceStart(s, s.forces[0]);
+      expect(Math.hypot(ally.x - army.x, ally.y - army.y), side).toBeLessThan(Math.hypot(ally.x - foe.x, ally.y - foe.y));
+    }
+  });
+
+  it("o chefe a caçar é o da primeira força inimiga, mesmo com o aliado na frente da lista", () => {
+    const s = withAlly();
+    const swapped = { ...s, objective: "SLAY_CHIEF" as const, forces: [s.forces[1], s.forces[0]] };
+    expect(chiefForce(swapped)).toBe(s.forces[0]);
+    expect(scenarioProblem(swapped)).toBeNull();
+  });
+
+  it("no cerco, o aliado não fica atrás dos muros do inimigo, e o assalto escolhe a força inimiga", () => {
+    const s = withAlly();
+    const sieged = withSiege({ ...s, forces: [s.forces[1], s.forces[0]] }, newSiege());
+    expect(sieged.forces[0].side).not.toBe("WALLS");
+    expect(sieged.forces[1].side).toBe("WALLS");
+    expect(scenarioProblem({ ...sieged, forces: [{ ...sieged.forces[0], side: "WALLS" }, sieged.forces[1]] })).not.toBeNull();
+  });
+
+  it("quem defende os muros não muda a postura do aliado", () => {
+    const s = withSiege(withAlly(), { ...newSiege(), role: "DEFEND" });
+    expect(forceStance(s, { ...s.forces[1], stance: "HOLD" })).toBe("HOLD");
+    expect(forceStance(s, { ...s.forces[0], stance: "HOLD" })).toBe("ATTACK");
+  });
+
+  it("o cenário guardado mantém o aliado, o duelo e os capitães (cada batalhão numa companhia só)", () => {
+    const s = withAlly();
+    const [a, b] = s.army.battalions;
+    const raw = {
+      ...s,
+      forces: [{ ...s.forces[0], duel: 4 }, s.forces[1]],
+      army: { ...s.army, captains: [newCaptainSpec([a.id, b.id]), { ...newCaptainSpec([b.id, "sumiu"]), command: 99 }] },
+    };
+    const back = cleanScenario(JSON.parse(JSON.stringify(raw)));
+    expect(back.forces[1].allied).toBe(true);
+    expect(back.forces[0].allied).toBeUndefined();
+    expect(back.forces[0].duel).toBe(4);
+    expect(back.army.captains?.[0].battalionIds).toEqual([a.id, b.id]);
+    expect(back.army.captains?.[1].battalionIds).toEqual([]);
+    expect(back.army.captains?.[1].command).toBe(5);
   });
 });

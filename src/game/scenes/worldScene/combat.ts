@@ -181,6 +181,8 @@ export const combatMethods = {
     const dueled = this.duelTaken.has(name);
     if (!dueled) eng?.notes.push(chief ? `${name}, que comandava o ${host.band?.name ?? "bando"}, caiu em combate.` : `O capitão ${name} caiu em combate.`);
     if (this.run) {
+      // Oficial aliado que cai não entra na conta dos inimigos abatidos
+      if (host.band && this.run.friends.includes(host.band)) return;
       this.run.officers.push(name);
       if (chief && host.band === this.run.prey) this.run.chiefDown = true;
     }
@@ -550,6 +552,14 @@ export const combatMethods = {
     for (const s of this.scouts) if (s.isAlive && s.inContact) add(s, s.vision);
     for (const m of this.messengers) if (m.isAlive) add(m, V.MESSENGER);
     for (const { party } of this.parties.values()) add(party, V.BATTALION);
+    // Batalha personalizada: a força aliada enxerga para o bando (alguns olhos por força)
+    if (this.run) {
+      for (const band of this.run.friends) {
+        const alive = band.members.filter((m) => m.isAlive);
+        const step = Math.max(1, Math.ceil(alive.length / 6));
+        for (let i = 0; i < alive.length; i += step) add(alive[i], V.BATTALION);
+      }
+    }
     // Batalha personalizada sem névoa: todo o campo à vista
     if (this.run && !this.run.def.fog) sources.push({ x: this.world.camp.center.x, y: this.world.camp.center.y, radius: 20000 });
     // Torres de vigia da planta do acampamento: enxergam longe em volta dele

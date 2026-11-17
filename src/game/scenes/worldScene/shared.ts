@@ -139,7 +139,14 @@ export interface ScenarioRun {
   seconds: number;
   /** Forças que ainda vão entrar em campo. */
   pending: ScenarioForce[];
+  /** As forças inimigas em campo. */
   bands: Warband[];
+  /** As forças aliadas da IA em campo (do lado do bando). */
+  friends: Warband[];
+  /** Quantos cada força aliada trouxe, quantos saíram do campo em ordem e quantos ela derrubou. */
+  allyStart: Map<Warband, number>;
+  allyGone: Map<Warband, number>;
+  allyKills: Map<Warband, number>;
   /** Saíram do campo em ordem: contam como quem fugiu. */
   left: Warband[];
   fled: number;
@@ -154,6 +161,8 @@ export interface ScenarioRun {
   start: Map<string, number>;
   /** Flechas que caíram sobre os nossos. */
   friendlyFire: number;
+  /** Flechas do inimigo que caíram sobre os dele (mede a disciplina dos arqueiros dele). */
+  foeFriendlyFire: number;
 }
 
 /**

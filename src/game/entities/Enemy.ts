@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Unit } from "./Unit";
+import { Unit, type Team } from "./Unit";
 import { BALANCE, COLORS, ENEMIES, FORMATIONS, MAGIC, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
@@ -174,6 +174,18 @@ export class Enemy extends Unit {
 
   override noteCharge(time: number): void {
     this.squad?.noteImpact(time);
+  }
+
+  /** Derrubou alguém do outro lado: a batalha personalizada conta as baixas da força aliada. */
+  static onScore: ((killer: Enemy) => void) | null = null;
+
+  override onKill(): void {
+    Enemy.onScore?.(this);
+  }
+
+  /** O aliado do bando luta do nosso lado. */
+  override get allegiance(): Team {
+    return this.friendly ? "ALLY" : "ENEMY";
   }
 
   /** Patrulha em paz não leva flecha perdida: ninguém começa uma guerra por acidente. */

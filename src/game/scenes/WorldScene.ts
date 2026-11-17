@@ -442,7 +442,8 @@ export class WorldScene extends Phaser.Scene {
     setWorldSize(this.world.cols, this.world.rows);
     this.onBridge = null;
     Enemy.onSpot = (e, scout) => this.onScoutSpotted(e, scout);
-    Unit.onFriendlyFire = (victim) => this.onFriendlyFire(victim);
+    Unit.onFriendlyFire = (victim, shooter) => this.onFriendlyFire(victim, shooter);
+    Enemy.onScore = (killer) => this.onEnemyScore(killer);
 
     // Mundo gerado: chão, terreno, estradas, locais de contrato, povoados e o acampamento
     this.culler = new StaticCuller();
@@ -576,7 +577,11 @@ export class WorldScene extends Phaser.Scene {
       },
     });
     this.warbands.hostile = (b) => this.bandHostile(b);
-    this.warbands.onEnterBubble = (b) => this.hosts.attachBand(b);
+    this.warbands.onEnterBubble = (b) => {
+      // O que é do bando (a caravana dele, a força aliada do cenário) já chega do nosso lado
+      if (b.ownerId === "PLAYER") for (const m of b.members) m.setFriendly(true);
+      this.hosts.attachBand(b);
+    };
     this.warbands.onLeaveBubble = (b) => this.hosts.detachBand(b);
 
     // Bandos marcham pelas mesmas regras de chão (lama, neve); inverno: os reinos recolhem os exércitos
@@ -709,6 +714,7 @@ export class WorldScene extends Phaser.Scene {
       Enemy.darkPerception = 1;
       Enemy.weatherSight = 1;
       Enemy.onSpot = null;
+      Enemy.onScore = null;
       Unit.onFriendlyFire = null;
       setArrowField([]);
     };
@@ -833,9 +839,11 @@ export class WorldScene extends Phaser.Scene {
     const base = (e: Enemy): readonly Unit[] => (e.friendly ? foesOfFriendly : e.side === "WILD" ? town : e.side === "TOWN" ? (e.hostile ? wildAndFriendly : wild) : e.hostile ? friendly : []);
     // Exércitos de reinos em guerra lutam de verdade quando se encontram na bolha
     const warFoes = this.warFoes(active);
+    // Batalha personalizada: goblins e reinos do cenário não brigam entre si; o aliado da IA luta
+    // com quem é hostil ao bando, e quem é hostil luta com ele
+    const runFoes = this.run && friendly.length > 0 ? active.filter((e) => e.hostile && !e.friendly) : [];
     const rivalsOf = (e: Enemy): readonly Unit[] => {
-      // Batalha personalizada: goblins e reinos do cenário não brigam entre si
-      if (this.run) return [];
+      if (this.run) return e.friendly ? runFoes : e.hostile ? friendly : [];
       const extra = e.factionId ? warFoes.get(e.factionId) : undefined;
       return extra ? [...base(e), ...extra] : base(e);
     };
@@ -964,10 +972,23 @@ export class WorldScene extends Phaser.Scene {
     for (const h of this.hosts.hosts) for (const s of h.squads) if (noticed(s) && s.soldiers[0]?.revealed) s.soldiers[0].floatText("flanqueados!", "#ffd27a");
   }
 
-  /** Flecha caiu nos nossos: conta na batalha e avisa, sem encher o feed. */
-  onFriendlyFire(victim: Unit): void {
-    if (this.run) this.run.friendlyFire++;
-    if (victim.team !== "ALLY" || this.time.now - this.friendlyFireAt < 6000) return;
+  /** Um inimigo derrubou alguém do outro lado: se for da força aliada do cenário, a baixa é dela. */
+  onEnemyScore(killer: Enemy): void {
+    const run = this.run;
+    if (!run || !killer.friendly || killer.owner?.kind !== "WARBAND") return;
+    const id = killer.owner.id;
+    const band = run.friends.find((b) => b.id === id);
+    if (band) run.allyKills.set(band, (run.allyKills.get(band) ?? 0) + 1);
+  }
+
+  /** Flecha caiu nos nossos: conta na batalha e avisa, sem encher o feed (só as nossas: o B é nosso). */
+  onFriendlyFire(victim: Unit, shooter: Unit): void {
+    // A batalha conta as duas coisas: as flechas nos nossos homens e as do inimigo nos dele
+    if (this.run) {
+      if (victim.team === "ALLY") this.run.friendlyFire++;
+      else if (victim.allegiance === "ENEMY") this.run.foeFriendlyFire++;
+    }
+    if (victim.team !== "ALLY" || shooter.team !== "ALLY" || this.time.now - this.friendlyFireAt < 6000) return;
     this.friendlyFireAt = this.time.now;
     victim.floatText("fogo amigo!", "#ffb3a0");
     this.pushFeed("Nossas flechas estão caindo sobre os nossos! Cessem fogo (B).");

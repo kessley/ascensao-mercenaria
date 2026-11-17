@@ -552,6 +552,14 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return 1;
   }
 
+  /**
+   * De que lado ele luta: o time, mas um inimigo aliado do bando (guarnição, força aliada da IA)
+   * luta do nosso. É o que decide fogo amigo, a baixa creditada e quem empurra quem.
+   */
+  get allegiance(): Team {
+    return this.team;
+  }
+
   /** Pode levar uma flecha que não era para ele. */
   get strayTarget(): boolean {
     return true;
@@ -737,7 +745,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       sfx.dodge(this);
       return;
     }
-    const friendly = source !== this && source.team === this.team && kind === "RANGED";
+    const friendly = source !== this && source.allegiance === this.allegiance && kind === "RANGED";
     // Escudo de frente para a chuva de flechas (quem vem de lado ou por trás não tem o que parar)
     if (kind === "RANGED" && this.shieldBlock > 0 && this.approachOf(source) === "FRONT" && Math.random() < this.shieldBlock) return;
     this.hp = Math.max(0, this.hp - amount * this.incomingMultiplier(source, kind));
@@ -773,7 +781,7 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       this.flashHit();
     } else this.flashEmber();
     if (this.hp <= 0) {
-      if (credit && credit.team !== this.team) credit.onKill();
+      if (credit && credit.allegiance !== this.allegiance) credit.onKill();
       this.die();
     }
   }

@@ -8,12 +8,12 @@ import { forEachNearPair } from "./nearPairs";
  * plantado lutando ou na fileira não cede a quem chega andando; quem carrega abre caminho.
  */
 function massAgainst(u: Unit, other: Unit): number {
-  if (u.isHero && u.team === other.team) return Infinity;
+  if (u.isHero && u.allegiance === other.allegiance) return Infinity;
   if (u.isCharging || u.ridingThrough) return u.mass * COMBAT.PUSH_CHARGING;
   // Cavalo em movimento abre caminho: é assim que a cavalaria sai de um cerco
   if (u.mounted && u.unitState === "MOVING") return u.mass * COMBAT.PUSH_RIDER;
   // Entre aliados ninguém é parede: quem passa e quem está parado abrem espaço um para o outro
-  const planted = u.team !== other.team && (u.unitState === "ATTACKING" || u.unitState === "IDLE");
+  const planted = u.allegiance !== other.allegiance && (u.unitState === "ATTACKING" || u.unitState === "IDLE");
   return planted ? u.mass * COMBAT.PUSH_PLANTED : u.mass;
 }
 

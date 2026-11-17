@@ -78,6 +78,12 @@ export class Companies {
       });
   }
 
+  /** Batalha personalizada: os capitães começam na postura que o cenário pediu. */
+  open(captains: readonly CaptainData[], stances: ReadonlyMap<string, CompanyStance>, field: readonly Battalion[]): void {
+    this.sync(captains);
+    for (const [id, stance] of stances) this.setStance(id, stance, field);
+  }
+
   /** Ordem direta do jogador a um batalhão: vale mais que a do capitão por um tempo. */
   playerOrdered(b: Battalion, time: number): void {
     this.orderedAt.set(b.id, time);

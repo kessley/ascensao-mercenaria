@@ -12,9 +12,12 @@ import {
   SIEGE_ROLES,
   SIEGE_TOWNS,
   forceSize,
+  newAlly,
   newBattalionSpec,
+  newCaptainSpec,
   newForce,
   newSiege,
+  scenarioAllyTotal,
   scenarioEnemyTotal,
   withSiege,
   type BattleScenario,
@@ -23,6 +26,7 @@ import {
   type ForceStance,
   type ScenarioArmy,
   type ScenarioBattalion,
+  type ScenarioCaptain,
   type ScenarioForce,
   type ScenarioHour,
   type ScenarioMapId,
@@ -32,6 +36,7 @@ import {
   type SiegeTown,
 } from "../../../game/data/scenarios";
 import { NOBLE_TRAITS, type NobleTrait } from "../../../game/sim/nobility";
+import { STANCE_LABEL, type CompanyStance } from "../../../game/sim/companies";
 import { ENEMIES, FORMATIONS, PROGRESSION, SEASONS, TROOPS, WAR_AI, WEATHER, type Formation, type Season, type TroopType, type WarDifficulty, type Weather } from "../../../utils/constants";
 
 const inputClass = "w-full rounded border border-neutral-600 bg-neutral-900 px-2 py-1.5 text-sm text-white outline-none focus:border-amber-400";
@@ -117,15 +122,62 @@ function BattalionRow({ b, onChange, onRemove }: { b: ScenarioBattalion; onChang
   );
 }
 
+/** Um capitão (Marco 20): nome, comando, tática, a postura do começo e a companhia, em ordem (o primeiro é a guarda dele). */
+function CaptainRow({ c, index, army, onChange, onRemove }: { c: ScenarioCaptain; index: number; army: ScenarioArmy; onChange: (c: ScenarioCaptain) => void; onRemove: () => void }) {
+  const others = new Set((army.captains ?? []).filter((x) => x.id !== c.id).flatMap((x) => x.battalionIds));
+  const toggle = (id: string) => onChange({ ...c, battalionIds: c.battalionIds.includes(id) ? c.battalionIds.filter((x) => x !== id) : [...c.battalionIds, id] });
+  return (
+    <div className="flex flex-col gap-2 rounded border border-neutral-800 bg-neutral-950/60 p-2" data-scenario-captain={index}>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={`Capitão ${index + 1} (vazio = sorteado)`}>
+          <input value={c.name} maxLength={40} onChange={(e) => onChange({ ...c, name: e.target.value })} className={inputClass} />
+        </Field>
+        <Pick<CompanyStance> label="Começa" value={c.stance} options={(Object.keys(STANCE_LABEL) as CompanyStance[]).map((id) => [id, STANCE_LABEL[id]])} onChange={(stance) => onChange({ ...c, stance })} />
+        <Count label="Comando" value={c.command} min={1} max={5} onChange={(command) => onChange({ ...c, command })} />
+        <Count label="Tática" value={c.tactics} min={1} max={5} onChange={(tactics) => onChange({ ...c, tactics })} />
+      </div>
+      <div className="flex flex-wrap items-center gap-1 text-xs">
+        <span className="text-neutral-400">Companhia:</span>
+        {army.battalions.map((b, i) => {
+          const on = c.battalionIds.includes(b.id);
+          const guard = c.battalionIds[0] === b.id;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              disabled={!on && others.has(b.id)}
+              onClick={() => toggle(b.id)}
+              title={guard ? "A guarda do capitão: ele marcha com este batalhão" : undefined}
+              className={`${SMALL_BTN} ${on ? "border-amber-400 text-amber-200" : ""}`}
+            >
+              {i + 1} · {TROOPS[b.troop].label}
+              {guard ? " ⚑" : ""}
+            </button>
+          );
+        })}
+        <button type="button" onClick={onRemove} className={`${SMALL_BTN} ml-auto`}>
+          Remover
+        </button>
+      </div>
+      {c.battalionIds.length === 0 && <p className="text-xs text-neutral-400">Sem companhia, o capitão fica fora da batalha.</p>}
+    </div>
+  );
+}
+
 function ArmyEditor({ army, onChange }: { army: ScenarioArmy; onChange: (a: ScenarioArmy) => void }) {
   const setBattalion = (i: number, next: ScenarioBattalion) => onChange({ ...army, battalions: army.battalions.map((b, k) => (k === i ? next : b)) });
   const add = (troop: TroopType) => onChange({ ...army, battalions: [...army.battalions, newBattalionSpec(troop)] });
+  // Batalhão que sai leva o lugar dele na companhia junto
+  const remove = (b: ScenarioBattalion) => onChange({ ...army, battalions: army.battalions.filter((x) => x !== b), captains: army.captains?.map((c) => ({ ...c, battalionIds: c.battalionIds.filter((id) => id !== b.id) })) });
+  const captains = army.captains ?? [];
+  const setCaptain = (i: number, next: ScenarioCaptain) => onChange({ ...army, captains: captains.map((c, k) => (k === i ? next : c)) });
+  const free = army.battalions.find((b) => !captains.some((c) => c.battalionIds.includes(b.id)));
   const full = army.battalions.length >= SCENARIO_LIMITS.BATTALIONS;
   const total = army.battalions.reduce((n, b) => n + b.soldiers, 0);
   return (
     <Section title="Seu exército" hint={`${army.battalions.length}/${SCENARIO_LIMITS.BATTALIONS} batalhões · ${total} soldados`}>
       {army.battalions.map((b, i) => (
-        <BattalionRow key={b.id} b={b} onChange={(next) => setBattalion(i, next)} onRemove={() => onChange({ ...army, battalions: army.battalions.filter((x) => x !== b) })} />
+        <BattalionRow key={b.id} b={b} onChange={(next) => setBattalion(i, next)} onRemove={() => remove(b)} />
       ))}
       <div className="flex flex-wrap gap-2">
         {(Object.keys(TROOPS) as TroopType[]).map((t) => (
@@ -138,6 +190,21 @@ function ArmyEditor({ army, onChange }: { army: ScenarioArmy; onChange: (a: Scen
         <Count label="Batedores" value={army.scouts} min={0} max={SCENARIO_LIMITS.SCOUTS} onChange={(scouts) => onChange({ ...army, scouts })} />
         <Count label="Mensageiros" value={army.messengers} min={0} max={SCENARIO_LIMITS.MESSENGERS} onChange={(messengers) => onChange({ ...army, messengers })} />
         <Count label="Carroças" value={army.wagons} min={0} max={SCENARIO_LIMITS.WAGONS} onChange={(wagons) => onChange({ ...army, wagons })} />
+      </div>
+      {captains.map((c, i) => (
+        <CaptainRow key={c.id} c={c} index={i} army={army} onChange={(next) => setCaptain(i, next)} onRemove={() => onChange({ ...army, captains: captains.filter((x) => x !== c) })} />
+      ))}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={captains.length >= SCENARIO_LIMITS.CAPTAINS || !free}
+          onClick={() => onChange({ ...army, captains: [...captains, newCaptainSpec(free ? [free.id] : [])] })}
+          className={`${SMALL_BTN} shrink-0`}
+          title="Um capitão conduz uma companhia de batalhões e decide sozinho onde a voz do Comandante não chega"
+        >
+          + Capitão
+        </button>
+        {captains.length > 0 && <span className="text-xs text-neutral-400">Por conta própria, ele só age longe da voz do Comandante (desligue as ordens diretas para ver).</span>}
       </div>
     </Section>
   );
@@ -169,23 +236,34 @@ function SiegeEditor({ scenario, onChange }: { scenario: BattleScenario; onChang
 
 function ForceEditor({ force, index, siege, onChange, onRemove }: { force: ScenarioForce; index: number; siege: ScenarioSiege | null; onChange: (f: ScenarioForce) => void; onRemove: () => void }) {
   const faction = ENEMY_FACTIONS[force.faction];
-  // Só há "atrás dos muros" quando os muros são do inimigo; lá dentro, ou no assalto, ninguém escolhe o que fazer
-  const sides = (Object.entries(FORCE_SIDES) as [ForceSide, string][]).filter(([id]) => id !== "WALLS" || siege?.role === "ATTACK");
-  const fixed = force.side === "WALLS" || siege?.role === "DEFEND";
-  const setFaction = (id: EnemyFactionId) => onChange({ ...newForce(id), id: force.id, side: force.side, stance: force.stance, delay: force.delay, competence: force.competence, trait: force.trait, chief: force.chief, duel: force.duel });
+  const allied = !!force.allied;
+  // Só há "atrás dos muros" quando os muros são do inimigo (e o aliado não fica lá); lá dentro, ou no assalto, o inimigo não escolhe o que fazer
+  const sides = (Object.entries(FORCE_SIDES) as [ForceSide, string][]).filter(([id]) => id !== "WALLS" || (siege?.role === "ATTACK" && !allied));
+  const fixed = force.side === "WALLS" || (siege?.role === "DEFEND" && !allied);
+  const setFaction = (id: EnemyFactionId) => onChange({ ...newForce(id), id: force.id, side: force.side, stance: force.stance, delay: force.delay, competence: force.competence, trait: force.trait, chief: force.chief, duel: force.duel, ...(allied ? { allied } : {}) });
+  const setAllied = (on: boolean) => {
+    const { allied: _, ...rest } = force;
+    onChange(on ? { ...rest, allied: true, side: force.side === "WALLS" ? "FRONT" : force.side } : rest);
+  };
   return (
-    <div className="flex flex-col gap-3 rounded border border-neutral-800 bg-neutral-950/60 p-3">
+    <div className={`flex flex-col gap-3 rounded border bg-neutral-950/60 p-3 ${allied ? "border-sky-900" : "border-neutral-800"}`} data-scenario-force={allied ? "ally" : "foe"}>
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold text-red-200">
-          Força {index + 1} <span className="font-normal text-neutral-400">· {forceSize(force)} combatentes</span>
+        <h4 className={`text-sm font-semibold ${allied ? "text-sky-200" : "text-red-200"}`}>
+          {allied ? "Aliados" : "Força"} {index + 1} <span className="font-normal text-neutral-400">· {forceSize(force)} combatentes</span>
         </h4>
-        <button type="button" onClick={onRemove} className={SMALL_BTN}>
-          Remover
-        </button>
+        <span className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-neutral-300" title="Luta do seu lado, com o mesmo comando da IA dos inimigos; você não dá ordens a ela">
+            <input type="checkbox" checked={allied} onChange={(e) => setAllied(e.target.checked)} className="accent-sky-500" />
+            Aliada (a IA comanda)
+          </label>
+          <button type="button" onClick={onRemove} className={SMALL_BTN}>
+            Remover
+          </button>
+        </span>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Pick<EnemyFactionId> label="Quem são" value={force.faction} options={(Object.keys(ENEMY_FACTIONS) as EnemyFactionId[]).map((id) => [id, ENEMY_FACTIONS[id].label])} onChange={setFaction} />
-        <Pick<ForceSide> label="De onde vêm" value={force.side} options={sides} onChange={(side) => onChange({ ...force, side })} />
+        <Pick<ForceSide> label={allied ? "Onde ficam" : "De onde vêm"} value={force.side} options={sides} onChange={(side) => onChange({ ...force, side })} />
         {fixed ? (
           <Field label="O que fazem">
             <span className="py-1.5 text-sm text-neutral-300">{force.side === "WALLS" ? "Guardam os muros" : "Assaltam os muros"}</span>
@@ -223,6 +301,7 @@ export function ScenarioEditor({ scenario, onChange }: { scenario: BattleScenari
   const set = (patch: Partial<BattleScenario>) => onChange({ ...scenario, ...patch });
   const setForce = (i: number, next: ScenarioForce) => set({ forces: scenario.forces.map((f, k) => (k === i ? next : f)) });
   const total = scenarioEnemyTotal(scenario);
+  const allies = scenarioAllyTotal(scenario);
   return (
     <div className="flex flex-col gap-4">
       <Section title="O cenário">
@@ -270,16 +349,19 @@ export function ScenarioEditor({ scenario, onChange }: { scenario: BattleScenari
 
       <ArmyEditor army={scenario.army} onChange={(army) => set({ army })} />
 
-      <Section title="O inimigo" hint={`${scenario.forces.length}/${SCENARIO_LIMITS.FORCES} forças · ${total} combatentes`}>
+      <Section title="As forças" hint={`${scenario.forces.length}/${SCENARIO_LIMITS.FORCES} forças · ${total} inimigos${allies > 0 ? ` · ${allies} aliados` : ""}`}>
         {scenario.forces.map((f, i) => (
           <ForceEditor key={f.id} force={f} index={i} siege={scenario.siege} onChange={(next) => setForce(i, next)} onRemove={() => set({ forces: scenario.forces.filter((x) => x !== f) })} />
         ))}
-        <div>
+        <div className="flex gap-2">
           <button type="button" disabled={scenario.forces.length >= SCENARIO_LIMITS.FORCES} onClick={() => set({ forces: [...scenario.forces, newForce()] })} className={SMALL_BTN}>
             + Força inimiga
           </button>
+          <button type="button" disabled={scenario.forces.length >= SCENARIO_LIMITS.FORCES} onClick={() => set({ forces: [...scenario.forces, newAlly()] })} className={SMALL_BTN}>
+            + Força aliada
+          </button>
         </div>
-        {total > SCENARIO_LIMITS.SAFE_TOTAL && <p className="text-xs text-amber-300">Mais de {SCENARIO_LIMITS.SAFE_TOTAL} inimigos em campo pode deixar o jogo lento.</p>}
+        {total + allies > SCENARIO_LIMITS.SAFE_TOTAL && <p className="text-xs text-amber-300">Mais de {SCENARIO_LIMITS.SAFE_TOTAL} combatentes da IA em campo pode deixar o jogo lento.</p>}
       </Section>
     </div>
   );

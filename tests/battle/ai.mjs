@@ -68,7 +68,7 @@ export async function ai({ battle, ev }, { check }) {
           lab.attackNearest();
         }
       });
-      return w.run.friendlyFire;
+      return w.run.foeFriendlyFire;
     });
   };
   // Uma batalha sozinha varia de 12 a 96 flechas nos seus: a soma de cinco de cada lado é o que conta

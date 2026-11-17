@@ -23,6 +23,7 @@ export const agentsMethods = {
 
   /** O bando ataca o jogador? Goblins, exércitos e hordas sim; patrulhas e mensageiros só em guerra ou provocados. */
   bandHostile(this: WorldScene, b: Warband): boolean {
+    if (b.ownerId === "PLAYER") return false;
     const s = useGameStore.getState();
     // Camponeses só querem a terra deles; só são inimigos do senhor (Marco 15)
     if (b.kind === "REBELS") return b.goal.kind === "SETTLEMENT" && s.settlements.find((t) => t.id === (b.goal as { id: string }).id)?.owner === "PLAYER";

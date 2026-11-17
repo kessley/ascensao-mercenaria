@@ -57,6 +57,11 @@ export function ScenarioBanner() {
         <span>
           Inimigos: <b className="text-red-300">{hud?.enemies ?? 0}</b>
           {hud?.waiting ? " · mais a caminho" : ""}
+          {hud?.allies !== undefined && (
+            <>
+              {" · "}Aliados: <b className="text-sky-300">{hud.allies}</b>
+            </>
+          )}
         </span>
       </div>
       <SiegeBar />
@@ -132,6 +137,15 @@ export function ScenarioOverlay() {
             ))}
           </tbody>
         </table>
+        {(result.allies ?? []).length > 0 && (
+          <ul className="text-xs text-sky-200" data-ally-result>
+            {(result.allies ?? []).map((a) => (
+              <li key={a.name}>
+                {a.name}: {a.alive} de {a.start} de pé · {a.kills} abate{a.kills === 1 ? "" : "s"}
+              </li>
+            ))}
+          </ul>
+        )}
         {result.officers.length > 0 && <p className="text-xs text-neutral-400">Oficiais inimigos abatidos: {result.officers.join(", ")}.</p>}
         {result.friendlyFire > 0 && <p className="text-xs text-rose-300">Fogo amigo: {result.friendlyFire} flecha{result.friendlyFire > 1 ? "s" : ""} acertou os seus homens.</p>}
         {scenario.boarding ? (

@@ -47,7 +47,7 @@ export const alarmsMethods = {
 
     // O herói inimigo que entra na vista: o tambor grave
     for (const e of this.enemies) {
-      if (!e.hero || !e.isAlive || !e.revealed || this.heroesSeen.has(e) || !this.fog.canSee(e)) continue;
+      if (!e.hero || !e.hostile || !e.isAlive || !e.revealed || this.heroesSeen.has(e) || !this.fog.canSee(e)) continue;
       this.heroesSeen.add(e);
       this.raiseAlarm("hero", { key: e.hero.name, at: e, text: `${e.hero.name} à vista!` });
     }

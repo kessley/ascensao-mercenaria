@@ -384,6 +384,12 @@ export class WarHost implements SquadCommand {
     this.lastSeenAt = this.links.scene.time.now;
   }
 
+  /** A hoste luta do lado do bando (força aliada do cenário): os avisos falam dela como nossa. */
+  private get allied(): boolean {
+    const lead = this.leader?.isAlive ? this.leader : this.members.find((m) => m.isAlive);
+    return !!lead?.friendly;
+  }
+
   private foes(w: HostWorld): Unit[] {
     const lead = this.leader?.isAlive ? this.leader : this.members.find((m) => m.isAlive);
     if (!lead) return [];
@@ -720,6 +726,8 @@ export class WarHost implements SquadCommand {
     const ear = this.links.listener();
     if (distance(lead, ear) > WAR_AI.HORN_HEARD) return;
     this.lastHornAt = w.time;
+    // A trombeta do aliado não é pista de nada: o jogador ouve a dele no campo
+    if (this.allied) return;
     this.links.horn(lead);
     this.links.feed(`Trombetas inimigas ${directionWord(ear, lead)}.`);
   }
@@ -828,7 +836,7 @@ export class WarHost implements SquadCommand {
       this.exposed = true;
       if (close) {
         this.links.ambush(this.ownCenter(), this);
-        this.links.feed(`Emboscada! ${this.staff.chief} saiu da mata!`);
+        this.links.feed(this.allied ? `${this.staff.chief} saiu da mata sobre o inimigo!` : `Emboscada! ${this.staff.chief} saiu da mata!`);
       }
       this.setPlan("ASSAULT", w);
       if (near.length > 0) this.runAssault(w, near, this.squads);
@@ -1001,7 +1009,7 @@ export class WarHost implements SquadCommand {
     this.leader = null;
     for (const s of this.squads) s.morale = Math.max(0, s.morale - WAR_AI.LEADER_DEATH_MORALE);
     this.links.officerDown(this, name, true, this.staff.hero ?? null);
-    if (seen) this.links.feed(`${name} caiu! O inimigo vacila.`);
+    if (seen) this.links.feed(this.allied ? `${name} caiu! Os aliados vacilam.` : `${name} caiu! O inimigo vacila.`);
     this.successionAt = w.time + WAR_AI.SUCCESSION_MS;
   }
 
