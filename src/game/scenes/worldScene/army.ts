@@ -393,6 +393,10 @@ export const armyMethods = {
       this.fatiguePos.set(b.id, c);
       const moved = Math.min(distance(prev, c), 80);
       let f = b.fatigue;
+      // O fôlego: some lutando de perto ou atirando, e volta fora da luta (correndo, não volta)
+      const fighting = b.soldiers.some((s) => s.unitState === "ATTACKING" && s.target);
+      if (fighting) b.winded = Math.min(100, b.winded + F.WINDED_PER_SEC * dt);
+      else if (!b.running) b.winded = Math.max(0, b.winded - F.BREATHE_PER_SEC * dt);
       if (this.quartered.has(b.id)) f -= F.CAMP_PER_SEC * dt;
       else if (b.soldiers.some((s) => s.target)) f += F.COMBAT_PER_SEC * dt;
       else if (moved > 0.4) {

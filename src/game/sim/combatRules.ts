@@ -1,4 +1,4 @@
-import { COMBAT } from "../../utils/constants";
+import { COMBAT, FATIGUE } from "../../utils/constants";
 import { angleDiff, angleTo, clamp, type Point } from "../../utils/math";
 
 /**
@@ -58,6 +58,12 @@ export function pressureCut(p: Pressure): number {
  */
 export function pressedHit(chance: number, cut: number): number {
   return 1 - (1 - chance) * (1 - cut);
+}
+
+/** O que sobra da defesa com o cansaço (Marco 24): nada muda até 40; com 100, 30% a menos. */
+export function fatigueDefense(tiredness: number): number {
+  const over = Math.max(0, Math.min(100, tiredness) - FATIGUE.DEFENSE_FROM) / (100 - FATIGUE.DEFENSE_FROM);
+  return 1 - over * FATIGUE.MAX_DEFENSE_LOSS;
 }
 
 /** Fração do dano que passa pela armadura. */

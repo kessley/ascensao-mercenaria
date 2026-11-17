@@ -53,6 +53,118 @@ function hitRate() {
   return { swings, hits, rate: swings > 0 ? Math.round((hits / swings) * 100) : null, side: e.approachOf(s), state: e.unitState };
 }
 
+/** Fôlego: uma linha luta 2 minutos seguidos, e depois descansa 70 s longe da luta. */
+function windedLine() {
+  // Goblins que não caem na frente do batalhão (a frente olha para o leste), cada um num soldado
+  const wallOfGoblins = (b, goblins) => {
+    const front = Math.max(...b.soldiers.map((x) => x.x));
+    const rank = b.soldiers.filter((x) => x.x > front - 8).sort((p, q) => p.y - q.y);
+    goblins.forEach((e, i) => {
+      const s = rank[i % rank.length];
+      e.x = front + 26;
+      e.y = s.y + (i >= rank.length ? 8 : 0);
+      e.home = { x: e.x, y: e.y };
+      e.dormant = false;
+      e.target = s;
+      e.maxHp = 1e6;
+      e.restoreHp(1e6);
+    });
+    for (const s of b.soldiers) {
+      s.maxHp = 1e6;
+      s.restoreHp(1e6);
+    }
+  };
+  const lab = window.__lab;
+  const w = window.__world;
+  lab.freezeAI();
+  lab.parkCommander();
+  const b = lab.battalion();
+  lab.place(b, 4000, 3500, 0);
+  const goblins = lab.allEnemies();
+  wallOfGoblins(b, goblins);
+  const hold = () => {
+    b.morale = 100;
+    b.panicking = false;
+    for (const e of goblins) if (e.squad) {
+      e.squad.morale = 100;
+      e.squad.panicking = false;
+    }
+  };
+  lab.step(120, hold);
+  const fought = { tiredness: Math.round(b.tiredness), winded: Math.round(b.winded), fatigue: Math.round(b.fatigue), defense: Math.round(b.fatigueDefense * 100) };
+  for (const e of goblins) {
+    e.x = 7000;
+    e.y = 6000;
+    e.home = { x: e.x, y: e.y };
+    e.target = null;
+  }
+  // Longe de verdade: o esquadrão deles voltaria andando para o ponto que segurava
+  lab.step(70, () => {
+    hold();
+    for (const e of goblins) {
+      e.x = 7000;
+      e.y = 6000;
+    }
+  });
+  return { fought, rested: { tiredness: Math.round(b.tiredness), winded: Math.round(b.winded) } };
+}
+
+/** Revezar: a linha da frente luta; o toque troca ela com o batalhão logo atrás. */
+function relief() {
+  // Goblins que não caem na frente do batalhão (a frente olha para o leste), cada um num soldado
+  const wallOfGoblins = (b, goblins) => {
+    const front = Math.max(...b.soldiers.map((x) => x.x));
+    const rank = b.soldiers.filter((x) => x.x > front - 8).sort((p, q) => p.y - q.y);
+    goblins.forEach((e, i) => {
+      const s = rank[i % rank.length];
+      e.x = front + 26;
+      e.y = s.y + (i >= rank.length ? 8 : 0);
+      e.home = { x: e.x, y: e.y };
+      e.dormant = false;
+      e.target = s;
+      e.maxHp = 1e6;
+      e.restoreHp(1e6);
+    });
+    for (const s of b.soldiers) {
+      s.maxHp = 1e6;
+      s.restoreHp(1e6);
+    }
+  };
+  const lab = window.__lab;
+  const w = window.__world;
+  lab.freezeAI();
+  lab.parkCommander();
+  const [a, r] = w.battalions;
+  lab.place(a, 4000, 3500, 0);
+  lab.place(r, 3870, 3500, 0);
+  // O Comandante perto, de viva voz (sem o acaso da trombeta no meio da luta)
+  w.commander.x = 3780;
+  w.commander.y = 3500;
+  const goblins = lab.allEnemies();
+  wallOfGoblins(a, goblins);
+  for (const s of r.soldiers) {
+    s.maxHp = 1e6;
+    s.restoreHp(1e6);
+  }
+  const hold = () => {
+    for (const b of [a, r]) {
+      b.morale = 100;
+      b.panicking = false;
+    }
+    for (const e of goblins) if (e.squad) {
+      e.squad.morale = 100;
+      e.squad.panicking = false;
+      e.squad.facing = Math.PI;
+    }
+  };
+  lab.step(4, hold);
+  const before = { a: Math.round(a.center.x), r: Math.round(r.center.x), a0: a.status, r0: r.status };
+  for (const b of w.battalions) b.selected = false;
+  w.relieveLine();
+  lab.step(15, hold);
+  return { ...before, aAfter: Math.round(a.center.x), rAfter: Math.round(r.center.x), aStatus: a.status, rStatus: r.status, feed: w.feed.filter((t) => t.startsWith("Revezar") || t.startsWith("Ninguém para revezar")).slice(-2) };
+}
+
 /** Quatro goblins que não caem em cima de um soldado: no meio da linha do batalhão, ou sozinho. */
 function pressedSoldier(alone) {
   const lab = window.__lab;
@@ -101,6 +213,16 @@ function pressedSoldier(alone) {
 }
 
 export async function skill({ battle, ev }, { check }) {
+  // Parte 3: o fôlego e o revezamento
+  await battle({ army: [["INFANTRY", 8]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
+  const breath = await ev(windedLine);
+  check("uma linha fica sem fôlego em cerca de 2 minutos de luta, e defende menos", breath.fought.tiredness >= 65 && breath.fought.defense <= 90, JSON.stringify(breath));
+  check("e recupera o fôlego em pouco mais de 1 minuto fora da luta", breath.rested.winded <= 10, JSON.stringify(breath));
+  await battle({ army: [["INFANTRY", 8], ["INFANTRY", 8]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
+  const swap = await ev(relief);
+  check("revezar: o batalhão de trás assume a linha, e o da frente passa para trás", swap.a0 === "ENGAGED" && swap.rAfter > swap.aAfter + 40, JSON.stringify(swap));
+  check("e quem assumiu está lutando, sem ninguém em pânico", swap.rStatus === "ENGAGED" && swap.aStatus !== "FLEEING", JSON.stringify(swap));
+
   // Parte 1: o nível vira perícia, para o bando e para o inimigo
   await battle({ army: [["INFANTRY", 1, 5]], forces: [{ faction: "GOBLINS", units: { GOBLIN: 2 }, level: 3 }], distance: 2400 });
   const vet = await ev(skills);

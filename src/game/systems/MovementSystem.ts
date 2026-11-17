@@ -37,6 +37,8 @@ function separatePair(a: Unit, b: Unit): void {
   if (dx >= min || dx <= -min || dy >= min || dy <= -min) return;
   let d = Math.sqrt(dx * dx + dy * dy);
   if (d >= min) return;
+  // Revezando: uma linha passa por dentro da outra
+  if (a.passesThrough(b)) return;
   if (d < 0.001) {
     dx = Math.random() - 0.5;
     dy = Math.random() - 0.5;

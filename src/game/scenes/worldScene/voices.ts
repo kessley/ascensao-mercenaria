@@ -147,7 +147,7 @@ export const voicesMethods = {
 
     for (const b of this.battalions) {
       if (b.isDestroyed) continue;
-      const mood = (b.panicking ? 1 : 0) | (b.fatigue >= FATIGUE.EXHAUSTED ? 2 : 0);
+      const mood = (b.panicking ? 1 : 0) | (b.tiredness >= FATIGUE.EXHAUSTED ? 2 : 0);
       const was = this.voiceMood.get(b);
       this.voiceMood.set(b, mood);
       if (was === undefined || was === mood) continue;

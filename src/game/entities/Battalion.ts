@@ -12,7 +12,7 @@ import { angleTo, centroid, distance, nearest, type Point } from "../../utils/ma
 import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
 import { battalionMods, soldierStats, type BattalionMods } from "../../utils/progression";
 import { formationOffset, formationSize, frontOf } from "../systems/formation";
-import { cycleStep, type CycleState } from "../sim/combatRules";
+import { cycleStep, fatigueDefense, type CycleState } from "../sim/combatRules";
 import { nearestWithin } from "../systems/nearIndex";
 import { PIXEL_FONT } from "../art/font";
 import { OUTLINE, ramp } from "../art/pixel";
@@ -75,6 +75,11 @@ export class Battalion {
   selected = false;
   /** Fadiga (Marco 13): 0 descansado, 100 exausto. Lento, fraco e com moral que custa a voltar. */
   fatigue = 0;
+  /** Fôlego perdido na luta (Marco 24): sobe depressa lutando e volta fora da luta. */
+  winded = 0;
+  /** Revezar: o batalhão com quem troca de lugar agora (um passa por dentro do outro) e até quando. */
+  reliefWith: Battalion | null = null;
+  reliefUntil = 0;
 
   private readonly scene: Phaser.Scene;
   private readonly stats: UnitStats;
@@ -217,16 +222,36 @@ export class Battalion {
     return this.lieutenant && !this.lieutenantDied ? PASSIVES[this.lieutenant.passive] : null;
   }
 
+  /** O cansaço que pesa agora: o da marcha mais o fôlego perdido na luta. */
+  get tiredness(): number {
+    return Math.min(100, this.fatigue + this.winded);
+  }
+
   /** Velocidade conforme a fadiga (mais lento a partir de FATIGUE.SLOW_FROM). */
   get fatigueSpeed(): number {
-    const over = Math.max(0, this.fatigue - FATIGUE.SLOW_FROM) / (100 - FATIGUE.SLOW_FROM);
+    const over = Math.max(0, this.tiredness - FATIGUE.SLOW_FROM) / (100 - FATIGUE.SLOW_FROM);
     return 1 - over * FATIGUE.MAX_SLOW;
   }
 
   get fatigueDamage(): number {
     // Em jejum, o braço pesa (Marco 23)
     const fast = Battalion.faithToday.fasting.has(this.faith) ? FAITH.FAST_DAMAGE : 1;
-    return (1 - (this.fatigue / 100) * FATIGUE.MAX_DAMAGE_LOSS) * fast;
+    return (1 - (this.tiredness / 100) * FATIGUE.MAX_DAMAGE_LOSS) * fast;
+  }
+
+  /** A defesa com o cansaço (Marco 24): sem fôlego, o braço não sobe a tempo de aparar. */
+  get fatigueDefense(): number {
+    return fatigueDefense(this.tiredness);
+  }
+
+  /** No corpo a corpo de verdade: alguém golpeando quem está ao alcance (quem só tem alvo à vista, não). */
+  get inMelee(): boolean {
+    return this.soldiers.some((s) => !s.ranged && s.unitState === "ATTACKING" && !!s.target);
+  }
+
+  /** Revezando com `other` agora: um passa por dentro do outro. */
+  relievingWith(other: Battalion): boolean {
+    return this.reliefWith === other && this.scene.time.now < this.reliefUntil;
   }
 
   /** No dia santo da sua fé, a tropa luta de má vontade e perde a moral mais depressa (> 1; Marco 23). */
@@ -236,7 +261,7 @@ export class Battalion {
 
   /** Recuperação de moral conforme a fadiga. */
   get fatigueRecovery(): number {
-    return 1 - (this.fatigue / 100) * FATIGUE.MAX_RECOVERY_LOSS;
+    return 1 - (this.tiredness / 100) * FATIGUE.MAX_RECOVERY_LOSS;
   }
 
   get lieutenantAlive(): boolean {
@@ -447,6 +472,9 @@ export class Battalion {
       this.selectionGfx.clear();
       return;
     }
+
+    // A troca do revezamento acabou (ou o outro caiu): cada um volta a ser parede para o outro
+    if (this.reliefWith && (this.scene.time.now >= this.reliefUntil || this.reliefWith.isDestroyed)) this.reliefWith = null;
 
     if (this.panicking) this.updateFleeing(dt, enemies);
     else this.updateOrdered(dt, enemies);

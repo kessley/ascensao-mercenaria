@@ -41,7 +41,7 @@ const HELP_LINES = [
   "Arraste com o botão direito para posicionar: risco longo, linha fina; risco curto, funda",
   "Da esquerda para a direita, a frente olha para cima",
   "C prende a câmera · setas, borda ou botão do meio movem · roda dá zoom · H centraliza",
-  "B cessa o fogo · N investida em ciclo · T tochas · M som · E interage · Tab mapa · J missões",
+  "B cessa o fogo · N investida em ciclo · K revezar · T tochas · M som · E interage · Tab mapa · J missões",
 ];
 
 interface CommandProps {
@@ -275,6 +275,14 @@ export function BattleBar({ hidden }: { hidden: boolean }) {
             {TRUMPET_ORDERS.map((o) => (
               <Command key={o.call} icon={<CommandIcon id={o.icon} />} label={o.label} hint={o.hint} keyName={o.keyName} disabled={targets.length === 0} onClick={() => send({ type: "TRUMPET", ids: picked.map((b) => b.id), call: o.call })} />
             ))}
+            <Command
+              icon={<CommandIcon id="RELIEVE" />}
+              label="Revezar"
+              hint="Quem luta passa por dentro do batalhão descansado logo atrás, que assume a linha"
+              keyName="K"
+              disabled={targets.length === 0}
+              onClick={() => send({ type: "RELIEVE", ids: [] })}
+            />
             <Command
               icon={<CommandIcon id="RUN" />}
               label="Correr"

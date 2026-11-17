@@ -98,7 +98,7 @@ export const hudMethods = {
       forecast: this.forecast(),
       forced: this.forced,
       forageBlocked: this.forageBlocked(),
-      fatigue: Object.fromEntries(this.battalions.map((b) => [b.id, Math.round(b.fatigue)])),
+      fatigue: Object.fromEntries(this.battalions.map((b) => [b.id, Math.round(b.tiredness)])),
       wagonsAlive: this.wagons.filter((w) => w.isAlive).length,
       pitchBlocked: this.pitchBlocked(),
       standardBlocked: this.standardBlocked(),

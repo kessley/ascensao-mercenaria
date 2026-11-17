@@ -5,7 +5,7 @@
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
 - **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
-- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: a parte 0 (a linha de base), a 1 (a perícia) e a 2 (a pressão) estão feitas.
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: as partes 0 (a linha de base), 1 (a perícia), 2 (a pressão) e 3 (o fôlego e "Revezar") estão feitas.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -70,7 +70,7 @@ O usuário deixou estas escolhas com o plano.
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
-| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0, 1 e 2 feitas) |
+| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 a 3 feitas) |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
 | 6 | [Marco 27 — O mundo refeito: lugares vivos](#6-marco-27--o-mundo-refeito-lugares-vivos) | recurso e arte | A única mudança no gerador; os marcos seguintes moram nele | a fazer |
@@ -251,9 +251,14 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
      - Fileira é ter um vizinho de pé a até 46 px, do mesmo batalhão ou esquadrão, que não esteja fugindo. O batalhão em pânico não faz fileira. O chefe e o herói inimigo lutam sozinhos, como o Comandante.
      - A IA inimiga escolhe o alvo isolado como se estivesse 30% mais perto. "Não deixar os seus isolados" fica com a formação, que já segura cada um no seu lugar, e com a guarda do Comandante (parte 5).
      - **Medido** (suíte `pericia`, com centenas de golpes): o Comandante cercado por 6 goblins apara de 7% a 12%, e cai em 11 a 18 s; contra um só, apara 85%. Com 4 goblins em cima, o soldado no meio da linha apara 67%; o soldado sozinho, 6%.
-3. **Fôlego.** A fadiga de lutar já existe (`FATIGUE.COMBAT_PER_SEC`). Agora ela tira defesa: nada até 40, e 30% a menos com 100.
+3. **Fôlego** — ✅ feita em 17 de novembro. A fadiga de lutar já existe (`FATIGUE.COMBAT_PER_SEC`). Agora ela tira defesa: nada até 40, e 30% a menos com 100.
    - Uma linha se cansa em cerca de 2 minutos de luta seguida, e descansa fora dela.
    - **Ordem nova, "Revezar":** o batalhão da frente passa por dentro do de trás, que assume a linha, sem ninguém se desorganizar.
+   - **Como ficou:**
+     - **O fôlego é separado do cansaço da marcha.** Lutar de perto ou atirando tira o fôlego (0,6 por segundo) e deixa um pouco de cansaço que fica (0,1 por segundo). Fora da luta, sem correr, o fôlego volta a 1,2 por segundo. O cansaço da marcha continua só voltando com descanso de verdade. O que pesa (velocidade, dano, moral e agora defesa) é a soma dos dois.
+     - "Revezar" fica na barra, junto dos toques, e na tecla K. Vale para os selecionados (ou para todo o exército): quem está no corpo a corpo troca com o batalhão mais perto que está logo atrás dele, a até 320 px, e que não luta. Quem assume a linha fica com a largura dela. Por 9 s, as duas linhas passam uma por dentro da outra sem se empurrar. É um toque combinado: chega pela voz, pela trombeta ou pelo mensageiro.
+     - **Medido** (suíte `pericia`): 2 minutos de luta deixam a linha com 84 de cansaço e 78% da defesa; 70 s longe da luta, ela volta a 1. No revezamento, a linha de trás assume a frente e a da frente passa para trás, sem pânico.
+     - "Revezar a tempo vence a luta que, sem revezar, se perde" é medido na parte 8, com a vida e o golpe novos.
 4. **Vida e golpe.**
    - A vida vem do corpo, e a armadura é o que faz a tropa pesada aguentar.
 

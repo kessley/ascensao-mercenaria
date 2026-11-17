@@ -546,6 +546,11 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     return n;
   }
 
+  /** Passa por dentro de `other` sem empurrar (o revezamento das linhas). */
+  passesThrough(_other: Unit): boolean {
+    return false;
+  }
+
   /** Os vizinhos de fileira (tropa em formação). Sem formação, ninguém: luta sozinho. */
   protected rankmates(): readonly Unit[] {
     return [];

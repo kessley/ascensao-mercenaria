@@ -826,6 +826,19 @@ export const ICON_ART = {
     "..nnnnnn..",
     "....nn....",
   ],
+  /** Revezar: duas linhas trocam de lugar. */
+  RELIEVE: [
+    "nnnnnnnnnn",
+    "..........",
+    ".n......n.",
+    ".n.....nnn",
+    ".n......n.",
+    ".n......n.",
+    "nnn.....n.",
+    ".n........",
+    "..........",
+    "nnnnnnnnnn",
+  ],
   KITE: [
     "..........",
     "..........",

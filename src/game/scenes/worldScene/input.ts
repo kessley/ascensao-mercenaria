@@ -8,7 +8,8 @@ import { formationOffset } from "../../systems/formation";
 import { setTimeRate, timeRate } from "../../gameClock";
 import { STANCE_LABEL } from "../../sim/companies";
 import { useGameStore, type BattleCommand } from "../../../store/useGameStore";
-import { BALANCE, CAMERA, COLORS, COMBAT, FORMATIONS } from "../../../utils/constants";
+import { BALANCE, CAMERA, COLORS, COMBAT, FATIGUE, FORMATIONS } from "../../../utils/constants";
+import { reliefPairs, type LineSpot } from "../../sim/relief";
 import { angleTo, centroid, distance, nearest, type Point } from "../../../utils/math";
 import { type BattleKeys, FORMATION_KEYS, COMBAT_RUN_COLOR, DRAG_THRESHOLD, isShiftHeld } from "./shared";
 import type { WorldScene } from "../WorldScene";
@@ -61,7 +62,7 @@ export const inputMethods = {
   setupInput(this: WorldScene): void {
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Teclado indisponível");
-    this.keys = keyboard.addKeys("W,A,S,D,SPACE,SHIFT,F,Q,ESC,ONE,TWO,THREE,FOUR,C,H,UP,DOWN,LEFT,RIGHT,R,E,TAB,T,V,G,P,X,Z,B,N,J,L") as BattleKeys;
+    this.keys = keyboard.addKeys("W,A,S,D,SPACE,SHIFT,F,Q,ESC,ONE,TWO,THREE,FOUR,C,H,UP,DOWN,LEFT,RIGHT,R,E,TAB,T,V,G,P,X,Z,B,N,J,L,K") as BattleKeys;
     // No duelo (Marco 21), Espaço é o golpe leve; fora dele, o golpe do Comandante é lido a cada quadro
     this.keys.SPACE.on("down", () => {
       if (this.inDuel()) this.duelPress("light");
@@ -94,6 +95,10 @@ export const inputMethods = {
     });
     this.keys.N.on("down", () => {
       if (!this.ended && !this.inDuel()) this.toggleCycle();
+    });
+    // K: revezar a linha (Marco 24)
+    this.keys.K.on("down", () => {
+      if (!this.ended && !this.inDuel()) this.relieveLine();
     });
     keyboard.on("keydown-A", (e: KeyboardEvent) => {
       if (!e.ctrlKey || this.ended || this.inDuel()) return;
@@ -499,6 +504,49 @@ export const inputMethods = {
   },
 
   /** Quem atira e foge liga ou desliga o modo escaramuça. */
+  /**
+   * Revezar (Marco 24): o batalhão que luta passa por dentro do descansado logo atrás, que assume
+   * a linha com a mesma largura. Um toque basta para os dois (é um toque combinado, como os outros).
+   */
+  relieveLine(this: WorldScene): void {
+    const spot = (b: Battalion): LineSpot => ({ id: b.id, x: b.center.x, y: b.center.y, facing: b.facing, fighting: b.inMelee, free: !b.isDestroyed && !b.panicking });
+    const all = this.battalions.filter((b) => !b.isDestroyed);
+    const pairs = reliefPairs(this.commandTargets().filter((b) => !b.isDestroyed).map(spot), all.map(spot));
+    if (pairs.length === 0) {
+      this.pushFeed("Ninguém para revezar: é preciso um batalhão descansado logo atrás de quem luta.");
+      return;
+    }
+    const byId = new Map(all.map((b) => [b.id, b]));
+    this.withOrderBatch(() => {
+      for (const [frontId, rearId] of pairs) {
+        const front = byId.get(frontId);
+        const rear = byId.get(rearId);
+        if (!front || !rear) continue;
+        this.dispatch(
+          front,
+          "Revezar",
+          () => {
+            if (front.isDestroyed || rear.isDestroyed || front.panicking || rear.panicking) return;
+            const line = { ...front.center };
+            const back = { ...rear.center };
+            const facing = front.facing;
+            const width = front.width;
+            const until = this.time.now + FATIGUE.RELIEF_MS;
+            front.reliefWith = rear;
+            rear.reliefWith = front;
+            front.reliefUntil = until;
+            rear.reliefUntil = until;
+            rear.orderMove(line, facing, width === null ? {} : { width });
+            front.orderMove(back, facing);
+            this.pushFeed(`Revezar: ${rear.name} assume a linha de ${front.name}.`);
+          },
+          "BASIC",
+        );
+      }
+    });
+    this.publishHud();
+  },
+
   toggleKite(this: WorldScene): void {
     const group = this.commandTargets().filter((b) => !b.isDestroyed && b.ammoLeft !== null);
     if (group.length === 0) return;
@@ -706,6 +754,9 @@ export const inputMethods = {
           break;
         case "KITE":
           this.toggleKite();
+          break;
+        case "RELIEVE":
+          this.relieveLine();
           break;
         case "RUN":
           this.toggleRun();

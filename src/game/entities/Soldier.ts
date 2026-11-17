@@ -139,7 +139,12 @@ export class Soldier extends Unit {
 
   override defenseSkill(time: number): number {
     const base = super.defenseSkill(time);
-    return base > 0 ? base + FORMATIONS[this.battalion.formation].defenseBonus : 0;
+    return base > 0 ? (base + FORMATIONS[this.battalion.formation].defenseBonus) * this.battalion.fatigueDefense : 0;
+  }
+
+  /** No revezamento, as duas linhas passam uma por dentro da outra. */
+  override passesThrough(other: Unit): boolean {
+    return other instanceof Soldier && other.battalion !== this.battalion && this.battalion.relievingWith(other.battalion);
   }
 
   override noteCharge(time: number): void {

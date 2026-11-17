@@ -711,7 +711,7 @@ export type BattleCommand =
   /** Arma (ou desarma) a mira de uma magia do Comandante (Marco 19). */
   | { type: "SPELL"; ids: string[]; spell: SpellId }
   /** Pausa tática liga/desliga; selecionados correm ou voltam ao passo. */
-  | { type: "TACTICAL_PAUSE" | "RUN" | "SLOW_MOTION" | "HOLD_FIRE" | "CYCLE" | "KITE"; ids: string[] }
+  | { type: "TACTICAL_PAUSE" | "RUN" | "SLOW_MOTION" | "HOLD_FIRE" | "CYCLE" | "KITE" | "RELIEVE"; ids: string[] }
   /** Viagem rápida pelo Mapa do Continente até o ponto (x, y) do mundo. */
   | { type: "TRAVEL"; ids: string[]; x: number; y: number }
   /** Fundar uma vila onde o Comandante está. */

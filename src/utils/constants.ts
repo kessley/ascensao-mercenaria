@@ -2124,8 +2124,20 @@ export const FATIGUE = {
   NIGHT: 2,
   ROUGH: 1.5,
   FORCED: 2.5,
-  /** Lutando: por segundo, para cada batalhão com gente em combate. */
-  COMBAT_PER_SEC: 0.3,
+  /** Lutando: por segundo, para cada batalhão com gente em combate (o cansaço que fica). */
+  COMBAT_PER_SEC: 0.1,
+  /**
+   * Fôlego (Marco 24): lutar tira o fôlego depressa, e ele volta fora da luta. Uma linha fica sem
+   * fôlego em cerca de 2 minutos de luta seguida, e o recupera em pouco mais de 1 minuto parada.
+   */
+  WINDED_PER_SEC: 0.6,
+  BREATHE_PER_SEC: 1.2,
+  /** A defesa só cai a partir daqui; com 100, cai MAX_DEFENSE_LOSS. */
+  DEFENSE_FROM: 40,
+  MAX_DEFENSE_LOSS: 0.3,
+  /** Revezar: até que distância (px) o batalhão de trás assume a linha, e por quanto tempo um passa pelo outro. */
+  RELIEF_RANGE: 320,
+  RELIEF_MS: 9000,
   /** Correndo: por segundo, além do cansaço da marcha. */
   RUN_PER_SEC: 1.2,
   /** Parado: recupera por dia de relógio (ao relento) e por segundo de verdade nos alojamentos. */
