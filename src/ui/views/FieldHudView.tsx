@@ -15,6 +15,7 @@ import { useArmyAt, useExpeditionNow, useMissionPlan } from "../components/missi
 import { PHASE_LABEL, darknessAt, formatHour, phaseOf } from "../../utils/time";
 import { campaignYear, daysToNextSeason, isFlood, seasonDay, seasonOf } from "../../utils/season";
 import { BattalionContextMenu } from "../components/BattalionContextMenu";
+import { AlarmArrows } from "../components/AlarmArrows";
 import { Button } from "../components/Button";
 import { ResourceBar } from "../components/ResourceBar";
 import { SoundControl } from "../components/SoundControl";
@@ -340,6 +341,7 @@ export function FieldHudView() {
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-4 text-white">
       {hud && hud.slow.left > 0 && <div className="absolute inset-0 shadow-[inset_0_0_140px_rgba(56,189,248,0.4)]" />}
       <BattalionContextMenu />
+      <AlarmArrows />
       {/* Topo: Comandante, recursos e recuo */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex w-72 flex-col gap-2 hud-box p-3">

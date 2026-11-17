@@ -399,7 +399,7 @@ export const ordersMethods = {
       if (event?.type === "DELIVERED") {
         // O mensageiro sinaliza de longe: trombeta e bandeira até onde a tropa vê e ouve
         this.signalWave(event.at.x, event.at.y, COLORS.PENNANT, m.signalRange);
-        sfx.messengerHorn(event.at);
+        this.raiseAlarm("messenger", { key: m.rider.id, at: { x: event.at.x, y: event.at.y }, text: `${m.rider.name} sinalizou "${event.order}"` });
         const more = event.remaining > 0 ? ` Segue para mais ${event.remaining}.` : "";
         this.pushFeed(`${m.rider.name} sinalizou "${event.order}" a ${event.recipients.join(" e ")}.${more}`);
       }

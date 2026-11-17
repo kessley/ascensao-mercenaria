@@ -31,6 +31,8 @@ export interface PlayOptions {
   seconds?: number;
   /** Com posição, ouve-se mesmo de longe, com pelo menos este volume (a tropa selecionada fora da tela). */
   floor?: number;
+  /** Sem posição: de que lado vem (−1 esquerda, 1 direita). O alarme soa inteiro, mas do lado dele. */
+  pan?: number;
 }
 
 export type SoundRecipe = (ctx: BaseAudioContext, out: AudioNode, opts: { pitch: number; noise: AudioBuffer }) => void;
@@ -163,7 +165,7 @@ class AudioEngineImpl {
     if (bus === "voice" && now < this.alarmUntil) return false;
 
     let gain = opts.volume ?? 1;
-    let pan = 0;
+    let pan = opts.pan ?? 0;
     if (positional) {
       const placed = placeSound((opts.x as number) - this.listener.x, (opts.y as number) - this.listener.y, this.listener.hearing, this.listener.halfWidth);
       if (!placed && !opts.floor) return false; // longe demais para ouvir

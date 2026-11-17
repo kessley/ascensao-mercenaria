@@ -188,6 +188,8 @@ export const agentsMethods = {
     if (!c.returning && !this.inCamp) for (const b of c.escort) this.convoyArrivals.set(b.id, at);
     s.convoyArrives();
     const after = useGameStore.getState();
+    const raid = after.log.slice(-2).find((l) => l.text.startsWith("Salteadores caíram sobre o comboio"));
+    if (raid) this.raiseAlarm("convoy", { key: c.id, at, text: raid.text });
     this.wagons.forEach((w, i) => {
       const p = after.train === "ARMY" ? { x: at.x - 40 * (i % 2), y: at.y + 30 * i } : this.wagonSlot(i);
       w.x = p.x;

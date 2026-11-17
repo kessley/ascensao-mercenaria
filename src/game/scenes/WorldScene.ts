@@ -57,6 +57,8 @@ import { NO_FAITH_DAY, keptToday } from "../sim/faith";
 import { AudioEngine } from "../../audio/AudioEngine";
 import { sfx, startCampfireAmbience, stopCampfireAmbience } from "../../audio/sounds";
 import { fieldSound } from "../../audio/fieldLoops";
+import { alarms } from "../../audio/alarms";
+import type { RealmWatch } from "../../audio/alarmRules";
 import { distance, type Point } from "../../utils/math";
 import { type BattleKeys, type PendingDelivery, type Engagement, type ScenarioRun, type GateRule, inRect, SNAPSHOT_MS } from "./worldScene/shared";
 import { armyMethods, type ArmyMethods } from "./worldScene/army";
@@ -75,6 +77,7 @@ import { hudMethods, type HudMethods } from "./worldScene/hud";
 import { duelMethods, type DuelMethods, type FieldDuel } from "./worldScene/duel";
 import { magicMethods, type MagicAnim, type MagicFlash, type MagicMethods } from "./worldScene/magic";
 import { voicesMethods, type VoicesMethods } from "./worldScene/voices";
+import { alarmsMethods, type AlarmsMethods } from "./worldScene/alarms";
 import type { SpellId } from "../sim/magic";
 import type { DuelInput } from "../sim/duel";
 
@@ -175,6 +178,10 @@ export class WorldScene extends Phaser.Scene {
   voiceMood = new WeakMap<Battalion, number>();
   squadPanic = new WeakMap<EnemySquad, boolean>();
   nextTauntAt = 0;
+  /** Os alarmes (S1): quando a cena olhou, o que viu no reino e os heróis inimigos já anunciados. */
+  alarmWatchAt = 0;
+  realmWatch: RealmWatch | null = null;
+  heroesSeen = new WeakSet<Enemy>();
   /** Inimigos do contrato ativo e do motim, já postos no mapa. */
   contractEnemies: Enemy[] = [];
   contractId: string | null = null;
@@ -691,6 +698,7 @@ export class WorldScene extends Phaser.Scene {
       this.stopSlowMotion();
       stopCampfireAmbience();
       fieldSound.stop();
+      alarms.clear();
       AudioEngine.setPaused(false);
       useGameStore.getState().setCampPrompt(null);
       Unit.darkness = 0;
@@ -749,6 +757,7 @@ export class WorldScene extends Phaser.Scene {
     this.weatherLayer.update(this.cameras.main, this.weather, weatherDt, this.wind);
     this.groundWeather.update(this.cameras.main, this.weather, weatherDt, Unit.groundStamp);
     AudioEngine.setListener(view.centerX, view.centerY, view.width);
+    alarms.setView(view.x, view.y, view.width, view.height);
     // Com o mapa, um painel ou um relatório abertos, o combate se cala (o resto do som continua)
     AudioEngine.setPaused(this.ended);
     AudioEngine.setLoopVolume("campfire", Math.max(0, 1 - distance({ x: view.centerX, y: view.centerY }, this.campArea.campfire) / 1100));
@@ -856,6 +865,7 @@ export class WorldScene extends Phaser.Scene {
     setArrowField(everyone);
     resolveAttacks(this, everyone, time);
     this.updateFieldSound(time, everyone);
+    this.updateAlarms(time);
     this.combatFx.update(time, dt, everyone, Unit.lod);
     this.updateMagic(time, dt, everyone);
     this.hosts.afterCombat(hostWorld);
@@ -1137,5 +1147,5 @@ export class WorldScene extends Phaser.Scene {
  * A cena passava de 6000 linhas: as partes moram em `./worldScene/`, cada uma um objeto de métodos
  * com `this: WorldScene`, e entram aqui no protótipo. A interface diz ao TypeScript que são da cena.
  */
-export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods, MagicMethods, VoicesMethods {}
-Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods, magicMethods, voicesMethods);
+export interface WorldScene extends ArmyMethods, CampMethods, SeaMethods, ScenarioMethods, CombatMethods, SiegeMethods, RealmMethods, AgentsMethods, SaveMethods, OrdersMethods, InputMethods, ScoutsMethods, HudMethods, DuelMethods, MagicMethods, VoicesMethods, AlarmsMethods {}
+Object.assign(WorldScene.prototype, armyMethods, campMethods, seaMethods, scenarioMethods, combatMethods, siegeMethods, realmMethods, agentsMethods, saveMethods, ordersMethods, inputMethods, scoutsMethods, hudMethods, duelMethods, magicMethods, voicesMethods, alarmsMethods);

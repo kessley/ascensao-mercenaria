@@ -203,7 +203,7 @@ export const duelMethods = {
     }
     if (this.duelSeekers.delete(hero)) hero.driver = null;
     this.duelPressed = {};
-    sfx.charge(center);
+    this.raiseAlarm("duel", { at: center, text: auto ? `${h.name} desafia ${captain?.name ?? "um capitão"} para um duelo` : `${h.name} desafia o Comandante` });
     if (auto) {
       this.pushFeed(`${h.name} desafia ${captain?.name ?? "um capitão"} para um duelo! Os homens abrem o anel.`);
     } else {

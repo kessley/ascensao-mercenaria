@@ -701,6 +701,8 @@ export type BattleCommand =
   /** Postura furtiva liga/desliga; soltar a harpia com o relatório. */
   | { type: "SCOUT_STEALTH" | "HARPY_SEND"; ids: string[] }
   | { type: "CAMERA"; ids: string[]; action: "TOGGLE" | "CENTER" }
+  /** Leva a câmera até um ponto (o clique na seta de um alarme, S1). */
+  | { type: "LOOK"; ids: string[]; x: number; y: number }
   /** Ordem larga a uma companhia (Marco 20): `ids` = [id do capitão]. */
   | { type: "COMPANY"; ids: string[]; stance: CompanyStance }
   /** Toque de trombeta pré-combinado para os batalhões `ids` (vazio = todo o exército). */

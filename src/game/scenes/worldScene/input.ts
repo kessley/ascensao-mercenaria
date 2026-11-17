@@ -648,6 +648,11 @@ export const inputMethods = {
           if (cmd.action === "TOGGLE") this.setCameraLocked(!this.cameraLocked);
           else this.centerOnCommander();
           break;
+        case "LOOK":
+          // A câmera solta do Comandante e vai até o alarme
+          this.setCameraLocked(false);
+          this.cameras.main.pan(cmd.x, cmd.y, 450, "Sine.easeInOut", true);
+          break;
         case "COMPANY": {
           const id = cmd.ids[0];
           const lead = id ? this.companies.leaderBattalion(id, this.battalions) : null;

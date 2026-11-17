@@ -62,7 +62,6 @@ const trumpetFor =
   (ctx, out) =>
     brass(ctx, out, TRUMPET_TUNES[order] ?? [[523, 0.3]], 0.22);
 
-const messengerHorn: SoundRecipe = (ctx, out) => brass(ctx, out, [[659, 0.12], [784, 0.24]], 0.16, 3200);
 
 const victory: SoundRecipe = (ctx, out) =>
   brass(ctx, out, [[523, 0.18], [659, 0.18], [784, 0.18], [1047, 0.7]], 0.22);
@@ -89,7 +88,6 @@ export const sfx = {
   banner: (p: Pos) => AudioEngine.play("banner", bannerFlap, { ...p }, 300, 1),
   warCry: (p: Pos) => AudioEngine.play("warCry", warCry, { ...p, volume: 0.9 }, 1000, 1),
   trumpet: (order: string, p: Pos) => AudioEngine.play(`trumpet:${order}`, trumpetFor(order), { ...p }, 400, 1),
-  messengerHorn: (p: Pos) => AudioEngine.play("messengerHorn", messengerHorn, { ...p, volume: 0.8 }, 150, 2),
   victory: () => AudioEngine.play("victory", victory, {}, 2000, 1),
   defeat: () => AudioEngine.play("defeat", defeat, {}, 2000, 1),
 

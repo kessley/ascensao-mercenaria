@@ -395,15 +395,19 @@ export const realmMethods = {
         if (!defenders && !this.campArea.packed) {
           store.raidCamp(band.name);
           this.pushFeed(`${band.name} atacou o acampamento desguarnecido!`);
+          this.raiseAlarm("camp", { at: camp, text: `${band.name} atacou o acampamento desguarnecido!` });
         } else if (defenders && !this.campArea.packed && !campWatched(store)) {
           // Há gente, mas ninguém de guarda nem sentinela (Marco 22): o bando pega o acampamento de surpresa
           store.raidCamp(band.name, true);
           this.pushFeed(`${band.name} pegou o acampamento de surpresa: ninguém estava de guarda!`);
+          this.raiseAlarm("camp", { at: camp, text: `${band.name} pegou o acampamento de surpresa!` });
         }
         this.warbands.retarget(band);
         continue;
       }
       if (ev.goal.kind !== "SETTLEMENT") continue;
+      const goalId = ev.goal.id;
+      const wasOurs = store.settlements.find((x) => x.id === goalId)?.owner === "PLAYER";
       const outcome = store.bandArrives(ev.goal.id, {
         name: band.name,
         kind: band.kind,
@@ -418,6 +422,11 @@ export const realmMethods = {
         if (t) this.pushFeed(outcome === "CAPTURED" ? `${t.name} expulsou o senhor: a aldeia é livre.` : `A revolta de ${t.name} foi contida pela guarnição.`);
         this.warbands.disband(band);
         continue;
+      }
+      // O sino da aldeia: a nossa sempre; a dos outros, se o Comandante está perto
+      if (t && outcome !== "IGNORED") {
+        const said = outcome === "REPELLED" ? `${t.name} repeliu o ${band.name}` : outcome === "CAPTURED" ? `${t.name} caiu nas mãos do ${band.name}` : outcome === "RUINED" ? `${t.name} foi tomada pelos mortos!` : `${band.name} saqueou ${t.name}!`;
+        this.villageBell(t, wasOurs, said);
       }
       if (outcome === "REPELLED") {
         // Os defensores derrubam metade do bando antes de ele recuar

@@ -165,6 +165,9 @@ export const scoutsMethods = {
     if (news.length === 0 && report.nests.length === 0 && report.views.length < 3) return;
     const who = via === "HARPY" ? `A harpia de ${s.rider.name} chegou` : `${s.rider.name} voltou`;
     this.pushFeed(`${who}: ${news.length > 0 ? news.slice(0, 3).join("; ") : "nada de hostil na região"}.`);
+    // O sinal do batedor: a seta aponta para o perigo que ele viu (ou para ele, se não viu nenhum)
+    const danger = report.sightings.find((v) => v.hostile);
+    this.raiseAlarm("scout", { key: s.rider.id, at: danger ? { x: danger.x, y: danger.y } : s, text: danger ? `${who}: ${danger.name} à vista` : who });
     this.publishHud();
   },
 
