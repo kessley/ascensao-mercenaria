@@ -5,6 +5,7 @@ import { approachOf, armorFactor, pressureCut, sideDamage, type Approach, type P
 import { sfx } from "../../audio/sounds";
 import { battle } from "../../audio/combatSounds";
 import { BARE, type StrikeLook } from "../../audio/hitRules";
+import { sheetStats, type CombatSheet } from "../sim/sheet";
 import type { TerrainMap } from "../world/TerrainMap";
 import type { NavGrid } from "../systems/NavGrid";
 import { flameKey, LOD_SCALE, sheetOf, skinOf, type Lod, type Skin } from "../art/atlas";
@@ -536,6 +537,10 @@ export abstract class Unit extends Phaser.GameObjects.Container {
       attackers += this.pressWeight[i];
       if (this.approachOf(u) === "FRONT") front += this.pressWeight[i];
     }
+    // A guarda por perto segura alguns dos que viriam nele
+    const relief = Math.min(this.pressureRelief(time), Math.max(0, attackers - 1));
+    attackers -= relief;
+    front = Math.max(0, front - relief);
     return { attackers, front, inRank: attackers > 1 && this.inRank(time), shieldWall: this.inShieldWall };
   }
 
@@ -544,6 +549,21 @@ export abstract class Unit extends Phaser.GameObjects.Container {
     let n = 0;
     for (let i = 0; i < this.pressers.length; i++) if (this.pressers[i].isAlive && time - this.pressedAt[i] <= COMBAT.PRESSURE_MS) n++;
     return n;
+  }
+
+  /** A ficha de luta de quem tem nome (Marco 24): ataque, defesa e vida saem dela. */
+  applySheet(sheet: CombatSheet, hpMult = 1): void {
+    const s = sheetStats(sheet);
+    const share = this.maxHp > 0 ? this.hp / this.maxHp : 1;
+    this.attack = s.attack;
+    this.defense = s.defense;
+    this.maxHp = Math.round(s.hp * hpMult);
+    this.hp = Math.max(1, Math.round(this.maxHp * share));
+  }
+
+  /** Quantos atacantes alguém do lado dele tira da conta da pressão (a guarda do Comandante). */
+  protected pressureRelief(_time: number): number {
+    return 0;
   }
 
   /** Golpe de assinatura (chefes, Marco 24): pronto a partir deste tempo; sem golpe, nunca. */

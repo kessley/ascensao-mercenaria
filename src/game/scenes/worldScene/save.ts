@@ -29,7 +29,7 @@ export const saveMethods = {
     const c = this.commander;
     const enemies: EnemySave[] = this.enemies
       // Guarnições e bichos não vão no save: voltam a aparecer quando o bando chega perto
-      .filter((e) => e.isAlive && e.owner?.kind !== "WARBAND" && e.owner?.kind !== "MUTINY" && e.owner?.kind !== "GARRISON" && e.owner?.kind !== "WILDLIFE" && e.owner?.kind !== "SITE")
+      .filter((e) => e.isAlive && e.owner?.kind !== "WARBAND" && e.owner?.kind !== "MUTINY" && e.owner?.kind !== "GARRISON" && e.owner?.kind !== "WILDLIFE" && e.owner?.kind !== "SITE" && e.owner?.kind !== "GUARD")
       .map((e) => ({ kind: e.kind, x: e.x, y: e.y, hp: e.hp, color: e.bodyColor, owner: e.owner, ...(e.level > 1 ? { level: e.level } : {}) }));
     return {
       commander: { x: c.x, y: c.y, hp: c.hp, facing: c.facing },

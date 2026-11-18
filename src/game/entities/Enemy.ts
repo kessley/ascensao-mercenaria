@@ -3,6 +3,7 @@ import { Unit, type Team } from "./Unit";
 import { BALANCE, COLORS, COMBAT, ENEMIES, FORMATIONS, MAGIC, PROGRESSION, TIME, WOLF, type AttackKind, type EnemyKind } from "../../utils/constants";
 import { levelSkill, levelSpread } from "../../utils/progression";
 import { angleDiff, angleTo, distance, type Point } from "../../utils/math";
+import { sheetFromDuel } from "../sim/sheet";
 import type { EnemySquad, SquadCommand, SquadOrder } from "../systems/EnemySquad";
 import { enemyLook } from "../art/looks";
 import { duelBannerKey } from "../art/atlas";
@@ -44,6 +45,8 @@ export class Enemy extends Unit {
     | { kind: "SITE"; siteId: string }
     /** Bichos do mundo (alcateias de lobos). */
     | { kind: "WILDLIFE"; pack: number }
+    /** A guarda do Comandante (Marco 24): do bando, anda com ele. */
+    | { kind: "GUARD" }
     | null = null;
   /**
    * Lado no mundo: os do povoado (guarnições, patrulhas, exércitos dos reinos) e os selvagens
@@ -122,6 +125,8 @@ export class Enemy extends Unit {
   /** Dá a ficha de herói; quem procura o Comandante ergue o estandarte do desafio. */
   makeHero(name: string, data: HeroData): void {
     this.hero = { name, ...data };
+    // A ficha de luta (Marco 24): o chefe de calamidade tem os números dele
+    if (!this.isBoss) this.applySheet(data.sheet ?? sheetFromDuel(data.duel));
     this.challenge?.destroy();
     this.challenge = null;
     if (!seeksDuel(data)) return;
@@ -205,8 +210,8 @@ export class Enemy extends Unit {
     return this.hostile || this.friendly;
   }
 
-  /** Guarda pessoal de um chefe (Marco 24): fica perto dele e luta com quem chega nele. */
-  guardOf(boss: Enemy, foes: () => readonly Unit[]): void {
+  /** Guarda pessoal de um chefe (ou do Comandante, Marco 24): fica perto dele e luta com quem chega nele. */
+  guardOf(boss: Unit, foes: () => readonly Unit[]): void {
     let pickAt = -Infinity;
     this.driver = (dt) => {
       if (!boss.isAlive) {

@@ -59,7 +59,8 @@ function brawl() {
 /** O Comandante sozinho no meio de `n` goblins: quantos golpes ele apara e quanto aguenta. */
 export function surrounded(opts) {
   // `ev` passa um argumento só: o número, ou { n, immortal, tough }
-  const { n, immortal = false, tough = false } = typeof opts === "number" ? { n: opts } : opts;
+  // `guard`: a guarda do Comandante (Marco 24) fica do lado dele; sem isso, ela sai do campo
+  const { n, immortal = false, tough = false, guard = false } = typeof opts === "number" ? { n: opts } : opts;
   const lab = window.__lab;
   const w = window.__world;
   lab.freezeAI();
@@ -68,7 +69,18 @@ export function surrounded(opts) {
   for (const b of w.battalions) lab.place(b, 600, 600, 0);
   c.x = 4000;
   c.y = 3500;
+  for (const [i, g] of (w.commanderGuard ?? []).entries()) {
+    if (guard) {
+      g.x = c.x + Math.cos(i * 1.57) * 22;
+      g.y = c.y + Math.sin(i * 1.57) * 22;
+    } else {
+      g.unitState = "DEAD";
+      g.destroy();
+    }
+  }
   const goblins = lab.allEnemies().slice(0, n);
+  // O chefe goblin é herói e desafiaria o Comandante para um duelo (Marco 21), que mexe na vida dele direto
+  for (const e of goblins) w.duelDone?.add(e);
   for (const e of lab.allEnemies().slice(n)) {
     e.x = 7000;
     e.y = 6000;
@@ -104,7 +116,7 @@ export function surrounded(opts) {
     if (tough) c.restoreHp(c.maxHp);
     return !c.isAlive || goblins.every((e) => !e.isAlive);
   });
-  return { blows, hits, parried: blows > 0 ? Math.round(((blows - hits) / blows) * 100) : null, fell: c.isAlive ? null : Math.round((w.time.now - t0) / 100) / 10, alive: goblins.filter((e) => e.isAlive).length };
+  return { blows, hits, parried: blows > 0 ? Math.round(((blows - hits) / blows) * 100) : null, fell: c.isAlive ? null : Math.round((w.time.now - t0) / 100) / 10, alive: goblins.filter((e) => e.isAlive).length, hp: Math.round(c.hp), maxHp: c.maxHp };
 }
 
 /** Um batalhão inteiro em cima de um só inimigo grande: quanto ele aguenta e quantos leva junto. */

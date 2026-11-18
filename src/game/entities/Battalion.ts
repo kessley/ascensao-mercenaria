@@ -9,6 +9,7 @@ import { faithOf, type FaithId, type FaithToday } from "../sim/faith";
 import type { CaptainData } from "../data/captains";
 import { PASSIVES, type LieutenantData, type PassiveDef } from "../data/lieutenants";
 import { angleTo, centroid, distance, nearest, type Point } from "../../utils/math";
+import { LIEUTENANT_SHEET, sheetFromDuel } from "../sim/sheet";
 import type { BattalionData, BattalionStatus } from "../../store/useGameStore";
 import { battalionMods, soldierStats, type BattalionMods } from "../../utils/progression";
 import { formationOffset, formationSize, frontOf } from "../systems/formation";
@@ -162,6 +163,7 @@ export class Battalion {
       };
       const slot = this.slotFor(data.soldiers, data.soldiers + 1, { x, y });
       this.lieutenantUnit = new Soldier(scene, slot.x, slot.y, data.troopType, this, leaderStats, "LIEUTENANT");
+      this.lieutenantUnit.applySheet(LIEUTENANT_SHEET);
       this.soldiers.push(this.lieutenantUnit);
     }
 
@@ -176,6 +178,8 @@ export class Battalion {
       };
       const slot = this.slotFor(this.soldiers.length, this.soldiers.length + 1, { x, y });
       this.captainUnit = new Soldier(scene, slot.x, slot.y, data.troopType, this, captainStats, "CAPTAIN");
+      // O duelo do capitão (Marco 21) é a ficha de luta dele
+      this.captainUnit.applySheet(sheetFromDuel(captain.duel));
       this.soldiers.push(this.captainUnit);
     }
 

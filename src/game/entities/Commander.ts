@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import { Unit } from "./Unit";
 import { sfx } from "../../audio/sounds";
-import { BALANCE, COLORS, COMBAT } from "../../utils/constants";
+import { BALANCE, COLORS, COMBAT, COMMANDER_GUARD } from "../../utils/constants";
+import { COMMANDER_SHEET, type CombatSheet } from "../sim/sheet";
 import { angleDiff, angleTo, nearest } from "../../utils/math";
 import { commanderLook } from "../art/looks";
 import { slashSprite } from "../world/CombatEffects";
@@ -18,12 +19,20 @@ export class Commander extends Unit {
   /** O jeito de quem manda (traços e cicatrizes, ver leaderBonus). */
   private might = 1;
 
-  /** Ajusta o corpo ao Comandante do momento. */
-  embody(hp: number, damage: number): void {
-    const share = this.hp / this.maxHp;
-    this.maxHp = Math.round(BALANCE.COMMANDER.hp * hp);
+  /** A guarda do Comandante (Marco 24): os 4 veteranos que andam com ele. */
+  guards: readonly Unit[] = [];
+
+  /** Ajusta o corpo ao Comandante do momento: a ficha de luta dele, com os traços e as cicatrizes. */
+  embody(hp: number, damage: number, sheet: CombatSheet = COMMANDER_SHEET): void {
+    this.applySheet(sheet, hp);
     this.might = damage;
-    this.restoreHp(this.maxHp * share);
+  }
+
+  /** Cada um da guarda por perto tira um atacante da conta da pressão. */
+  protected override pressureRelief(): number {
+    let n = 0;
+    for (const g of this.guards) if (g.isAlive && (g.x - this.x) ** 2 + (g.y - this.y) ** 2 <= COMMANDER_GUARD.NEAR ** 2) n++;
+    return n;
   }
 
   constructor(scene: Phaser.Scene, x: number, y: number) {

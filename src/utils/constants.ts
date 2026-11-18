@@ -2639,3 +2639,14 @@ export const TRADE = {
   /** O vivandeiro do acampamento vende rações a este múltiplo do preço do mercado mais perto. */
   SUTLER_MARKUP: 1.3,
 } as const;
+
+/** A guarda do Comandante (Marco 24): os veteranos que andam com ele. */
+export const COMMANDER_GUARD = {
+  SIZE: 4,
+  KIND: "MAN_AT_ARMS" as EnemyKind,
+  /** Até aqui (px) do Comandante, cada um tira um atacante da conta da pressão. */
+  NEAR: 70,
+  /** Repõe quem caiu quando nenhum inimigo está a menos disto (px), olhando a cada CHECK_MS. */
+  CALM: 900,
+  CHECK_MS: 5000,
+} as const;

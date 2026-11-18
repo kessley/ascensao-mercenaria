@@ -5,7 +5,7 @@
 ## Estado
 - **Plano decidido em 10 de novembro.** O usuário jogou, deu as notas dele e deixou a fase por conta do plano: os marcos, a ordem e as pendências da Fase 3, que passam todas para cá.
 - **S1 ✅ OK** (17 de novembro): o som da voz do bando, em seis partes. O inventário de tudo o que se ouve está em [SOM.md](SOM.md).
-- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: as partes 0 (a linha de base), 1 (a perícia), 2 (a pressão), 3 (o fôlego e "Revezar") e 4 (a vida e o golpe) estão feitas.
+- **Etapa 2 ✅ OK** (17 de novembro): o diário de ritmo e a bancada de batalha, com aliados da IA e capitães. A linha de base e a suíte `cercos` passaram para o Marco 24, que vai recalibrar as verificações de batalha de qualquer jeito. O Marco 24 está em andamento: as partes 0 (a linha de base), 1 (a perícia), 2 (a pressão), 3 (o fôlego e "Revezar"), 4 (a vida e o golpe) e 5 (a ficha e a guarda do Comandante) estão feitas.
 - O título é uma escolha deste plano. O usuário pode trocar.
 
 ## A intenção
@@ -70,7 +70,7 @@ O usuário deixou estas escolhas com o plano.
 | --- | --- | --- | --- | --- |
 | 1 | [S1 — Som, parte 1: a voz do bando](#1-s1--som-parte-1-a-voz-do-bando--ok) | som | Pedido para já; não mexe no equilíbrio | ✅ OK |
 | 2 | [A régua e a bancada](#2-a-régua-e-a-bancada--ok) | ferramenta e dívida | Medir antes de mudar o combate | ✅ OK |
-| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 a 4 feitas) |
+| 3 | [Marco 24 — Batalha: perícia em vez de vida](#3-marco-24--batalha-perícia-em-vez-de-vida) | recurso | Todo minuto de jogo tem luta | em andamento (partes 0 a 5 feitas) |
 | 4 | [Marco 25 — O Comandante em campo e o duelo de ação](#4-marco-25--o-comandante-em-campo-e-o-duelo-de-ação) | recurso e arte | Usa a perícia e a pressão do Marco 24 | a fazer |
 | 5 | [Marco 26 — Missões com história](#5-marco-26--missões-com-história) | recurso | A segunda maior dor do começo | a fazer |
 | 6 | [Marco 27 — O mundo refeito: lugares vivos](#6-marco-27--o-mundo-refeito-lugares-vivos) | recurso e arte | A única mudança no gerador; os marcos seguintes moram nele | a fazer |
@@ -279,10 +279,18 @@ Os números saem da suíte `linha` (`npm run test:battle -- linha`), que mede e 
      - Os feridos que voltam: 55%, e 70% com curandeira.
      - **O Senhor da Guerra:** 160 de vida, ataque 82, defesa 78 e armadura 0,25. **O Necromante:** 140 de vida, ataque 60 e defesa 72. Cada um tem uma guarda pessoal de 6 (brutamontes ou guardas de ossos) que não se afasta mais de 150 px dele e bate em quem chega nele. O Senhor da Guerra abre a luta com o golpe de assinatura, e repete a cada 6 s: um giro que pega todos na frente dele, sem aparar, com o dobro do dano, e empurra.
      - **Medido** (suíte `pericia`): de frente, um soldado acerta o Senhor da Guerra 14%. Cercado por 4, os soldados acertam 93%, e ele cai em 28 s, girando a arma 5 vezes.
-5. **A ficha de quem tem nome.** Comandante, tenentes, capitães e heróis inimigos usam a mesma ficha de luta, de 1 a 10:
+5. **A ficha de quem tem nome** — ✅ feita em 18 de novembro. Comandante, tenentes, capitães e heróis inimigos usam a mesma ficha de luta, de 1 a 10:
    - **Armas** dá o ataque, **Guarda** dá a defesa, **Vigor** dá a vida e o fôlego.
    - O Duelo dos capitães e a habilidade dos nobres (`martial`) viram essa ficha.
    - **A guarda do Comandante:** 4 veteranos que andam com ele. Cada um por perto tira um atacante da conta da pressão.
+   - **Como ficou:**
+     - A conta da ficha (`sim/sheet.ts`): ataque e defesa = 30 + 5 por ponto (de 35 a 80); vida = 30 + 6 por ponto de Vigor (de 36 a 90).
+     - **O Comandante** que funda o bando tem Armas 9, Guarda 8 e Vigor 5: ataque 75 e defesa 70, como antes, mas 60 de vida em vez de 220. Os traços e as cicatrizes continuam mexendo na vida, por cima da ficha. A ficha fica no `leader` do save; sem ela, vale a do fundador.
+     - **O tenente** tem a ficha de um veterano (6, 6, 5). **O capitão** tira a ficha do Duelo (1 a 5): duelo 1 = 2/2/4, duelo 5 = 10/10/8. **O herói inimigo** tira a ficha da mão do nobre (`martial`) quando tem, e do duelo quando não tem. O Senhor da Guerra e o Necromante continuam com os números da parte 4.
+     - O duelo do Marco 21 continua usando o número de 1 a 5; o Marco 25 passa o duelo de ação para a ficha.
+     - **A guarda:** 4 homens de armas, aliados da IA, que andam com o Comandante e batem em quem chega a até 150 px dele. Quem cai volta depois da luta, um de cada vez, quando não há inimigo a menos de 900 px. Não vai no save: forma-se de novo quando o jogo carrega.
+     - **Medido** (suíte `pericia`, com o chefe goblin sem desafiar para duelo): cercado por 5 goblins, sem a guarda, o Comandante cai em 9,2 s; com ela, ele apara 65% dos golpes, a guarda derruba os 5, e ele termina com 49 de 60.
+     - **Para o Marco 25:** o duelo de campo leva a vida do Comandante na proporção do duelo. Com 60 de vida, perder um duelo agora deixa ele quase no chão, e o herói inimigo desafia logo que o vê.
 6. **Leitura.**
    - O golpe aparado mostra a pose de bloqueio, a faísca e o som.
    - Quem está com três ou mais em cima mostra a guarda aberta.

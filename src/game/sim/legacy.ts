@@ -8,6 +8,8 @@ import { clamp } from "../../utils/math";
  * com quem herdar o estandarte, e os traços do herdeiro mudam o rumo da campanha.
  */
 
+import type { CombatSheet } from "./sheet";
+
 export interface Leader {
   name: string;
   /** Idade quando assumiu o bando. */
@@ -29,6 +31,8 @@ export interface Leader {
   tongues?: Partial<Record<CultureId, number>>;
   /** As marcas que a magia deixou no corpo (Marco 19): cada uma tira um pouco da vida. */
   marks?: number;
+  /** A ficha de luta (Marco 24); sem o campo, a do fundador. */
+  sheet?: CombatSheet;
 }
 
 export interface FormerLeader {

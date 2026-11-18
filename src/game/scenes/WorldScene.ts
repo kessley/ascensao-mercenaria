@@ -289,6 +289,10 @@ export class WorldScene extends Phaser.Scene {
   lastIceAt = 0;
   /** Fadiga de cada batalhão (sobrevive a quando ele é recriado) e onde estava no quadro anterior. */
   fatigueById = new Map<string, number>();
+  /** A guarda do Comandante (Marco 24). */
+  commanderGuard: Enemy[] = [];
+  guardCheckAt = 0;
+  guardMustered = false;
   fatiguePos = new Map<string, Point>();
 
   // --- Economia e comércio (Marco 14) ---
@@ -897,6 +901,7 @@ export class WorldScene extends Phaser.Scene {
     this.collectSupportLosses();
     this.collectWagonLosses();
     this.updateFatigue(dt);
+    this.tendGuard(time);
     this.updateVoices(time);
     this.checkThinIce(time);
     this.drawMissions();

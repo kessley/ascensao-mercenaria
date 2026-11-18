@@ -9,7 +9,8 @@ import { scaleGroups } from "../../data/battleMaps";
 import { DIFFICULTY, type Contract } from "../../data/contracts";
 import { leaderBonus } from "../../sim/legacy";
 import { useGameStore, type BattalionData, type GameState } from "../../../store/useGameStore";
-import { BALANCE, WORLD, FATIGUE, GOODS, PRISONERS } from "../../../utils/constants";
+import { BALANCE, COLORS, COMMANDER_GUARD, WORLD, FATIGUE, GOODS, PRISONERS } from "../../../utils/constants";
+import { COMMANDER_SHEET } from "../../sim/sheet";
 import { campMoraleBonus, startingMorale } from "../../../utils/economy";
 import { roadGraphOf } from "../../sim/roadGraph";
 import { centroid, distance, type Point } from "../../../utils/math";
@@ -429,8 +430,40 @@ export const armyMethods = {
 
   /** O corpo do Comandante acompanha quem está no cargo: traços e cicatrizes. */
   applyLeader(this: WorldScene): void {
-    const bonus = leaderBonus(useGameStore.getState().leader);
-    this.commander.embody(bonus.hp, bonus.damage);
+    const leader = useGameStore.getState().leader;
+    const bonus = leaderBonus(leader);
+    this.commander.embody(bonus.hp, bonus.damage, leader.sheet ?? COMMANDER_SHEET);
+  },
+
+  /**
+   * A guarda do Comandante (Marco 24): 4 veteranos que andam com ele e batem em quem chega nele.
+   * Quem cai é reposto depois da luta, um de cada vez, quando não há inimigo por perto.
+   */
+  tendGuard(this: WorldScene, time: number): void {
+    if (time < this.guardCheckAt) return;
+    this.guardCheckAt = time + COMMANDER_GUARD.CHECK_MS;
+    this.commanderGuard = this.commanderGuard.filter((g) => g.isAlive);
+    const c = this.commander;
+    if (!c.isAlive || this.commanderGuard.length >= COMMANDER_GUARD.SIZE) {
+      c.guards = this.commanderGuard;
+      return;
+    }
+    const first = this.commanderGuard.length === 0 && !this.guardMustered;
+    const danger = this.enemies.some((e) => e.isAlive && e.hostile && !e.dormant && (e.x - c.x) ** 2 + (e.y - c.y) ** 2 < COMMANDER_GUARD.CALM ** 2);
+    if (danger && !first) return;
+    const n = first ? COMMANDER_GUARD.SIZE : 1;
+    for (let i = 0; i < n; i++) {
+      const a = (i / COMMANDER_GUARD.SIZE) * Math.PI * 2;
+      const g = this.spawnEnemy(c.x + Math.cos(a) * 30, c.y + Math.sin(a) * 30, COMMANDER_GUARD.KIND, COLORS.ALLY);
+      g.setFriendly(true);
+      g.owner = { kind: "GUARD" };
+      g.dormant = false;
+      g.setVisible(true);
+      g.guardOf(c, () => this.enemies.filter((e) => e.isAlive && e.hostile && !e.dormant));
+      this.commanderGuard.push(g);
+    }
+    this.guardMustered = true;
+    c.guards = this.commanderGuard;
   },
 
   // --- Cortejo ---

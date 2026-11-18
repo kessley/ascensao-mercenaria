@@ -5,6 +5,7 @@ import type { NobleTrait } from "../sim/nobility";
 import type { CaptainData } from "./captains";
 import type { TraitId } from "./lieutenants";
 import type { CultureId } from "./planet";
+import { sheetFromDuel, sheetFromMartial, type CombatSheet } from "../sim/sheet";
 
 /**
  * Heróis do outro lado (Marco 21): os capitães e chefes das forças inimigas têm nome, mão no um
@@ -18,6 +19,8 @@ export interface HeroData {
   /** O traço que diz como ele luta (null = nenhum que importe). */
   trait: NobleTrait | null;
   weapon: DuelWeapon;
+  /** A ficha de luta (Marco 24); sem ela, sai do duelo. */
+  sheet?: CombatSheet;
 }
 
 /** A arma de cada oficial: o orc no machado, o sargento no escudo, o chefe goblin na lança. */
@@ -52,7 +55,8 @@ const clampDuel = (v: number) => Math.max(1, Math.min(5, Math.round(v)));
  */
 export function rollHero(kind: EnemyKind, base: number, trait: NobleTrait | null, chief: boolean, martial?: number, random: () => number = Math.random): HeroData {
   const duel = martial !== undefined ? clampDuel(martial / 2) : clampDuel(roll(base, base + 1, random) + (chief ? 0 : -1) + (HARDY.has(kind) ? 1 : 0));
-  return { duel, trait, weapon: WEAPON_OF[kind] ?? "SWORD" };
+  // A ficha de luta (Marco 24): o nobre traz a mão dele; o resto sai do duelo
+  return { duel, trait, weapon: WEAPON_OF[kind] ?? "SWORD", sheet: martial !== undefined ? sheetFromMartial(martial) : sheetFromDuel(duel) };
 }
 
 /** O jeito de lutar pelo traço: bravo e cruel emendam, o astuto finge, o covarde e o estudioso esperam. */

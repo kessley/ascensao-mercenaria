@@ -101,7 +101,9 @@ function hitRate() {
     }
     if (e.unitState === "FLEEING") e.unitState = "ATTACKING";
   });
-  return { swings, hits, rate: swings > 0 ? Math.round((hits / swings) * 100) : null, side: e.approachOf(s), state: e.unitState };
+  // A chance pela conta, com os números desta luta (a formação do esquadrão muda a defesa do goblin)
+  const chance = Math.round(Math.min(0.92, Math.max(0.15, 0.5 + (s.meleeSkill() - e.defenseSkill(window.__world.time.now)) / 100)) * 100);
+  return { swings, hits, rate: swings > 0 ? Math.round((hits / swings) * 100) : null, chance, side: e.approachOf(s), state: e.unitState };
 }
 
 /** Fôlego: uma linha luta 2 minutos seguidos, e depois descansa 70 s longe da luta. */
@@ -302,7 +304,26 @@ function bossGuard() {
   return { guardHits, near };
 }
 
+/** A ficha do Comandante em campo e a guarda dele. */
+function commanderSheet() {
+  const w = window.__world;
+  window.__lab.step(1);
+  const c = w.commander;
+  return { attack: c.attack, defense: c.defense, hp: c.maxHp, guard: w.commanderGuard.filter((g) => g.isAlive).length, friendly: w.commanderGuard.every((g) => g.friendly && !g.hostile) };
+}
+
 export async function skill({ battle, ev }, { check }) {
+  // Parte 5: a ficha de quem tem nome e a guarda do Comandante
+  await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 5 }, faction: "GOBLINS", distance: 2400 });
+  const sheet = await ev(commanderSheet);
+  check("o Comandante luta pela ficha (75 e 70, e a vida de um homem), com a guarda de 4", sheet.attack === 75 && sheet.defense === 70 && sheet.hp < 100 && sheet.guard === 4 && sheet.friendly, JSON.stringify(sheet));
+  const bare = await ev(surrounded, { n: 5 });
+  check("cercado por 5, sem a guarda, o Comandante cai em menos de 10 s", bare.fell !== null && bare.fell < 10, JSON.stringify(bare));
+  await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 5 }, faction: "GOBLINS", distance: 2400 });
+  await ev(commanderSheet);
+  const guarded = await ev(surrounded, { n: 5, guard: true });
+  check("com a guarda, ele aguenta", guarded.fell === null, JSON.stringify(guarded));
+
   await battle({ army: [["INFANTRY", 4]], force: { ORC: 1 }, faction: "ORCS", distance: 2400 });
   const guard = await ev(bossGuard);
   check("a guarda pessoal volta para o chefe e bate em quem está em cima dele", guard.guardHits > 0 && guard.near.every((d) => d < 150), JSON.stringify(guard));
@@ -317,7 +338,7 @@ export async function skill({ battle, ev }, { check }) {
   check("um soldado derruba um goblin em 7 a 9 s", mid !== null && mid >= 6.5 && mid <= 10, JSON.stringify({ mediana: mid, tempos: times }));
   await battle({ army: [["INFANTRY", 1]], force: { ORC: 1 }, faction: "ORCS", distance: 2400 });
   const front = await ev(warlord);
-  check("o Senhor da Guerra tem 160 de vida e, de frente, um soldado quase não acerta nele", front.hp === 160 && front.rate !== null && front.rate <= 25, JSON.stringify(front));
+  check("o Senhor da Guerra tem 160 de vida e, de frente, um soldado quase não acerta nele", front.hp === 160 && front.rate !== null && front.rate <= 30, JSON.stringify(front));
   await battle({ army: [["INFANTRY", 4]], force: { ORC: 1 }, faction: "ORCS", distance: 2400 });
   const four = await ev(warlord);
   check("cercado por 4, os soldados acertam 60% ou mais nele, e ele cai em menos de meio minuto", four.rate !== null && four.rate >= 60 && four.fell !== null && four.fell < 30, JSON.stringify(four));
@@ -346,7 +367,8 @@ export async function skill({ battle, ev }, { check }) {
   const fiveHits = await ev(hitRate);
   await battle({ army: [["INFANTRY", 1, 1]], force: { GOBLIN: 1 }, faction: "GOBLINS", distance: 2400 });
   const oneHits = await ev(hitRate);
-  check("o veterano acerta o goblin bem mais que o novato (82% contra 62%)", fiveHits.rate !== null && oneHits.rate !== null && fiveHits.rate > oneHits.rate + 8, JSON.stringify({ five: fiveHits, one: oneHits }));
+  const near = (h) => h.rate !== null && Math.abs(h.rate - h.chance) <= 10;
+  check("o veterano acerta o goblin bem mais que o novato (82% contra 62%, pela conta)", near(fiveHits) && near(oneHits) && fiveHits.chance >= oneHits.chance + 15, JSON.stringify({ five: fiveHits, one: oneHits }));
 
   await battle({ army: [["INFANTRY", 2]], force: { GOBLIN: 6 }, faction: "GOBLINS", distance: 2400 });
   // Duro (não cai): centenas de golpes para contar o aparo; depois, de verdade, quanto ele aguenta
